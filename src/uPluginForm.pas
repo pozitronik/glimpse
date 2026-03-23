@@ -1,4 +1,4 @@
-/// Main plugin form and frame view control.
+/// Main plugin form, frame view control, and extraction worker thread.
 /// The form is parented to TC's Lister window and hosts the toolbar and frame display.
 unit uPluginForm;
 
@@ -11,6 +11,10 @@ uses
   Vcl.ComCtrls, Vcl.Buttons, Vcl.Graphics,
   uSettings, uFrameOffsets, uFFmpegExe;
 
+const
+  WM_FRAME_READY     = WM_USER + 100; { WParam=index, LParam=TBitmap ptr (0=error) }
+  WM_EXTRACTION_DONE = WM_USER + 101; { extraction finished }
+
 type
   TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);
 
@@ -19,6 +23,21 @@ type
     Bitmap: TBitmap;
     Timecode: string;
     TimeOffset: Double;
+  end;
+
+  /// Worker thread that extracts frames sequentially via ffmpeg.exe.
+  /// Posts WM_FRAME_READY for each frame and WM_EXTRACTION_DONE when finished.
+  TExtractionThread = class(TThread)
+  private
+    FFFmpegPath: string;
+    FFileName: string;
+    FOffsets: TFrameOffsetArray;
+    FTargetWnd: HWND;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AFFmpegPath, AFileName: string;
+      const AOffsets: TFrameOffsetArray; ATargetWnd: HWND);
   end;
 
   /// Custom control that renders frame cells in grid or scroll layout.
@@ -48,6 +67,8 @@ type
     procedure SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
     procedure SetFrame(AIndex: Integer; ABitmap: TBitmap);
     procedure SetCellError(AIndex: Integer);
+    procedure ClearCells;
+    function HasPlaceholders: Boolean;
     procedure AdvanceAnimation;
     procedure RecalcSize;
     property ViewMode: TViewMode read FViewMode write FViewMode;
@@ -76,6 +97,9 @@ type
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
     FLblError: TLabel;
+    { Worker }
+    FWorkerThread: TExtractionThread;
+    FFramesLoaded: Integer;
     { Animation }
     FAnimTimer: TTimer;
 
@@ -84,15 +108,20 @@ type
     procedure CreateErrorLabel;
     procedure ApplySettings;
     procedure SetupPlaceholders;
-    procedure ClearFrames;
     procedure ShowError(const AMessage: string);
     procedure HideError;
     procedure UpdateFrameViewSize;
+    procedure StartExtraction;
+    procedure StopExtraction;
+    procedure DrainPendingFrameMessages;
+    procedure UpdateProgress;
     procedure OnAnimTimer(Sender: TObject);
     procedure OnFrameCountChange(Sender: TObject);
     procedure OnViewModeClick(Sender: TObject);
     procedure OnZoomChange(Sender: TObject);
     procedure OnScrollBoxResize(Sender: TObject);
+    procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
+    procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
   protected
     procedure Resize; override;
   public
@@ -109,6 +138,51 @@ const
   CELL_GAP       = 4;
   TIMECODE_H     = 20;
   ASPECT_RATIO   = 9.0 / 16.0; { 16:9 video }
+
+{ TExtractionThread }
+
+constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
+  const AOffsets: TFrameOffsetArray; ATargetWnd: HWND);
+begin
+  inherited Create(True); { suspended }
+  FreeOnTerminate := False;
+  FFFmpegPath := AFFmpegPath;
+  FFileName := AFileName;
+  FOffsets := Copy(AOffsets);
+  FTargetWnd := ATargetWnd;
+end;
+
+procedure TExtractionThread.Execute;
+var
+  FFmpeg: TFFmpegExe;
+  Bmp: TBitmap;
+  I: Integer;
+begin
+  FFmpeg := TFFmpegExe.Create(FFFmpegPath);
+  try
+    for I := 0 to High(FOffsets) do
+    begin
+      if Terminated then
+        Exit;
+
+      Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+
+      if Terminated then
+      begin
+        Bmp.Free;
+        Exit;
+      end;
+
+      { Transfer bitmap ownership to the UI thread via PostMessage }
+      PostMessage(FTargetWnd, WM_FRAME_READY, WPARAM(I), LPARAM(Bmp));
+    end;
+  finally
+    FFmpeg.Free;
+  end;
+
+  if not Terminated then
+    PostMessage(FTargetWnd, WM_EXTRACTION_DONE, 0, 0);
+end;
 
 { TFrameView }
 
@@ -206,7 +280,7 @@ end;
 procedure TFrameView.PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
 var
   Bmp: TBitmap;
-  SrcR, DstR: TRect;
+  DstR: TRect;
   Scale: Double;
   DW, DH: Integer;
 begin
@@ -217,20 +291,18 @@ begin
     Exit;
   end;
   { Scale to fit cell, maintaining aspect ratio }
-  Scale := Min((ARect.Width) / Max(1, Bmp.Width),
-               (ARect.Height) / Max(1, Bmp.Height));
+  Scale := Min(ARect.Width / Max(1, Bmp.Width),
+               ARect.Height / Max(1, Bmp.Height));
   DW := Round(Bmp.Width * Scale);
   DH := Round(Bmp.Height * Scale);
-  DstR.Left := ARect.Left + (ARect.Width - DW) div 2;
-  DstR.Top  := ARect.Top + (ARect.Height - DH) div 2;
+  DstR.Left   := ARect.Left + (ARect.Width - DW) div 2;
+  DstR.Top    := ARect.Top + (ARect.Height - DH) div 2;
   DstR.Right  := DstR.Left + DW;
   DstR.Bottom := DstR.Top + DH;
 
   { Fill letterbox area }
   Canvas.Brush.Color := $002D2D2D;
   Canvas.FillRect(ARect);
-
-  SrcR := Rect(0, 0, Bmp.Width, Bmp.Height);
   Canvas.StretchDraw(DstR, Bmp);
 end;
 
@@ -282,6 +354,8 @@ begin
 end;
 
 procedure TFrameView.PaintErrorCell(const ARect: TRect);
+var
+  R: TRect;
 begin
   Canvas.Brush.Color := $002D2D2D;
   Canvas.Pen.Style := psClear;
@@ -290,7 +364,7 @@ begin
   Canvas.Font.Size := 9;
   Canvas.Font.Color := $004040FF;
   Canvas.Brush.Style := bsClear;
-  var R := ARect;
+  R := ARect;
   DrawText(Canvas.Handle, 'Error', -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
 end;
 
@@ -333,6 +407,25 @@ begin
     FCells[AIndex].State := fcsError;
     Invalidate;
   end;
+end;
+
+procedure TFrameView.ClearCells;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCells) do
+    FreeAndNil(FCells[I].Bitmap);
+  SetLength(FCells, 0);
+end;
+
+function TFrameView.HasPlaceholders: Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCells) do
+    if FCells[I].State = fcsPlaceholder then
+      Exit(True);
+  Result := False;
 end;
 
 procedure TFrameView.AdvanceAnimation;
@@ -393,7 +486,9 @@ destructor TPluginForm.Destroy;
 begin
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
-  ClearFrames;
+  StopExtraction;
+  DrainPendingFrameMessages;
+  FFrameView.ClearCells;
   inherited;
 end;
 
@@ -520,7 +615,10 @@ var
   FFmpeg: TFFmpegExe;
 begin
   FFileName := AFileName;
-  ClearFrames;
+  StopExtraction;
+  DrainPendingFrameMessages;
+  FFrameView.ClearCells;
+  FVideoInfo := Default(TVideoInfo);
 
   if FFFmpegPath = '' then
   begin
@@ -528,7 +626,7 @@ begin
     Exit;
   end;
 
-  { Probe video metadata (synchronous; Phase 4 moves to worker thread) }
+  { Probe video metadata synchronously (fast, reads only header) }
   FFmpeg := TFFmpegExe.Create(FFFmpegPath);
   try
     FVideoInfo := FFmpeg.ProbeVideo(FFileName);
@@ -544,6 +642,7 @@ begin
 
   SetupPlaceholders;
   HideError;
+  StartExtraction;
 end;
 
 procedure TPluginForm.SetupPlaceholders;
@@ -555,12 +654,89 @@ begin
   UpdateFrameViewSize;
 end;
 
-procedure TPluginForm.ClearFrames;
+procedure TPluginForm.StartExtraction;
 begin
-  FOffsets := nil;
-  FVideoInfo := Default(TVideoInfo);
-  FFrameView.SetCellCount(0, nil);
-  FFrameView.Invalidate;
+  StopExtraction;
+  FFramesLoaded := 0;
+
+  { Show progress in marquee mode until first frame arrives }
+  FProgressBar.Style := pbstMarquee;
+  FProgressBar.Visible := True;
+  FLblProgress.Caption := 'Extracting...';
+  FLblProgress.Visible := True;
+
+  FAnimTimer.Enabled := True;
+
+  FWorkerThread := TExtractionThread.Create(FFFmpegPath, FFileName, FOffsets, Handle);
+  FWorkerThread.Start;
+end;
+
+procedure TPluginForm.StopExtraction;
+begin
+  if Assigned(FWorkerThread) then
+  begin
+    FWorkerThread.Terminate;
+    FWorkerThread.WaitFor;
+    FreeAndNil(FWorkerThread);
+  end;
+end;
+
+procedure TPluginForm.DrainPendingFrameMessages;
+var
+  Msg: TMsg;
+begin
+  { Remove pending WM_FRAME_READY messages and free their bitmap payloads
+    to prevent leaks when the window is being torn down or reloaded }
+  while PeekMessage(Msg, Handle, WM_FRAME_READY, WM_FRAME_READY, PM_REMOVE) do
+  begin
+    if Msg.lParam <> 0 then
+      TObject(Msg.lParam).Free;
+  end;
+  { Also discard any pending done notification }
+  PeekMessage(Msg, Handle, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE);
+end;
+
+procedure TPluginForm.UpdateProgress;
+begin
+  if FFramesLoaded >= Length(FOffsets) then
+  begin
+    FProgressBar.Visible := False;
+    FLblProgress.Visible := False;
+    FAnimTimer.Enabled := FFrameView.HasPlaceholders;
+  end
+  else if FFramesLoaded > 0 then
+  begin
+    { Switch from marquee to ranged after first frame }
+    FProgressBar.Style := pbstNormal;
+    FProgressBar.Max := Length(FOffsets);
+    FProgressBar.Position := FFramesLoaded;
+    FLblProgress.Caption := Format('Extracting... (%d/%d)',
+      [FFramesLoaded, Length(FOffsets)]);
+  end;
+end;
+
+procedure TPluginForm.WMFrameReady(var Message: TMessage);
+var
+  Index: Integer;
+  Bmp: TBitmap;
+begin
+  Index := Integer(Message.WParam);
+  Bmp := TBitmap(Message.LParam);
+
+  if Bmp <> nil then
+    FFrameView.SetFrame(Index, Bmp)
+  else
+    FFrameView.SetCellError(Index);
+
+  Inc(FFramesLoaded);
+  UpdateProgress;
+end;
+
+procedure TPluginForm.WMExtractionDone(var Message: TMessage);
+begin
+  FProgressBar.Visible := False;
+  FLblProgress.Visible := False;
+  FAnimTimer.Enabled := FFrameView.HasPlaceholders;
 end;
 
 procedure TPluginForm.ShowError(const AMessage: string);
@@ -569,6 +745,8 @@ begin
   FLblError.Caption := AMessage;
   FLblError.Visible := True;
   FAnimTimer.Enabled := False;
+  FProgressBar.Visible := False;
+  FLblProgress.Visible := False;
 end;
 
 procedure TPluginForm.HideError;
@@ -607,8 +785,11 @@ end;
 procedure TPluginForm.OnFrameCountChange(Sender: TObject);
 begin
   if not FVideoInfo.IsValid then Exit;
+  StopExtraction;
+  DrainPendingFrameMessages;
+  FFrameView.ClearCells;
   SetupPlaceholders;
-  { Phase 4: cancel current extraction and restart }
+  StartExtraction;
 end;
 
 procedure TPluginForm.OnViewModeClick(Sender: TObject);
