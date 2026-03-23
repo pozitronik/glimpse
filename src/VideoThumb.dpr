@@ -14,7 +14,8 @@ uses
   uFrameOffsets in 'uFrameOffsets.pas',
   uFFmpegLocator in 'uFFmpegLocator.pas',
   uFFmpegExe in 'uFFmpegExe.pas',
-  uFFmpegSetupDlg in 'uFFmpegSetupDlg.pas';
+  uFFmpegSetupDlg in 'uFFmpegSetupDlg.pas',
+  uPluginForm in 'uPluginForm.pas';
 
 exports
   ListLoad,

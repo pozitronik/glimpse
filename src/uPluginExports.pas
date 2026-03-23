@@ -24,12 +24,35 @@ function ListGetPreviewBitmapW(FileToLoad: PWideChar; Width, Height: Integer;
 implementation
 
 uses
-  System.SysUtils, System.AnsiStrings, uSettings, uFFmpegLocator, uFFmpegSetupDlg;
+  System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
+  uSettings, uFFmpegLocator, uFFmpegSetupDlg, uPluginForm;
 
 var
   GSettings: TPluginSettings;
   GPluginDir: string;
   GFFmpegPath: string;
+  GLogPath: string;
+
+procedure Log(const AMsg: string);
+var
+  F: TextFile;
+begin
+  if GLogPath = '' then Exit;
+  try
+    AssignFile(F, GLogPath);
+    if FileExists(GLogPath) then
+      Append(F)
+    else
+      Rewrite(F);
+    try
+      WriteLn(F, FormatDateTime('hh:nn:ss.zzz', Now) + '  ' + AMsg);
+    finally
+      CloseFile(F);
+    end;
+  except
+    { Logging must never crash the plugin }
+  end;
+end;
 
 /// Ensures ffmpeg is available; shows setup dialog if needed.
 procedure EnsureFFmpeg;
@@ -42,10 +65,12 @@ begin
   if Assigned(GSettings) and GSettings.FFmpegSuppressPrompt then
     Exit;
 
+  Log('EnsureFFmpeg: showing setup dialog');
   case ShowFFmpegSetupDialog(Path, DontAsk) of
     fsrBrowsed:
       begin
         GFFmpegPath := Path;
+        Log('EnsureFFmpeg: user browsed, path=' + Path);
         if Assigned(GSettings) then
         begin
           GSettings.FFmpegExePath := Path;
@@ -53,37 +78,70 @@ begin
         end;
       end;
     fsrCancel:
-      if DontAsk and Assigned(GSettings) then
       begin
-        GSettings.FFmpegSuppressPrompt := True;
-        GSettings.Save;
+        Log('EnsureFFmpeg: user cancelled, dontAsk=' + BoolToStr(DontAsk, True));
+        if DontAsk and Assigned(GSettings) then
+        begin
+          GSettings.FFmpegSuppressPrompt := True;
+          GSettings.Save;
+        end;
       end;
   end;
 end;
 
 /// Internal handler shared by ListLoad and ListLoadW.
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
+var
+  Form: TPluginForm;
 begin
-  EnsureFFmpeg;
-  { Phase 3: will create the plugin window here }
   Result := 0;
+  Log('DoListLoad: ParentWin=$' + IntToHex(ParentWin) +
+      ' File=' + AFileName + ' Flags=' + IntToStr(ShowFlags));
+  try
+    EnsureFFmpeg;
+    Log('DoListLoad: ffmpegPath=' + GFFmpegPath);
+    Form := TPluginForm.CreateForPlugin(ParentWin, AFileName, GSettings, GFFmpegPath);
+    Result := Form.Handle;
+    Log('DoListLoad: Form created, Handle=$' + IntToHex(Result) +
+        ' IsWindow=' + BoolToStr(IsWindow(Result), True) +
+        ' Visible=' + BoolToStr(IsWindowVisible(Result), True) +
+        ' Parent=$' + IntToHex(GetParent(Result)));
+  except
+    on E: Exception do
+    begin
+      Log('DoListLoad: EXCEPTION ' + E.ClassName + ': ' + E.Message);
+      MessageBox(ParentWin, PChar('VideoThumb: ' + E.Message),
+        'VideoThumb', MB_OK or MB_ICONERROR);
+    end;
+  end;
 end;
 
 function ListLoad(ParentWin: HWND; FileToLoad: PAnsiChar; ShowFlags: Integer): HWND; stdcall;
 begin
+  Log('ListLoad (ANSI)');
   Result := DoListLoad(ParentWin, string(AnsiString(FileToLoad)), ShowFlags);
 end;
 
 function ListLoadW(ParentWin: HWND; FileToLoad: PWideChar; ShowFlags: Integer): HWND; stdcall;
 begin
+  Log('ListLoadW (Unicode)');
   Result := DoListLoad(ParentWin, string(FileToLoad), ShowFlags);
 end;
 
 /// Reuses an existing plugin window for a new file (smoother navigation).
 function DoListLoadNext(ParentWin: HWND; ListWin: HWND; const AFileName: string; ShowFlags: Integer): Integer;
+var
+  Ctrl: TWinControl;
 begin
-  { Phase 3: will reload the plugin window with a new file }
-  Result := LISTPLUGIN_ERROR;
+  Log('DoListLoadNext: ListWin=$' + IntToHex(ListWin) + ' File=' + AFileName);
+  Ctrl := FindControl(ListWin);
+  if Ctrl is TPluginForm then
+  begin
+    TPluginForm(Ctrl).LoadFile(AFileName);
+    Result := LISTPLUGIN_OK;
+  end
+  else
+    Result := LISTPLUGIN_ERROR;
 end;
 
 function ListLoadNext(ParentWin: HWND; ListWin: HWND; FileToLoad: PAnsiChar; ShowFlags: Integer): Integer; stdcall;
@@ -97,8 +155,13 @@ begin
 end;
 
 procedure ListCloseWindow(ListWin: HWND); stdcall;
+var
+  Ctrl: TWinControl;
 begin
-  { Phase 3: will destroy the plugin window here }
+  Log('ListCloseWindow: $' + IntToHex(ListWin));
+  Ctrl := FindControl(ListWin);
+  if Ctrl is TPluginForm then
+    Ctrl.Free;
 end;
 
 procedure ListGetDetectString(DetectString: PAnsiChar; MaxLen: Integer); stdcall;
@@ -108,8 +171,6 @@ var
   I: Integer;
   DS: AnsiString;
 begin
-  { Build detect string from configured or default extension list.
-    TC may call this before ListSetDefaultParams, so GSettings can be nil. }
   if Assigned(GSettings) then
     Extensions := GSettings.ExtensionList.Split([',', ' '])
   else
@@ -129,6 +190,9 @@ begin
   DS := AnsiString(Builder);
   if MaxLen > 0 then
     System.AnsiStrings.StrLCopy(DetectString, PAnsiChar(DS), MaxLen - 1);
+
+  Log('ListGetDetectString: len=' + IntToStr(Length(DS)) +
+      ' str=' + string(Copy(DS, 1, 80)) + '...');
 end;
 
 function ListSearchText(ListWin: HWND; SearchString: PAnsiChar; SearchParameter: Integer): Integer; stdcall;
@@ -140,15 +204,9 @@ function ListSendCommand(ListWin: HWND; Command, Parameter: Integer): Integer; s
 begin
   case Command of
     lc_Copy:
-      begin
-        { Phase 11: copy frame to clipboard }
-        Result := LISTPLUGIN_OK;
-      end;
+      Result := LISTPLUGIN_OK;
     lc_NewParams:
-      begin
-        { Phase 5: re-layout on resize }
-        Result := LISTPLUGIN_OK;
-      end;
+      Result := LISTPLUGIN_OK;
   else
     Result := LISTPLUGIN_ERROR;
   end;
@@ -160,18 +218,27 @@ var
 begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
+  GLogPath := GPluginDir + 'videothumb_debug.log';
+
+  { Start fresh log each session }
+  if FileExists(GLogPath) then
+    DeleteFile(GLogPath);
+
+  Log('ListSetDefaultParams');
+  Log('  PluginDir=' + GPluginDir);
+  Log('  DLL HInstance=$' + IntToHex(HInstance));
 
   FreeAndNil(GSettings);
   GSettings := TPluginSettings.Create(GPluginDir + 'VideoThumb.ini');
   GSettings.Load;
 
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
+  Log('  FFmpegPath=' + GFFmpegPath);
 end;
 
 /// Returns a preview bitmap for TC thumbnail view.
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 begin
-  { Phase 2+: will extract a single midpoint frame and return as HBITMAP }
   Result := 0;
 end;
 
@@ -190,6 +257,7 @@ end;
 initialization
 
 finalization
+  Log('finalization');
   FreeAndNil(GSettings);
 
 end.
