@@ -1,5 +1,11 @@
 library VideoThumb;
 
+{$IFDEF WIN64}
+  {$E wlx64}
+{$ELSE}
+  {$E wlx}
+{$ENDIF}
+
 uses
   Winapi.Windows,
   uWlxAPI in 'uWlxAPI.pas',
