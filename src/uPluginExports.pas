@@ -34,9 +34,12 @@ var
   GLogPath: string;
 
 procedure Log(const AMsg: string);
+{$IFDEF DEBUG}
 var
   F: TextFile;
+{$ENDIF}
 begin
+  {$IFDEF DEBUG}
   if GLogPath = '' then Exit;
   try
     AssignFile(F, GLogPath);
@@ -52,6 +55,7 @@ begin
   except
     { Logging must never crash the plugin }
   end;
+  {$ENDIF}
 end;
 
 /// Ensures ffmpeg is available; shows setup dialog if needed.
