@@ -77,6 +77,9 @@
         <DCCReference Include="TestFrameOffsets.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uFrameOffsets.pas"/>
+        <DCCReference Include="..\src\uFFmpegLocator.pas"/>
+        <DCCReference Include="..\src\uFFmpegExe.pas"/>
+        <DCCReference Include="TestFFmpegExe.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>

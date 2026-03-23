@@ -24,15 +24,47 @@ function ListGetPreviewBitmapW(FileToLoad: PWideChar; Width, Height: Integer;
 implementation
 
 uses
-  System.SysUtils, System.AnsiStrings, uSettings;
+  System.SysUtils, System.AnsiStrings, uSettings, uFFmpegLocator, uFFmpegSetupDlg;
 
 var
   GSettings: TPluginSettings;
   GPluginDir: string;
+  GFFmpegPath: string;
+
+/// Ensures ffmpeg is available; shows setup dialog if needed.
+procedure EnsureFFmpeg;
+var
+  Path: string;
+  DontAsk: Boolean;
+begin
+  if GFFmpegPath <> '' then
+    Exit;
+  if Assigned(GSettings) and GSettings.FFmpegSuppressPrompt then
+    Exit;
+
+  case ShowFFmpegSetupDialog(Path, DontAsk) of
+    fsrBrowsed:
+      begin
+        GFFmpegPath := Path;
+        if Assigned(GSettings) then
+        begin
+          GSettings.FFmpegExePath := Path;
+          GSettings.Save;
+        end;
+      end;
+    fsrCancel:
+      if DontAsk and Assigned(GSettings) then
+      begin
+        GSettings.FFmpegSuppressPrompt := True;
+        GSettings.Save;
+      end;
+  end;
+end;
 
 /// Internal handler shared by ListLoad and ListLoadW.
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
 begin
+  EnsureFFmpeg;
   { Phase 3: will create the plugin window here }
   Result := 0;
 end;
@@ -132,6 +164,8 @@ begin
   FreeAndNil(GSettings);
   GSettings := TPluginSettings.Create(GPluginDir + 'VideoThumb.ini');
   GSettings.Load;
+
+  GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
 end;
 
 /// Returns a preview bitmap for TC thumbnail view.

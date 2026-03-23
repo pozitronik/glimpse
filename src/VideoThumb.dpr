@@ -11,7 +11,10 @@ uses
   uWlxAPI in 'uWlxAPI.pas',
   uPluginExports in 'uPluginExports.pas',
   uSettings in 'uSettings.pas',
-  uFrameOffsets in 'uFrameOffsets.pas';
+  uFrameOffsets in 'uFrameOffsets.pas',
+  uFFmpegLocator in 'uFFmpegLocator.pas',
+  uFFmpegExe in 'uFFmpegExe.pas',
+  uFFmpegSetupDlg in 'uFFmpegSetupDlg.pas';
 
 exports
   ListLoad,

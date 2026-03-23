@@ -10,8 +10,11 @@ uses
   DUnitX.Loggers.XML.NUnit,
   uSettings in '..\src\uSettings.pas',
   uFrameOffsets in '..\src\uFrameOffsets.pas',
+  uFFmpegLocator in '..\src\uFFmpegLocator.pas',
+  uFFmpegExe in '..\src\uFFmpegExe.pas',
   TestSettings in 'TestSettings.pas',
-  TestFrameOffsets in 'TestFrameOffsets.pas';
+  TestFrameOffsets in 'TestFrameOffsets.pas',
+  TestFFmpegExe in 'TestFFmpegExe.pas';
 
 var
   Runner: ITestRunner;

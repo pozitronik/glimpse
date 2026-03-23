@@ -98,6 +98,9 @@
         <DCCReference Include="uPluginExports.pas"/>
         <DCCReference Include="uSettings.pas"/>
         <DCCReference Include="uFrameOffsets.pas"/>
+        <DCCReference Include="uFFmpegLocator.pas"/>
+        <DCCReference Include="uFFmpegExe.pas"/>
+        <DCCReference Include="uFFmpegSetupDlg.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
