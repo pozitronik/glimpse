@@ -14,7 +14,9 @@ uses
   uFFmpegExe in '..\src\uFFmpegExe.pas',
   TestSettings in 'TestSettings.pas',
   TestFrameOffsets in 'TestFrameOffsets.pas',
-  TestFFmpegExe in 'TestFFmpegExe.pas';
+  TestFFmpegExe in 'TestFFmpegExe.pas',
+  uPluginForm in '..\src\uPluginForm.pas',
+  TestFrameView in 'TestFrameView.pas';
 
 var
   Runner: ITestRunner;

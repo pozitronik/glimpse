@@ -43,7 +43,6 @@ type
   /// Custom control that renders frame cells in grid or scroll layout.
   TFrameView = class(TCustomControl)
   private
-    FCells: TArray<TFrameCell>;
     FViewMode: TViewMode;
     FBackColor: TColor;
     FAnimStep: Integer;
@@ -51,7 +50,6 @@ type
     FTimecodeHeight: Integer;
     function GetColumnCount: Integer;
     function GetCellImageSize: TSize;
-    function GetCellRect(AIndex: Integer): TRect;
     function GetTimecodeRect(AIndex: Integer): TRect;
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
@@ -63,7 +61,9 @@ type
   protected
     procedure Paint; override;
   public
+    FCells: TArray<TFrameCell>;
     constructor Create(AOwner: TComponent); override;
+    function GetCellRect(AIndex: Integer): TRect;
     procedure SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
     procedure SetFrame(AIndex: Integer; ABitmap: TBitmap);
     procedure SetCellError(AIndex: Integer);
