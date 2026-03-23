@@ -97,8 +97,8 @@ powershell -NoProfile -Command ^
     "if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }; " ^
     "New-Item -ItemType Directory -Path $staging | Out-Null; " ^
     "$filesToCopy = @(" ^
-        "@{Src='src\Win32\Release\VideoThumb.wlx';   Dst=\"$staging\VideoThumb.wlx\"}, " ^
-        "@{Src='src\Win64\Release\VideoThumb.wlx64';  Dst=\"$staging\VideoThumb.wlx64\"}, " ^
+        "@{Src='src\Win32\Release\VideoThumb.dll';    Dst=\"$staging\VideoThumb.wlx\"}, " ^
+        "@{Src='src\Win64\Release\VideoThumb.dll';    Dst=\"$staging\VideoThumb.wlx64\"}, " ^
         "@{Src='README.md';                            Dst=\"$staging\README.md\"}, " ^
         "@{Src='LICENSE';                              Dst=\"$staging\LICENSE\"}" ^
     "); " ^

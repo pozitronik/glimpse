@@ -1,0 +1,455 @@
+unit TestSettings;
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TTestPluginSettings = class
+  private
+    FTempDir: string;
+    FTempIniPath: string;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestDefaultValues;
+    [Test]
+    procedure TestSaveAndReload;
+    [Test]
+    procedure TestInvalidIniValues;
+    [Test]
+    procedure TestFFmpegModeRoundTrip;
+    [Test]
+    procedure TestViewModeRoundTrip;
+    [Test]
+    procedure TestZoomModeRoundTrip;
+    [Test]
+    procedure TestSaveFormatRoundTrip;
+    [Test]
+    procedure TestColorRoundTrip;
+    [Test]
+    procedure TestBoundaryValues;
+    [Test]
+    procedure TestClampOutOfRange;
+    [Test]
+    procedure TestEmptyExtensionListFallback;
+    [Test]
+    procedure TestMissingIniFileUsesDefaults;
+    [Test]
+    procedure TestResetDefaults;
+  end;
+
+implementation
+
+uses
+  System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
+  uSettings;
+
+procedure TTestPluginSettings.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_Test_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+  FTempIniPath := TPath.Combine(FTempDir, 'test.ini');
+end;
+
+procedure TTestPluginSettings.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+procedure TTestPluginSettings.TestDefaultValues;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load; { INI does not exist, so all values should be defaults }
+
+    Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode));
+    Assert.AreEqual(DEF_FFMPEG_EXE_PATH, S.FFmpegExePath);
+    Assert.AreEqual(DEF_FFMPEG_AUTO_DL, S.FFmpegAutoDownloaded);
+    Assert.AreEqual(DEF_FFMPEG_SUPPRESS, S.FFmpegSuppressPrompt);
+    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
+    Assert.AreEqual(DEF_SKIP_EDGES_PERCENT, S.SkipEdgesPercent);
+    Assert.AreEqual(DEF_MAX_WORKERS, S.MaxWorkers);
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
+    Assert.AreEqual(DEF_ZOOM_FACTOR, S.ZoomFactor, 0.001);
+    Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background));
+    Assert.AreEqual(DEF_SHOW_TIMECODE, S.ShowTimecode);
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
+    Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat));
+    Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+    Assert.AreEqual(DEF_PNG_COMPRESSION, S.PngCompression);
+    Assert.AreEqual(DEF_SAVE_FOLDER, S.SaveFolder);
+    Assert.AreEqual(DEF_CACHE_ENABLED, S.CacheEnabled);
+    Assert.AreEqual(DEF_CACHE_FOLDER, S.CacheFolder);
+    Assert.AreEqual(DEF_CACHE_MAX_SIZE_MB, S.CacheMaxSizeMB);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveAndReload;
+var
+  S1, S2: TPluginSettings;
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.FFmpegMode := fmExe;
+    S1.FFmpegExePath := 'C:\ffmpeg\ffmpeg.exe';
+    S1.FFmpegAutoDownloaded := True;
+    S1.FFmpegSuppressPrompt := True;
+    S1.DefaultN := 8;
+    S1.SkipEdgesPercent := 5;
+    S1.MaxWorkers := 4;
+    S1.ViewMode := vmScroll;
+    S1.ZoomMode := zmActual;
+    S1.ZoomFactor := 2.5;
+    S1.Background := TColor($00FF8040);
+    S1.ShowTimecode := False;
+    S1.ExtensionList := 'mp4,mkv,avi';
+    S1.SaveFormat := sfJPEG;
+    S1.JpegQuality := 75;
+    S1.PngCompression := 9;
+    S1.SaveFolder := 'D:\Screenshots';
+    S1.CacheEnabled := True;
+    S1.CacheFolder := 'C:\Cache';
+    S1.CacheMaxSizeMB := 1000;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Ord(fmExe), Ord(S2.FFmpegMode));
+    Assert.AreEqual('C:\ffmpeg\ffmpeg.exe', S2.FFmpegExePath);
+    Assert.IsTrue(S2.FFmpegAutoDownloaded);
+    Assert.IsTrue(S2.FFmpegSuppressPrompt);
+    Assert.AreEqual(8, S2.DefaultN);
+    Assert.AreEqual(5, S2.SkipEdgesPercent);
+    Assert.AreEqual(4, S2.MaxWorkers);
+    Assert.AreEqual(Ord(vmScroll), Ord(S2.ViewMode));
+    Assert.AreEqual(Ord(zmActual), Ord(S2.ZoomMode));
+    Assert.AreEqual(2.5, S2.ZoomFactor, 0.001);
+    Assert.AreEqual(Integer(TColor($00FF8040)), Integer(S2.Background));
+    Assert.IsFalse(S2.ShowTimecode);
+    Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);
+    Assert.AreEqual(Ord(sfJPEG), Ord(S2.SaveFormat));
+    Assert.AreEqual(75, S2.JpegQuality);
+    Assert.AreEqual(9, S2.PngCompression);
+    Assert.AreEqual('D:\Screenshots', S2.SaveFolder);
+    Assert.IsTrue(S2.CacheEnabled);
+    Assert.AreEqual('C:\Cache', S2.CacheFolder);
+    Assert.AreEqual(1000, S2.CacheMaxSizeMB);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestInvalidIniValues;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Write intentionally broken values }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('ffmpeg', 'Mode', 'INVALID');
+    Ini.WriteString('view', 'Mode', 'unknown');
+    Ini.WriteString('view', 'ZoomMode', 'WRONG');
+    Ini.WriteString('view', 'ZoomFactor', '-5');
+    Ini.WriteString('view', 'Background', 'not_a_color');
+    Ini.WriteString('save', 'Format', 'BMP');
+    Ini.WriteInteger('save', 'JpegQuality', 999);
+    Ini.WriteInteger('save', 'PngCompression', -1);
+    Ini.WriteInteger('cache', 'MaxSizeMB', 5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode), 'Invalid ffmpeg mode should fall back to default');
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode), 'Invalid view mode should fall back to default');
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode), 'Invalid zoom mode should fall back to default');
+    Assert.AreEqual(DEF_ZOOM_FACTOR, S.ZoomFactor, 0.001, 'Negative zoom factor should fall back to default');
+    Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background), 'Invalid color should fall back to default');
+    Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat), 'Unknown format should fall back to default');
+    Assert.AreEqual(100, S.JpegQuality, 'Out-of-range quality should be clamped to 100');
+    Assert.AreEqual(0, S.PngCompression, 'Negative compression should be clamped to 0');
+    Assert.AreEqual(10, S.CacheMaxSizeMB, 'Below-minimum cache size should be clamped to 10');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFFmpegModeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FFmpegMode := fmAuto;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(fmAuto), Ord(S.FFmpegMode));
+
+    S.FFmpegMode := fmExe;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestViewModeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.ViewMode := vmGrid;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(vmGrid), Ord(S.ViewMode));
+
+    S.ViewMode := vmScroll;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(vmScroll), Ord(S.ViewMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestZoomModeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.ZoomMode := zmFitWindow;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S.ZoomMode));
+
+    S.ZoomMode := zmFitIfLarger;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S.ZoomMode));
+
+    S.ZoomMode := zmActual;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(zmActual), Ord(S.ZoomMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveFormatRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.SaveFormat := sfPNG;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(sfPNG), Ord(S.SaveFormat));
+
+    S.SaveFormat := sfJPEG;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(sfJPEG), Ord(S.SaveFormat));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestColorRoundTrip;
+var
+  S: TPluginSettings;
+
+  procedure CheckColor(AColor: TColor; const ALabel: string);
+  begin
+    S.Background := AColor;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Integer(AColor), Integer(S.Background), ALabel);
+  end;
+
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    CheckColor(TColor($001E1E1E), 'Near-black (#1E1E1E)');
+    CheckColor(TColor($00000000), 'Black (#000000)');
+    CheckColor(TColor($00FFFFFF), 'White (#FFFFFF)');
+    CheckColor(TColor($00FF0000), 'Pure red (#0000FF in HTML, stored as $00FF0000)');
+    CheckColor(TColor($000000FF), 'Pure blue (#FF0000 in HTML, stored as $000000FF)');
+    CheckColor(TColor($00F7C34F), 'Arbitrary color');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBoundaryValues;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    { Test minimum N }
+    S.DefaultN := 1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(1, S.DefaultN);
+
+    { Test maximum N }
+    S.DefaultN := 99;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(99, S.DefaultN);
+
+    { Test JPEG quality boundaries }
+    S.JpegQuality := 1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(1, S.JpegQuality);
+
+    S.JpegQuality := 100;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(100, S.JpegQuality);
+
+    { Test PNG compression boundaries }
+    S.PngCompression := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(0, S.PngCompression);
+
+    S.PngCompression := 9;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(9, S.PngCompression);
+
+    { Test SkipEdges boundaries }
+    S.SkipEdgesPercent := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(0, S.SkipEdgesPercent);
+
+    S.SkipEdgesPercent := 49;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(49, S.SkipEdgesPercent);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClampOutOfRange;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'DefaultN', 0);
+    Ini.WriteInteger('extraction', 'SkipEdges', 50);
+    Ini.WriteInteger('extraction', 'MaxWorkers', 100);
+    Ini.WriteInteger('save', 'JpegQuality', 0);
+    Ini.WriteInteger('save', 'PngCompression', 10);
+    Ini.WriteInteger('cache', 'MaxSizeMB', 99999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(1, S.DefaultN, 'N below 1 clamped to 1');
+    Assert.AreEqual(49, S.SkipEdgesPercent, 'SkipEdges above 49 clamped to 49');
+    Assert.AreEqual(16, S.MaxWorkers, 'MaxWorkers above 16 clamped to 16');
+    Assert.AreEqual(1, S.JpegQuality, 'Quality below 1 clamped to 1');
+    Assert.AreEqual(9, S.PngCompression, 'Compression above 9 clamped to 9');
+    Assert.AreEqual(10000, S.CacheMaxSizeMB, 'Cache size above 10000 clamped to 10000');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestEmptyExtensionListFallback;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('extensions', 'List', '   ');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList,
+      'Whitespace-only extension list should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestMissingIniFileUsesDefaults;
+var
+  S: TPluginSettings;
+begin
+  { Point to a path that definitely does not exist }
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestResetDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.DefaultN := 42;
+    S.ViewMode := vmScroll;
+    S.JpegQuality := 10;
+
+    S.ResetDefaults;
+
+    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
+    Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+  finally
+    S.Free;
+  end;
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestPluginSettings);
+
+end.
