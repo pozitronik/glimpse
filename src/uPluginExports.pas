@@ -191,12 +191,15 @@ begin
     Builder := Builder + 'EXT="' + Extensions[I] + '"';
   end;
 
+  { MULTIMEDIA keyword tells TC to override its built-in media viewer }
+  Builder := 'MULTIMEDIA & (' + Builder + ')';
   DS := AnsiString(Builder);
   if MaxLen > 0 then
     System.AnsiStrings.StrLCopy(DetectString, PAnsiChar(DS), MaxLen - 1);
 
-  Log('ListGetDetectString: len=' + IntToStr(Length(DS)) +
-      ' str=' + string(Copy(DS, 1, 80)) + '...');
+  Log('ListGetDetectString: MaxLen=' + IntToStr(MaxLen) +
+      ' len=' + IntToStr(Length(DS)) +
+      ' str=' + string(DS));
 end;
 
 function ListSearchText(ListWin: HWND; SearchString: PAnsiChar; SearchParameter: Integer): Integer; stdcall;
