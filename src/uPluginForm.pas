@@ -48,6 +48,7 @@ type
     FAnimStep: Integer;
     FCellGap: Integer;
     FTimecodeHeight: Integer;
+    FColumnCount: Integer;
     function GetColumnCount: Integer;
     function GetCellImageSize: TSize;
     function GetTimecodeRect(AIndex: Integer): TRect;
@@ -72,6 +73,9 @@ type
     function HasPlaceholders: Boolean;
     procedure AdvanceAnimation;
     procedure RecalcSize;
+    function CalcFitColumns(AViewportW, AViewportH: Integer): Integer;
+    function DefaultColumnCount: Integer;
+    property ColumnCount: Integer read FColumnCount write FColumnCount;
     property ViewMode: TViewMode read FViewMode write FViewMode;
     property BackColor: TColor read FBackColor write FBackColor;
   end;
@@ -200,6 +204,7 @@ begin
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
   FAnimStep := 0;
+  FColumnCount := 0;
 end;
 
 procedure TFrameView.WMEraseBkgnd(var Message: TWMEraseBkgnd);
@@ -221,10 +226,40 @@ end;
 
 function TFrameView.GetColumnCount: Integer;
 begin
+  if FViewMode = vmScroll then
+    Exit(1);
+  if Length(FCells) <= 1 then
+    Exit(1);
+  if FColumnCount > 0 then
+    Exit(FColumnCount);
+  Result := Max(1, Floor(Sqrt(Length(FCells))));
+end;
+
+function TFrameView.DefaultColumnCount: Integer;
+begin
   if (FViewMode = vmScroll) or (Length(FCells) <= 1) then
     Result := 1
   else
     Result := Max(1, Floor(Sqrt(Length(FCells))));
+end;
+
+function TFrameView.CalcFitColumns(AViewportW, AViewportH: Integer): Integer;
+var
+  C, Rows, CellW, CellH, RowH, TotalH: Integer;
+begin
+  if (Length(FCells) <= 1) or (AViewportW <= 0) or (AViewportH <= 0) then
+    Exit(1);
+  for C := 1 to Length(FCells) do
+  begin
+    CellW := Max(1, (AViewportW - (C + 1) * FCellGap) div C);
+    CellH := Max(1, Round(CellW * ASPECT_RATIO));
+    RowH := CellH + FTimecodeHeight + FCellGap;
+    Rows := (Length(FCells) + C - 1) div C;
+    TotalH := FCellGap + Rows * RowH;
+    if TotalH <= AViewportH then
+      Exit(C);
+  end;
+  Result := Length(FCells);
 end;
 
 function TFrameView.GetCellImageSize: TSize;
@@ -820,7 +855,35 @@ begin
 end;
 
 procedure TPluginForm.UpdateFrameViewSize;
+var
+  ZoomMode: TZoomMode;
+  FitCols, DefCols: Integer;
 begin
+  if FFrameView.ViewMode = vmGrid then
+  begin
+    if FCmbZoom.ItemIndex >= 0 then
+      ZoomMode := TZoomMode(FCmbZoom.ItemIndex)
+    else
+      ZoomMode := zmFitWindow;
+
+    case ZoomMode of
+      zmFitWindow:
+        FFrameView.ColumnCount := FFrameView.CalcFitColumns(
+          FScrollBox.ClientWidth, FScrollBox.ClientHeight);
+      zmFitIfLarger:
+        begin
+          FitCols := FFrameView.CalcFitColumns(
+            FScrollBox.ClientWidth, FScrollBox.ClientHeight);
+          DefCols := FFrameView.DefaultColumnCount;
+          FFrameView.ColumnCount := Max(FitCols, DefCols);
+        end;
+    else
+      FFrameView.ColumnCount := 0;
+    end;
+  end
+  else
+    FFrameView.ColumnCount := 0;
+
   FFrameView.Width := FScrollBox.ClientWidth;
   FFrameView.RecalcSize;
   FFrameView.Invalidate;
@@ -894,7 +957,7 @@ end;
 
 procedure TPluginForm.OnZoomChange(Sender: TObject);
 begin
-  { Phase 7: apply zoom mode }
+  UpdateFrameViewSize;
 end;
 
 end.

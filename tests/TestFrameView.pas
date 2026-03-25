@@ -23,6 +23,19 @@ type
   end;
 
   [TestFixture]
+  TTestFrameViewFit = class
+  public
+    [Test] procedure TestCalcFitColumnsSingleFrame;
+    [Test] procedure TestCalcFitColumnsResultFits;
+    [Test] procedure TestCalcFitColumnsMaximizesCellSize;
+    [Test] procedure TestCalcFitColumnsSmallViewport;
+    [Test] procedure TestCalcFitColumnsZeroViewport;
+    [Test] procedure TestColumnCountOverride;
+    [Test] procedure TestColumnCountZeroUsesAuto;
+    [Test] procedure TestDefaultColumnCount;
+  end;
+
+  [TestFixture]
   TTestFrameViewScroll = class
   public
     [Test] procedure TestWheelDownScrollsForward;
@@ -288,6 +301,156 @@ begin
       Assert.IsTrue(R.Right <= V.Width, Format('Cell %d Right > Width', [I]));
       Assert.IsTrue(R.Bottom <= V.Height, Format('Cell %d Bottom > Height', [I]));
     end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+{ TTestFrameViewFit }
+
+procedure TTestFrameViewFit.TestCalcFitColumnsSingleFrame;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    Assert.AreEqual(1, V.CalcFitColumns(800, 600));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestCalcFitColumnsResultFits;
+var
+  V: TFrameView;
+  Cols: Integer;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    Cols := V.CalcFitColumns(800, 600);
+    V.ColumnCount := Cols;
+    V.Width := 800;
+    V.RecalcSize;
+    Assert.IsTrue(V.Height <= 600,
+      Format('Height %d should fit in viewport 600 with %d columns', [V.Height, Cols]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestCalcFitColumnsMaximizesCellSize;
+var
+  V: TFrameView;
+  Cols: Integer;
+begin
+  { The result should be the minimum column count that fits,
+    because fewer columns = larger cells }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    Cols := V.CalcFitColumns(800, 600);
+    if Cols > 1 then
+    begin
+      V.ColumnCount := Cols - 1;
+      V.Width := 800;
+      V.RecalcSize;
+      Assert.IsTrue(V.Height > 600,
+        Format('Height %d with %d columns should exceed viewport 600',
+          [V.Height, Cols - 1]));
+    end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestCalcFitColumnsSmallViewport;
+var
+  V: TFrameView;
+  Cols: Integer;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    Cols := V.CalcFitColumns(800, 50);
+    Assert.IsTrue(Cols >= 1);
+    V.ColumnCount := Cols;
+    V.Width := 800;
+    V.RecalcSize;
+    Assert.IsTrue((V.Height <= 50) or (Cols = 4),
+      'Should fit or use max columns');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestCalcFitColumnsZeroViewport;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    Assert.AreEqual(1, V.CalcFitColumns(0, 0), 'Zero viewport returns 1');
+    Assert.AreEqual(1, V.CalcFitColumns(800, 0), 'Zero height returns 1');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestColumnCountOverride;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    V.ColumnCount := 5;
+    V.RecalcSize;
+    Assert.IsTrue(V.Height > 0);
+    { With 5 columns: cell 0 is col 0, cell 5 is col 0 (row 1) }
+    Assert.AreEqual(V.GetCellRect(0).Left, V.GetCellRect(5).Left,
+      'Cell 5 should be in the same column as cell 0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestColumnCountZeroUsesAuto;
+var
+  V: TFrameView;
+  H1, H2: Integer;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ColumnCount := 0;
+    V.RecalcSize;
+    H1 := V.Height;
+    { Default for 4 cells: floor(sqrt(4)) = 2 columns, should match }
+    V.ColumnCount := 2;
+    V.RecalcSize;
+    H2 := V.Height;
+    Assert.AreEqual(H1, H2, 'ColumnCount=0 should match default (2 columns)');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFit.TestDefaultColumnCount;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    Assert.AreEqual(3, V.DefaultColumnCount, 'floor(sqrt(9)) = 3');
+    V.SetCellCount(1, MakeOffsets(1));
+    Assert.AreEqual(1, V.DefaultColumnCount, 'Single frame = 1');
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ViewMode := vmScroll;
+    Assert.AreEqual(1, V.DefaultColumnCount, 'Scroll mode always 1');
   finally
     FreeTestFrameView(V);
   end;
@@ -592,6 +755,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewLayout);
+  TDUnitX.RegisterTestFixture(TTestFrameViewFit);
   TDUnitX.RegisterTestFixture(TTestFrameViewScroll);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
 
