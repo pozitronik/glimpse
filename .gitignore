@@ -1,2 +1,11 @@
 /src/VideoThumb.res
+/src/Win64/
+/src/Win32/
+/tests/Win64/
+/tests/Win32/
+./idea
+src/VideoThumb.delphilsp.json
+/coverage/Win32/CodeCoverage.exe
+/coverage/Win64/CodeCoverage.exe
+/src/VideoThumb.dproj.local
 /tests/VideoThumbTests.res

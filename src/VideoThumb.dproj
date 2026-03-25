@@ -34,6 +34,10 @@
         <GenDll>true</GenDll>
         <SanitizedProjectName>VideoThumb</SanitizedProjectName>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'=='true'">
+        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
+    </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <Debugger_HostApplication>D:\DSHELL\TOTALCMD64.EXE</Debugger_HostApplication>
         <Debugger_RunParams>/i=%commander_path%\debug.ini</Debugger_RunParams>

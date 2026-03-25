@@ -42,7 +42,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'=='true'">
         <SanitizedProjectName>VideoThumbTests</SanitizedProjectName>
-        <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
+        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
