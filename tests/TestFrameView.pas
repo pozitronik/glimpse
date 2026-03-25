@@ -36,6 +36,31 @@ type
   end;
 
   [TestFixture]
+  TTestFrameViewFilmstrip = class
+  public
+    [Test] procedure TestFilmstripSingleRow;
+    [Test] procedure TestFilmstripNoOverlap;
+    [Test] procedure TestFilmstripCellHeight;
+  end;
+
+  [TestFixture]
+  TTestFrameViewSingle = class
+  public
+    [Test] procedure TestSingleFillsViewport;
+    [Test] procedure TestNavigateForward;
+    [Test] procedure TestNavigateBackward;
+    [Test] procedure TestNavigateClamps;
+  end;
+
+  [TestFixture]
+  TTestFrameViewSmartGrid = class
+  public
+    [Test] procedure TestSmartGridFillsViewport;
+    [Test] procedure TestSmartGridNoOverlap;
+    [Test] procedure TestSmartGridAllFramesCovered;
+  end;
+
+  [TestFixture]
   TTestFrameViewScroll = class
   public
     [Test] procedure TestWheelDownScrollsForward;
@@ -456,6 +481,212 @@ begin
   end;
 end;
 
+{ TTestFrameViewFilmstrip }
+
+procedure TTestFrameViewFilmstrip.TestFilmstripSingleRow;
+var
+  V: TFrameView;
+  I: Integer;
+  R: TRect;
+begin
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    { All cells should have the same Top }
+    for I := 1 to 3 do
+    begin
+      R := V.GetCellRect(I);
+      Assert.AreEqual(V.GetCellRect(0).Top, R.Top,
+        Format('Cell %d should be on same row as cell 0', [I]));
+    end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFilmstrip.TestFilmstripNoOverlap;
+var
+  V: TFrameView;
+  I: Integer;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    for I := 0 to 2 do
+    begin
+      R1 := V.GetCellRect(I);
+      R2 := V.GetCellRect(I + 1);
+      Assert.IsTrue(R1.Right <= R2.Left,
+        Format('Cell %d right edge should not overlap cell %d left edge', [I, I + 1]));
+    end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFilmstrip.TestFilmstripCellHeight;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Height > 0, 'Cell should have positive height');
+    Assert.IsTrue(R.Height <= 400, 'Cell height should fit viewport');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+{ TTestFrameViewSingle }
+
+procedure TTestFrameViewSingle.TestSingleFillsViewport;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 600);
+    V.Width := 800;
+    V.Height := 600;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Width > 0, 'Cell should have positive width');
+    Assert.IsTrue(R.Height > 0, 'Cell should have positive height');
+    Assert.IsTrue(R.Right <= 800, 'Cell should fit within viewport width');
+    Assert.IsTrue(R.Bottom <= 600, 'Cell should fit within viewport height');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestNavigateForward;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    Assert.AreEqual(0, V.CurrentFrameIndex);
+    V.NavigateFrame(1);
+    Assert.AreEqual(1, V.CurrentFrameIndex);
+    V.NavigateFrame(1);
+    Assert.AreEqual(2, V.CurrentFrameIndex);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestNavigateBackward;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.NavigateFrame(2);
+    Assert.AreEqual(2, V.CurrentFrameIndex);
+    V.NavigateFrame(-1);
+    Assert.AreEqual(1, V.CurrentFrameIndex);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestNavigateClamps;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.NavigateFrame(-5);
+    Assert.AreEqual(0, V.CurrentFrameIndex, 'Should clamp to 0');
+    V.NavigateFrame(100);
+    Assert.AreEqual(3, V.CurrentFrameIndex, 'Should clamp to last');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+{ TTestFrameViewSmartGrid }
+
+procedure TTestFrameViewSmartGrid.TestSmartGridFillsViewport;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    Assert.AreEqual(800, V.Width, 'Width should match viewport');
+    Assert.AreEqual(600, V.Height, 'Height should match viewport');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridNoOverlap;
+var
+  V: TFrameView;
+  I, J: Integer;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    for I := 0 to 7 do
+      for J := I + 1 to 8 do
+      begin
+        R1 := V.GetCellRect(I);
+        R2 := V.GetCellRect(J);
+        Assert.IsFalse(
+          (R1.Left < R2.Right) and (R1.Right > R2.Left) and
+          (R1.Top < R2.Bottom) and (R1.Bottom > R2.Top),
+          Format('Cells %d and %d overlap', [I, J]));
+      end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridAllFramesCovered;
+var
+  V: TFrameView;
+  I: Integer;
+  R: TRect;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(9, MakeOffsets(9));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    for I := 0 to 8 do
+    begin
+      R := V.GetCellRect(I);
+      Assert.IsTrue(R.Width > 0,
+        Format('Cell %d should have positive width', [I]));
+      Assert.IsTrue(R.Height > 0,
+        Format('Cell %d should have positive height', [I]));
+    end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 { Helper: send WM_MOUSEWHEEL to a control with given delta }
 procedure SendWheel(AControl: TControl; ADelta: SmallInt);
 begin
@@ -756,6 +987,9 @@ end;
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewLayout);
   TDUnitX.RegisterTestFixture(TTestFrameViewFit);
+  TDUnitX.RegisterTestFixture(TTestFrameViewFilmstrip);
+  TDUnitX.RegisterTestFixture(TTestFrameViewSingle);
+  TDUnitX.RegisterTestFixture(TTestFrameViewSmartGrid);
   TDUnitX.RegisterTestFixture(TTestFrameViewScroll);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
 

@@ -9,7 +9,7 @@ uses
 
 type
   TFFmpegMode = (fmAuto, fmExe);
-  TViewMode = (vmGrid, vmScroll);
+  TViewMode = (vmScroll, vmGrid, vmSmartGrid, vmFilmstrip, vmSingle);
   TZoomMode = (zmFitWindow, zmFitIfLarger, zmActual);
   TSaveFormat = (sfPNG, sfJPEG);
 
@@ -257,6 +257,12 @@ class function TPluginSettings.StrToViewMode(const AValue: string): TViewMode;
 begin
   if SameText(AValue, 'scroll') then
     Result := vmScroll
+  else if SameText(AValue, 'smartgrid') then
+    Result := vmSmartGrid
+  else if SameText(AValue, 'filmstrip') then
+    Result := vmFilmstrip
+  else if SameText(AValue, 'single') then
+    Result := vmSingle
   else
     Result := DEF_VIEW_MODE;
 end;
@@ -264,7 +270,10 @@ end;
 class function TPluginSettings.ViewModeToStr(AMode: TViewMode): string;
 begin
   case AMode of
-    vmScroll: Result := 'scroll';
+    vmScroll:    Result := 'scroll';
+    vmSmartGrid: Result := 'smartgrid';
+    vmFilmstrip: Result := 'filmstrip';
+    vmSingle:    Result := 'single';
   else
     Result := 'grid';
   end;

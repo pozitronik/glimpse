@@ -217,18 +217,23 @@ end;
 procedure TTestPluginSettings.TestViewModeRoundTrip;
 var
   S: TPluginSettings;
+
+  procedure Check(AMode: TViewMode; const ALabel: string);
+  begin
+    S.ViewMode := AMode;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(AMode), Ord(S.ViewMode), ALabel);
+  end;
+
 begin
   S := TPluginSettings.Create(FTempIniPath);
   try
-    S.ViewMode := vmGrid;
-    S.Save;
-    S.Load;
-    Assert.AreEqual(Ord(vmGrid), Ord(S.ViewMode));
-
-    S.ViewMode := vmScroll;
-    S.Save;
-    S.Load;
-    Assert.AreEqual(Ord(vmScroll), Ord(S.ViewMode));
+    Check(vmGrid, 'Grid');
+    Check(vmScroll, 'Scroll');
+    Check(vmSmartGrid, 'SmartGrid');
+    Check(vmFilmstrip, 'Filmstrip');
+    Check(vmSingle, 'Single');
   finally
     S.Free;
   end;
