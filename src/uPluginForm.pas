@@ -137,7 +137,6 @@ type
 implementation
 
 const
-  TOOLBAR_HEIGHT = 34;
   CELL_GAP       = 4;
   TIMECODE_H     = 20;
   ASPECT_RATIO   = 9.0 / 16.0; { 16:9 video }
@@ -508,31 +507,40 @@ begin
 end;
 
 procedure TPluginForm.CreateToolbar;
+const
+  TB_PAD   = 4;   { Vertical padding above and below controls }
+  CTRL_GAP = 8;   { Gap between control groups }
+  BTN_GAP  = 2;   { Gap between adjacent buttons in a group }
+  PB_H     = 16;  { Progress bar height }
 var
-  X, CY: Integer;
+  X, CY, CtrlH: Integer;
 begin
   FToolbar := TPanel.Create(Self);
   FToolbar.Parent := Self;
   FToolbar.Align := alTop;
-  FToolbar.Height := TOOLBAR_HEIGHT;
   FToolbar.BevelOuter := bvNone;
   FToolbar.ParentBackground := False;
 
-  CY := (TOOLBAR_HEIGHT - 22) div 2;
-  X := 8;
+  { Create edit first: its auto-sized height is the reference for all controls }
+  FEditFrameCount := TEdit.Create(FToolbar);
+  FEditFrameCount.Parent := FToolbar;
+  FEditFrameCount.Width := 40;
+  FEditFrameCount.ReadOnly := True;
+  CtrlH := FEditFrameCount.Height;
+
+  FToolbar.Height := CtrlH + 2 * TB_PAD;
+  CY := TB_PAD;
+  X := CTRL_GAP;
 
   FLblFrames := TLabel.Create(FToolbar);
   FLblFrames.Parent := FToolbar;
   FLblFrames.Caption := 'Frames:';
   FLblFrames.AutoSize := True;
   FLblFrames.Left := X;
-  FLblFrames.Top := CY + 3;
+  FLblFrames.Top := CY + (CtrlH - FLblFrames.Height) div 2;
   Inc(X, FLblFrames.Width + 4);
 
-  FEditFrameCount := TEdit.Create(FToolbar);
-  FEditFrameCount.Parent := FToolbar;
-  FEditFrameCount.SetBounds(X, CY, 40, 22);
-  FEditFrameCount.ReadOnly := True;
+  FEditFrameCount.SetBounds(X, CY, 40, CtrlH);
   FEditFrameCount.OnChange := OnFrameCountChange;
 
   FUpDown := TUpDown.Create(FToolbar);
@@ -540,46 +548,46 @@ begin
   FUpDown.Associate := FEditFrameCount;
   FUpDown.Min := 1;
   FUpDown.Max := 99;
-  Inc(X, 40 + FUpDown.Width + 14);
+  Inc(X, 40 + FUpDown.Width + CTRL_GAP);
 
   FBtnGrid := TSpeedButton.Create(FToolbar);
   FBtnGrid.Parent := FToolbar;
-  FBtnGrid.SetBounds(X, CY, 48, 22);
+  FBtnGrid.SetBounds(X, CY, 56, CtrlH);
   FBtnGrid.GroupIndex := 1;
   FBtnGrid.AllowAllUp := False;
   FBtnGrid.Caption := 'Grid';
   FBtnGrid.OnClick := OnViewModeClick;
-  Inc(X, 50);
+  Inc(X, 56 + BTN_GAP);
 
   FBtnScroll := TSpeedButton.Create(FToolbar);
   FBtnScroll.Parent := FToolbar;
-  FBtnScroll.SetBounds(X, CY, 48, 22);
+  FBtnScroll.SetBounds(X, CY, 56, CtrlH);
   FBtnScroll.GroupIndex := 1;
   FBtnScroll.AllowAllUp := False;
   FBtnScroll.Caption := 'Scroll';
   FBtnScroll.OnClick := OnViewModeClick;
-  Inc(X, 60);
+  Inc(X, 56 + CTRL_GAP);
 
   FCmbZoom := TComboBox.Create(FToolbar);
   FCmbZoom.Parent := FToolbar;
   FCmbZoom.Style := csDropDownList;
-  FCmbZoom.SetBounds(X, CY, 110, 22);
+  FCmbZoom.SetBounds(X, CY, 140, CtrlH);
   FCmbZoom.Items.Add('Fit window');
   FCmbZoom.Items.Add('Fit if larger');
   FCmbZoom.Items.Add('100%');
   FCmbZoom.OnChange := OnZoomChange;
-  Inc(X, 120);
+  Inc(X, 140 + CTRL_GAP);
 
   FProgressBar := TProgressBar.Create(FToolbar);
   FProgressBar.Parent := FToolbar;
-  FProgressBar.SetBounds(X, CY + 3, 120, 16);
+  FProgressBar.SetBounds(X, CY + (CtrlH - PB_H) div 2, 120, PB_H);
   FProgressBar.Visible := False;
 
   FLblProgress := TLabel.Create(FToolbar);
   FLblProgress.Parent := FToolbar;
   FLblProgress.AutoSize := True;
-  FLblProgress.Left := X + 125;
-  FLblProgress.Top := CY + 3;
+  FLblProgress.Left := X + 120 + 4;
+  FLblProgress.Top := CY + (CtrlH - FLblProgress.Height) div 2;
   FLblProgress.Visible := False;
 end;
 
