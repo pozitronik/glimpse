@@ -8,7 +8,7 @@ uses
   System.SysUtils, System.Classes, System.Types, System.Math,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Buttons, Vcl.Graphics,
+  Vcl.ComCtrls, Vcl.Graphics,
   uSettings, uFrameOffsets, uFFmpegExe;
 
 const
@@ -89,8 +89,8 @@ type
     FLblFrames: TLabel;
     FEditFrameCount: TEdit;
     FUpDown: TUpDown;
-    FBtnGrid: TSpeedButton;
-    FBtnScroll: TSpeedButton;
+    FBtnGrid: TButton;
+    FBtnScroll: TButton;
     FCmbZoom: TComboBox;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
@@ -112,6 +112,7 @@ type
     procedure ShowError(const AMessage: string);
     procedure HideError;
     procedure UpdateFrameViewSize;
+    procedure UpdateViewModeButtons;
     procedure StartExtraction;
     procedure StopExtraction;
     procedure DrainPendingFrameMessages;
@@ -121,8 +122,10 @@ type
     procedure OnViewModeClick(Sender: TObject);
     procedure OnZoomChange(Sender: TObject);
     procedure OnScrollBoxResize(Sender: TObject);
+    procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
+    procedure CMDialogKey(var Message: TWMKey); message CM_DIALOGKEY;
   protected
     procedure Resize; override;
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
@@ -473,6 +476,8 @@ var
 begin
   CreateNew(nil);
   BorderStyle := bsNone;
+  KeyPreview := True;
+  OnKeyDown := OnFormKeyDown;
 
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
@@ -526,6 +531,7 @@ begin
   FEditFrameCount.Parent := FToolbar;
   FEditFrameCount.Width := 40;
   FEditFrameCount.ReadOnly := True;
+  FEditFrameCount.TabOrder := 0;
   CtrlH := FEditFrameCount.Height;
 
   FToolbar.Height := CtrlH + 2 * TB_PAD;
@@ -550,21 +556,19 @@ begin
   FUpDown.Max := 99;
   Inc(X, 40 + FUpDown.Width + CTRL_GAP);
 
-  FBtnGrid := TSpeedButton.Create(FToolbar);
+  FBtnGrid := TButton.Create(FToolbar);
   FBtnGrid.Parent := FToolbar;
   FBtnGrid.SetBounds(X, CY, 56, CtrlH);
-  FBtnGrid.GroupIndex := 1;
-  FBtnGrid.AllowAllUp := False;
   FBtnGrid.Caption := 'Grid';
+  FBtnGrid.TabOrder := 1;
   FBtnGrid.OnClick := OnViewModeClick;
   Inc(X, 56 + BTN_GAP);
 
-  FBtnScroll := TSpeedButton.Create(FToolbar);
+  FBtnScroll := TButton.Create(FToolbar);
   FBtnScroll.Parent := FToolbar;
   FBtnScroll.SetBounds(X, CY, 56, CtrlH);
-  FBtnScroll.GroupIndex := 1;
-  FBtnScroll.AllowAllUp := False;
   FBtnScroll.Caption := 'Scroll';
+  FBtnScroll.TabOrder := 2;
   FBtnScroll.OnClick := OnViewModeClick;
   Inc(X, 56 + CTRL_GAP);
 
@@ -575,6 +579,7 @@ begin
   FCmbZoom.Items.Add('Fit window');
   FCmbZoom.Items.Add('Fit if larger');
   FCmbZoom.Items.Add('100%');
+  FCmbZoom.TabOrder := 3;
   FCmbZoom.OnChange := OnZoomChange;
   Inc(X, 140 + CTRL_GAP);
 
@@ -624,10 +629,9 @@ begin
   if FSettings = nil then Exit;
 
   FUpDown.Position := FSettings.DefaultN;
-  FBtnGrid.Down := FSettings.ViewMode = vmGrid;
-  FBtnScroll.Down := FSettings.ViewMode = vmScroll;
   FCmbZoom.ItemIndex := Ord(FSettings.ZoomMode);
   FFrameView.ViewMode := FSettings.ViewMode;
+  UpdateViewModeButtons;
   FFrameView.BackColor := FSettings.Background;
   FScrollBox.Color := FSettings.Background;
   Color := FSettings.Background;
@@ -762,6 +766,42 @@ begin
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
 end;
 
+procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  case Key of
+    VK_TAB:
+      begin
+        SelectNext(ActiveControl, not (ssShift in Shift), True);
+        Key := 0;
+      end;
+    VK_ESCAPE:
+      begin
+        PostMessage(GetParent(Handle), WM_KEYDOWN, VK_ESCAPE, 0);
+        PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
+        Key := 0;
+      end;
+  end;
+end;
+
+procedure TPluginForm.CMDialogKey(var Message: TWMKey);
+begin
+  case Message.CharCode of
+    VK_TAB:
+      begin
+        SelectNext(ActiveControl, GetKeyState(VK_SHIFT) >= 0, True);
+        Message.Result := 1;
+      end;
+    VK_ESCAPE:
+      begin
+        PostMessage(GetParent(Handle), WM_KEYDOWN, VK_ESCAPE, 0);
+        PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
+        Message.Result := 1;
+      end;
+  else
+    inherited;
+  end;
+end;
+
 procedure TPluginForm.ShowError(const AMessage: string);
 begin
   FFrameView.Visible := False;
@@ -784,6 +824,20 @@ begin
   FFrameView.Width := FScrollBox.ClientWidth;
   FFrameView.RecalcSize;
   FFrameView.Invalidate;
+end;
+
+procedure TPluginForm.UpdateViewModeButtons;
+begin
+  if FFrameView.ViewMode = vmGrid then
+  begin
+    FBtnGrid.Font.Style := [fsBold];
+    FBtnScroll.Font.Style := [];
+  end
+  else
+  begin
+    FBtnGrid.Font.Style := [];
+    FBtnScroll.Font.Style := [fsBold];
+  end;
 end;
 
 procedure TPluginForm.Resize;
@@ -830,10 +884,11 @@ end;
 
 procedure TPluginForm.OnViewModeClick(Sender: TObject);
 begin
-  if FBtnGrid.Down then
+  if Sender = FBtnGrid then
     FFrameView.ViewMode := vmGrid
   else
     FFrameView.ViewMode := vmScroll;
+  UpdateViewModeButtons;
   UpdateFrameViewSize;
 end;
 
