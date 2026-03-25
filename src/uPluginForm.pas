@@ -58,6 +58,7 @@ type
     procedure PaintTimecode(AIndex: Integer);
     procedure PaintErrorCell(const ARect: TRect);
     procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
+    procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
   protected
     procedure Paint; override;
   public
@@ -124,6 +125,8 @@ type
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
   protected
     procedure Resize; override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+      MousePos: TPoint): Boolean; override;
   public
     constructor CreateForPlugin(AParentWin: HWND; const AFileName: string;
       ASettings: TPluginSettings; const AFFmpegPath: string);
@@ -200,6 +203,18 @@ end;
 procedure TFrameView.WMEraseBkgnd(var Message: TWMEraseBkgnd);
 begin
   Message.Result := 1;
+end;
+
+procedure TFrameView.WMMouseWheel(var Message: TWMMouseWheel);
+begin
+  if Parent is TScrollBox then
+  begin
+    TScrollBox(Parent).VertScrollBar.Position :=
+      TScrollBox(Parent).VertScrollBar.Position - Message.WheelDelta;
+    Message.Result := 1;
+  end
+  else
+    inherited;
 end;
 
 function TFrameView.GetColumnCount: Integer;
@@ -768,6 +783,19 @@ begin
   inherited;
   if Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
+end;
+
+function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
+  MousePos: TPoint): Boolean;
+begin
+  if Assigned(FScrollBox) and FScrollBox.Visible then
+  begin
+    FScrollBox.VertScrollBar.Position :=
+      FScrollBox.VertScrollBar.Position - WheelDelta;
+    Result := True;
+  end
+  else
+    Result := inherited;
 end;
 
 procedure TPluginForm.OnScrollBoxResize(Sender: TObject);

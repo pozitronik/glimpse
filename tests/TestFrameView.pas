@@ -23,6 +23,14 @@ type
   end;
 
   [TestFixture]
+  TTestFrameViewScroll = class
+  public
+    [Test] procedure TestWheelDownScrollsForward;
+    [Test] procedure TestWheelUpScrollsBackward;
+    [Test] procedure TestWheelWithoutScrollBoxParent;
+  end;
+
+  [TestFixture]
   TTestFrameViewState = class
   public
     [Test] procedure TestSetCellCountCreatesPlaceholders;
@@ -41,7 +49,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Types, Vcl.Forms, Vcl.Graphics,
+  System.SysUtils, System.Types,
+  Winapi.Windows, Winapi.Messages,
+  Vcl.Forms, Vcl.Graphics, Vcl.Controls,
   uPluginForm, uFrameOffsets, uSettings;
 
 { Helper: create a TFrameView with a temporary parent so it has a valid ClientWidth }
@@ -283,6 +293,110 @@ begin
   end;
 end;
 
+{ Helper: send WM_MOUSEWHEEL to a control with given delta }
+procedure SendWheel(AControl: TControl; ADelta: SmallInt);
+begin
+  AControl.Perform(WM_MOUSEWHEEL, WPARAM(Word(ADelta)) shl 16, 0);
+end;
+
+{ TTestFrameViewScroll }
+
+procedure TTestFrameViewScroll.TestWheelDownScrollsForward;
+var
+  Form: TForm;
+  ScrollBox: TScrollBox;
+  View: TFrameView;
+  OldPos: Integer;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    Form.SetBounds(0, 0, 800, 300);
+    Form.HandleNeeded;
+
+    ScrollBox := TScrollBox.Create(Form);
+    ScrollBox.Parent := Form;
+    ScrollBox.Align := alClient;
+    ScrollBox.BorderStyle := bsNone;
+
+    View := TFrameView.Create(ScrollBox);
+    View.Parent := ScrollBox;
+    View.SetBounds(0, 0, 780, 2000);
+
+    ScrollBox.VertScrollBar.Range := 2000;
+    OldPos := ScrollBox.VertScrollBar.Position;
+
+    SendWheel(View, -120);
+
+    Assert.IsTrue(ScrollBox.VertScrollBar.Position > OldPos,
+      'Scroll position should increase when scrolling down');
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameViewScroll.TestWheelUpScrollsBackward;
+var
+  Form: TForm;
+  ScrollBox: TScrollBox;
+  View: TFrameView;
+  PosAfterDown: Integer;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    Form.SetBounds(0, 0, 800, 300);
+    Form.HandleNeeded;
+
+    ScrollBox := TScrollBox.Create(Form);
+    ScrollBox.Parent := Form;
+    ScrollBox.Align := alClient;
+    ScrollBox.BorderStyle := bsNone;
+
+    View := TFrameView.Create(ScrollBox);
+    View.Parent := ScrollBox;
+    View.SetBounds(0, 0, 780, 2000);
+
+    ScrollBox.VertScrollBar.Range := 2000;
+
+    { Scroll down first to move away from 0 }
+    SendWheel(View, -120);
+    SendWheel(View, -120);
+    SendWheel(View, -120);
+    PosAfterDown := ScrollBox.VertScrollBar.Position;
+    Assert.IsTrue(PosAfterDown > 0, 'Should have scrolled down from 0');
+
+    { Now scroll up }
+    SendWheel(View, 120);
+
+    Assert.IsTrue(ScrollBox.VertScrollBar.Position < PosAfterDown,
+      'Scroll position should decrease when scrolling up');
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameViewScroll.TestWheelWithoutScrollBoxParent;
+var
+  Form: TForm;
+  View: TFrameView;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    Form.SetBounds(0, 0, 800, 600);
+    Form.HandleNeeded;
+
+    View := TFrameView.Create(Form);
+    View.Parent := Form;
+    View.SetBounds(0, 0, 780, 2000);
+
+    { Must not crash when parent is not a TScrollBox }
+    SendWheel(View, -120);
+
+    Assert.Pass('No crash when parent is not TScrollBox');
+  finally
+    Form.Free;
+  end;
+end;
+
 { TTestFrameViewState }
 
 procedure TTestFrameViewState.TestSetCellCountCreatesPlaceholders;
@@ -478,6 +592,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewLayout);
+  TDUnitX.RegisterTestFixture(TTestFrameViewScroll);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
 
 end.
