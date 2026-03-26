@@ -1268,6 +1268,11 @@ begin
 
   UpdateViewModeButtons;
   UpdateFrameViewSize;
+
+  { Persist user preference }
+  FSettings.ViewMode := AMode;
+  FSettings.ZoomMode := FFrameView.ZoomMode;
+  FSettings.Save;
 end;
 
 procedure TPluginForm.LoadFile(const AFileName: string);
@@ -1608,6 +1613,10 @@ begin
 
   FFrameView.ZoomMode := TZoomMode(MI.Tag);
   UpdateFrameViewSize;
+
+  { Persist user preference }
+  FSettings.ZoomMode := FFrameView.ZoomMode;
+  FSettings.Save;
 end;
 
 procedure TPluginForm.Resize;
@@ -1664,6 +1673,10 @@ end;
 
 procedure TPluginForm.OnFrameCountChange(Sender: TObject);
 begin
+  { Persist user preference }
+  FSettings.DefaultN := FUpDown.Position;
+  FSettings.Save;
+
   if not FVideoInfo.IsValid then Exit;
   StopExtraction;
   DrainPendingFrameMessages;
