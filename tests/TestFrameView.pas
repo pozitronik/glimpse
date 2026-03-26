@@ -1685,6 +1685,8 @@ begin
     { With NativeW=0, cell falls back to Max(1, 0) = 1 pixel }
     Assert.AreEqual(1, R.Width, 'Cell width should fall back to 1 with zero native');
     Assert.AreEqual(1, R.Height, 'Cell height should fall back to 1 with zero native');
+    { Width should fall back to viewport (no horizontal scroll needed for 1px cells) }
+    Assert.AreEqual(800, V.Width, 'View width should fall back to viewport');
     { Height should still be positive }
     Assert.IsTrue(V.Height > 0, 'View height should be positive');
   finally

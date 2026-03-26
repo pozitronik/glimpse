@@ -223,6 +223,21 @@ const
   TIMECODE_H     = 20;
   DEF_ASPECT_RATIO = 9.0 / 16.0; { fallback for 16:9 video }
 
+  { Painting colors }
+  CLR_CELL_BG         = TColor($002D2D2D); { dark gray cell/placeholder background }
+  CLR_ARC             = TColor($00707070); { loading spinner arc }
+  CLR_TIMECODE_OVERLAY = TColor($00CCCCCC); { timecode text over smart grid cells }
+  CLR_TIMECODE_LOADED  = TColor($00AAAAAA); { timecode text for loaded frames }
+  CLR_TIMECODE_PENDING = TColor($00555555); { timecode text for placeholders }
+  CLR_ERROR_TEXT       = TColor($004040FF); { error cell label }
+
+  { Painting fonts and sizes }
+  FONT_NAME         = 'Segoe UI';
+  FONT_TIMECODE     = 8;
+  FONT_ERROR        = 9;
+  ARC_PEN_WIDTH     = 3;
+  ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
+
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
   );
@@ -735,7 +750,7 @@ end;
 
 procedure TFrameView.PaintPlaceholder(const ARect: TRect);
 begin
-  Canvas.Brush.Color := $002D2D2D;
+  Canvas.Brush.Color := CLR_CELL_BG;
   Canvas.Pen.Style := psClear;
   Canvas.Rectangle(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom);
   PaintArc(ARect);
@@ -765,7 +780,7 @@ begin
   DstR.Bottom := DstR.Top + DH;
 
   { Fill letterbox area }
-  Canvas.Brush.Color := $002D2D2D;
+  Canvas.Brush.Color := CLR_CELL_BG;
   Canvas.FillRect(ARect);
   Canvas.StretchDraw(DstR, Bmp);
 end;
@@ -807,12 +822,12 @@ const
 begin
   CX := (ARect.Left + ARect.Right) div 2;
   CY := (ARect.Top + ARect.Bottom) div 2;
-  Radius := Min(ARect.Width, ARect.Height) div 8;
+  Radius := Min(ARect.Width, ARect.Height) div ARC_RADIUS_DIV;
   if Radius < 5 then Exit;
 
   StartAngle := FAnimStep * 45.0;
-  Canvas.Pen.Color := $00707070;
-  Canvas.Pen.Width := 3;
+  Canvas.Pen.Color := CLR_ARC;
+  Canvas.Pen.Width := ARC_PEN_WIDTH;
   Canvas.Pen.Style := psSolid;
 
   for I := 0 to SEGMENTS do
@@ -832,23 +847,23 @@ var
   R: TRect;
 begin
   R := GetTimecodeRect(AIndex);
-  Canvas.Font.Name := 'Segoe UI';
-  Canvas.Font.Size := 8;
+  Canvas.Font.Name := FONT_NAME;
+  Canvas.Font.Size := FONT_TIMECODE;
 
   if FViewMode = vmSmartGrid then
   begin
     { Semi-transparent overlay for smart grid }
-    Canvas.Brush.Color := $002D2D2D;
+    Canvas.Brush.Color := CLR_CELL_BG;
     Canvas.Brush.Style := bsSolid;
     Canvas.FillRect(R);
-    Canvas.Font.Color := $00CCCCCC;
+    Canvas.Font.Color := CLR_TIMECODE_OVERLAY;
   end
   else
   begin
     if FCells[AIndex].State = fcsLoaded then
-      Canvas.Font.Color := $00AAAAAA
+      Canvas.Font.Color := CLR_TIMECODE_LOADED
     else
-      Canvas.Font.Color := $00555555;
+      Canvas.Font.Color := CLR_TIMECODE_PENDING;
   end;
 
   Canvas.Brush.Style := bsClear;
@@ -860,12 +875,12 @@ procedure TFrameView.PaintErrorCell(const ARect: TRect);
 var
   R: TRect;
 begin
-  Canvas.Brush.Color := $002D2D2D;
+  Canvas.Brush.Color := CLR_CELL_BG;
   Canvas.Pen.Style := psClear;
   Canvas.Rectangle(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom);
-  Canvas.Font.Name := 'Segoe UI';
-  Canvas.Font.Size := 9;
-  Canvas.Font.Color := $004040FF;
+  Canvas.Font.Name := FONT_NAME;
+  Canvas.Font.Size := FONT_ERROR;
+  Canvas.Font.Color := CLR_ERROR_TEXT;
   Canvas.Brush.Style := bsClear;
   R := ARect;
   DrawText(Canvas.Handle, 'Error', -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
@@ -977,7 +992,9 @@ begin
         case FZoomMode of
           zmActual:
             if FNativeW > 0 then
-              Width := Max(FViewportW, FNativeW + 2 * FCellGap);
+              Width := Max(FViewportW, FNativeW + 2 * FCellGap)
+            else
+              Width := FViewportW;
         else
           Width := FViewportW;
         end;
@@ -1625,31 +1642,17 @@ end;
 
 function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
   MousePos: TPoint): Boolean;
+var
+  Msg: TWMMouseWheel;
 begin
-  if Assigned(FScrollBox) and FScrollBox.Visible then
+  { Forward to TFrameView so wheel logic lives in one place (WMMouseWheel) }
+  if Assigned(FFrameView) and Assigned(FScrollBox) and FScrollBox.Visible then
   begin
-    case FFrameView.ViewMode of
-      vmSingle:
-        begin
-          if WheelDelta > 0 then
-            FFrameView.NavigateFrame(-1)
-          else
-            FFrameView.NavigateFrame(1);
-          Result := True;
-        end;
-      vmFilmstrip:
-        begin
-          FScrollBox.HorzScrollBar.Position :=
-            FScrollBox.HorzScrollBar.Position - WheelDelta;
-          Result := True;
-        end;
-    else
-      begin
-        FScrollBox.VertScrollBar.Position :=
-          FScrollBox.VertScrollBar.Position - WheelDelta;
-        Result := True;
-      end;
-    end;
+    ZeroMemory(@Msg, SizeOf(Msg));
+    Msg.Msg := WM_MOUSEWHEEL;
+    Msg.WheelDelta := WheelDelta;
+    FFrameView.Perform(WM_MOUSEWHEEL, TMessage(Msg).WParam, TMessage(Msg).LParam);
+    Result := True;
   end
   else
     Result := inherited;
