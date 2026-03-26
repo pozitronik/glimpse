@@ -1103,7 +1103,7 @@ begin
   FEditFrameCount := TEdit.Create(FToolbar);
   FEditFrameCount.Parent := FToolbar;
   FEditFrameCount.Width := 40;
-  FEditFrameCount.ReadOnly := True;
+  FEditFrameCount.NumbersOnly := True;
   FEditFrameCount.TabOrder := 0;
   CtrlH := FEditFrameCount.Height;
 
