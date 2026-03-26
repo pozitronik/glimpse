@@ -943,7 +943,8 @@ procedure TFrameView.RecalcSize;
 var
   Cols, Rows: Integer;
   Sz: TSize;
-  CellH, CellW, N: Integer;
+  CellH, N: Integer;
+  R0: TRect;
 begin
   N := Length(FCells);
   if N = 0 then
@@ -966,18 +967,9 @@ begin
       end;
     vmFilmstrip:
       begin
-        { Use the same zoom logic as GetCellRectFilmstrip }
-        CellH := Max(1, FViewportH - FTimecodeHeight - 2 * FCellGap);
-        case FZoomMode of
-          zmActual:
-            CellH := Max(1, FNativeH);
-          zmFitIfLarger:
-            if (FNativeH > 0) and (FNativeH < CellH) then
-              CellH := FNativeH;
-        end;
-        CellW := Max(1, Round(CellH / FAspectRatio));
-        Width := Max(FViewportW, FCellGap + N * (CellW + FCellGap));
-        Height := Max(FViewportH, CellH + FTimecodeHeight + 2 * FCellGap);
+        R0 := GetCellRectFilmstrip(0);
+        Width := Max(FViewportW, FCellGap + N * (R0.Width + FCellGap));
+        Height := Max(FViewportH, R0.Height + FTimecodeHeight + 2 * FCellGap);
       end;
     vmScroll:
       begin
