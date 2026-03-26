@@ -1670,6 +1670,9 @@ end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
 begin
+  { Drain any frames that arrived since the last notification.
+    Covers the case where PostMessage notifications miss the HWND. }
+  ProcessPendingFrames;
   if Assigned(FFrameView) and FFrameView.Visible then
     FFrameView.AdvanceAnimation;
 end;
