@@ -1046,6 +1046,10 @@ begin
   CreateErrorLabel;
   ApplySettings;
 
+  { Wire OnChange after ApplySettings so initial Position assignment doesn't
+    trigger a save that overwrites the loaded DefaultN }
+  FEditFrameCount.OnChange := OnFrameCountChange;
+
   ParentWindow := AParentWin;
   FParentWnd := AParentWin;
   SetWindowSubclass(AParentWin, @ParentSubclassProc, 1, DWORD_PTR(Self));
@@ -1116,7 +1120,6 @@ begin
   Inc(X, FLblFrames.Width + 4);
 
   FEditFrameCount.SetBounds(X, CY, 40, CtrlH);
-  FEditFrameCount.OnChange := OnFrameCountChange;
 
   FUpDown := TUpDown.Create(FToolbar);
   FUpDown.Parent := FToolbar;
