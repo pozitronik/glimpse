@@ -211,7 +211,7 @@ const
   DEF_ASPECT_RATIO = 9.0 / 16.0; { fallback for 16:9 video }
 
   MODE_CAPTIONS: array[TViewMode] of string = (
-    'Scroll', 'Grid', 'Smart', 'Film', 'Single'
+    'Scroll '#$2195, 'Grid', 'Smart', 'Scroll '#$2194, 'Single'
   );
 
   { Per-mode sizing submode labels }
@@ -1068,8 +1068,8 @@ const
   TB_PAD   = 4;   { Vertical padding above and below controls }
   CTRL_GAP = 8;   { Gap between control groups }
   BTN_GAP  = 2;   { Gap between adjacent buttons in a group }
-  BTN_W_SPLIT = 72;  { Split button width (caption + dropdown arrow) }
-  BTN_W_PLAIN = 56;  { Plain button width (no dropdown) }
+  BTN_PAD  = 16;  { Horizontal text padding inside button (both sides) }
+  SPLIT_ARROW_W = 20; { Extra width for split button dropdown arrow }
   PB_H     = 16;  { Progress bar height }
 var
   X, CY, CtrlH, BW: Integer;
@@ -1119,13 +1119,14 @@ begin
     { Create popup menu first (needed for DropDownMenu assignment) }
     FModePopups[VM] := CreateModePopup(VM);
 
-    if FModePopups[VM] <> nil then
-      BW := BTN_W_SPLIT
-    else
-      BW := BTN_W_PLAIN;
-
     FModeButtons[VM] := TButton.Create(FToolbar);
     FModeButtons[VM].Parent := FToolbar;
+
+    { Auto-width: measure caption text and add padding }
+    BW := Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
+    if FModePopups[VM] <> nil then
+      Inc(BW, SPLIT_ARROW_W);
+
     FModeButtons[VM].SetBounds(X, CY, BW, CtrlH);
     FModeButtons[VM].Caption := MODE_CAPTIONS[VM];
     FModeButtons[VM].Tag := Ord(VM);
