@@ -6,14 +6,15 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Types, System.Math,
+  System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus,
   uSettings, uFrameOffsets, uFFmpegExe;
 
 const
-  WM_FRAME_READY     = WM_USER + 100; { WParam=index, LParam=TBitmap ptr (0=error) }
-  WM_EXTRACTION_DONE = WM_USER + 101; { extraction finished }
+  WM_FRAME_READY     = WM_USER + 100; { Notification: pending frames available in queue }
+  WM_EXTRACTION_DONE = WM_USER + 101; { Extraction finished }
 
 type
   TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);
@@ -30,19 +31,28 @@ type
     Count: Integer;
   end;
 
+  { Extracted frame awaiting delivery to UI thread }
+  TPendingFrame = record
+    Index: Integer;
+    Bitmap: TBitmap; { nil = extraction error }
+  end;
+
   /// Worker thread that extracts frames sequentially via ffmpeg.exe.
-  /// Posts WM_FRAME_READY for each frame and WM_EXTRACTION_DONE when finished.
+  /// Stores results in a thread-safe queue and posts notifications.
   TExtractionThread = class(TThread)
   private
     FFFmpegPath: string;
     FFileName: string;
     FOffsets: TFrameOffsetArray;
-    FTargetWnd: HWND;
+    FNotifyWnd: HWND;
+    FQueue: TList<TPendingFrame>;
+    FQueueLock: TCriticalSection;
   protected
     procedure Execute; override;
   public
     constructor Create(const AFFmpegPath, AFileName: string;
-      const AOffsets: TFrameOffsetArray; ATargetWnd: HWND);
+      const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
+      AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection);
   end;
 
   /// Custom control that renders frame cells in various layout modes.
@@ -132,6 +142,8 @@ type
     { Worker }
     FWorkerThread: TExtractionThread;
     FFramesLoaded: Integer;
+    FPendingFrames: TList<TPendingFrame>;
+    FPendingLock: TCriticalSection;
     { Animation }
     FAnimTimer: TTimer;
 
@@ -148,6 +160,7 @@ type
     procedure ActivateMode(AMode: TViewMode);
     procedure StartExtraction;
     procedure StopExtraction;
+    procedure ProcessPendingFrames;
     procedure DrainPendingFrameMessages;
     procedure UpdateProgress;
     procedure OnAnimTimer(Sender: TObject);
@@ -226,20 +239,24 @@ const
 { TExtractionThread }
 
 constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
-  const AOffsets: TFrameOffsetArray; ATargetWnd: HWND);
+  const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
+  AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
   FFFmpegPath := AFFmpegPath;
   FFileName := AFileName;
   FOffsets := Copy(AOffsets);
-  FTargetWnd := ATargetWnd;
+  FNotifyWnd := ANotifyWnd;
+  FQueue := AQueue;
+  FQueueLock := AQueueLock;
 end;
 
 procedure TExtractionThread.Execute;
 var
   FFmpeg: TFFmpegExe;
   Bmp: TBitmap;
+  Frame: TPendingFrame;
   I: Integer;
 begin
   FFmpeg := TFFmpegExe.Create(FFFmpegPath);
@@ -257,15 +274,23 @@ begin
         Exit;
       end;
 
-      { Transfer bitmap ownership to the UI thread via PostMessage }
-      PostMessage(FTargetWnd, WM_FRAME_READY, WPARAM(I), LPARAM(Bmp));
+      { Enqueue frame for the UI thread; PostMessage is just a notification }
+      Frame.Index := I;
+      Frame.Bitmap := Bmp;
+      FQueueLock.Enter;
+      try
+        FQueue.Add(Frame);
+      finally
+        FQueueLock.Leave;
+      end;
+      PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
     end;
   finally
     FFmpeg.Free;
   end;
 
   if not Terminated then
-    PostMessage(FTargetWnd, WM_EXTRACTION_DONE, 0, 0);
+    PostMessage(FNotifyWnd, WM_EXTRACTION_DONE, 0, 0);
 end;
 
 { TFrameView }
@@ -1026,6 +1051,9 @@ begin
   SetWindowSubclass(AParentWin, @ParentSubclassProc, 1, DWORD_PTR(Self));
   Visible := True;
 
+  FPendingFrames := TList<TPendingFrame>.Create;
+  FPendingLock := TCriticalSection.Create;
+
   FAnimTimer := TTimer.Create(Self);
   FAnimTimer.Interval := 80;
   FAnimTimer.OnTimer := OnAnimTimer;
@@ -1043,6 +1071,8 @@ begin
   StopExtraction;
   DrainPendingFrameMessages;
   FFrameView.ClearCells;
+  FPendingLock.Free;
+  FPendingFrames.Free;
   inherited;
 end;
 
@@ -1311,7 +1341,8 @@ begin
 
   FAnimTimer.Enabled := True;
 
-  FWorkerThread := TExtractionThread.Create(FFFmpegPath, FFileName, FOffsets, Handle);
+  FWorkerThread := TExtractionThread.Create(FFFmpegPath, FFileName, FOffsets,
+    Handle, FPendingFrames, FPendingLock);
   FWorkerThread.Start;
 end;
 
@@ -1325,18 +1356,50 @@ begin
   end;
 end;
 
+procedure TPluginForm.ProcessPendingFrames;
+var
+  Snapshot: TArray<TPendingFrame>;
+  I: Integer;
+begin
+  { Drain the queue under lock, then process outside the lock }
+  FPendingLock.Enter;
+  try
+    Snapshot := FPendingFrames.ToArray;
+    FPendingFrames.Clear;
+  finally
+    FPendingLock.Leave;
+  end;
+
+  for I := 0 to High(Snapshot) do
+  begin
+    if Snapshot[I].Bitmap <> nil then
+      FFrameView.SetFrame(Snapshot[I].Index, Snapshot[I].Bitmap)
+    else
+      FFrameView.SetCellError(Snapshot[I].Index);
+    Inc(FFramesLoaded);
+  end;
+
+  if Length(Snapshot) > 0 then
+    UpdateProgress;
+end;
+
 procedure TPluginForm.DrainPendingFrameMessages;
 var
   Msg: TMsg;
+  I: Integer;
 begin
-  { Remove pending WM_FRAME_READY messages and free their bitmap payloads
-    to prevent leaks when the window is being torn down or reloaded }
-  while PeekMessage(Msg, Handle, WM_FRAME_READY, WM_FRAME_READY, PM_REMOVE) do
-  begin
-    if Msg.lParam <> 0 then
-      TObject(Msg.lParam).Free;
+  { Free any bitmaps still in the queue }
+  FPendingLock.Enter;
+  try
+    for I := 0 to FPendingFrames.Count - 1 do
+      FPendingFrames[I].Bitmap.Free;
+    FPendingFrames.Clear;
+  finally
+    FPendingLock.Leave;
   end;
-  { Also discard any pending done notification }
+  { Discard stale notification messages from the Win32 queue }
+  while PeekMessage(Msg, Handle, WM_FRAME_READY, WM_FRAME_READY, PM_REMOVE) do
+    ; { notifications carry no payload }
   PeekMessage(Msg, Handle, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE);
 end;
 
@@ -1360,24 +1423,14 @@ begin
 end;
 
 procedure TPluginForm.WMFrameReady(var Message: TMessage);
-var
-  Index: Integer;
-  Bmp: TBitmap;
 begin
-  Index := Integer(Message.WParam);
-  Bmp := TBitmap(Message.LParam);
-
-  if Bmp <> nil then
-    FFrameView.SetFrame(Index, Bmp)
-  else
-    FFrameView.SetCellError(Index);
-
-  Inc(FFramesLoaded);
-  UpdateProgress;
+  ProcessPendingFrames;
 end;
 
 procedure TPluginForm.WMExtractionDone(var Message: TMessage);
 begin
+  { Safety net: process any frames that arrived after the last notification }
+  ProcessPendingFrames;
   FProgressBar.Visible := False;
   FLblProgress.Visible := False;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
