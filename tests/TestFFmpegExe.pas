@@ -32,6 +32,12 @@ type
     [Test] procedure TestParseCodecHevc;
     [Test] procedure TestParseCodecMpeg2;
     [Test] procedure TestParseCodecNoVideo;
+    { Edge cases }
+    [Test] procedure TestParseDurationEmptyString;
+    [Test] procedure TestParseDurationTrailingDot;
+    [Test] procedure TestParseResolutionSingleDigitRejected;
+    [Test] procedure TestParseVideoCodecEmptyInput;
+    [Test] procedure TestParseVideoCodecExtraSpaces;
   end;
 
   [TestFixture]
@@ -205,6 +211,40 @@ end;
 procedure TTestFFmpegParsing.TestParseCodecNoVideo;
 begin
   Assert.AreEqual('', ParseVideoCodec('Audio: aac (LC), 44100 Hz'));
+end;
+
+{ TTestFFmpegParsing: Edge cases }
+
+procedure TTestFFmpegParsing.TestParseDurationEmptyString;
+begin
+  Assert.AreEqual(-1.0, ParseDuration(''), 0.001, 'Empty string should return -1');
+end;
+
+procedure TTestFFmpegParsing.TestParseDurationTrailingDot;
+begin
+  { "00:01:30." has a dot but no fractional digits: should reject as malformed }
+  Assert.AreEqual(-1.0, ParseDuration('Duration: 00:01:30.'), 0.001,
+    'Trailing dot without fraction should return -1');
+end;
+
+procedure TTestFFmpegParsing.TestParseResolutionSingleDigitRejected;
+var
+  W, H: Integer;
+begin
+  { Single-digit dimensions (e.g. 8x8) must be rejected to avoid hex false matches }
+  Assert.IsFalse(ParseResolution('Video: h264, 8x8, 30 fps', W, H),
+    'Single-digit resolution should be rejected');
+end;
+
+procedure TTestFFmpegParsing.TestParseVideoCodecEmptyInput;
+begin
+  Assert.AreEqual('', ParseVideoCodec(''), 'Empty string should return empty codec');
+end;
+
+procedure TTestFFmpegParsing.TestParseVideoCodecExtraSpaces;
+begin
+  { Multiple spaces between "Video:" and codec name should be skipped }
+  Assert.AreEqual('vp9', ParseVideoCodec('Video:    vp9 (Profile 0)'));
 end;
 
 { TTestFFmpegLocator }

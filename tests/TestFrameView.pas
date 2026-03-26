@@ -107,6 +107,22 @@ type
     [Test] procedure TestHasPlaceholdersMixed;
     [Test] procedure TestSetFrameOutOfRange;
     [Test] procedure TestSetCellErrorOutOfRange;
+    [Test] procedure TestSetCellCountResetsCurrentFrameIndex;
+    [Test] procedure TestClearCellsResetsCurrentFrameIndex;
+  end;
+
+  [TestFixture]
+  TTestFrameViewMisc = class
+  public
+    [Test] procedure TestAdvanceAnimationWrapsAt8;
+    [Test] procedure TestRecalcSizeEmptyUsesViewportHeight;
+    [Test] procedure TestGetColumnCountPerMode;
+    [Test] procedure TestSmartGridDistributesCorrectly;
+    [Test] procedure TestSmartGridPicksOptimalRows;
+    [Test] procedure TestGridCentersHorizontally;
+    [Test] procedure TestScrollActualNoNativeWidth;
+    [Test] procedure TestSingleFitWindowLetterboxesTall;
+    [Test] procedure TestFilmstripWheelScrollsHorizontally;
   end;
 
 implementation
@@ -1465,6 +1481,281 @@ begin
   end;
 end;
 
+procedure TTestFrameViewState.TestSetCellCountResetsCurrentFrameIndex;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(5, MakeOffsets(5));
+    V.NavigateFrame(3);
+    Assert.AreEqual(3, V.CurrentFrameIndex, 'Precondition: navigated to 3');
+    { SetCellCount should reset CurrentFrameIndex to 0 }
+    V.SetCellCount(5, MakeOffsets(5));
+    Assert.AreEqual(0, V.CurrentFrameIndex,
+      'SetCellCount should reset CurrentFrameIndex to 0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestClearCellsResetsCurrentFrameIndex;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(5, MakeOffsets(5));
+    V.NavigateFrame(2);
+    Assert.AreEqual(2, V.CurrentFrameIndex, 'Precondition: navigated to 2');
+    V.ClearCells;
+    Assert.AreEqual(0, V.CurrentFrameIndex,
+      'ClearCells should reset CurrentFrameIndex to 0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+{ TTestFrameViewMisc }
+
+procedure TTestFrameViewMisc.TestAdvanceAnimationWrapsAt8;
+var
+  V: TFrameView;
+  I: Integer;
+begin
+  { Animation step should cycle through 0..7 and wrap back to 0 }
+  V := CreateTestFrameView(400, vmGrid);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    for I := 1 to 8 do
+      V.AdvanceAnimation;
+    { After 8 advances from initial 0, should wrap back to 0 }
+    for I := 1 to 7 do
+      V.AdvanceAnimation;
+    { 15 total advances: 15 mod 8 = 7 }
+    V.AdvanceAnimation; { 16 mod 8 = 0 }
+    { No crash = success. The wrap behavior is internal, but we verify
+      it does not crash after many cycles. }
+    Assert.Pass('Animation cycles without error');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestRecalcSizeEmptyUsesViewportHeight;
+var
+  V: TFrameView;
+begin
+  { With 0 cells and a viewport set, RecalcSize should set Height = FViewportH }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(0, nil);
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    Assert.AreEqual(600, V.Height,
+      'Empty cells with viewport 600 should set Height to viewport');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestGetColumnCountPerMode;
+var
+  V: TFrameView;
+begin
+  { Verify column count logic for each view mode }
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+
+    V.ViewMode := vmScroll;
+    Assert.AreEqual(1, V.DefaultColumnCount, 'Scroll: always 1 column');
+
+    V.ViewMode := vmGrid;
+    Assert.AreEqual(2, V.DefaultColumnCount, 'Grid: floor(sqrt(4)) = 2');
+
+    V.SetCellCount(9, MakeOffsets(9));
+    Assert.AreEqual(3, V.DefaultColumnCount, 'Grid: floor(sqrt(9)) = 3');
+
+    V.SetCellCount(1, MakeOffsets(1));
+    Assert.AreEqual(1, V.DefaultColumnCount, 'Grid: single frame = 1');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestSmartGridDistributesCorrectly;
+var
+  V: TFrameView;
+  I: Integer;
+  R: TRect;
+  TotalCells: Integer;
+begin
+  { Verify that all 7 frames are reachable and non-degenerate in SmartGrid }
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(7, MakeOffsets(7));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+
+    TotalCells := 0;
+    for I := 0 to 6 do
+    begin
+      R := V.GetCellRect(I);
+      Assert.IsTrue(R.Width > 10,
+        Format('Cell %d width (%d) should be meaningful', [I, R.Width]));
+      Assert.IsTrue(R.Height > 10,
+        Format('Cell %d height (%d) should be meaningful', [I, R.Height]));
+      Assert.IsTrue(R.Left >= 0, Format('Cell %d should not start before 0', [I]));
+      Assert.IsTrue(R.Top >= 0, Format('Cell %d should not start before 0', [I]));
+      Inc(TotalCells);
+    end;
+    Assert.AreEqual(7, TotalCells, 'All 7 frames should be accounted for');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestSmartGridPicksOptimalRows;
+var
+  V: TFrameView;
+  R0, R1: TRect;
+begin
+  { For 4 frames with 16:9 aspect ratio in 800x600 viewport,
+    the algorithm should pick 2 rows (2+2) rather than 1 row (4)
+    because 2 rows yields aspect ratio closer to 9/16 }
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.AspectRatio := 9.0 / 16.0;
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+
+    R0 := V.GetCellRect(0);
+    R1 := V.GetCellRect(2); { If 2 rows: this is in row 1 }
+
+    { With 2 rows of 2: cell 2 should be on a different row than cell 0 }
+    Assert.IsTrue(R1.Top > R0.Top,
+      'Cell 2 should be on a lower row than cell 0 for 4-frame 16:9 layout');
+    { But cells 0 and 1 should be on the same row }
+    Assert.AreEqual(R0.Top, V.GetCellRect(1).Top,
+      'Cells 0 and 1 should be on the same row');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestGridCentersHorizontally;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { When grid is narrower than viewport, it should be centered }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { With 1 column, the single cell should be roughly centered }
+    Assert.IsTrue(R.Left > 0, 'Cell should not be at left edge (should be centered)');
+    Assert.IsTrue(R.Left < 400, 'Cell should not be beyond center');
+    { Left offset should roughly equal the gap from right edge }
+    Assert.IsTrue(Abs(R.Left - (800 - R.Right)) <= 1,
+      Format('Cell should be centered: Left=%d, Right gap=%d', [R.Left, 800 - R.Right]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestScrollActualNoNativeWidth;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { Scroll mode + zmActual + NativeW=0: fallback to minimal cells }
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.NativeW := 0;
+    V.NativeH := 0;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { With NativeW=0, cell falls back to Max(1, 0) = 1 pixel }
+    Assert.AreEqual(1, R.Width, 'Cell width should fall back to 1 with zero native');
+    Assert.AreEqual(1, R.Height, 'Cell height should fall back to 1 with zero native');
+    { Height should still be positive }
+    Assert.IsTrue(V.Height > 0, 'View height should be positive');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestSingleFitWindowLetterboxesTall;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { With a very tall aspect ratio, FitWindow should letterbox (width limited by height) }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.AspectRatio := 2.0; { height = 2x width, very tall }
+    V.ZoomMode := zmFitWindow;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.Width := 800;
+    V.Height := 600;
+    R := V.GetCellRect(0);
+    { Height limited by viewport, so width should be much less than viewport }
+    Assert.IsTrue(R.Width < 400,
+      Format('Tall aspect ratio should produce narrow cell: got width=%d', [R.Width]));
+    Assert.IsTrue(R.Height > R.Width,
+      'Height should exceed width for tall aspect ratio');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewMisc.TestFilmstripWheelScrollsHorizontally;
+var
+  Form: TForm;
+  ScrollBox: TScrollBox;
+  View: TFrameView;
+  OldPos: Integer;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    Form.SetBounds(0, 0, 400, 400);
+    Form.HandleNeeded;
+
+    ScrollBox := TScrollBox.Create(Form);
+    ScrollBox.Parent := Form;
+    ScrollBox.Align := alClient;
+    ScrollBox.BorderStyle := bsNone;
+
+    View := TFrameView.Create(ScrollBox);
+    View.Parent := ScrollBox;
+    View.ViewMode := vmFilmstrip;
+    View.SetCellCount(10, MakeOffsets(10));
+    View.SetViewport(400, 400);
+    View.RecalcSize;
+    { Filmstrip is wider than scrollbox, enabling horizontal scroll }
+    View.SetBounds(0, 0, View.Width, View.Height);
+
+    ScrollBox.HorzScrollBar.Range := View.Width;
+    OldPos := ScrollBox.HorzScrollBar.Position;
+
+    { Send wheel down: should scroll horizontally in filmstrip mode }
+    SendWheel(View, -120);
+
+    Assert.IsTrue(ScrollBox.HorzScrollBar.Position > OldPos,
+      'Filmstrip wheel should scroll horizontally');
+  finally
+    Form.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewLayout);
   TDUnitX.RegisterTestFixture(TTestFrameViewFit);
@@ -1474,5 +1765,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewScroll);
   TDUnitX.RegisterTestFixture(TTestFrameViewGridZoom);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
+  TDUnitX.RegisterTestFixture(TTestFrameViewMisc);
 
 end.

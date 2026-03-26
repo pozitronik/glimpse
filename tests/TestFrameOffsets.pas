@@ -49,6 +49,13 @@ type
     procedure TestFormatTimecodeForFilename;
     [Test]
     procedure TestFormatTimecodeNegative;
+    { Additional edge cases }
+    [Test]
+    procedure TestNegativeFrameCountRaises;
+    [Test]
+    procedure TestOffsetsEvenlySpaced;
+    [Test]
+    procedure TestMaxEdgeGuardMinimalRange;
   end;
 
 implementation
@@ -250,6 +257,52 @@ procedure TTestFrameOffsets.TestFormatTimecodeNegative;
 begin
   { Negative time should be treated as zero }
   Assert.AreEqual('00:00:00.000', FormatTimecode(-5.0));
+end;
+
+{ Additional edge cases }
+
+procedure TTestFrameOffsets.TestNegativeFrameCountRaises;
+begin
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(100.0, -5, 0); end,
+    EArgumentException,
+    'Negative frame count should raise'
+  );
+end;
+
+procedure TTestFrameOffsets.TestOffsetsEvenlySpaced;
+var
+  Offsets: TFrameOffsetArray;
+  I: Integer;
+  ExpectedSpacing, ActualSpacing: Double;
+begin
+  { With no edge guard, spacing between consecutive frames should be D/N }
+  Offsets := CalculateFrameOffsets(120.0, 6, 0);
+  ExpectedSpacing := 120.0 / 6; { = 20.0 }
+  for I := 0 to 4 do
+  begin
+    ActualSpacing := Offsets[I + 1].TimeOffset - Offsets[I].TimeOffset;
+    Assert.AreEqual(ExpectedSpacing, ActualSpacing, 0.001,
+      Format('Spacing between frames %d and %d should be %.1f', [I + 1, I + 2, ExpectedSpacing]));
+  end;
+end;
+
+procedure TTestFrameOffsets.TestMaxEdgeGuardMinimalRange;
+var
+  Offsets: TFrameOffsetArray;
+begin
+  { 49% edge guard: effective range is 49%..51% = 2% of duration }
+  { With D=1000, EffStart=490, EffEnd=510, EffDuration=20 }
+  Offsets := CalculateFrameOffsets(1000.0, 3, 49);
+  Assert.AreEqual(3, Integer(Length(Offsets)));
+  { All offsets should fall within [490, 510] }
+  Assert.IsTrue(Offsets[0].TimeOffset >= 490.0,
+    Format('First offset %.3f should be >= 490', [Offsets[0].TimeOffset]));
+  Assert.IsTrue(Offsets[2].TimeOffset <= 510.0,
+    Format('Last offset %.3f should be <= 510', [Offsets[2].TimeOffset]));
+  { Offsets should still be ascending }
+  Assert.IsTrue(Offsets[0].TimeOffset < Offsets[1].TimeOffset, 'Must be ascending');
+  Assert.IsTrue(Offsets[1].TimeOffset < Offsets[2].TimeOffset, 'Must be ascending');
 end;
 
 initialization
