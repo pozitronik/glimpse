@@ -9,7 +9,7 @@ uses
 
 type
   TFFmpegMode = (fmAuto, fmExe);
-  TViewMode = (vmScroll, vmGrid, vmSmartGrid, vmFilmstrip, vmSingle);
+  TViewMode = (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
   TZoomMode = (zmFitWindow, zmFitIfLarger, zmActual);
   TSaveFormat = (sfPNG, sfJPEG);
 

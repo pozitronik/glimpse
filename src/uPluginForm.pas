@@ -211,14 +211,14 @@ const
   DEF_ASPECT_RATIO = 9.0 / 16.0; { fallback for 16:9 video }
 
   MODE_CAPTIONS: array[TViewMode] of string = (
-    'Scroll '#$2195, 'Grid', 'Smart', 'Scroll '#$2194, 'Single'
+    'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
   );
 
   { Per-mode sizing submode labels }
   SIZING_LABELS: array[TViewMode, TZoomMode] of string = (
-    { vmScroll }    ('Fit width',  'Fit if larger', 'Original size'),
-    { vmGrid }      ('Fit all',    'Fit if larger', 'Original size'),
     { vmSmartGrid } ('', '', ''),
+    { vmGrid }      ('', '', ''),
+    { vmScroll }    ('Fit width',  'Fit if larger', 'Original size'),
     { vmFilmstrip } ('Fit height', 'Fit if larger', 'Original size'),
     { vmSingle }    ('Fit',        'Fit if larger', 'Original size')
   );
@@ -388,27 +388,10 @@ function TFrameView.GetCellImageSize: TSize;
 var
   Cols, AvailW: Integer;
 begin
-  { Grid + Original: use native frame dimensions }
-  if (FViewMode = vmGrid) and (FZoomMode = zmActual) and
-     (FNativeW > 0) and (FNativeH > 0) then
-  begin
-    Result.cx := FNativeW;
-    Result.cy := FNativeH;
-    Exit;
-  end;
-
   Cols := GetColumnCount;
   AvailW := ClientWidth - (Cols + 1) * FCellGap;
   Result.cx := Max(1, AvailW div Cols);
   Result.cy := Max(1, Round(Result.cx * FAspectRatio));
-
-  { Grid + Fit if larger: cap cell size at native dimensions }
-  if (FViewMode = vmGrid) and (FZoomMode = zmFitIfLarger) and
-     (FNativeW > 0) and (Result.cx > FNativeW) then
-  begin
-    Result.cx := FNativeW;
-    Result.cy := FNativeH;
-  end;
 end;
 
 function TFrameView.GetCellRect(AIndex: Integer): TRect;
@@ -1165,8 +1148,8 @@ var
   ZM: TZoomMode;
   MI: TMenuItem;
 begin
-  { Smart Grid has no sizing submodes }
-  if AMode = vmSmartGrid then
+  { Grid modes always fit all frames to the available space }
+  if AMode in [vmSmartGrid, vmGrid] then
     Exit(nil);
 
   Result := TPopupMenu.Create(Self);
@@ -1239,7 +1222,7 @@ procedure TPluginForm.ActivateMode(AMode: TViewMode);
 begin
   FFrameView.ViewMode := AMode;
 
-  { Apply the zoom mode stored in the popup for this mode }
+  { Apply the zoom mode stored in the popup, or force Fit for modes without submodes }
   if FModePopups[AMode] <> nil then
   begin
     var I: Integer;
@@ -1249,7 +1232,9 @@ begin
         FFrameView.ZoomMode := TZoomMode(FModePopups[AMode].Items[I].Tag);
         Break;
       end;
-  end;
+  end
+  else
+    FFrameView.ZoomMode := zmFitWindow;
 
   UpdateViewModeButtons;
   UpdateFrameViewSize;
