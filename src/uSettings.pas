@@ -27,7 +27,7 @@ type
     FMaxWorkers: Integer;
     { [view] }
     FViewMode: TViewMode;
-    FZoomMode: TZoomMode;
+    FModeZoom: array[TViewMode] of TZoomMode;
     FZoomFactor: Double;
     FBackground: TColor;
     FShowTimecode: Boolean;
@@ -54,6 +54,10 @@ type
     class function HexToColor(const AValue: string; ADefault: TColor): TColor; static;
     class function ColorToHex(AColor: TColor): string; static;
     class function Clamp(AValue, AMin, AMax: Integer): Integer; static;
+    function GetModeZoom(AMode: TViewMode): TZoomMode;
+    procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
+    function GetActiveZoom: TZoomMode;
+    procedure SetActiveZoom(AValue: TZoomMode);
   public
     constructor Create(const AIniPath: string);
 
@@ -79,7 +83,10 @@ type
 
     { [view] }
     property ViewMode: TViewMode read FViewMode write FViewMode;
-    property ZoomMode: TZoomMode read FZoomMode write FZoomMode;
+    { Per-mode zoom: FModeZoom[AMode] }
+    property ModeZoom[AMode: TViewMode]: TZoomMode read GetModeZoom write SetModeZoom;
+    { Convenience: reads/writes FModeZoom[FViewMode] }
+    property ZoomMode: TZoomMode read GetActiveZoom write SetActiveZoom;
     property ZoomFactor: Double read FZoomFactor write FZoomFactor;
     property Background: TColor read FBackground write FBackground;
     property ShowTimecode: Boolean read FShowTimecode write FShowTimecode;
@@ -142,7 +149,8 @@ begin
   FSkipEdgesPercent := DEF_SKIP_EDGES_PERCENT;
   FMaxWorkers := DEF_MAX_WORKERS;
   FViewMode := DEF_VIEW_MODE;
-  FZoomMode := DEF_ZOOM_MODE;
+  for var VM := Low(TViewMode) to High(TViewMode) do
+    FModeZoom[VM] := DEF_ZOOM_MODE;
   FZoomFactor := DEF_ZOOM_FACTOR;
   FBackground := DEF_BACKGROUND;
   FShowTimecode := DEF_SHOW_TIMECODE;
@@ -176,7 +184,9 @@ begin
     FMaxWorkers := Clamp(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 1, 16);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
-    FZoomMode := StrToZoomMode(Ini.ReadString('view', 'ZoomMode', ''));
+    for var VM := Low(TViewMode) to High(TViewMode) do
+      FModeZoom[VM] := StrToZoomMode(Ini.ReadString(
+        'view.' + ViewModeToStr(VM), 'ZoomMode', ''));
     FZoomFactor := Ini.ReadFloat('view', 'ZoomFactor', DEF_ZOOM_FACTOR);
     if FZoomFactor <= 0 then
       FZoomFactor := DEF_ZOOM_FACTOR;
@@ -216,7 +226,9 @@ begin
     Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
 
     Ini.WriteString('view', 'Mode', ViewModeToStr(FViewMode));
-    Ini.WriteString('view', 'ZoomMode', ZoomModeToStr(FZoomMode));
+    for var VM := Low(TViewMode) to High(TViewMode) do
+      Ini.WriteString('view.' + ViewModeToStr(VM), 'ZoomMode',
+        ZoomModeToStr(FModeZoom[VM]));
     Ini.WriteFloat('view', 'ZoomFactor', FZoomFactor);
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
     Ini.WriteBool('view', 'ShowTimecode', FShowTimecode);
@@ -353,6 +365,26 @@ end;
 class function TPluginSettings.Clamp(AValue, AMin, AMax: Integer): Integer;
 begin
   Result := EnsureRange(AValue, AMin, AMax);
+end;
+
+function TPluginSettings.GetModeZoom(AMode: TViewMode): TZoomMode;
+begin
+  Result := FModeZoom[AMode];
+end;
+
+procedure TPluginSettings.SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
+begin
+  FModeZoom[AMode] := AValue;
+end;
+
+function TPluginSettings.GetActiveZoom: TZoomMode;
+begin
+  Result := FModeZoom[FViewMode];
+end;
+
+procedure TPluginSettings.SetActiveZoom(AValue: TZoomMode);
+begin
+  FModeZoom[FViewMode] := AValue;
 end;
 
 end.

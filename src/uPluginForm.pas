@@ -1229,6 +1229,9 @@ begin
 end;
 
 procedure TPluginForm.ApplySettings;
+var
+  VM: TViewMode;
+  I: Integer;
 begin
   if FSettings = nil then Exit;
 
@@ -1236,14 +1239,12 @@ begin
   FFrameView.ViewMode := FSettings.ViewMode;
   FFrameView.ZoomMode := FSettings.ZoomMode;
 
-  { Update popup menu checked state for the active mode }
-  if FModePopups[FSettings.ViewMode] <> nil then
-  begin
-    var I: Integer;
-    for I := 0 to FModePopups[FSettings.ViewMode].Items.Count - 1 do
-      FModePopups[FSettings.ViewMode].Items[I].Checked :=
-        I = Ord(FSettings.ZoomMode);
-  end;
+  { Restore per-mode zoom selections in all popup menus }
+  for VM := Low(TViewMode) to High(TViewMode) do
+    if FModePopups[VM] <> nil then
+      for I := 0 to FModePopups[VM].Items.Count - 1 do
+        FModePopups[VM].Items[I].Checked :=
+          I = Ord(FSettings.ModeZoom[VM]);
 
   UpdateViewModeButtons;
   FFrameView.BackColor := FSettings.Background;
