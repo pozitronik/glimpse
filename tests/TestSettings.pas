@@ -43,6 +43,14 @@ type
     procedure TestMissingIniFileUsesDefaults;
     [Test]
     procedure TestResetDefaults;
+    [Test]
+    procedure TestPerModeZoomIndependence;
+    [Test]
+    procedure TestPerModeZoomRoundTrip;
+    [Test]
+    procedure TestPerModeZoomDefaultsAllModes;
+    [Test]
+    procedure TestPerModeZoomOldIniBackwardCompat;
   end;
 
 implementation
@@ -449,6 +457,99 @@ begin
     Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
     Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
     Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomIndependence;
+var
+  S: TPluginSettings;
+begin
+  { Setting zoom for one view mode must not affect another }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.ModeZoom[vmScroll] := zmActual;
+    S.ModeZoom[vmFilmstrip] := zmFitIfLarger;
+    S.ModeZoom[vmSingle] := zmFitWindow;
+
+    Assert.AreEqual(Ord(zmActual), Ord(S.ModeZoom[vmScroll]), 'Scroll');
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S.ModeZoom[vmFilmstrip]), 'Filmstrip');
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S.ModeZoom[vmSingle]), 'Single');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  { Each mode gets a distinct zoom; verify all survive save/load }
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.ModeZoom[vmSmartGrid] := zmFitWindow;
+    S1.ModeZoom[vmGrid] := zmFitWindow;
+    S1.ModeZoom[vmScroll] := zmActual;
+    S1.ModeZoom[vmFilmstrip] := zmFitIfLarger;
+    S1.ModeZoom[vmSingle] := zmActual;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S2.ModeZoom[vmSmartGrid]), 'SmartGrid');
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S2.ModeZoom[vmGrid]), 'Grid');
+    Assert.AreEqual(Ord(zmActual), Ord(S2.ModeZoom[vmScroll]), 'Scroll');
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S2.ModeZoom[vmFilmstrip]), 'Filmstrip');
+    Assert.AreEqual(Ord(zmActual), Ord(S2.ModeZoom[vmSingle]), 'Single');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomDefaultsAllModes;
+var
+  S: TPluginSettings;
+  VM: TViewMode;
+begin
+  { After Load with missing INI, every mode should have default zoom }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    for VM := Low(TViewMode) to High(TViewMode) do
+      Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ModeZoom[VM]),
+        'Mode ' + IntToStr(Ord(VM)) + ' should default to DEF_ZOOM_MODE');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomOldIniBackwardCompat;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Old INI files have no per-mode zoom sections; all modes should get defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'Mode', 'scroll');
+    { No [view.scroll], [view.filmstrip] etc. sections }
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(vmScroll), Ord(S.ViewMode), 'ViewMode should load');
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ModeZoom[vmScroll]),
+      'Missing per-mode section should fall back to default');
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ModeZoom[vmFilmstrip]),
+      'Missing per-mode section should fall back to default');
   finally
     S.Free;
   end;

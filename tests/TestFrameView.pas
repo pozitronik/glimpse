@@ -41,6 +41,10 @@ type
     [Test] procedure TestFilmstripSingleRow;
     [Test] procedure TestFilmstripNoOverlap;
     [Test] procedure TestFilmstripCellHeight;
+    [Test] procedure TestFilmstripActualUsesNativeHeight;
+    [Test] procedure TestFilmstripFitIfLargerCapsToNative;
+    [Test] procedure TestFilmstripFitIfLargerScalesDown;
+    [Test] procedure TestFilmstripRecalcSizeMatchesCellRect;
   end;
 
   [TestFixture]
@@ -50,6 +54,11 @@ type
     [Test] procedure TestNavigateForward;
     [Test] procedure TestNavigateBackward;
     [Test] procedure TestNavigateClamps;
+    [Test] procedure TestSingleActualUsesNativeSize;
+    [Test] procedure TestSingleFitIfLargerSmallNative;
+    [Test] procedure TestSingleFitIfLargerLargeNative;
+    [Test] procedure TestNavigateEmptyCells;
+    [Test] procedure TestNavigateSingleCell;
   end;
 
   [TestFixture]
@@ -58,6 +67,10 @@ type
     [Test] procedure TestSmartGridFillsViewport;
     [Test] procedure TestSmartGridNoOverlap;
     [Test] procedure TestSmartGridAllFramesCovered;
+    [Test] procedure TestSmartGridSingleFrame;
+    [Test] procedure TestSmartGridTwoFrames;
+    [Test] procedure TestSmartGridThreeFrames;
+    [Test] procedure TestSmartGridLargeCount;
   end;
 
   [TestFixture]
@@ -66,6 +79,16 @@ type
     [Test] procedure TestWheelDownScrollsForward;
     [Test] procedure TestWheelUpScrollsBackward;
     [Test] procedure TestWheelWithoutScrollBoxParent;
+    [Test] procedure TestScrollActualUsesNativeWidth;
+    [Test] procedure TestScrollFitIfLargerCapsToNative;
+    [Test] procedure TestScrollFitIfLargerScalesDown;
+  end;
+
+  [TestFixture]
+  TTestFrameViewGridZoom = class
+  public
+    [Test] procedure TestGridActualUsesNativeWidthForColumns;
+    [Test] procedure TestGridActualZeroNativeFallsBack;
   end;
 
   [TestFixture]
@@ -73,6 +96,8 @@ type
   public
     [Test] procedure TestSetCellCountCreatesPlaceholders;
     [Test] procedure TestSetCellCountStoresTimecodes;
+    [Test] procedure TestSetCellCountNilOffsets;
+    [Test] procedure TestSetCellCountOffsetsShorterThanCount;
     [Test] procedure TestSetFrameChangesState;
     [Test] procedure TestSetCellErrorChangesState;
     [Test] procedure TestClearCellsFreesBitmaps;
@@ -87,7 +112,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Types,
+  System.SysUtils, System.Types, System.Math,
   Winapi.Windows, Winapi.Messages,
   Vcl.Forms, Vcl.Graphics, Vcl.Controls,
   uPluginForm, uFrameOffsets, uSettings;
@@ -547,6 +572,103 @@ begin
   end;
 end;
 
+procedure TTestFrameViewFilmstrip.TestFilmstripActualUsesNativeHeight;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmActual: cell height = native video height, ignoring viewport }
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.NativeW := 640;
+    V.NativeH := 360;
+    V.AspectRatio := 360 / 640;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.AreEqual(360, R.Height, 'Cell height should match native height');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFilmstrip.TestFilmstripFitIfLargerCapsToNative;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmFitIfLarger with small native: cell height = native height }
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.NativeW := 320;
+    V.NativeH := 180;
+    V.AspectRatio := 180 / 320;
+    V.ZoomMode := zmFitIfLarger;
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.AreEqual(180, R.Height,
+      'FitIfLarger should cap to native when native < viewport');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFilmstrip.TestFilmstripFitIfLargerScalesDown;
+var
+  V: TFrameView;
+  R: TRect;
+  AvailH: Integer;
+begin
+  { zmFitIfLarger with large native: cell height = available viewport height }
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.NativeW := 1920;
+    V.NativeH := 1080;
+    V.AspectRatio := 1080 / 1920;
+    V.ZoomMode := zmFitIfLarger;
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { Available height = viewport - timecode - 2*gap }
+    AvailH := 400 - 20 - 2 * 4;
+    Assert.AreEqual(AvailH, R.Height,
+      'FitIfLarger should use viewport height when native > viewport');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewFilmstrip.TestFilmstripRecalcSizeMatchesCellRect;
+var
+  V: TFrameView;
+  R0: TRect;
+  N: Integer;
+begin
+  { RecalcSize total width must be consistent with GetCellRectFilmstrip }
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    N := 5;
+    V.NativeW := 640;
+    V.NativeH := 360;
+    V.AspectRatio := 360 / 640;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(N, MakeOffsets(N));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    R0 := V.GetCellRect(0);
+    { Width = max(viewport, gap + N * (cellW + gap)) }
+    Assert.AreEqual(Max(800, 4 + N * (R0.Width + 4)), V.Width,
+      'RecalcSize width should match cell rect geometry');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 { TTestFrameViewSingle }
 
 procedure TTestFrameViewSingle.TestSingleFillsViewport;
@@ -619,6 +741,112 @@ begin
   end;
 end;
 
+procedure TTestFrameViewSingle.TestSingleActualUsesNativeSize;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmActual: cell should use native dimensions regardless of viewport }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.NativeW := 320;
+    V.NativeH := 240;
+    V.AspectRatio := 240 / 320;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.Width := 800;
+    V.Height := 600;
+    R := V.GetCellRect(0);
+    Assert.AreEqual(320, R.Width, 'Width should match native');
+    Assert.AreEqual(240, R.Height, 'Height should match native');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestSingleFitIfLargerSmallNative;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmFitIfLarger with small native: cell should use native size }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.NativeW := 200;
+    V.NativeH := 150;
+    V.AspectRatio := 150 / 200;
+    V.ZoomMode := zmFitIfLarger;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.Width := 800;
+    V.Height := 600;
+    R := V.GetCellRect(0);
+    Assert.AreEqual(200, R.Width, 'Should use native width when small');
+    Assert.AreEqual(150, R.Height, 'Should use native height when small');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestSingleFitIfLargerLargeNative;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmFitIfLarger with large native: cell should scale down to fit viewport }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.NativeW := 1920;
+    V.NativeH := 1080;
+    V.AspectRatio := 1080 / 1920;
+    V.ZoomMode := zmFitIfLarger;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.Width := 800;
+    V.Height := 600;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Width <= 800, 'Should scale down to fit width');
+    Assert.IsTrue(R.Height <= 600, 'Should scale down to fit height');
+    Assert.IsTrue(R.Width > 200, 'Should not be tiny');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestNavigateEmptyCells;
+var
+  V: TFrameView;
+begin
+  { NavigateFrame with no cells must not crash }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(0, nil);
+    V.NavigateFrame(1);
+    V.NavigateFrame(-1);
+    Assert.AreEqual(0, V.CurrentFrameIndex);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSingle.TestNavigateSingleCell;
+var
+  V: TFrameView;
+begin
+  { With 1 cell, navigation should stay at index 0 }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    V.NavigateFrame(1);
+    Assert.AreEqual(0, V.CurrentFrameIndex, 'Cannot navigate past single cell');
+    V.NavigateFrame(-1);
+    Assert.AreEqual(0, V.CurrentFrameIndex, 'Cannot navigate before single cell');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 { TTestFrameViewSmartGrid }
 
 procedure TTestFrameViewSmartGrid.TestSmartGridFillsViewport;
@@ -681,6 +909,105 @@ begin
         Format('Cell %d should have positive width', [I]));
       Assert.IsTrue(R.Height > 0,
         Format('Cell %d should have positive height', [I]));
+    end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridSingleFrame;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { Single frame should fill viewport }
+    Assert.AreEqual(800, R.Width, 'Single frame should fill viewport width');
+    Assert.AreEqual(600, R.Height, 'Single frame should fill viewport height');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridTwoFrames;
+var
+  V: TFrameView;
+  R0, R1: TRect;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R0 := V.GetCellRect(0);
+    R1 := V.GetCellRect(1);
+    Assert.IsTrue(R0.Width > 0, 'Cell 0 should have positive width');
+    Assert.IsTrue(R1.Width > 0, 'Cell 1 should have positive width');
+    { Cells should not overlap }
+    Assert.IsFalse(
+      (R0.Left < R1.Right) and (R0.Right > R1.Left) and
+      (R0.Top < R1.Bottom) and (R0.Bottom > R1.Top),
+      'Two frames should not overlap');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridThreeFrames;
+var
+  V: TFrameView;
+  I, J: Integer;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    { No pair should overlap }
+    for I := 0 to 1 do
+      for J := I + 1 to 2 do
+      begin
+        R1 := V.GetCellRect(I);
+        R2 := V.GetCellRect(J);
+        Assert.IsFalse(
+          (R1.Left < R2.Right) and (R1.Right > R2.Left) and
+          (R1.Top < R2.Bottom) and (R1.Bottom > R2.Top),
+          Format('Cells %d and %d overlap', [I, J]));
+      end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridLargeCount;
+var
+  V: TFrameView;
+  I: Integer;
+  R: TRect;
+begin
+  { 25 frames: all should have positive dimensions and fit within viewport }
+  V := CreateTestFrameView(1024, vmSmartGrid);
+  try
+    V.SetCellCount(25, MakeOffsets(25));
+    V.SetViewport(1024, 768);
+    V.RecalcSize;
+    for I := 0 to 24 do
+    begin
+      R := V.GetCellRect(I);
+      Assert.IsTrue(R.Width > 0,
+        Format('Cell %d should have positive width', [I]));
+      Assert.IsTrue(R.Height > 0,
+        Format('Cell %d should have positive height', [I]));
+      Assert.IsTrue(R.Right <= 1024,
+        Format('Cell %d right edge should be within viewport', [I]));
+      Assert.IsTrue(R.Bottom <= 768,
+        Format('Cell %d bottom edge should be within viewport', [I]));
     end;
   finally
     FreeTestFrameView(V);
@@ -791,6 +1118,122 @@ begin
   end;
 end;
 
+procedure TTestFrameViewScroll.TestScrollActualUsesNativeWidth;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmActual: cell should use native video dimensions }
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.NativeW := 640;
+    V.NativeH := 360;
+    V.AspectRatio := 360 / 640;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.AreEqual(640, R.Width, 'Width should match native');
+    Assert.AreEqual(360, R.Height, 'Height should match native');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewScroll.TestScrollFitIfLargerCapsToNative;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmFitIfLarger with small native: cell width = native width }
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.NativeW := 400;
+    V.NativeH := 225;
+    V.AspectRatio := 225 / 400;
+    V.ZoomMode := zmFitIfLarger;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.AreEqual(400, R.Width,
+      'FitIfLarger should cap to native when native < viewport');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewScroll.TestScrollFitIfLargerScalesDown;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { zmFitIfLarger with large native: cell width = viewport width }
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.NativeW := 1920;
+    V.NativeH := 1080;
+    V.AspectRatio := 1080 / 1920;
+    V.ZoomMode := zmFitIfLarger;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { When native > viewport, FitIfLarger uses viewport width }
+    Assert.IsTrue(R.Width <= 800,
+      'FitIfLarger should not exceed viewport when native is larger');
+    Assert.IsTrue(R.Width > 100, 'Cell should not be tiny');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+{ TTestFrameViewGridZoom }
+
+procedure TTestFrameViewGridZoom.TestGridActualUsesNativeWidthForColumns;
+var
+  V: TFrameView;
+  R0, R1: TRect;
+begin
+  { zmActual: columns based on native frame width fitting into client area }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.NativeW := 300;
+    V.NativeH := 169;
+    V.AspectRatio := 169 / 300;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(4, MakeOffsets(4));
+    V.RecalcSize;
+    R0 := V.GetCellRect(0);
+    R1 := V.GetCellRect(1);
+    { With 800px viewport and 300px native, we expect 2 columns: (800-4)/(300+4) = 2.6 -> 2 }
+    Assert.IsTrue(R1.Left > R0.Left,
+      'With 300px native in 800px viewport, cell 1 should be to the right of cell 0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewGridZoom.TestGridActualZeroNativeFallsBack;
+var
+  V: TFrameView;
+begin
+  { zmActual with NativeW=0: should fall back to default column calculation }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.NativeW := 0;
+    V.NativeH := 0;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(4, MakeOffsets(4));
+    V.RecalcSize;
+    { Should not crash and should produce positive height }
+    Assert.IsTrue(V.Height > 0, 'Should fall back gracefully with zero native dims');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 { TTestFrameViewState }
 
 procedure TTestFrameViewState.TestSetCellCountCreatesPlaceholders;
@@ -818,6 +1261,44 @@ begin
     { Timecodes should match FormatTimecode of the offsets }
     Assert.AreEqual(FormatTimecode(10.0), V.FCells[0].Timecode);
     Assert.AreEqual(FormatTimecode(20.0), V.FCells[1].Timecode);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestSetCellCountNilOffsets;
+var
+  V: TFrameView;
+begin
+  { nil offsets: cells should have empty timecodes and zero time offsets }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, nil);
+    Assert.AreEqual(3, Integer(Length(V.FCells)));
+    Assert.AreEqual('', V.FCells[0].Timecode, 'Nil offsets: timecode should be empty');
+    Assert.AreEqual(0.0, V.FCells[0].TimeOffset, 0.001, 'Nil offsets: time should be 0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestSetCellCountOffsetsShorterThanCount;
+var
+  V: TFrameView;
+  Offsets: TFrameOffsetArray;
+begin
+  { Offsets array shorter than count: extra cells get empty timecodes }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    Offsets := MakeOffsets(2);
+    V.SetCellCount(4, Offsets);
+    Assert.AreEqual(4, Integer(Length(V.FCells)));
+    { First 2 cells should have timecodes from offsets }
+    Assert.AreEqual(FormatTimecode(10.0), V.FCells[0].Timecode);
+    Assert.AreEqual(FormatTimecode(20.0), V.FCells[1].Timecode);
+    { Extra cells beyond offsets array should have empty timecodes }
+    Assert.AreEqual('', V.FCells[2].Timecode, 'Beyond offsets: timecode should be empty');
+    Assert.AreEqual('', V.FCells[3].Timecode, 'Beyond offsets: timecode should be empty');
   finally
     FreeTestFrameView(V);
   end;
@@ -991,6 +1472,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewSingle);
   TDUnitX.RegisterTestFixture(TTestFrameViewSmartGrid);
   TDUnitX.RegisterTestFixture(TTestFrameViewScroll);
+  TDUnitX.RegisterTestFixture(TTestFrameViewGridZoom);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
 
 end.
