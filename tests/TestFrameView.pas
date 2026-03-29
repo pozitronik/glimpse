@@ -125,6 +125,22 @@ type
     [Test] procedure TestFilmstripWheelScrollsHorizontally;
   end;
 
+  [TestFixture]
+  TTestFrameViewZoom = class
+  public
+    [Test] procedure TestZoomFactorDefaultsToOne;
+    [Test] procedure TestGridZoomScalesCellDimensions;
+    [Test] procedure TestScrollZoomScalesCellDimensions;
+    [Test] procedure TestFilmstripZoomScalesCellHeight;
+    [Test] procedure TestSingleZoomUsesViewportBase;
+    [Test] procedure TestSmartGridZoomScalesDimensions;
+    [Test] procedure TestZoomFactorOneNoChange;
+    [Test] procedure TestGridZoomedContentExceedsViewport;
+    [Test] procedure TestSmartGridZoomCentering;
+    [Test] procedure TestScrollZoomedRecalcSizeWidth;
+    [Test] procedure TestSingleZoomedRecalcSize;
+  end;
+
 implementation
 
 uses
@@ -415,6 +431,7 @@ begin
     because fewer columns = larger cells }
   V := CreateTestFrameView(800, vmGrid);
   try
+    V.SetViewport(800, 600);
     V.SetCellCount(9, MakeOffsets(9));
     Cols := V.CalcFitColumns(800, 600);
     if Cols > 1 then
@@ -1212,9 +1229,10 @@ var
   V: TFrameView;
   R0, R1: TRect;
 begin
-  { zmActual: columns based on native frame width fitting into client area }
+  { zmActual: columns based on native frame width fitting into viewport }
   V := CreateTestFrameView(800, vmGrid);
   try
+    V.SetViewport(800, 600);
     V.NativeW := 300;
     V.NativeH := 169;
     V.AspectRatio := 169 / 300;
@@ -1653,6 +1671,7 @@ begin
   { When grid is narrower than viewport, it should be centered }
   V := CreateTestFrameView(800, vmGrid);
   try
+    V.SetViewport(800, 600);
     V.SetCellCount(1, MakeOffsets(1));
     V.RecalcSize;
     R := V.GetCellRect(0);
@@ -1758,6 +1777,256 @@ begin
   end;
 end;
 
+{ TTestFrameViewZoom }
+
+procedure TTestFrameViewZoom.TestZoomFactorDefaultsToOne;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    Assert.AreEqual(1.0, V.ZoomFactor, 0.001, 'Default zoom factor should be 1.0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestGridZoomScalesCellDimensions;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ColumnCount := 2;
+    V.RecalcSize;
+    R1 := V.GetCellRect(0);
+
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    Assert.IsTrue(Abs(R2.Width - R1.Width * 2) <= 2,
+      Format('Zoomed width %d should be ~2x base %d', [R2.Width, R1.Width]));
+    Assert.IsTrue(Abs(R2.Height - R1.Height * 2) <= 2,
+      Format('Zoomed height %d should be ~2x base %d', [R2.Height, R1.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestScrollZoomScalesCellDimensions;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(2, MakeOffsets(2));
+    V.RecalcSize;
+    R1 := V.GetCellRect(0);
+
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    Assert.IsTrue(Abs(R2.Width - R1.Width * 2) <= 2,
+      Format('Zoomed width %d should be ~2x base %d', [R2.Width, R1.Width]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestFilmstripZoomScalesCellHeight;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(3, MakeOffsets(3));
+    V.RecalcSize;
+    R1 := V.GetCellRect(0);
+
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    Assert.IsTrue(Abs(R2.Height - R1.Height * 2) <= 2,
+      Format('Zoomed height %d should be ~2x base %d', [R2.Height, R1.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestSingleZoomUsesViewportBase;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  { Zoom should scale from the viewport-fit base, not from some other reference }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(1, MakeOffsets(1));
+    V.Width := 800;
+    V.Height := 600;
+    R1 := V.GetCellRect(0);
+
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    Assert.IsTrue(Abs(R2.Width - R1.Width * 2) <= 2,
+      Format('Zoomed width %d should be ~2x base %d', [R2.Width, R1.Width]));
+    Assert.IsTrue(Abs(R2.Height - R1.Height * 2) <= 2,
+      Format('Zoomed height %d should be ~2x base %d', [R2.Height, R1.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestSmartGridZoomScalesDimensions;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.Width := 800;
+    V.Height := 600;
+    V.RecalcSize;
+    R1 := V.GetCellRect(0);
+
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    Assert.IsTrue(Abs(R2.Width - R1.Width * 2) <= 2,
+      Format('Zoomed width %d should be ~2x base %d', [R2.Width, R1.Width]));
+    Assert.IsTrue(Abs(R2.Height - R1.Height * 2) <= 2,
+      Format('Zoomed height %d should be ~2x base %d', [R2.Height, R1.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestZoomFactorOneNoChange;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  { Explicitly setting zoom=1.0 should produce identical rects }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ColumnCount := 2;
+    V.RecalcSize;
+    R1 := V.GetCellRect(0);
+
+    V.ZoomFactor := 1.0;
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    Assert.AreEqual(R1.Left, R2.Left, 'Left should be identical at zoom=1');
+    Assert.AreEqual(R1.Top, R2.Top, 'Top should be identical at zoom=1');
+    Assert.AreEqual(R1.Width, R2.Width, 'Width should be identical at zoom=1');
+    Assert.AreEqual(R1.Height, R2.Height, 'Height should be identical at zoom=1');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestGridZoomedContentExceedsViewport;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ColumnCount := 2;
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    Assert.IsTrue(V.Width > 800,
+      Format('Grid width %d should exceed viewport 800 at zoom=2', [V.Width]));
+    Assert.IsTrue(V.Height > 600,
+      Format('Grid height %d should exceed viewport 600 at zoom=2', [V.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestSmartGridZoomCentering;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { At zoom < 1, smart grid content is smaller than viewport, should be centered }
+  V := CreateTestFrameView(800, vmSmartGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.Width := 800;
+    V.Height := 600;
+    V.ZoomFactor := 0.5;
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { First cell should have positive Left offset (centered) }
+    Assert.IsTrue(R.Left > 0,
+      Format('SmartGrid at zoom=0.5 should center: Left=%d', [R.Left]));
+    Assert.IsTrue(R.Top > 0,
+      Format('SmartGrid at zoom=0.5 should center: Top=%d', [R.Top]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestScrollZoomedRecalcSizeWidth;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmScroll);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(2, MakeOffsets(2));
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    Assert.IsTrue(V.Width > 800,
+      Format('Scroll width %d should exceed viewport at zoom=2', [V.Width]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestSingleZoomedRecalcSize;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(1, MakeOffsets(1));
+    V.Width := 800;
+    V.Height := 600;
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    Assert.IsTrue(V.Width > 800,
+      Format('Single width %d should exceed viewport at zoom=2', [V.Width]));
+    Assert.IsTrue(V.Height > 600,
+      Format('Single height %d should exceed viewport at zoom=2', [V.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewLayout);
   TDUnitX.RegisterTestFixture(TTestFrameViewFit);
@@ -1768,5 +2037,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewGridZoom);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
   TDUnitX.RegisterTestFixture(TTestFrameViewMisc);
+  TDUnitX.RegisterTestFixture(TTestFrameViewZoom);
 
 end.

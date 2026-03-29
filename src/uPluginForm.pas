@@ -71,6 +71,7 @@ type
     FNativeH: Integer;
     FViewportW: Integer;
     FViewportH: Integer;
+    FZoomFactor: Double;
     FSmartRows: TArray<TSmartRow>;
     function GetColumnCount: Integer;
     function GetCellImageSize: TSize;
@@ -115,6 +116,7 @@ type
     property NativeH: Integer read FNativeH write FNativeH;
     property BackColor: TColor read FBackColor write FBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
+    property ZoomFactor: Double read FZoomFactor write FZoomFactor;
   end;
 
   /// Plugin form created as a child of TC's Lister window.
@@ -158,6 +160,8 @@ type
     procedure UpdateFrameViewSize;
     procedure UpdateViewModeButtons;
     procedure ActivateMode(AMode: TViewMode);
+    procedure ZoomBy(AFactor: Double);
+    procedure ResetZoom;
     procedure StartExtraction;
     procedure StopExtraction;
     procedure ProcessPendingFrames;
@@ -237,6 +241,12 @@ const
   FONT_ERROR        = 9;
   ARC_PEN_WIDTH     = 3;
   ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
+
+  { Continuous zoom }
+  ZOOM_IN_FACTOR  = 1.25;
+  ZOOM_OUT_FACTOR = 1 / 1.25;
+  MIN_ZOOM = 0.1;
+  MAX_ZOOM = 10.0;
 
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
@@ -327,6 +337,7 @@ begin
   FNativeH := 0;
   FViewportW := 0;
   FViewportH := 0;
+  FZoomFactor := 1.0;
 end;
 
 procedure TFrameView.WMEraseBkgnd(var Message: TWMEraseBkgnd);
@@ -389,7 +400,7 @@ begin
         Exit(1);
       { Original size: columns based on native frame width }
       if (FZoomMode = zmActual) and (FNativeW > 0) then
-        Exit(Max(1, (ClientWidth - FCellGap) div (FNativeW + FCellGap)));
+        Exit(Max(1, (FViewportW - FCellGap) div (FNativeW + FCellGap)));
       if FColumnCount > 0 then
         Exit(FColumnCount);
       Result := Max(1, Floor(Sqrt(Length(FCells))));
@@ -429,8 +440,8 @@ var
   Cols, AvailW: Integer;
 begin
   Cols := GetColumnCount;
-  AvailW := ClientWidth - (Cols + 1) * FCellGap;
-  Result.cx := Max(1, AvailW div Cols);
+  AvailW := FViewportW - (Cols + 1) * FCellGap;
+  Result.cx := Max(1, Round(AvailW / Cols * FZoomFactor));
   Result.cy := Max(1, Round(Result.cx * FAspectRatio));
 end;
 
@@ -484,19 +495,23 @@ begin
       end;
     zmFitIfLarger:
       begin
-        CellW := Max(1, ClientWidth - 2 * FCellGap);
+        CellW := Max(1, FViewportW - 2 * FCellGap);
         if (FNativeW > 0) and (FNativeW < CellW) then
           CellW := FNativeW;
         CellH := Max(1, Round(CellW * FAspectRatio));
       end;
   else { zmFitWindow }
     begin
-      CellW := Max(1, ClientWidth - 2 * FCellGap);
+      CellW := Max(1, FViewportW - 2 * FCellGap);
       CellH := Max(1, Round(CellW * FAspectRatio));
     end;
   end;
 
-  { Center horizontally when cell is narrower than viewport }
+  { Apply continuous zoom }
+  CellW := Max(1, Round(CellW * FZoomFactor));
+  CellH := Max(1, Round(CellH * FZoomFactor));
+
+  { Center horizontally when cell is narrower than control }
   if CellW + 2 * FCellGap < ClientWidth then
     LeftX := (ClientWidth - CellW) div 2
   else
@@ -528,6 +543,8 @@ begin
     CellH := AvailH;
   end;
 
+  { Apply continuous zoom }
+  CellH := Max(1, Round(CellH * FZoomFactor));
   CellW := Max(1, Round(CellH / FAspectRatio));
 
   { Center vertically when cell is shorter than available height }
@@ -547,8 +564,9 @@ var
   CellW, CellH: Integer;
   AvailW, AvailH: Integer;
 begin
-  AvailW := Max(1, ClientWidth - 2 * FCellGap);
-  AvailH := Max(1, ClientHeight - FTimecodeHeight - 2 * FCellGap);
+  { Base available space from viewport, not control size }
+  AvailW := Max(1, FViewportW - 2 * FCellGap);
+  AvailH := Max(1, FViewportH - FTimecodeHeight - 2 * FCellGap);
 
   case FZoomMode of
     zmActual:
@@ -561,13 +579,11 @@ begin
         if (FNativeW > 0) and (FNativeH > 0) and
            (FNativeW <= AvailW) and (FNativeH <= AvailH) then
         begin
-          { Native size fits, use it directly }
           CellW := FNativeW;
           CellH := FNativeH;
         end
         else
         begin
-          { Scale down to fit }
           CellW := AvailW;
           CellH := Round(CellW * FAspectRatio);
           if CellH > AvailH then
@@ -589,9 +605,13 @@ begin
     end;
   end;
 
-  { Center in viewport }
+  { Apply continuous zoom }
+  CellW := Max(1, Round(CellW * FZoomFactor));
+  CellH := Max(1, Round(CellH * FZoomFactor));
+
+  { Center in control (ClientWidth may exceed viewport when zoomed) }
   Result.Left   := (ClientWidth - CellW) div 2;
-  Result.Top    := FCellGap + (AvailH - CellH) div 2;
+  Result.Top    := FCellGap + (Max(1, ClientHeight - 2 * FCellGap - FTimecodeHeight) - CellH) div 2;
   Result.Right  := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
@@ -599,6 +619,7 @@ end;
 function TFrameView.GetCellRectSmartGrid(AIndex: Integer): TRect;
 var
   RowIdx, CellInRow, RowTop, RowH, CellW, PrevCount: Integer;
+  OffX, OffY: Integer;
 begin
   if Length(FSmartRows) = 0 then
     Exit(Rect(0, 0, 1, 1));
@@ -627,6 +648,21 @@ begin
         Result.Bottom := FViewportH
       else
         Result.Bottom := RowTop + RowH;
+
+      { Apply continuous zoom }
+      if FZoomFactor <> 1.0 then
+      begin
+        Result.Left   := Round(Result.Left * FZoomFactor);
+        Result.Top    := Round(Result.Top * FZoomFactor);
+        Result.Right  := Round(Result.Right * FZoomFactor);
+        Result.Bottom := Round(Result.Bottom * FZoomFactor);
+      end;
+
+      { Center when zoomed content is smaller than control }
+      OffX := Max(0, (ClientWidth - Round(FViewportW * FZoomFactor)) div 2);
+      OffY := Max(0, (ClientHeight - Round(FViewportH * FZoomFactor)) div 2);
+      if (OffX > 0) or (OffY > 0) then
+        Result.Offset(OffX, OffY);
 
       Exit;
     end;
@@ -956,9 +992,9 @@ end;
 
 procedure TFrameView.RecalcSize;
 var
-  Cols, Rows: Integer;
+  Cols, Rows, GridW: Integer;
   Sz: TSize;
-  CellH, N: Integer;
+  N: Integer;
   R0: TRect;
 begin
   N := Length(FCells);
@@ -972,13 +1008,14 @@ begin
     vmSmartGrid:
       begin
         CalcSmartGridLayout;
-        Width := FViewportW;
-        Height := FViewportH;
+        Width := Max(FViewportW, Round(FViewportW * FZoomFactor));
+        Height := Max(FViewportH, Round(FViewportH * FZoomFactor));
       end;
     vmSingle:
       begin
-        Width := FViewportW;
-        Height := FViewportH;
+        R0 := GetCellRectSingle(FCurrentFrameIndex);
+        Width := Max(FViewportW, R0.Right + FCellGap);
+        Height := Max(FViewportH, R0.Bottom + FTimecodeHeight + FCellGap);
       end;
     vmFilmstrip:
       begin
@@ -988,28 +1025,17 @@ begin
       end;
     vmScroll:
       begin
-        { Width: at least viewport wide (for centering), wider if native exceeds }
-        case FZoomMode of
-          zmActual:
-            if FNativeW > 0 then
-              Width := Max(FViewportW, FNativeW + 2 * FCellGap)
-            else
-              Width := FViewportW;
-        else
-          Width := FViewportW;
-        end;
-        { Height: at least viewport tall (for background fill), taller if content exceeds }
-        if N > 0 then
-        begin
-          CellH := GetCellRectScroll(0).Height;
-          Height := Max(FViewportH, FCellGap + N * (CellH + FTimecodeHeight + FCellGap));
-        end;
+        R0 := GetCellRectScroll(0);
+        Width := Max(FViewportW, R0.Width + 2 * FCellGap);
+        Height := Max(FViewportH, FCellGap + N * (R0.Height + FTimecodeHeight + FCellGap));
       end;
-  else
+  else { vmGrid }
     begin
       Cols := GetColumnCount;
       Sz := GetCellImageSize;
       Rows := Ceil(N / Cols);
+      GridW := Cols * (Sz.cx + FCellGap) + FCellGap;
+      Width := Max(FViewportW, GridW);
       Height := Max(FViewportH, FCellGap + Rows * (Sz.cy + FTimecodeHeight + FCellGap));
     end;
   end;
@@ -1263,6 +1289,7 @@ end;
 
 procedure TPluginForm.ActivateMode(AMode: TViewMode);
 begin
+  FFrameView.ZoomFactor := 1.0;
   FFrameView.ViewMode := AMode;
 
   { Apply the zoom mode stored in the popup, or force Fit for modes without submodes }
@@ -1286,6 +1313,37 @@ begin
   FSettings.ViewMode := AMode;
   FSettings.ZoomMode := FFrameView.ZoomMode;
   FSettings.Save;
+end;
+
+procedure TPluginForm.ZoomBy(AFactor: Double);
+var
+  OldF, NewF, CX, CY: Double;
+begin
+  OldF := FFrameView.ZoomFactor;
+  NewF := EnsureRange(OldF * AFactor, MIN_ZOOM, MAX_ZOOM);
+  if SameValue(NewF, OldF, 0.0001) then
+    Exit;
+
+  { Viewport center in content coordinates }
+  CX := FScrollBox.HorzScrollBar.Position + FScrollBox.ClientWidth / 2;
+  CY := FScrollBox.VertScrollBar.Position + FScrollBox.ClientHeight / 2;
+
+  FFrameView.ZoomFactor := NewF;
+  UpdateFrameViewSize;
+
+  { Restore so the same content point remains at viewport center }
+  FScrollBox.HorzScrollBar.Position :=
+    Round(CX * NewF / OldF - FScrollBox.ClientWidth / 2);
+  FScrollBox.VertScrollBar.Position :=
+    Round(CY * NewF / OldF - FScrollBox.ClientHeight / 2);
+end;
+
+procedure TPluginForm.ResetZoom;
+begin
+  if SameValue(FFrameView.ZoomFactor, 1.0, 0.0001) then
+    Exit;
+  FFrameView.ZoomFactor := 1.0;
+  UpdateFrameViewSize;
 end;
 
 procedure TPluginForm.LoadFile(const AFileName: string);
@@ -1487,6 +1545,22 @@ begin
         PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
         Key := 0;
       end;
+    VK_OEM_PLUS, VK_ADD:
+      begin
+        ZoomBy(ZOOM_IN_FACTOR);
+        Key := 0;
+      end;
+    VK_OEM_MINUS, VK_SUBTRACT:
+      begin
+        ZoomBy(ZOOM_OUT_FACTOR);
+        Key := 0;
+      end;
+    Ord('0'), VK_NUMPAD0:
+      if ssCtrl in Shift then
+      begin
+        ResetZoom;
+        Key := 0;
+      end;
   end;
 end;
 
@@ -1530,28 +1604,31 @@ procedure TPluginForm.UpdateFrameViewSize;
 var
   FitCols, DefCols: Integer;
   VW, VH: Integer;
+  Zoomed: Boolean;
 begin
+  Zoomed := not SameValue(FFrameView.ZoomFactor, 1.0, 0.001);
+
   { Configure scrollbox FIRST so ClientWidth/ClientHeight reflect scrollbar state }
   case FFrameView.ViewMode of
     vmScroll:
       begin
-        FScrollBox.HorzScrollBar.Visible := FFrameView.ZoomMode = zmActual;
+        FScrollBox.HorzScrollBar.Visible := Zoomed or (FFrameView.ZoomMode = zmActual);
         FScrollBox.VertScrollBar.Visible := True;
       end;
     vmGrid:
       begin
-        FScrollBox.HorzScrollBar.Visible := False;
+        FScrollBox.HorzScrollBar.Visible := Zoomed;
         FScrollBox.VertScrollBar.Visible := True;
       end;
     vmSmartGrid, vmSingle:
       begin
-        FScrollBox.HorzScrollBar.Visible := False;
-        FScrollBox.VertScrollBar.Visible := False;
+        FScrollBox.HorzScrollBar.Visible := Zoomed;
+        FScrollBox.VertScrollBar.Visible := Zoomed;
       end;
     vmFilmstrip:
       begin
         FScrollBox.HorzScrollBar.Visible := True;
-        FScrollBox.VertScrollBar.Visible := FFrameView.ZoomMode = zmActual;
+        FScrollBox.VertScrollBar.Visible := Zoomed or (FFrameView.ZoomMode = zmActual);
       end;
   end;
 
@@ -1580,16 +1657,11 @@ begin
     FFrameView.ColumnCount := 0;
 
   { Set initial frame view dimensions; RecalcSize may adjust Width/Height }
-  case FFrameView.ViewMode of
-    vmSmartGrid, vmSingle:
-      FFrameView.SetBounds(0, 0, VW, VH);
-  else
-    begin
-      FFrameView.Left := 0;
-      FFrameView.Top := 0;
-      FFrameView.Width := VW;
-    end;
-  end;
+  FFrameView.Left := 0;
+  FFrameView.Top := 0;
+  FFrameView.Width := VW;
+  if FFrameView.ViewMode in [vmSmartGrid, vmSingle] then
+    FFrameView.Height := VH;
 
   FFrameView.RecalcSize;
   FFrameView.Invalidate;
@@ -1645,6 +1717,17 @@ function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
 var
   Msg: TWMMouseWheel;
 begin
+  { Ctrl+Wheel: continuous zoom }
+  if ssCtrl in Shift then
+  begin
+    if WheelDelta > 0 then
+      ZoomBy(ZOOM_IN_FACTOR)
+    else
+      ZoomBy(ZOOM_OUT_FACTOR);
+    Result := True;
+    Exit;
+  end;
+
   { Forward to TFrameView so wheel logic lives in one place (WMMouseWheel) }
   if Assigned(FFrameView) and Assigned(FScrollBox) and FScrollBox.Visible then
   begin
