@@ -9,7 +9,8 @@ uses
   System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd,
+  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs,
+  Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
   uSettings, uFrameOffsets, uFFmpegExe;
 
 const
@@ -175,6 +176,11 @@ type
     procedure SwitchOrCycleMode(AKey: Word);
     procedure CopyFrameToClipboard;
     procedure CopyAllToClipboard;
+    function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
+    procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat);
+    procedure SaveSingleFrame;
+    procedure SaveCombinedFrame;
+    procedure SaveAllFrames;
     procedure StartExtraction;
     procedure StopExtraction;
     procedure ProcessPendingFrames;
@@ -268,11 +274,12 @@ const
   CM_SAVE_FRAME    = 1;
   CM_SAVE_SELECTED = 2;
   CM_SAVE_ALL      = 3;
-  CM_COPY_FRAME    = 4;
-  CM_COPY_ALL      = 5;
-  CM_SELECT_ALL    = 6;
-  CM_DESELECT_ALL  = 7;
-  CM_SETTINGS      = 8;
+  CM_SAVE_COMBINED = 4;
+  CM_COPY_FRAME    = 5;
+  CM_COPY_ALL      = 6;
+  CM_SELECT_ALL    = 7;
+  CM_DESELECT_ALL  = 8;
+  CM_SETTINGS      = 9;
 
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
@@ -1376,9 +1383,10 @@ begin
   FContextMenu := TPopupMenu.Create(Self);
   FContextMenu.OnPopup := OnContextMenuPopup;
 
-  AddItem('Save frame...', CM_SAVE_FRAME);
+  AddItem('Save frame...'#9'Ctrl+S', CM_SAVE_FRAME);
   AddItem('Save selected...', CM_SAVE_SELECTED);
-  AddItem('Save all...', CM_SAVE_ALL);
+  AddItem('Save combined...'#9'Ctrl+Shift+S', CM_SAVE_COMBINED);
+  AddItem('Save all...'#9'Ctrl+Alt+S', CM_SAVE_ALL);
   AddSeparator;
   AddItem('Copy frame'#9'Ctrl+C', CM_COPY_FRAME);
   AddItem('Copy all'#9'Ctrl+Shift+C', CM_COPY_ALL);
@@ -1573,6 +1581,188 @@ begin
     Clipboard.Assign(Bmp);
   finally
     Bmp.Free;
+  end;
+end;
+
+function TPluginForm.FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
+var
+  BaseName, Ext: string;
+  T: Double;
+  H, M, S, MS: Integer;
+begin
+  BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
+  T := FFrameView.FCells[AIndex].TimeOffset;
+  H := Trunc(T) div 3600;
+  M := (Trunc(T) mod 3600) div 60;
+  S := Trunc(T) mod 60;
+  MS := Round(Frac(T) * 1000);
+  case AFormat of
+    sfJPEG: Ext := '.jpg';
+  else
+    Ext := '.png';
+  end;
+  Result := Format('%s_frame_%.2d_%.2d-%.2d-%.2d.%.3d%s',
+    [BaseName, AIndex + 1, H, M, S, MS, Ext]);
+end;
+
+procedure TPluginForm.SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
+  AFormat: TSaveFormat);
+var
+  Png: TPngImage;
+  Jpg: TJPEGImage;
+begin
+  case AFormat of
+    sfPNG:
+      begin
+        Png := TPngImage.Create;
+        try
+          Png.CompressionLevel := FSettings.PngCompression;
+          Png.Assign(ABitmap);
+          Png.SaveToFile(APath);
+        finally
+          Png.Free;
+        end;
+      end;
+    sfJPEG:
+      begin
+        Jpg := TJPEGImage.Create;
+        try
+          Jpg.CompressionQuality := FSettings.JpegQuality;
+          Jpg.Assign(ABitmap);
+          Jpg.SaveToFile(APath);
+        finally
+          Jpg.Free;
+        end;
+      end;
+  end;
+end;
+
+procedure TPluginForm.SaveSingleFrame;
+var
+  Dlg: TSaveDialog;
+  Idx: Integer;
+  Fmt: TSaveFormat;
+begin
+  if Length(FFrameView.FCells) = 0 then Exit;
+  { Same selection logic as CopyFrameToClipboard }
+  Idx := FContextCellIndex;
+  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
+    Idx := FFrameView.CurrentFrameIndex;
+  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
+    Idx := 0;
+  if FFrameView.FCells[Idx].State <> fcsLoaded then Exit;
+
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title := 'Save frame';
+    Dlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
+    case FSettings.SaveFormat of
+      sfJPEG: Dlg.FilterIndex := 2;
+    else
+      Dlg.FilterIndex := 1;
+    end;
+    Dlg.DefaultExt := 'png';
+    Dlg.FileName := FrameFileName(Idx, FSettings.SaveFormat);
+    if FSettings.SaveFolder <> '' then
+      Dlg.InitialDir := FSettings.SaveFolder;
+    Dlg.Options := Dlg.Options + [ofOverwritePrompt];
+
+    if Dlg.Execute then
+    begin
+      case Dlg.FilterIndex of
+        2: Fmt := sfJPEG;
+      else
+        Fmt := sfPNG;
+      end;
+      SaveBitmapToFile(FFrameView.FCells[Idx].Bitmap, Dlg.FileName, Fmt);
+      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
+      FSettings.Save;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TPluginForm.SaveCombinedFrame;
+var
+  Dlg: TSaveDialog;
+  Bmp: TBitmap;
+  Fmt: TSaveFormat;
+  BaseName: string;
+begin
+  if Length(FFrameView.FCells) = 0 then Exit;
+
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title := 'Save combined image';
+    Dlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
+    case FSettings.SaveFormat of
+      sfJPEG: Dlg.FilterIndex := 2;
+    else
+      Dlg.FilterIndex := 1;
+    end;
+    Dlg.DefaultExt := 'png';
+    BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
+    Dlg.FileName := BaseName + '_combined.png';
+    if FSettings.SaveFolder <> '' then
+      Dlg.InitialDir := FSettings.SaveFolder;
+    Dlg.Options := Dlg.Options + [ofOverwritePrompt];
+
+    if Dlg.Execute then
+    begin
+      case Dlg.FilterIndex of
+        2: Fmt := sfJPEG;
+      else
+        Fmt := sfPNG;
+      end;
+      Bmp := TBitmap.Create;
+      try
+        Bmp.SetSize(FFrameView.Width, FFrameView.Height);
+        Bmp.Canvas.Brush.Color := FFrameView.BackColor;
+        Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
+        FFrameView.PaintTo(Bmp.Canvas, 0, 0);
+        SaveBitmapToFile(Bmp, Dlg.FileName, Fmt);
+      finally
+        Bmp.Free;
+      end;
+      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
+      FSettings.Save;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TPluginForm.SaveAllFrames;
+var
+  Dlg: TFileOpenDialog;
+  I: Integer;
+  Dir: string;
+begin
+  if Length(FFrameView.FCells) = 0 then Exit;
+
+  Dlg := TFileOpenDialog.Create(nil);
+  try
+    Dlg.Title := 'Save all frames';
+    Dlg.Options := Dlg.Options + [fdoPickFolders];
+    if FSettings.SaveFolder <> '' then
+      Dlg.DefaultFolder := FSettings.SaveFolder;
+
+    if Dlg.Execute then
+    begin
+      Dir := IncludeTrailingPathDelimiter(Dlg.FileName);
+      for I := 0 to High(FFrameView.FCells) do
+      begin
+        if FFrameView.FCells[I].State <> fcsLoaded then Continue;
+        SaveBitmapToFile(FFrameView.FCells[I].Bitmap,
+          Dir + FrameFileName(I, FSettings.SaveFormat),
+          FSettings.SaveFormat);
+      end;
+      FSettings.SaveFolder := Dlg.FileName;
+      FSettings.Save;
+    end;
+  finally
+    Dlg.Free;
   end;
 end;
 
@@ -1782,6 +1972,20 @@ begin
           CopyAllToClipboard
         else
           CopyFrameToClipboard;
+        Key := 0;
+      end;
+    Ord('S'):
+      if ssCtrl in Shift then
+      begin
+        if [ssShift, ssAlt] * Shift = [ssAlt] then
+          SaveAllFrames
+        else if [ssShift, ssAlt] * Shift = [ssShift] then
+          SaveCombinedFrame
+        else if [ssShift, ssAlt] * Shift = [] then
+        begin
+          FContextCellIndex := -1;
+          SaveSingleFrame;
+        end;
         Key := 0;
       end;
     VK_TAB:
@@ -2020,11 +2224,12 @@ begin
   begin
     MI := FContextMenu.Items[I];
     case MI.Tag of
+      CM_SAVE_FRAME:    MI.Enabled := HasClickedFrame;
+      CM_SAVE_COMBINED: MI.Enabled := HasFrames;
+      CM_SAVE_ALL:      MI.Enabled := HasFrames;
       CM_COPY_FRAME:    MI.Enabled := HasClickedFrame;
       CM_COPY_ALL:      MI.Enabled := HasFrames;
-      CM_SAVE_FRAME,
       CM_SAVE_SELECTED,
-      CM_SAVE_ALL,
       CM_SELECT_ALL,
       CM_DESELECT_ALL,
       CM_SETTINGS:      MI.Enabled := False;
@@ -2035,6 +2240,9 @@ end;
 procedure TPluginForm.OnContextMenuClick(Sender: TObject);
 begin
   case TMenuItem(Sender).Tag of
+    CM_SAVE_FRAME:    SaveSingleFrame;
+    CM_SAVE_COMBINED: SaveCombinedFrame;
+    CM_SAVE_ALL:      SaveAllFrames;
     CM_COPY_FRAME: CopyFrameToClipboard;
     CM_COPY_ALL:   CopyAllToClipboard;
   end;
