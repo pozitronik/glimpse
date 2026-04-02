@@ -32,6 +32,7 @@ var
   GPluginDir: string;
   GFFmpegPath: string;
   GLogPath: string;
+  GPromptShown: Boolean;
 
 procedure Log(const AMsg: string);
 {$IFDEF DEBUG}
@@ -62,15 +63,15 @@ end;
 procedure EnsureFFmpeg;
 var
   Path: string;
-  DontAsk: Boolean;
 begin
   if GFFmpegPath <> '' then
     Exit;
-  if Assigned(GSettings) and GSettings.FFmpegSuppressPrompt then
+  if GPromptShown then
     Exit;
 
   Log('EnsureFFmpeg: showing setup dialog');
-  case ShowFFmpegSetupDialog(Path, DontAsk) of
+  GPromptShown := True;
+  case ShowFFmpegSetupDialog(Path) of
     fsrBrowsed:
       begin
         GFFmpegPath := Path;
@@ -82,14 +83,7 @@ begin
         end;
       end;
     fsrCancel:
-      begin
-        Log('EnsureFFmpeg: user cancelled, dontAsk=' + BoolToStr(DontAsk, True));
-        if DontAsk and Assigned(GSettings) then
-        begin
-          GSettings.FFmpegSuppressPrompt := True;
-          GSettings.Save;
-        end;
-      end;
+      Log('EnsureFFmpeg: user cancelled');
   end;
 end;
 

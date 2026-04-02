@@ -20,7 +20,6 @@ type
     FFFmpegMode: TFFmpegMode;
     FFFmpegExePath: string;
     FFFmpegAutoDownloaded: Boolean;
-    FFFmpegSuppressPrompt: Boolean;
     { [extraction] }
     FFramesCount: Integer;
     FSkipEdgesPercent: Integer;
@@ -78,7 +77,6 @@ type
     property FFmpegMode: TFFmpegMode read FFFmpegMode write FFFmpegMode;
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
     property FFmpegAutoDownloaded: Boolean read FFFmpegAutoDownloaded write FFFmpegAutoDownloaded;
-    property FFmpegSuppressPrompt: Boolean read FFFmpegSuppressPrompt write FFFmpegSuppressPrompt;
 
     { [extraction] }
     property FramesCount: Integer read FFramesCount write FFramesCount;
@@ -115,7 +113,7 @@ const
   DEF_FFMPEG_MODE        = fmAuto;
   DEF_FFMPEG_EXE_PATH    = '';
   DEF_FFMPEG_AUTO_DL     = False;
-  DEF_FFMPEG_SUPPRESS    = False;
+
   DEF_FRAMES_COUNT          = 4;
   DEF_SKIP_EDGES_PERCENT = 2;
   DEF_MAX_WORKERS        = 1;
@@ -150,7 +148,6 @@ begin
   FFFmpegMode := DEF_FFMPEG_MODE;
   FFFmpegExePath := DEF_FFMPEG_EXE_PATH;
   FFFmpegAutoDownloaded := DEF_FFMPEG_AUTO_DL;
-  FFFmpegSuppressPrompt := DEF_FFMPEG_SUPPRESS;
   FFramesCount := DEF_FRAMES_COUNT;
   FSkipEdgesPercent := DEF_SKIP_EDGES_PERCENT;
   FMaxWorkers := DEF_MAX_WORKERS;
@@ -184,7 +181,6 @@ begin
     FFFmpegMode := StrToFFmpegMode(Ini.ReadString('ffmpeg', 'Mode', ''));
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', DEF_FFMPEG_EXE_PATH);
     FFFmpegAutoDownloaded := Ini.ReadBool('ffmpeg', 'AutoDownloaded', DEF_FFMPEG_AUTO_DL);
-    FFFmpegSuppressPrompt := Ini.ReadBool('ffmpeg', 'SuppressSetupPrompt', DEF_FFMPEG_SUPPRESS);
 
     FFramesCount := Clamp(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
     FSkipEdgesPercent := Clamp(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
@@ -225,7 +221,6 @@ begin
     Ini.WriteString('ffmpeg', 'Mode', FFmpegModeToStr(FFFmpegMode));
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);
     Ini.WriteBool('ffmpeg', 'AutoDownloaded', FFFmpegAutoDownloaded);
-    Ini.WriteBool('ffmpeg', 'SuppressSetupPrompt', FFFmpegSuppressPrompt);
 
     Ini.WriteInteger('extraction', 'FramesCount', FFramesCount);
     Ini.WriteInteger('extraction', 'SkipEdges', FSkipEdgesPercent);

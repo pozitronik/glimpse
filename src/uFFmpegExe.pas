@@ -52,6 +52,15 @@ function ParseResolution(const AText: string; out AWidth, AHeight: Integer): Boo
 /// Parses video codec name from ffmpeg stderr output.
 function ParseVideoCodec(const AText: string): string;
 
+/// Parses version string from `ffmpeg -version` output.
+/// Expects first line like "ffmpeg version 6.1.1 ...".
+/// Returns version string (e.g. "6.1.1") or empty if not recognized.
+function ParseFFmpegVersion(const AText: string): string;
+
+/// Runs `ffmpeg -version` and returns the version string.
+/// Returns empty string if the executable is not a valid ffmpeg.
+function ValidateFFmpeg(const AExePath: string): string;
+
 implementation
 
 uses
@@ -353,6 +362,56 @@ begin
 
   if P > Start then
     Result := Copy(AText, Start, P - Start);
+end;
+
+function ParseFFmpegVersion(const AText: string): string;
+var
+  Line, Prefix: string;
+  P, Start: Integer;
+begin
+  Result := '';
+  if AText = '' then
+    Exit;
+
+  { Take first line only }
+  P := Pos(#10, AText);
+  if P > 0 then
+    Line := Copy(AText, 1, P - 1)
+  else
+    Line := AText;
+  Line := Trim(Line.Replace(#13, ''));
+
+  Prefix := 'ffmpeg version ';
+  if not Line.StartsWith(Prefix, True) then
+    Exit;
+
+  { Extract version token (everything up to the next space or dash) }
+  P := Length(Prefix) + 1;
+  Start := P;
+  while (P <= Length(Line)) and not CharInSet(Line[P], [' ', '-']) do
+    Inc(P);
+
+  if P > Start then
+    Result := Copy(Line, Start, P - Start);
+end;
+
+function ValidateFFmpeg(const AExePath: string): string;
+var
+  CmdLine: string;
+  StdOut, StdErr: TBytes;
+  Output: string;
+begin
+  Result := '';
+  CmdLine := Format('"%s" -version', [AExePath]);
+  if RunProcess(CmdLine, StdOut, StdErr, 5000) <> 0 then
+    Exit;
+  if Length(StdOut) > 0 then
+    Output := TEncoding.UTF8.GetString(StdOut)
+  else if Length(StdErr) > 0 then
+    Output := TEncoding.UTF8.GetString(StdErr)
+  else
+    Exit;
+  Result := ParseFFmpegVersion(Output);
 end;
 
 { TFFmpegExe }

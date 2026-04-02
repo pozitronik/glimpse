@@ -32,6 +32,14 @@ type
     [Test] procedure TestParseCodecHevc;
     [Test] procedure TestParseCodecMpeg2;
     [Test] procedure TestParseCodecNoVideo;
+    { Version parsing }
+    [Test] procedure TestParseVersionStandard;
+    [Test] procedure TestParseVersionWithSuffix;
+    [Test] procedure TestParseVersionGitBuild;
+    [Test] procedure TestParseVersionMultiLine;
+    [Test] procedure TestParseVersionEmpty;
+    [Test] procedure TestParseVersionNotFFmpeg;
+    [Test] procedure TestParseVersionCaseInsensitive;
     { Edge cases }
     [Test] procedure TestParseDurationEmptyString;
     [Test] procedure TestParseDurationTrailingDot;
@@ -211,6 +219,51 @@ end;
 procedure TTestFFmpegParsing.TestParseCodecNoVideo;
 begin
   Assert.AreEqual('', ParseVideoCodec('Audio: aac (LC), 44100 Hz'));
+end;
+
+{ TTestFFmpegParsing: Version }
+
+procedure TTestFFmpegParsing.TestParseVersionStandard;
+begin
+  Assert.AreEqual('6.1.1',
+    ParseFFmpegVersion('ffmpeg version 6.1.1 Copyright (c) 2000-2023'));
+end;
+
+procedure TTestFFmpegParsing.TestParseVersionWithSuffix;
+begin
+  Assert.AreEqual('7.0',
+    ParseFFmpegVersion('ffmpeg version 7.0-full_build Copyright (c) 2000-2024'));
+end;
+
+procedure TTestFFmpegParsing.TestParseVersionGitBuild;
+begin
+  Assert.AreEqual('N',
+    ParseFFmpegVersion('ffmpeg version N-112858-g3545b4a51b Copyright (c) 2000-2024'));
+end;
+
+procedure TTestFFmpegParsing.TestParseVersionMultiLine;
+begin
+  Assert.AreEqual('5.1.4',
+    ParseFFmpegVersion('ffmpeg version 5.1.4 Copyright'#13#10 +
+      'built with gcc 12.2.0'#13#10 +
+      'configuration: --enable-gpl'));
+end;
+
+procedure TTestFFmpegParsing.TestParseVersionEmpty;
+begin
+  Assert.AreEqual('', ParseFFmpegVersion(''));
+end;
+
+procedure TTestFFmpegParsing.TestParseVersionNotFFmpeg;
+begin
+  Assert.AreEqual('', ParseFFmpegVersion('Microsoft Windows [Version 10.0.19045]'));
+  Assert.AreEqual('', ParseFFmpegVersion('Usage: someapp [options]'));
+end;
+
+procedure TTestFFmpegParsing.TestParseVersionCaseInsensitive;
+begin
+  Assert.AreEqual('6.0',
+    ParseFFmpegVersion('FFmpeg version 6.0 Copyright'));
 end;
 
 { TTestFFmpegParsing: Edge cases }

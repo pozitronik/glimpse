@@ -53,7 +53,9 @@
         <DCCReference Include="uFrameOffsets.pas"/>
         <DCCReference Include="uFFmpegLocator.pas"/>
         <DCCReference Include="uFFmpegExe.pas"/>
-        <DCCReference Include="uFFmpegSetupDlg.pas"/>
+        <DCCReference Include="uFFmpegSetupDlg.pas">
+            <Form>FFmpegSetupForm</Form>
+        </DCCReference>
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="uCache.pas"/>
         <BuildConfiguration Include="Base">

@@ -91,7 +91,6 @@ begin
     Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode));
     Assert.AreEqual(DEF_FFMPEG_EXE_PATH, S.FFmpegExePath);
     Assert.AreEqual(DEF_FFMPEG_AUTO_DL, S.FFmpegAutoDownloaded);
-    Assert.AreEqual(DEF_FFMPEG_SUPPRESS, S.FFmpegSuppressPrompt);
     Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
     Assert.AreEqual(DEF_SKIP_EDGES_PERCENT, S.SkipEdgesPercent);
     Assert.AreEqual(DEF_MAX_WORKERS, S.MaxWorkers);
@@ -121,7 +120,6 @@ begin
     S1.FFmpegMode := fmExe;
     S1.FFmpegExePath := 'C:\ffmpeg\ffmpeg.exe';
     S1.FFmpegAutoDownloaded := True;
-    S1.FFmpegSuppressPrompt := True;
     S1.FramesCount := 8;
     S1.SkipEdgesPercent := 5;
     S1.MaxWorkers := 4;
@@ -148,7 +146,6 @@ begin
     Assert.AreEqual(Ord(fmExe), Ord(S2.FFmpegMode));
     Assert.AreEqual('C:\ffmpeg\ffmpeg.exe', S2.FFmpegExePath);
     Assert.IsTrue(S2.FFmpegAutoDownloaded);
-    Assert.IsTrue(S2.FFmpegSuppressPrompt);
     Assert.AreEqual(8, S2.FramesCount);
     Assert.AreEqual(5, S2.SkipEdgesPercent);
     Assert.AreEqual(4, S2.MaxWorkers);
