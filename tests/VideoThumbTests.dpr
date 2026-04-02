@@ -16,7 +16,9 @@ uses
   TestFrameOffsets in 'TestFrameOffsets.pas',
   TestFFmpegExe in 'TestFFmpegExe.pas',
   uPluginForm in '..\src\uPluginForm.pas',
-  TestFrameView in 'TestFrameView.pas';
+  TestFrameView in 'TestFrameView.pas',
+  uCache in '..\src\uCache.pas',
+  TestCache in 'TestCache.pas';
 
 var
   Runner: ITestRunner;

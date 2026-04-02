@@ -25,7 +25,7 @@ implementation
 
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
-  uSettings, uFFmpegLocator, uFFmpegSetupDlg, uPluginForm;
+  uSettings, uFFmpegLocator, uFFmpegSetupDlg, uPluginForm, uCache;
 
 var
   GSettings: TPluginSettings;
@@ -248,6 +248,21 @@ begin
 
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log('  FFmpegPath=' + GFFmpegPath);
+
+  { Run cache eviction once per session }
+  if GSettings.CacheEnabled then
+  begin
+    var CacheDir := GSettings.CacheFolder;
+    if CacheDir = '' then
+      CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+    with TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB) do
+    try
+      Evict;
+    finally
+      Free;
+    end;
+    Log('  CacheDir=' + CacheDir);
+  end;
 end;
 
 /// Returns a preview bitmap for TC thumbnail view.

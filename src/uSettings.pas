@@ -130,7 +130,7 @@ const
   DEF_JPEG_QUALITY       = 90;
   DEF_PNG_COMPRESSION    = 6;
   DEF_SAVE_FOLDER        = '';
-  DEF_CACHE_ENABLED      = False;
+  DEF_CACHE_ENABLED      = True;
   DEF_CACHE_FOLDER       = '';
   DEF_CACHE_MAX_SIZE_MB  = 500;
 

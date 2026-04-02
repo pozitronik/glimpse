@@ -5,13 +5,13 @@ unit uPluginForm;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Types, System.Math,
+  System.SysUtils, System.Classes, System.Types, System.Math, System.IOUtils,
   System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
   Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
-  uSettings, uFrameOffsets, uFFmpegExe;
+  uSettings, uFrameOffsets, uFFmpegExe, uCache;
 
 const
   WM_FRAME_READY     = WM_USER + 100; { Notification: pending frames available in queue }
@@ -49,12 +49,15 @@ type
     FNotifyWnd: HWND;
     FQueue: TList<TPendingFrame>;
     FQueueLock: TCriticalSection;
+    FCache: TFrameCache;     { nil if cache disabled }
+    FBypassCache: Boolean;   { True to skip cache reads (Refresh) }
   protected
     procedure Execute; override;
   public
     constructor Create(const AFFmpegPath, AFileName: string;
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
-      AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection);
+      AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
+      ACache: TFrameCache; ABypassCache: Boolean);
   end;
 
   /// Custom control that renders frame cells in various layout modes.
@@ -169,6 +172,7 @@ type
     FFramesLoaded: Integer;
     FPendingFrames: TList<TPendingFrame>;
     FPendingLock: TCriticalSection;
+    FCache: TFrameCache;
     { Animation }
     FAnimTimer: TTimer;
     { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
@@ -198,7 +202,7 @@ type
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
     procedure RefreshExtraction;
-    procedure StartExtraction;
+    procedure StartExtraction(ABypassCache: Boolean = False);
     procedure StopExtraction;
     procedure ProcessPendingFrames;
     procedure DrainPendingFrameMessages;
@@ -320,7 +324,8 @@ const
 
 constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
-  AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection);
+  AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
+  ACache: TFrameCache; ABypassCache: Boolean);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -330,6 +335,8 @@ begin
   FNotifyWnd := ANotifyWnd;
   FQueue := AQueue;
   FQueueLock := AQueueLock;
+  FCache := ACache;
+  FBypassCache := ABypassCache;
 end;
 
 procedure TExtractionThread.Execute;
@@ -338,6 +345,7 @@ var
   Bmp: TBitmap;
   Frame: TPendingFrame;
   I: Integer;
+  Key: string;
 begin
   FFmpeg := TFFmpegExe.Create(FFFmpegPath);
   try
@@ -346,7 +354,28 @@ begin
       if Terminated then
         Exit;
 
-      Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+      Bmp := nil;
+      Key := '';
+
+      { Try cache first unless bypassed }
+      if Assigned(FCache) and (not FBypassCache) then
+      begin
+        Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
+        Bmp := FCache.TryGet(Key);
+      end;
+
+      { Cache miss: extract via ffmpeg }
+      if Bmp = nil then
+      begin
+        Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+        { Write to cache on successful extraction }
+        if (Bmp <> nil) and Assigned(FCache) then
+        begin
+          if Key = '' then
+            Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
+          FCache.Put(Key, Bmp);
+        end;
+      end;
 
       if Terminated then
       begin
@@ -1314,6 +1343,15 @@ begin
   FPendingFrames := TList<TPendingFrame>.Create;
   FPendingLock := TCriticalSection.Create;
 
+  { Create cache if enabled }
+  if FSettings.CacheEnabled then
+  begin
+    var CacheDir := FSettings.CacheFolder;
+    if CacheDir = '' then
+      CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+    FCache := TFrameCache.Create(CacheDir, FSettings.CacheMaxSizeMB);
+  end;
+
   FAnimTimer := TTimer.Create(Self);
   FAnimTimer.Interval := 80;
   FAnimTimer.OnTimer := OnAnimTimer;
@@ -1333,6 +1371,7 @@ begin
   FFrameView.ClearCells;
   FPendingLock.Free;
   FPendingFrames.Free;
+  FCache.Free;
   inherited;
 end;
 
@@ -2015,7 +2054,7 @@ begin
   UpdateFrameViewSize;
 end;
 
-procedure TPluginForm.StartExtraction;
+procedure TPluginForm.StartExtraction(ABypassCache: Boolean);
 begin
   StopExtraction;
   FFramesLoaded := 0;
@@ -2029,7 +2068,7 @@ begin
   FAnimTimer.Enabled := True;
 
   FWorkerThread := TExtractionThread.Create(FFFmpegPath, FFileName, FOffsets,
-    Handle, FPendingFrames, FPendingLock);
+    Handle, FPendingFrames, FPendingLock, FCache, ABypassCache);
   FWorkerThread.Start;
 end;
 
@@ -2496,13 +2535,12 @@ end;
 
 procedure TPluginForm.RefreshExtraction;
 begin
-  { TODO: when cache is implemented, this must bypass it }
   if not FVideoInfo.IsValid then Exit;
   StopExtraction;
   DrainPendingFrameMessages;
   FFrameView.ClearCells;
   SetupPlaceholders;
-  StartExtraction;
+  StartExtraction(True); { bypass cache reads, still write }
 end;
 
 end.
