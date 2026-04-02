@@ -1636,6 +1636,17 @@ end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 begin
+  { Ctrl+Up/Down: adjust frame count }
+  if (ssCtrl in Shift) and (Key in [VK_UP, VK_DOWN]) then
+  begin
+    if Key = VK_UP then
+      FUpDown.Position := FUpDown.Position + 1
+    else
+      FUpDown.Position := FUpDown.Position - 1;
+    Key := 0;
+    Exit;
+  end;
+
   { Single mode: arrow keys navigate between frames }
   if FFrameView.ViewMode = vmSingle then
   begin
