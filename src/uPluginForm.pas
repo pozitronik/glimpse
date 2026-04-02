@@ -25,6 +25,7 @@ type
     Bitmap: TBitmap;
     Timecode: string;
     TimeOffset: Double;
+    Selected: Boolean;
   end;
 
   TSmartRow = record
@@ -98,11 +99,17 @@ type
     procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
   protected
     procedure Paint; override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
+      X, Y: Integer); override;
   public
     FCells: TArray<TFrameCell>;
     constructor Create(AOwner: TComponent); override;
     function GetCellRect(AIndex: Integer): TRect;
     function CellIndexAt(const APoint: TPoint): Integer;
+    procedure ToggleSelection(AIndex: Integer);
+    procedure SelectAll;
+    procedure DeselectAll;
+    function SelectedCount: Integer;
     procedure SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
     procedure SetFrame(AIndex: Integer; ABitmap: TBitmap);
     procedure SetCellError(AIndex: Integer);
@@ -255,6 +262,8 @@ const
   CLR_TIMECODE_LOADED  = TColor($00AAAAAA); { timecode text for loaded frames }
   CLR_TIMECODE_PENDING = TColor($00555555); { timecode text for placeholders }
   CLR_ERROR_TEXT       = TColor($004040FF); { error cell label }
+  CLR_SELECTION        = TColor($00F7C34F); { #4FC3F7 light blue selection border }
+  SELECTION_BORDER_W   = 2;
 
   { Painting fonts and sizes }
   FONT_NAME         = 'Segoe UI';
@@ -868,6 +877,15 @@ begin
     fcsError: PaintErrorCell(R);
   end;
   PaintTimecode(AIndex);
+  if FCells[AIndex].Selected then
+  begin
+    Canvas.Pen.Color := CLR_SELECTION;
+    Canvas.Pen.Width := SELECTION_BORDER_W;
+    Canvas.Pen.Style := psSolid;
+    Canvas.Brush.Style := bsClear;
+    R.Inflate(-SELECTION_BORDER_W div 2, -SELECTION_BORDER_W div 2);
+    Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+  end;
 end;
 
 procedure TFrameView.PaintPlaceholder(const ARect: TRect);
@@ -1162,6 +1180,57 @@ begin
   Result := -1;
 end;
 
+procedure TFrameView.ToggleSelection(AIndex: Integer);
+begin
+  if (AIndex >= 0) and (AIndex < Length(FCells)) then
+  begin
+    FCells[AIndex].Selected := not FCells[AIndex].Selected;
+    Invalidate;
+  end;
+end;
+
+procedure TFrameView.SelectAll;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCells) do
+    FCells[I].Selected := True;
+  Invalidate;
+end;
+
+procedure TFrameView.DeselectAll;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCells) do
+    FCells[I].Selected := False;
+  Invalidate;
+end;
+
+function TFrameView.SelectedCount: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to High(FCells) do
+    if FCells[I].Selected then
+      Inc(Result);
+end;
+
+procedure TFrameView.MouseDown(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
+var
+  Idx: Integer;
+begin
+  inherited;
+  if (Button = mbLeft) and (ssCtrl in Shift) then
+  begin
+    Idx := CellIndexAt(Point(X, Y));
+    if Idx >= 0 then
+      ToggleSelection(Idx);
+  end;
+end;
+
 { TPluginForm }
 
 constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string;
@@ -1391,7 +1460,7 @@ begin
   AddItem('Copy frame'#9'Ctrl+C', CM_COPY_FRAME);
   AddItem('Copy all'#9'Ctrl+Shift+C', CM_COPY_ALL);
   AddSeparator;
-  AddItem('Select all', CM_SELECT_ALL);
+  AddItem('Select all'#9'Ctrl+A', CM_SELECT_ALL);
   AddItem('Deselect all', CM_DESELECT_ALL);
   AddSeparator;
   AddItem('Settings...', CM_SETTINGS);
@@ -2001,6 +2070,12 @@ begin
         end;
         Key := 0;
       end;
+    Ord('A'):
+      if (ssCtrl in Shift) and not (ssShift in Shift) and not (ssAlt in Shift) then
+      begin
+        FFrameView.SelectAll;
+        Key := 0;
+      end;
     VK_TAB:
       begin
         SelectNext(ActiveControl, not (ssShift in Shift), True);
@@ -2242,9 +2317,9 @@ begin
       CM_SAVE_ALL:      MI.Enabled := HasFrames;
       CM_COPY_FRAME:    MI.Enabled := HasClickedFrame;
       CM_COPY_ALL:      MI.Enabled := HasFrames;
+      CM_SELECT_ALL:    MI.Enabled := HasFrames;
+      CM_DESELECT_ALL:  MI.Enabled := FFrameView.SelectedCount > 0;
       CM_SAVE_SELECTED,
-      CM_SELECT_ALL,
-      CM_DESELECT_ALL,
       CM_SETTINGS:      MI.Enabled := False;
     end;
   end;
@@ -2256,8 +2331,10 @@ begin
     CM_SAVE_FRAME:    SaveSingleFrame;
     CM_SAVE_COMBINED: SaveCombinedFrame;
     CM_SAVE_ALL:      SaveAllFrames;
-    CM_COPY_FRAME: CopyFrameToClipboard;
-    CM_COPY_ALL:   CopyAllToClipboard;
+    CM_COPY_FRAME:    CopyFrameToClipboard;
+    CM_COPY_ALL:      CopyAllToClipboard;
+    CM_SELECT_ALL:    FFrameView.SelectAll;
+    CM_DESELECT_ALL:  FFrameView.DeselectAll;
   end;
 end;
 
