@@ -9,7 +9,7 @@ uses
   System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs,
+  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
   Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
   uSettings, uFrameOffsets, uFFmpegExe;
 
@@ -76,6 +76,7 @@ type
     FBaseViewportW: Integer;  { frozen viewport for layout when zoomed }
     FBaseViewportH: Integer;
     FZoomFactor: Double;
+    FShowTimecode: Boolean;
     FSmartRows: TArray<TSmartRow>;
     function BaseW: Integer;
     function BaseH: Integer;
@@ -95,6 +96,7 @@ type
     procedure PaintArc(const ARect: TRect);
     procedure PaintTimecode(AIndex: Integer);
     procedure PaintErrorCell(const ARect: TRect);
+    procedure SetShowTimecode(AValue: Boolean);
     procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
   protected
@@ -130,6 +132,7 @@ type
     property BackColor: TColor read FBackColor write FBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
     property ZoomFactor: Double read FZoomFactor write FZoomFactor;
+    property ShowTimecode: Boolean read FShowTimecode write SetShowTimecode;
   end;
 
   /// Plugin form created as a child of TC's Lister window.
@@ -150,6 +153,7 @@ type
     FModePopups: array[TViewMode] of TPopupMenu;
     FContextMenu: TPopupMenu;
     FContextCellIndex: Integer;
+    FBtnTimecode: TSpeedButton;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
     { Content }
@@ -177,6 +181,7 @@ type
     procedure HideError;
     procedure UpdateFrameViewSize;
     procedure UpdateViewModeButtons;
+    procedure UpdateTimecodeButton;
     procedure ActivateMode(AMode: TViewMode);
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
@@ -198,6 +203,7 @@ type
     procedure OnFrameCountChange(Sender: TObject);
     procedure OnModeButtonClick(Sender: TObject);
     procedure OnSizingMenuClick(Sender: TObject);
+    procedure OnTimecodeButtonClick(Sender: TObject);
     procedure OnScrollBoxResize(Sender: TObject);
     procedure OnContextMenuPopup(Sender: TObject);
     procedure OnContextMenuClick(Sender: TObject);
@@ -370,7 +376,8 @@ begin
   inherited;
   DoubleBuffered := True;
   FCellGap := CELL_GAP;
-  FTimecodeHeight := TIMECODE_H;
+  FShowTimecode := True;
+  FTimecodeHeight := 0;
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
   FZoomMode := zmFitWindow;
@@ -835,13 +842,13 @@ end;
 function TFrameView.GetTimecodeRect(AIndex: Integer): TRect;
 var
   CR: TRect;
+  TW: Integer;
 begin
   CR := GetCellRect(AIndex);
-  if FViewMode = vmSmartGrid then
-    { Overlay timecode at bottom of cell }
-    Result := Rect(CR.Left, CR.Bottom - FTimecodeHeight, CR.Right, CR.Bottom)
-  else
-    Result := Rect(CR.Left, CR.Bottom, CR.Right, CR.Bottom + FTimecodeHeight);
+  Canvas.Font.Name := FONT_NAME;
+  Canvas.Font.Size := FONT_TIMECODE;
+  TW := Canvas.TextWidth(FCells[AIndex].Timecode) + 8;
+  Result := Rect(CR.Left, CR.Bottom - TIMECODE_H, CR.Left + TW, CR.Bottom);
 end;
 
 procedure TFrameView.Paint;
@@ -985,29 +992,31 @@ begin
   end;
 end;
 
+procedure TFrameView.SetShowTimecode(AValue: Boolean);
+begin
+  if FShowTimecode = AValue then Exit;
+  FShowTimecode := AValue;
+end;
+
 procedure TFrameView.PaintTimecode(AIndex: Integer);
 var
   R: TRect;
 begin
+  if not FShowTimecode then Exit;
+  if FCells[AIndex].Timecode = '' then Exit;
   R := GetTimecodeRect(AIndex);
   Canvas.Font.Name := FONT_NAME;
   Canvas.Font.Size := FONT_TIMECODE;
 
-  if FViewMode = vmSmartGrid then
-  begin
-    { Semi-transparent overlay for smart grid }
-    Canvas.Brush.Color := CLR_CELL_BG;
-    Canvas.Brush.Style := bsSolid;
-    Canvas.FillRect(R);
-    Canvas.Font.Color := CLR_TIMECODE_OVERLAY;
-  end
+  { Overlay with dark background for readability }
+  Canvas.Brush.Color := CLR_CELL_BG;
+  Canvas.Brush.Style := bsSolid;
+  Canvas.FillRect(R);
+
+  if FCells[AIndex].State = fcsLoaded then
+    Canvas.Font.Color := CLR_TIMECODE_OVERLAY
   else
-  begin
-    if FCells[AIndex].State = fcsLoaded then
-      Canvas.Font.Color := CLR_TIMECODE_LOADED
-    else
-      Canvas.Font.Color := CLR_TIMECODE_PENDING;
-  end;
+    Canvas.Font.Color := CLR_TIMECODE_PENDING;
 
   Canvas.Brush.Style := bsClear;
   DrawText(Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, R,
@@ -1379,6 +1388,16 @@ begin
       Inc(X, BW + CTRL_GAP);
   end;
 
+  FBtnTimecode := TSpeedButton.Create(FToolbar);
+  FBtnTimecode.Parent := FToolbar;
+  BW := Canvas.TextWidth('TC') + BTN_PAD;
+  FBtnTimecode.SetBounds(X, CY, BW, CtrlH);
+  FBtnTimecode.Caption := 'TC';
+  FBtnTimecode.GroupIndex := 1;
+  FBtnTimecode.AllowAllUp := True;
+  FBtnTimecode.OnClick := OnTimecodeButtonClick;
+  Inc(X, BW + CTRL_GAP);
+
   FProgressBar := TProgressBar.Create(FToolbar);
   FProgressBar.Parent := FToolbar;
   FProgressBar.SetBounds(X, CY + (CtrlH - PB_H) div 2, 120, PB_H);
@@ -1504,6 +1523,8 @@ begin
           I = Ord(FSettings.ModeZoom[VM]);
 
   UpdateViewModeButtons;
+  FFrameView.ShowTimecode := FSettings.ShowTimecode;
+  UpdateTimecodeButton;
   FFrameView.BackColor := FSettings.Background;
   FScrollBox.Color := FSettings.Background;
   Color := FSettings.Background;
@@ -2285,6 +2306,20 @@ begin
     else
       FModeButtons[VM].Font.Style := [];
   end;
+end;
+
+procedure TPluginForm.UpdateTimecodeButton;
+begin
+  FBtnTimecode.Down := FFrameView.ShowTimecode;
+end;
+
+procedure TPluginForm.OnTimecodeButtonClick(Sender: TObject);
+begin
+  FFrameView.ShowTimecode := not FFrameView.ShowTimecode;
+  UpdateTimecodeButton;
+  UpdateFrameViewSize;
+  FSettings.ShowTimecode := FFrameView.ShowTimecode;
+  FSettings.Save;
 end;
 
 procedure TPluginForm.OnModeButtonClick(Sender: TObject);

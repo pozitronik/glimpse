@@ -669,8 +669,8 @@ begin
     V.SetViewport(800, 400);
     V.RecalcSize;
     R := V.GetCellRect(0);
-    { Available height = viewport - timecode - 2*gap }
-    AvailH := 400 - 20 - 2 * 4;
+    { Available height = viewport - 2*gap (timecodes are overlaid, not reserved) }
+    AvailH := 400 - 2 * 4;
     Assert.AreEqual(AvailH, R.Height,
       'FitIfLarger should use viewport height when native > viewport');
   finally
@@ -2079,7 +2079,7 @@ begin
     R := V.GetCellRect(0);
     Rows := 2; { 4 frames / 2 cols }
     Sz_cy := R.Height;
-    RowH := Sz_cy + 20 + 4; { timecode + gap }
+    RowH := Sz_cy + 4; { gap (timecodes are overlaid) }
     GridH := 4 + Rows * RowH;
 
     if GridH < 600 then
@@ -2087,11 +2087,10 @@ begin
       { First cell should not start at the very top }
       Assert.IsTrue(R.Top > 4,
         Format('Grid should be centered: Top=%d, expected > 4 (gap only)', [R.Top]));
-      { Top offset should roughly equal bottom gap }
+      { Last cell should be within viewport }
       R := V.GetCellRect(3); { last cell }
-      Assert.IsTrue(R.Bottom + 20 < 600,
-        Format('Last cell bottom+timecode=%d should be within viewport 600',
-          [R.Bottom + 20]));
+      Assert.IsTrue(R.Bottom < 600,
+        Format('Last cell bottom=%d should be within viewport 600', [R.Bottom]));
     end;
   finally
     FreeTestFrameView(V);
