@@ -1639,7 +1639,6 @@ begin
         Key := 0;
       end;
     Ord('0'), VK_NUMPAD0:
-      if ssCtrl in Shift then
       begin
         ResetZoom;
         Key := 0;
