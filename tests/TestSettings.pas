@@ -54,8 +54,6 @@ type
     [Test]
     procedure TestActiveZoomDelegatesToViewMode;
     [Test]
-    procedure TestZoomFactorZeroFallback;
-    [Test]
     procedure TestSaveOverwritesPreviousValues;
     [Test]
     procedure TestMaxWorkersBoundaryValues;
@@ -99,7 +97,6 @@ begin
     Assert.AreEqual(DEF_MAX_WORKERS, S.MaxWorkers);
     Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
     Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
-    Assert.AreEqual(DEF_ZOOM_FACTOR, S.ZoomFactor, 0.001);
     Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background));
     Assert.AreEqual(DEF_SHOW_TIMECODE, S.ShowTimecode);
     Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
@@ -130,7 +127,6 @@ begin
     S1.MaxWorkers := 4;
     S1.ViewMode := vmScroll;
     S1.ZoomMode := zmActual;
-    S1.ZoomFactor := 2.5;
     S1.Background := TColor($00FF8040);
     S1.ShowTimecode := False;
     S1.ExtensionList := 'mp4,mkv,avi';
@@ -158,7 +154,6 @@ begin
     Assert.AreEqual(4, S2.MaxWorkers);
     Assert.AreEqual(Ord(vmScroll), Ord(S2.ViewMode));
     Assert.AreEqual(Ord(zmActual), Ord(S2.ZoomMode));
-    Assert.AreEqual(2.5, S2.ZoomFactor, 0.001);
     Assert.AreEqual(Integer(TColor($00FF8040)), Integer(S2.Background));
     Assert.IsFalse(S2.ShowTimecode);
     Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);
@@ -185,7 +180,6 @@ begin
     Ini.WriteString('ffmpeg', 'Mode', 'INVALID');
     Ini.WriteString('view', 'Mode', 'unknown');
     Ini.WriteString('view', 'ZoomMode', 'WRONG');
-    Ini.WriteString('view', 'ZoomFactor', '-5');
     Ini.WriteString('view', 'Background', 'not_a_color');
     Ini.WriteString('save', 'Format', 'BMP');
     Ini.WriteInteger('save', 'JpegQuality', 999);
@@ -201,7 +195,6 @@ begin
     Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode), 'Invalid ffmpeg mode should fall back to default');
     Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode), 'Invalid view mode should fall back to default');
     Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode), 'Invalid zoom mode should fall back to default');
-    Assert.AreEqual(DEF_ZOOM_FACTOR, S.ZoomFactor, 0.001, 'Negative zoom factor should fall back to default');
     Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background), 'Invalid color should fall back to default');
     Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat), 'Unknown format should fall back to default');
     Assert.AreEqual(100, S.JpegQuality, 'Out-of-range quality should be clamped to 100');
@@ -594,28 +587,7 @@ begin
   end;
 end;
 
-procedure TTestPluginSettings.TestZoomFactorZeroFallback;
-var
-  Ini: TIniFile;
-  S: TPluginSettings;
-begin
-  { ZoomFactor=0 should fall back to default (code checks <= 0) }
-  Ini := TIniFile.Create(FTempIniPath);
-  try
-    Ini.WriteFloat('view', 'ZoomFactor', 0.0);
-  finally
-    Ini.Free;
-  end;
 
-  S := TPluginSettings.Create(FTempIniPath);
-  try
-    S.Load;
-    Assert.AreEqual(DEF_ZOOM_FACTOR, S.ZoomFactor, 0.001,
-      'Zero zoom factor should fall back to default');
-  finally
-    S.Free;
-  end;
-end;
 
 procedure TTestPluginSettings.TestSaveOverwritesPreviousValues;
 var

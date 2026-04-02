@@ -28,7 +28,6 @@ type
     { [view] }
     FViewMode: TViewMode;
     FModeZoom: array[TViewMode] of TZoomMode;
-    FZoomFactor: Double;
     FBackground: TColor;
     FShowTimecode: Boolean;
     { [extensions] }
@@ -87,7 +86,6 @@ type
     property ModeZoom[AMode: TViewMode]: TZoomMode read GetModeZoom write SetModeZoom;
     { Convenience: reads/writes FModeZoom[FViewMode] }
     property ZoomMode: TZoomMode read GetActiveZoom write SetActiveZoom;
-    property ZoomFactor: Double read FZoomFactor write FZoomFactor;
     property Background: TColor read FBackground write FBackground;
     property ShowTimecode: Boolean read FShowTimecode write FShowTimecode;
 
@@ -116,7 +114,6 @@ const
   DEF_MAX_WORKERS        = 1;
   DEF_VIEW_MODE          = vmGrid;
   DEF_ZOOM_MODE          = zmFitWindow;
-  DEF_ZOOM_FACTOR        = 1.0;
   DEF_BACKGROUND         = TColor($001E1E1E);
   DEF_SHOW_TIMECODE      = True;
   DEF_EXTENSION_LIST     = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
@@ -151,7 +148,6 @@ begin
   FViewMode := DEF_VIEW_MODE;
   for var VM := Low(TViewMode) to High(TViewMode) do
     FModeZoom[VM] := DEF_ZOOM_MODE;
-  FZoomFactor := DEF_ZOOM_FACTOR;
   FBackground := DEF_BACKGROUND;
   FShowTimecode := DEF_SHOW_TIMECODE;
   FExtensionList := DEF_EXTENSION_LIST;
@@ -187,9 +183,6 @@ begin
     for var VM := Low(TViewMode) to High(TViewMode) do
       FModeZoom[VM] := StrToZoomMode(Ini.ReadString(
         'view.' + ViewModeToStr(VM), 'ZoomMode', ''));
-    FZoomFactor := Ini.ReadFloat('view', 'ZoomFactor', DEF_ZOOM_FACTOR);
-    if FZoomFactor <= 0 then
-      FZoomFactor := DEF_ZOOM_FACTOR;
     FBackground := HexToColor(Ini.ReadString('view', 'Background', ''), DEF_BACKGROUND);
     FShowTimecode := Ini.ReadBool('view', 'ShowTimecode', DEF_SHOW_TIMECODE);
 
@@ -229,7 +222,6 @@ begin
     for var VM := Low(TViewMode) to High(TViewMode) do
       Ini.WriteString('view.' + ViewModeToStr(VM), 'ZoomMode',
         ZoomModeToStr(FModeZoom[VM]));
-    Ini.WriteFloat('view', 'ZoomFactor', FZoomFactor);
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
     Ini.WriteBool('view', 'ShowTimecode', FShowTimecode);
 
