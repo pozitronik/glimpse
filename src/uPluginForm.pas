@@ -1144,7 +1144,7 @@ begin
   ApplySettings;
 
   { Wire OnChange after ApplySettings so initial Position assignment doesn't
-    trigger a save that overwrites the loaded DefaultN }
+    trigger a save that overwrites the loaded FramesCount }
   FEditFrameCount.OnChange := OnFrameCountChange;
 
   ParentWindow := AParentWin;
@@ -1335,7 +1335,7 @@ var
 begin
   if FSettings = nil then Exit;
 
-  FUpDown.Position := FSettings.DefaultN;
+  FUpDown.Position := FSettings.FramesCount;
   FFrameView.ViewMode := FSettings.ViewMode;
   FFrameView.ZoomMode := FSettings.ZoomMode;
 
@@ -1896,7 +1896,7 @@ end;
 procedure TPluginForm.OnFrameCountChange(Sender: TObject);
 begin
   { Persist user preference }
-  FSettings.DefaultN := FUpDown.Position;
+  FSettings.FramesCount := FUpDown.Position;
   FSettings.Save;
 
   if not FVideoInfo.IsValid then Exit;

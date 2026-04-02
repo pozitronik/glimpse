@@ -92,7 +92,7 @@ begin
     Assert.AreEqual(DEF_FFMPEG_EXE_PATH, S.FFmpegExePath);
     Assert.AreEqual(DEF_FFMPEG_AUTO_DL, S.FFmpegAutoDownloaded);
     Assert.AreEqual(DEF_FFMPEG_SUPPRESS, S.FFmpegSuppressPrompt);
-    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
     Assert.AreEqual(DEF_SKIP_EDGES_PERCENT, S.SkipEdgesPercent);
     Assert.AreEqual(DEF_MAX_WORKERS, S.MaxWorkers);
     Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
@@ -122,7 +122,7 @@ begin
     S1.FFmpegExePath := 'C:\ffmpeg\ffmpeg.exe';
     S1.FFmpegAutoDownloaded := True;
     S1.FFmpegSuppressPrompt := True;
-    S1.DefaultN := 8;
+    S1.FramesCount := 8;
     S1.SkipEdgesPercent := 5;
     S1.MaxWorkers := 4;
     S1.ViewMode := vmScroll;
@@ -149,7 +149,7 @@ begin
     Assert.AreEqual('C:\ffmpeg\ffmpeg.exe', S2.FFmpegExePath);
     Assert.IsTrue(S2.FFmpegAutoDownloaded);
     Assert.IsTrue(S2.FFmpegSuppressPrompt);
-    Assert.AreEqual(8, S2.DefaultN);
+    Assert.AreEqual(8, S2.FramesCount);
     Assert.AreEqual(5, S2.SkipEdgesPercent);
     Assert.AreEqual(4, S2.MaxWorkers);
     Assert.AreEqual(Ord(vmScroll), Ord(S2.ViewMode));
@@ -328,16 +328,16 @@ begin
   S := TPluginSettings.Create(FTempIniPath);
   try
     { Test minimum N }
-    S.DefaultN := 1;
+    S.FramesCount := 1;
     S.Save;
     S.Load;
-    Assert.AreEqual(1, S.DefaultN);
+    Assert.AreEqual(1, S.FramesCount);
 
     { Test maximum N }
-    S.DefaultN := 99;
+    S.FramesCount := 99;
     S.Save;
     S.Load;
-    Assert.AreEqual(99, S.DefaultN);
+    Assert.AreEqual(99, S.FramesCount);
 
     { Test JPEG quality boundaries }
     S.JpegQuality := 1;
@@ -396,7 +396,7 @@ begin
   S := TPluginSettings.Create(FTempIniPath);
   try
     S.Load;
-    Assert.AreEqual(1, S.DefaultN, 'N below 1 clamped to 1');
+    Assert.AreEqual(1, S.FramesCount, 'N below 1 clamped to 1');
     Assert.AreEqual(49, S.SkipEdgesPercent, 'SkipEdges above 49 clamped to 49');
     Assert.AreEqual(16, S.MaxWorkers, 'MaxWorkers above 16 clamped to 16');
     Assert.AreEqual(1, S.JpegQuality, 'Quality below 1 clamped to 1');
@@ -437,7 +437,7 @@ begin
   S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
   try
     S.Load;
-    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
     Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
     Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
   finally
@@ -451,13 +451,13 @@ var
 begin
   S := TPluginSettings.Create(FTempIniPath);
   try
-    S.DefaultN := 42;
+    S.FramesCount := 42;
     S.ViewMode := vmScroll;
     S.JpegQuality := 10;
 
     S.ResetDefaults;
 
-    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN);
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
     Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
     Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
   finally
@@ -596,11 +596,11 @@ begin
   { Save twice with different values; second values should persist }
   S := TPluginSettings.Create(FTempIniPath);
   try
-    S.DefaultN := 10;
+    S.FramesCount := 10;
     S.ViewMode := vmGrid;
     S.Save;
 
-    S.DefaultN := 20;
+    S.FramesCount := 20;
     S.ViewMode := vmFilmstrip;
     S.Save;
   finally
@@ -610,7 +610,7 @@ begin
   S := TPluginSettings.Create(FTempIniPath);
   try
     S.Load;
-    Assert.AreEqual(20, S.DefaultN, 'Second save should overwrite first');
+    Assert.AreEqual(20, S.FramesCount, 'Second save should overwrite first');
     Assert.AreEqual(Ord(vmFilmstrip), Ord(S.ViewMode),
       'Second save should overwrite first');
   finally
@@ -663,7 +663,7 @@ begin
     Assert.IsFalse(S.ShowTimecode, 'ShowTimecode should load');
     { Missing sections should use defaults }
     Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode), 'Missing ffmpeg section');
-    Assert.AreEqual(DEF_DEFAULT_N, S.DefaultN, 'Missing extraction section');
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount, 'Missing extraction section');
     Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat), 'Missing save section');
     Assert.AreEqual(DEF_CACHE_ENABLED, S.CacheEnabled, 'Missing cache section');
   finally
