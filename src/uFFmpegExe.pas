@@ -208,6 +208,7 @@ begin
       Png.LoadFromStream(Stream);
       Result := TBitmap.Create;
       Result.Assign(Png);
+      Result.PixelFormat := pf24bit; { Force DIB for thread-safe rendering }
     finally
       Png.Free;
     end;

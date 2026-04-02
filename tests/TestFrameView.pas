@@ -1351,10 +1351,12 @@ begin
     Bmp := TBitmap.Create;
     Bmp.Width := 100;
     Bmp.Height := 50;
-    V.SetFrame(0, Bmp);
+    V.SetFrame(0, Bmp); { SetFrame takes ownership and copies the bitmap }
     Assert.AreEqual(Ord(fcsLoaded), Ord(V.FCells[0].State));
     Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[1].State));
-    Assert.AreSame(Bmp, V.FCells[0].Bitmap);
+    Assert.IsNotNull(V.FCells[0].Bitmap);
+    Assert.AreEqual(100, V.FCells[0].Bitmap.Width);
+    Assert.AreEqual(50, V.FCells[0].Bitmap.Height);
   finally
     FreeTestFrameView(V);
   end;
@@ -1471,14 +1473,15 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(2, MakeOffsets(2));
+    { SetFrame takes ownership -- out-of-range frees the bitmap }
     Bmp := TBitmap.Create;
     Bmp.SetSize(10, 10);
-    { Should not crash or corrupt; bitmap is leaked intentionally in this test }
     V.SetFrame(5, Bmp);
+    Bmp := TBitmap.Create;
+    Bmp.SetSize(10, 10);
     V.SetFrame(-1, Bmp);
     Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[0].State));
     Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[1].State));
-    Bmp.Free;
   finally
     FreeTestFrameView(V);
   end;

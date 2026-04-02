@@ -18,6 +18,7 @@
         <Cfg_1>true</Cfg_1>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
+        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
     </PropertyGroup>
     <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win64)'!=''">
         <Cfg_1_Win64>true</Cfg_1_Win64>
@@ -54,6 +55,7 @@
         <DCCReference Include="uFFmpegExe.pas"/>
         <DCCReference Include="uFFmpegSetupDlg.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
+        <DCCReference Include="uCache.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

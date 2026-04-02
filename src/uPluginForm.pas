@@ -233,6 +233,32 @@ type
 
 implementation
 
+{$IFDEF DEBUG}
+var
+  GFormLogPath: string;
+
+procedure FormLog(const AMsg: string);
+var
+  F: TextFile;
+begin
+  if GFormLogPath = '' then Exit;
+  try
+    AssignFile(F, GFormLogPath);
+    if FileExists(GFormLogPath) then
+      Append(F)
+    else
+      Rewrite(F);
+    try
+      WriteLn(F, FormatDateTime('hh:nn:ss.zzz', Now)
+        + '  [tid=' + IntToStr(GetCurrentThreadId) + '] ' + AMsg);
+    finally
+      CloseFile(F);
+    end;
+  except
+  end;
+end;
+{$ENDIF}
+
 { comctl32 v6 subclass API - lets us monitor the parent window's WM_SIZE }
 function SetWindowSubclass(hWnd: HWND; pfnSubclass: Pointer;
   uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): BOOL; stdcall;
@@ -346,36 +372,58 @@ var
   Frame: TPendingFrame;
   I: Integer;
   Key: string;
+  Source: string;
 begin
+  {$IFDEF DEBUG}FormLog('Thread.Execute START frames=' + IntToStr(Length(FOffsets))
+    + ' bypass=' + BoolToStr(FBypassCache, True));{$ENDIF}
   FFmpeg := TFFmpegExe.Create(FFFmpegPath);
   try
     for I := 0 to High(FOffsets) do
     begin
       if Terminated then
+      begin
+        {$IFDEF DEBUG}FormLog('Thread.Execute TERMINATED at i=' + IntToStr(I));{$ENDIF}
         Exit;
+      end;
 
       Bmp := nil;
       Key := '';
+      Source := 'none';
 
       { Try cache first unless bypassed }
       if Assigned(FCache) and (not FBypassCache) then
       begin
         Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
         Bmp := FCache.TryGet(Key);
+        if Bmp <> nil then
+          Source := 'cache';
       end;
 
       { Cache miss: extract via ffmpeg }
       if Bmp = nil then
       begin
         Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
-        { Write to cache on successful extraction }
-        if (Bmp <> nil) and Assigned(FCache) then
+        if Bmp <> nil then
         begin
-          if Key = '' then
-            Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
-          FCache.Put(Key, Bmp);
+          Source := 'ffmpeg';
+          { Write to cache on successful extraction }
+          if Assigned(FCache) then
+          begin
+            if Key = '' then
+              Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
+            FCache.Put(Key, Bmp);
+          end;
         end;
       end;
+
+      {$IFDEF DEBUG}
+      if Bmp <> nil then
+        FormLog('Frame[' + IntToStr(I) + '] source=' + Source
+          + ' size=' + IntToStr(Bmp.Width) + 'x' + IntToStr(Bmp.Height)
+          + ' empty=' + BoolToStr(Bmp.Empty, True))
+      else
+        FormLog('Frame[' + IntToStr(I) + '] source=' + Source + ' Bmp=NIL');
+      {$ENDIF}
 
       if Terminated then
       begin
@@ -1122,13 +1170,29 @@ begin
 end;
 
 procedure TFrameView.SetFrame(AIndex: Integer; ABitmap: TBitmap);
+var
+  Copy: TBitmap;
+  Y, BytesPerRow: Integer;
 begin
   if (AIndex >= 0) and (AIndex < Length(FCells)) then
   begin
+    { Copy pixel data via raw memory, bypassing GDI entirely.
+      Canvas.Draw on a bitmap created by another thread intermittently
+      fails because the GDI DC handle is not reliably usable cross-thread. }
+    Copy := TBitmap.Create;
+    Copy.PixelFormat := pf24bit;
+    Copy.SetSize(ABitmap.Width, ABitmap.Height);
+    BytesPerRow := ABitmap.Width * 3;
+    for Y := 0 to ABitmap.Height - 1 do
+      Move(ABitmap.ScanLine[Y]^, Copy.ScanLine[Y]^, BytesPerRow);
+    ABitmap.Free;
+
     FCells[AIndex].State := fcsLoaded;
-    FCells[AIndex].Bitmap := ABitmap;
+    FCells[AIndex].Bitmap := Copy;
     Invalidate;
-  end;
+  end
+  else
+    ABitmap.Free;
 end;
 
 procedure TFrameView.SetCellError(AIndex: Integer);
@@ -1342,6 +1406,12 @@ begin
 
   FPendingFrames := TList<TPendingFrame>.Create;
   FPendingLock := TCriticalSection.Create;
+
+  {$IFDEF DEBUG}
+  GFormLogPath := ExtractFilePath(FSettings.IniPath) + 'videothumb_debug.log';
+  uCache.GCacheLogPath := GFormLogPath;
+  FormLog('CreateForPlugin: file=' + AFileName + ' handle=$' + IntToHex(Handle));
+  {$ENDIF}
 
   { Create cache if enabled }
   if FSettings.CacheEnabled then
@@ -2000,6 +2070,7 @@ procedure TPluginForm.LoadFile(const AFileName: string);
 var
   FFmpeg: TFFmpegExe;
 begin
+  {$IFDEF DEBUG}FormLog('LoadFile: ' + AFileName);{$ENDIF}
   FFileName := AFileName;
   StopExtraction;
   DrainPendingFrameMessages;
@@ -2096,12 +2167,27 @@ begin
     FPendingLock.Leave;
   end;
 
+  {$IFDEF DEBUG}
+  if Length(Snapshot) > 0 then
+    FormLog('ProcessPending: count=' + IntToStr(Length(Snapshot)));
+  {$ENDIF}
+
   for I := 0 to High(Snapshot) do
   begin
     if Snapshot[I].Bitmap <> nil then
-      FFrameView.SetFrame(Snapshot[I].Index, Snapshot[I].Bitmap)
+    begin
+      {$IFDEF DEBUG}
+      FormLog('  SetFrame[' + IntToStr(Snapshot[I].Index) + '] bmp='
+        + IntToStr(Snapshot[I].Bitmap.Width) + 'x' + IntToStr(Snapshot[I].Bitmap.Height)
+        + ' empty=' + BoolToStr(Snapshot[I].Bitmap.Empty, True));
+      {$ENDIF}
+      FFrameView.SetFrame(Snapshot[I].Index, Snapshot[I].Bitmap);
+    end
     else
+    begin
+      {$IFDEF DEBUG}FormLog('  SetCellError[' + IntToStr(Snapshot[I].Index) + ']');{$ENDIF}
       FFrameView.SetCellError(Snapshot[I].Index);
+    end;
     Inc(FFramesLoaded);
   end;
 
@@ -2155,11 +2241,15 @@ end;
 
 procedure TPluginForm.WMExtractionDone(var Message: TMessage);
 begin
+  {$IFDEF DEBUG}FormLog('WMExtractionDone: framesLoaded=' + IntToStr(FFramesLoaded)
+    + ' total=' + IntToStr(Length(FOffsets)));{$ENDIF}
   { Safety net: process any frames that arrived after the last notification }
   ProcessPendingFrames;
   FProgressBar.Visible := False;
   FLblProgress.Visible := False;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
+  {$IFDEF DEBUG}FormLog('  hasPlaceholders=' + BoolToStr(FFrameView.HasPlaceholders, True)
+    + ' timerEnabled=' + BoolToStr(FAnimTimer.Enabled, True));{$ENDIF}
 end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
