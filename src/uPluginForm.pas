@@ -186,6 +186,7 @@ type
     function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
     procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat);
     procedure SaveSingleFrame;
+    procedure SaveSelectedFrames;
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
     procedure StartExtraction;
@@ -1752,6 +1753,57 @@ begin
   end;
 end;
 
+procedure TPluginForm.SaveSelectedFrames;
+var
+  Dlg: TSaveDialog;
+  I, FirstSel: Integer;
+  Dir: string;
+  Fmt: TSaveFormat;
+begin
+  if FFrameView.SelectedCount < 2 then Exit;
+
+  { Find first selected frame for the sample filename }
+  FirstSel := 0;
+  for I := 0 to High(FFrameView.FCells) do
+    if FFrameView.FCells[I].Selected then begin FirstSel := I; Break; end;
+
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title := 'Save selected frames';
+    Dlg.Filter := 'PNG images (*.png)|*.png|JPEG images (*.jpg)|*.jpg';
+    case FSettings.SaveFormat of
+      sfJPEG: Dlg.FilterIndex := 2;
+    else
+      Dlg.FilterIndex := 1;
+    end;
+    Dlg.DefaultExt := 'png';
+    Dlg.FileName := FrameFileName(FirstSel, FSettings.SaveFormat);
+    if FSettings.SaveFolder <> '' then
+      Dlg.InitialDir := FSettings.SaveFolder;
+
+    if Dlg.Execute then
+    begin
+      case Dlg.FilterIndex of
+        2: Fmt := sfJPEG;
+      else
+        Fmt := sfPNG;
+      end;
+      Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Dlg.FileName));
+      for I := 0 to High(FFrameView.FCells) do
+      begin
+        if not FFrameView.FCells[I].Selected then Continue;
+        if FFrameView.FCells[I].State <> fcsLoaded then Continue;
+        SaveBitmapToFile(FFrameView.FCells[I].Bitmap,
+          Dir + FrameFileName(I, Fmt), Fmt);
+      end;
+      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
+      FSettings.Save;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
 procedure TPluginForm.SaveCombinedFrame;
 var
   Dlg: TSaveDialog;
@@ -2295,7 +2347,7 @@ end;
 
 procedure TPluginForm.OnContextMenuPopup(Sender: TObject);
 var
-  I: Integer;
+  I, SelCount: Integer;
   MI: TMenuItem;
   Pt: TPoint;
   HasFrames, HasClickedFrame: Boolean;
@@ -2317,9 +2369,15 @@ begin
       CM_SAVE_ALL:      MI.Enabled := HasFrames;
       CM_COPY_FRAME:    MI.Enabled := HasClickedFrame;
       CM_COPY_ALL:      MI.Enabled := HasFrames;
+      CM_SAVE_SELECTED:
+        begin
+          SelCount := FFrameView.SelectedCount;
+          MI.Visible := SelCount >= 2;
+          if MI.Visible then
+            MI.Caption := Format('Save selected (%d)...', [SelCount]);
+        end;
       CM_SELECT_ALL:    MI.Enabled := HasFrames;
       CM_DESELECT_ALL:  MI.Enabled := FFrameView.SelectedCount > 0;
-      CM_SAVE_SELECTED,
       CM_SETTINGS:      MI.Enabled := False;
     end;
   end;
@@ -2329,6 +2387,7 @@ procedure TPluginForm.OnContextMenuClick(Sender: TObject);
 begin
   case TMenuItem(Sender).Tag of
     CM_SAVE_FRAME:    SaveSingleFrame;
+    CM_SAVE_SELECTED: SaveSelectedFrames;
     CM_SAVE_COMBINED: SaveCombinedFrame;
     CM_SAVE_ALL:      SaveAllFrames;
     CM_COPY_FRAME:    CopyFrameToClipboard;
