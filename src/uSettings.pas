@@ -30,6 +30,8 @@ type
     FModeZoom: array[TViewMode] of TZoomMode;
     FBackground: TColor;
     FShowTimecode: Boolean;
+    FTimecodeBackColor: TColor;
+    FTimecodeBackAlpha: Byte;
     { [extensions] }
     FExtensionList: string;
     { [save] }
@@ -52,6 +54,9 @@ type
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
     class function HexToColor(const AValue: string; ADefault: TColor): TColor; static;
     class function ColorToHex(AColor: TColor): string; static;
+    class procedure HexToColorAlpha(const AValue: string; ADefColor: TColor;
+      ADefAlpha: Byte; out AColor: TColor; out AAlpha: Byte); static;
+    class function ColorAlphaToHex(AColor: TColor; AAlpha: Byte): string; static;
     class function Clamp(AValue, AMin, AMax: Integer): Integer; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
@@ -88,6 +93,8 @@ type
     property ZoomMode: TZoomMode read GetActiveZoom write SetActiveZoom;
     property Background: TColor read FBackground write FBackground;
     property ShowTimecode: Boolean read FShowTimecode write FShowTimecode;
+    property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
+    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
 
     { [extensions] }
     property ExtensionList: string read FExtensionList write FExtensionList;
@@ -116,6 +123,8 @@ const
   DEF_ZOOM_MODE          = zmFitWindow;
   DEF_BACKGROUND         = TColor($001E1E1E);
   DEF_SHOW_TIMECODE      = True;
+  DEF_TC_BACK_COLOR      = TColor($002D2D2D);
+  DEF_TC_BACK_ALPHA      = 180;
   DEF_EXTENSION_LIST     = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
   DEF_SAVE_FORMAT        = sfPNG;
   DEF_JPEG_QUALITY       = 90;
@@ -150,6 +159,8 @@ begin
     FModeZoom[VM] := DEF_ZOOM_MODE;
   FBackground := DEF_BACKGROUND;
   FShowTimecode := DEF_SHOW_TIMECODE;
+  FTimecodeBackColor := DEF_TC_BACK_COLOR;
+  FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
   FExtensionList := DEF_EXTENSION_LIST;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
@@ -175,7 +186,7 @@ begin
     FFFmpegAutoDownloaded := Ini.ReadBool('ffmpeg', 'AutoDownloaded', DEF_FFMPEG_AUTO_DL);
     FFFmpegSuppressPrompt := Ini.ReadBool('ffmpeg', 'SuppressSetupPrompt', DEF_FFMPEG_SUPPRESS);
 
-    FFramesCount := Clamp(Ini.ReadInteger('extraction', 'DefaultN', DEF_FRAMES_COUNT), 1, 99);
+    FFramesCount := Clamp(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
     FSkipEdgesPercent := Clamp(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
     FMaxWorkers := Clamp(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 1, 16);
 
@@ -185,6 +196,8 @@ begin
         'view.' + ViewModeToStr(VM), 'ZoomMode', ''));
     FBackground := HexToColor(Ini.ReadString('view', 'Background', ''), DEF_BACKGROUND);
     FShowTimecode := Ini.ReadBool('view', 'ShowTimecode', DEF_SHOW_TIMECODE);
+    HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''),
+      DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
@@ -214,7 +227,7 @@ begin
     Ini.WriteBool('ffmpeg', 'AutoDownloaded', FFFmpegAutoDownloaded);
     Ini.WriteBool('ffmpeg', 'SuppressSetupPrompt', FFFmpegSuppressPrompt);
 
-    Ini.WriteInteger('extraction', 'DefaultN', FFramesCount);
+    Ini.WriteInteger('extraction', 'FramesCount', FFramesCount);
     Ini.WriteInteger('extraction', 'SkipEdges', FSkipEdgesPercent);
     Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
 
@@ -224,6 +237,8 @@ begin
         ZoomModeToStr(FModeZoom[VM]));
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
     Ini.WriteBool('view', 'ShowTimecode', FShowTimecode);
+    Ini.WriteString('view', 'TimecodeBackground',
+      ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
 
     Ini.WriteString('extensions', 'List', FExtensionList);
 
@@ -351,6 +366,43 @@ begin
     C and $FF,
     (C shr 8) and $FF,
     (C shr 16) and $FF
+  ]);
+end;
+
+class procedure TPluginSettings.HexToColorAlpha(const AValue: string;
+  ADefColor: TColor; ADefAlpha: Byte; out AColor: TColor; out AAlpha: Byte);
+var
+  R, G, B, A: Integer;
+  Hex: string;
+begin
+  Hex := AValue.Trim;
+  if (Length(Hex) = 9) and (Hex[1] = '#') then
+  begin
+    try
+      R := StrToInt('$' + Copy(Hex, 2, 2));
+      G := StrToInt('$' + Copy(Hex, 4, 2));
+      B := StrToInt('$' + Copy(Hex, 6, 2));
+      A := StrToInt('$' + Copy(Hex, 8, 2));
+      AColor := TColor(R or (G shl 8) or (B shl 16));
+      AAlpha := Byte(A);
+      Exit;
+    except
+    end;
+  end;
+  AColor := ADefColor;
+  AAlpha := ADefAlpha;
+end;
+
+class function TPluginSettings.ColorAlphaToHex(AColor: TColor; AAlpha: Byte): string;
+var
+  C: Integer;
+begin
+  C := Integer(AColor);
+  Result := Format('#%.2X%.2X%.2X%.2X', [
+    C and $FF,
+    (C shr 8) and $FF,
+    (C shr 16) and $FF,
+    AAlpha
   ]);
 end;
 

@@ -77,6 +77,8 @@ type
     FBaseViewportH: Integer;
     FZoomFactor: Double;
     FShowTimecode: Boolean;
+    FTimecodeBackColor: TColor;
+    FTimecodeBackAlpha: Byte;
     FSmartRows: TArray<TSmartRow>;
     function BaseW: Integer;
     function BaseH: Integer;
@@ -133,6 +135,8 @@ type
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
     property ZoomFactor: Double read FZoomFactor write FZoomFactor;
     property ShowTimecode: Boolean read FShowTimecode write SetShowTimecode;
+    property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
+    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
   end;
 
   /// Plugin form created as a child of TC's Lister window.
@@ -377,6 +381,8 @@ begin
   DoubleBuffered := True;
   FCellGap := CELL_GAP;
   FShowTimecode := True;
+  FTimecodeBackColor := DEF_TC_BACK_COLOR;
+  FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
   FTimecodeHeight := 0;
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
@@ -1001,6 +1007,8 @@ end;
 procedure TFrameView.PaintTimecode(AIndex: Integer);
 var
   R: TRect;
+  Bmp: TBitmap;
+  BF: TBlendFunction;
 begin
   if not FShowTimecode then Exit;
   if FCells[AIndex].Timecode = '' then Exit;
@@ -1008,10 +1016,33 @@ begin
   Canvas.Font.Name := FONT_NAME;
   Canvas.Font.Size := FONT_TIMECODE;
 
-  { Overlay with dark background for readability }
-  Canvas.Brush.Color := CLR_CELL_BG;
-  Canvas.Brush.Style := bsSolid;
-  Canvas.FillRect(R);
+  { Alpha-blended background for readability }
+  if FTimecodeBackAlpha > 0 then
+  begin
+    if FTimecodeBackAlpha = 255 then
+    begin
+      Canvas.Brush.Color := FTimecodeBackColor;
+      Canvas.Brush.Style := bsSolid;
+      Canvas.FillRect(R);
+    end
+    else
+    begin
+      Bmp := TBitmap.Create;
+      try
+        Bmp.SetSize(1, 1);
+        Bmp.Canvas.Pixels[0, 0] := FTimecodeBackColor;
+        BF.BlendOp := AC_SRC_OVER;
+        BF.BlendFlags := 0;
+        BF.SourceConstantAlpha := FTimecodeBackAlpha;
+        BF.AlphaFormat := 0;
+        Winapi.Windows.AlphaBlend(Canvas.Handle,
+          R.Left, R.Top, R.Width, R.Height,
+          Bmp.Canvas.Handle, 0, 0, 1, 1, BF);
+      finally
+        Bmp.Free;
+      end;
+    end;
+  end;
 
   if FCells[AIndex].State = fcsLoaded then
     Canvas.Font.Color := CLR_TIMECODE_OVERLAY
@@ -1524,6 +1555,8 @@ begin
 
   UpdateViewModeButtons;
   FFrameView.ShowTimecode := FSettings.ShowTimecode;
+  FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
+  FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
   UpdateTimecodeButton;
   FFrameView.BackColor := FSettings.Background;
   FScrollBox.Color := FSettings.Background;

@@ -383,7 +383,7 @@ var
 begin
   Ini := TIniFile.Create(FTempIniPath);
   try
-    Ini.WriteInteger('extraction', 'DefaultN', 0);
+    Ini.WriteInteger('extraction', 'FramesCount', 0);
     Ini.WriteInteger('extraction', 'SkipEdges', 50);
     Ini.WriteInteger('extraction', 'MaxWorkers', 100);
     Ini.WriteInteger('save', 'JpegQuality', 0);
