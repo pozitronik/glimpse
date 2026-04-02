@@ -9,3 +9,4 @@ src/VideoThumb.delphilsp.json
 /coverage/Win64/CodeCoverage.exe
 /src/VideoThumb.dproj.local
 /tests/VideoThumbTests.res
+/coverage

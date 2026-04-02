@@ -71,8 +71,12 @@ type
     FNativeH: Integer;
     FViewportW: Integer;
     FViewportH: Integer;
+    FBaseViewportW: Integer;  { frozen viewport for layout when zoomed }
+    FBaseViewportH: Integer;
     FZoomFactor: Double;
     FSmartRows: TArray<TSmartRow>;
+    function BaseW: Integer;
+    function BaseH: Integer;
     function GetColumnCount: Integer;
     function GetCellImageSize: TSize;
     function GetCellRectGrid(AIndex: Integer): TRect;
@@ -148,6 +152,8 @@ type
     FPendingLock: TCriticalSection;
     { Animation }
     FAnimTimer: TTimer;
+    { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
+    FUpdatingLayout: Boolean;
 
     procedure CreateToolbar;
     procedure CreateFrameView;
@@ -337,6 +343,8 @@ begin
   FNativeH := 0;
   FViewportW := 0;
   FViewportH := 0;
+  FBaseViewportW := 0;
+  FBaseViewportH := 0;
   FZoomFactor := 1.0;
 end;
 
@@ -347,6 +355,25 @@ end;
 
 procedure TFrameView.WMMouseWheel(var Message: TWMMouseWheel);
 begin
+  { Ctrl+Wheel: delegate to parent form for zoom }
+  if (Message.Keys and MK_CONTROL) <> 0 then
+  begin
+    if GetParentForm(Self) is TPluginForm then
+    begin
+      { Claim keyboard focus BEFORE zoom: when SetFocus fires after ZoomBy,
+        the scrollbox handles CMFocusChanged by calling ScrollInView, which
+        resets scroll positions to show the top-left corner of this control,
+        overwriting the centered position that ZoomBy just computed. }
+      Winapi.Windows.SetFocus(Self.Handle);
+      if Message.WheelDelta > 0 then
+        TPluginForm(GetParentForm(Self)).ZoomBy(ZOOM_IN_FACTOR)
+      else
+        TPluginForm(GetParentForm(Self)).ZoomBy(ZOOM_OUT_FACTOR);
+    end;
+    Message.Result := 1;
+    Exit;
+  end;
+
   case FViewMode of
     vmSingle:
       begin
@@ -383,6 +410,29 @@ procedure TFrameView.SetViewport(AW, AH: Integer);
 begin
   FViewportW := AW;
   FViewportH := AH;
+  { Freeze base viewport when at zoom=1.0; keep frozen while zoomed so
+    cell sizes stay constant across window resizes }
+  if SameValue(FZoomFactor, 1.0, 0.001) then
+  begin
+    FBaseViewportW := AW;
+    FBaseViewportH := AH;
+  end;
+end;
+
+function TFrameView.BaseW: Integer;
+begin
+  if (FBaseViewportW > 0) and not SameValue(FZoomFactor, 1.0, 0.001) then
+    Result := FBaseViewportW
+  else
+    Result := FViewportW;
+end;
+
+function TFrameView.BaseH: Integer;
+begin
+  if (FBaseViewportH > 0) and not SameValue(FZoomFactor, 1.0, 0.001) then
+    Result := FBaseViewportH
+  else
+    Result := FViewportH;
 end;
 
 function TFrameView.GetColumnCount: Integer;
@@ -400,7 +450,7 @@ begin
         Exit(1);
       { Original size: columns based on native frame width }
       if (FZoomMode = zmActual) and (FNativeW > 0) then
-        Exit(Max(1, (FViewportW - FCellGap) div (FNativeW + FCellGap)));
+        Exit(Max(1, (BaseW - FCellGap) div (FNativeW + FCellGap)));
       if FColumnCount > 0 then
         Exit(FColumnCount);
       Result := Max(1, Floor(Sqrt(Length(FCells))));
@@ -440,7 +490,7 @@ var
   Cols, AvailW: Integer;
 begin
   Cols := GetColumnCount;
-  AvailW := FViewportW - (Cols + 1) * FCellGap;
+  AvailW := BaseW - (Cols + 1) * FCellGap;
   Result.cx := Max(1, Round(AvailW / Cols * FZoomFactor));
   Result.cy := Max(1, Round(Result.cx * FAspectRatio));
 end;
@@ -460,25 +510,34 @@ end;
 
 function TFrameView.GetCellRectGrid(AIndex: Integer): TRect;
 var
-  Cols, Col, Row: Integer;
+  Cols, Col, Row, Rows: Integer;
   Sz: TSize;
-  RowH, GridW, OffsetX: Integer;
+  RowH, GridW, GridH, OffsetX, OffsetY: Integer;
 begin
   Cols := GetColumnCount;
   Sz := GetCellImageSize;
   Col := AIndex mod Cols;
   Row := AIndex div Cols;
+  Rows := Ceil(Length(FCells) / Max(1, Cols));
   RowH := Sz.cy + FTimecodeHeight + FCellGap;
 
-  { Center grid horizontally when total grid width < client width }
   GridW := Cols * (Sz.cx + FCellGap) + FCellGap;
+  GridH := FCellGap + Rows * RowH;
+
+  { Center grid horizontally }
   if GridW < ClientWidth then
     OffsetX := (ClientWidth - GridW) div 2
   else
     OffsetX := 0;
 
+  { Center grid vertically }
+  if GridH < ClientHeight then
+    OffsetY := (ClientHeight - GridH) div 2
+  else
+    OffsetY := 0;
+
   Result.Left   := OffsetX + FCellGap + Col * (Sz.cx + FCellGap);
-  Result.Top    := FCellGap + Row * RowH;
+  Result.Top    := OffsetY + FCellGap + Row * RowH;
   Result.Right  := Result.Left + Sz.cx;
   Result.Bottom := Result.Top + Sz.cy;
 end;
@@ -495,14 +554,14 @@ begin
       end;
     zmFitIfLarger:
       begin
-        CellW := Max(1, FViewportW - 2 * FCellGap);
+        CellW := Max(1, BaseW - 2 * FCellGap);
         if (FNativeW > 0) and (FNativeW < CellW) then
           CellW := FNativeW;
         CellH := Max(1, Round(CellW * FAspectRatio));
       end;
   else { zmFitWindow }
     begin
-      CellW := Max(1, FViewportW - 2 * FCellGap);
+      CellW := Max(1, BaseW - 2 * FCellGap);
       CellH := Max(1, Round(CellW * FAspectRatio));
     end;
   end;
@@ -528,7 +587,7 @@ function TFrameView.GetCellRectFilmstrip(AIndex: Integer): TRect;
 var
   CellH, CellW, AvailH, TopY: Integer;
 begin
-  AvailH := Max(1, FViewportH - FTimecodeHeight - 2 * FCellGap);
+  AvailH := Max(1, BaseH - FTimecodeHeight - 2 * FCellGap);
 
   case FZoomMode of
     zmActual:
@@ -564,9 +623,9 @@ var
   CellW, CellH: Integer;
   AvailW, AvailH: Integer;
 begin
-  { Base available space from viewport, not control size }
-  AvailW := Max(1, FViewportW - 2 * FCellGap);
-  AvailH := Max(1, FViewportH - FTimecodeHeight - 2 * FCellGap);
+  { Base available space from frozen viewport, not control size }
+  AvailW := Max(1, BaseW - 2 * FCellGap);
+  AvailH := Max(1, BaseH - FTimecodeHeight - 2 * FCellGap);
 
   case FZoomMode of
     zmActual:
@@ -624,7 +683,7 @@ begin
   if Length(FSmartRows) = 0 then
     Exit(Rect(0, 0, 1, 1));
 
-  RowH := FViewportH div Length(FSmartRows);
+  RowH := BaseH div Length(FSmartRows);
 
   { Find which row this index belongs to }
   PrevCount := 0;
@@ -633,19 +692,19 @@ begin
     if AIndex < PrevCount + FSmartRows[RowIdx].Count then
     begin
       CellInRow := AIndex - PrevCount;
-      CellW := FViewportW div Max(1, FSmartRows[RowIdx].Count);
+      CellW := BaseW div Max(1, FSmartRows[RowIdx].Count);
       RowTop := RowIdx * RowH;
 
       { Last row/cell fills remaining space to avoid rounding gaps }
       Result.Left := CellInRow * CellW;
       if CellInRow = FSmartRows[RowIdx].Count - 1 then
-        Result.Right := FViewportW
+        Result.Right := BaseW
       else
         Result.Right := Result.Left + CellW;
 
       Result.Top := RowTop;
       if RowIdx = High(FSmartRows) then
-        Result.Bottom := FViewportH
+        Result.Bottom := BaseH
       else
         Result.Bottom := RowTop + RowH;
 
@@ -659,8 +718,8 @@ begin
       end;
 
       { Center when zoomed content is smaller than control }
-      OffX := Max(0, (ClientWidth - Round(FViewportW * FZoomFactor)) div 2);
-      OffY := Max(0, (ClientHeight - Round(FViewportH * FZoomFactor)) div 2);
+      OffX := Max(0, (ClientWidth - Round(BaseW * FZoomFactor)) div 2);
+      OffY := Max(0, (ClientHeight - Round(BaseH * FZoomFactor)) div 2);
       if (OffX > 0) or (OffY > 0) then
         Result.Offset(OffX, OffY);
 
@@ -679,7 +738,7 @@ var
   Rows: TArray<TSmartRow>;
 begin
   N := Length(FCells);
-  if (N = 0) or (FViewportW <= 0) or (FViewportH <= 0) then
+  if (N = 0) or (BaseW <= 0) or (BaseH <= 0) then
   begin
     SetLength(FSmartRows, 0);
     Exit;
@@ -702,9 +761,9 @@ begin
     for I := 0 to R - 1 do
     begin
       if I < Extra then
-        DisplayedAR := (FViewportH / R) / (FViewportW / (Base + 1))
+        DisplayedAR := (BaseH / R) / (BaseW / (Base + 1))
       else
-        DisplayedAR := (FViewportH / R) / (FViewportW / Max(1, Base));
+        DisplayedAR := (BaseH / R) / (BaseW / Max(1, Base));
       Score := Score + Abs(DisplayedAR - OrigAR);
     end;
 
@@ -1000,6 +1059,7 @@ begin
   N := Length(FCells);
   if N = 0 then
   begin
+    Width := FViewportW;
     Height := FViewportH;
     Exit;
   end;
@@ -1008,14 +1068,14 @@ begin
     vmSmartGrid:
       begin
         CalcSmartGridLayout;
-        Width := Max(FViewportW, Round(FViewportW * FZoomFactor));
-        Height := Max(FViewportH, Round(FViewportH * FZoomFactor));
+        Width := Max(FViewportW, Round(BaseW * FZoomFactor));
+        Height := Max(FViewportH, Round(BaseH * FZoomFactor));
       end;
     vmSingle:
       begin
         R0 := GetCellRectSingle(FCurrentFrameIndex);
-        Width := Max(FViewportW, R0.Right + FCellGap);
-        Height := Max(FViewportH, R0.Bottom + FTimecodeHeight + FCellGap);
+        Width := Max(FViewportW, R0.Width + 2 * FCellGap);
+        Height := Max(FViewportH, R0.Height + FTimecodeHeight + 2 * FCellGap);
       end;
     vmFilmstrip:
       begin
@@ -1317,25 +1377,43 @@ end;
 
 procedure TPluginForm.ZoomBy(AFactor: Double);
 var
-  OldF, NewF, CX, CY: Double;
+  OldF, NewF, NormX, NormY: Double;
 begin
   OldF := FFrameView.ZoomFactor;
   NewF := EnsureRange(OldF * AFactor, MIN_ZOOM, MAX_ZOOM);
   if SameValue(NewF, OldF, 0.0001) then
     Exit;
 
-  { Viewport center in content coordinates }
-  CX := FScrollBox.HorzScrollBar.Position + FScrollBox.ClientWidth / 2;
-  CY := FScrollBox.VertScrollBar.Position + FScrollBox.ClientHeight / 2;
+  { Normalized position (0..1) of the viewport center within the control.
+    When content is centered with offsets, the center maps to 0.5.
+    When content exceeds viewport, scroll position maps correctly.
+    This handles the centering-offset transition on zoom boundary. }
+  if FFrameView.Width > 0 then
+    NormX := (FScrollBox.HorzScrollBar.Position + FScrollBox.ClientWidth / 2)
+             / FFrameView.Width
+  else
+    NormX := 0.5;
+  if FFrameView.Height > 0 then
+    NormY := (FScrollBox.VertScrollBar.Position + FScrollBox.ClientHeight / 2)
+             / FFrameView.Height
+  else
+    NormY := 0.5;
 
-  FFrameView.ZoomFactor := NewF;
-  UpdateFrameViewSize;
+  { Guard: prevent OnScrollBoxResize/Resize from re-entering layout
+    while we change zoom factor, layout, and scroll position }
+  FUpdatingLayout := True;
+  try
+    FFrameView.ZoomFactor := NewF;
+    UpdateFrameViewSize;
 
-  { Restore so the same content point remains at viewport center }
-  FScrollBox.HorzScrollBar.Position :=
-    Round(CX * NewF / OldF - FScrollBox.ClientWidth / 2);
-  FScrollBox.VertScrollBar.Position :=
-    Round(CY * NewF / OldF - FScrollBox.ClientHeight / 2);
+    { Map normalized position to new control dimensions }
+    FScrollBox.HorzScrollBar.Position :=
+      Max(0, Round(NormX * FFrameView.Width - FScrollBox.ClientWidth / 2));
+    FScrollBox.VertScrollBar.Position :=
+      Max(0, Round(NormY * FFrameView.Height - FScrollBox.ClientHeight / 2));
+  finally
+    FUpdatingLayout := False;
+  end;
 end;
 
 procedure TPluginForm.ResetZoom;
@@ -1637,15 +1715,17 @@ begin
   VH := FScrollBox.ClientHeight;
   FFrameView.SetViewport(VW, VH);
 
-  { Calculate column count for grid mode }
+  { Calculate column count for grid mode (use frozen base when zoomed) }
   if FFrameView.ViewMode = vmGrid then
   begin
     case FFrameView.ZoomMode of
       zmFitWindow:
-        FFrameView.ColumnCount := FFrameView.CalcFitColumns(VW, VH);
+        FFrameView.ColumnCount := FFrameView.CalcFitColumns(
+          FFrameView.BaseW, FFrameView.BaseH);
       zmFitIfLarger:
         begin
-          FitCols := FFrameView.CalcFitColumns(VW, VH);
+          FitCols := FFrameView.CalcFitColumns(
+            FFrameView.BaseW, FFrameView.BaseH);
           DefCols := FFrameView.DefaultColumnCount;
           FFrameView.ColumnCount := Max(FitCols, DefCols);
         end;
@@ -1656,13 +1736,10 @@ begin
   else
     FFrameView.ColumnCount := 0;
 
-  { Set initial frame view dimensions; RecalcSize may adjust Width/Height }
-  FFrameView.Left := 0;
-  FFrameView.Top := 0;
-  FFrameView.Width := VW;
-  if FFrameView.ViewMode in [vmSmartGrid, vmSingle] then
-    FFrameView.Height := VH;
-
+  { RecalcSize sets Width/Height for all modes.
+    Do NOT reset Left/Top here: the scrollbox manages child positioning
+    via its scroll offset. Resetting Left=0 while Position>0 creates an
+    inconsistency that breaks subsequent ScrollBy delta calculations. }
   FFrameView.RecalcSize;
   FFrameView.Invalidate;
 end;
@@ -1708,7 +1785,7 @@ procedure TPluginForm.Resize;
 begin
   inherited;
   Realign;
-  if Assigned(FFrameView) and FFrameView.Visible then
+  if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
 
@@ -1743,7 +1820,7 @@ end;
 
 procedure TPluginForm.OnScrollBoxResize(Sender: TObject);
 begin
-  if Assigned(FFrameView) and FFrameView.Visible then
+  if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
 

@@ -139,6 +139,8 @@ type
     [Test] procedure TestSmartGridZoomCentering;
     [Test] procedure TestScrollZoomedRecalcSizeWidth;
     [Test] procedure TestSingleZoomedRecalcSize;
+    [Test] procedure TestGridZoomPreservesOnResize;
+    [Test] procedure TestGridVerticalCentering;
   end;
 
 implementation
@@ -2022,6 +2024,75 @@ begin
       Format('Single width %d should exceed viewport at zoom=2', [V.Width]));
     Assert.IsTrue(V.Height > 600,
       Format('Single height %d should exceed viewport at zoom=2', [V.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestGridZoomPreservesOnResize;
+var
+  V: TFrameView;
+  R1, R2: TRect;
+begin
+  { After zoom, resizing the viewport should NOT change cell dimensions }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ColumnCount := 2;
+    V.ZoomFactor := 2.0;
+    V.RecalcSize;
+    R1 := V.GetCellRect(0);
+
+    { Simulate resize: change viewport while zoomed }
+    V.SetViewport(1000, 700);
+    V.RecalcSize;
+    R2 := V.GetCellRect(0);
+
+    { Cell dimensions should stay the same (base viewport frozen at 800x600) }
+    Assert.AreEqual(R1.Width, R2.Width,
+      Format('Width changed on resize: was %d, now %d', [R1.Width, R2.Width]));
+    Assert.AreEqual(R1.Height, R2.Height,
+      Format('Height changed on resize: was %d, now %d', [R1.Height, R2.Height]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestGridVerticalCentering;
+var
+  V: TFrameView;
+  R: TRect;
+  Rows, Sz_cy, RowH, GridH: Integer;
+begin
+  { Grid that fits viewport should be centered vertically }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetViewport(800, 600);
+    V.SetCellCount(4, MakeOffsets(4));
+    V.ColumnCount := 2;
+    V.Width := 800;
+    V.Height := 600;
+    V.RecalcSize;
+
+    { Calculate expected grid height }
+    R := V.GetCellRect(0);
+    Rows := 2; { 4 frames / 2 cols }
+    Sz_cy := R.Height;
+    RowH := Sz_cy + 20 + 4; { timecode + gap }
+    GridH := 4 + Rows * RowH;
+
+    if GridH < 600 then
+    begin
+      { First cell should not start at the very top }
+      Assert.IsTrue(R.Top > 4,
+        Format('Grid should be centered: Top=%d, expected > 4 (gap only)', [R.Top]));
+      { Top offset should roughly equal bottom gap }
+      R := V.GetCellRect(3); { last cell }
+      Assert.IsTrue(R.Bottom + 20 < 600,
+        Format('Last cell bottom+timecode=%d should be within viewport 600',
+          [R.Bottom + 20]));
+    end;
   finally
     FreeTestFrameView(V);
   end;
