@@ -9,7 +9,7 @@ uses
   System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus,
+  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd,
   uSettings, uFrameOffsets, uFFmpegExe;
 
 const
@@ -171,6 +171,8 @@ type
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
     procedure SwitchOrCycleMode(AKey: Word);
+    procedure CopyFrameToClipboard;
+    procedure CopyAllToClipboard;
     procedure StartExtraction;
     procedure StopExtraction;
     procedure ProcessPendingFrames;
@@ -1358,8 +1360,8 @@ begin
   AddItem('Save selected...', CM_SAVE_SELECTED);
   AddItem('Save all...', CM_SAVE_ALL);
   AddSeparator;
-  AddItem('Copy frame', CM_COPY_FRAME);
-  AddItem('Copy all', CM_COPY_ALL);
+  AddItem('Copy frame'#9'Ctrl+C', CM_COPY_FRAME);
+  AddItem('Copy all'#9'Ctrl+Shift+C', CM_COPY_ALL);
   AddSeparator;
   AddItem('Select all', CM_SELECT_ALL);
   AddItem('Deselect all', CM_DESELECT_ALL);
@@ -1519,6 +1521,35 @@ begin
     { Persist }
     FSettings.ModeZoom[Target] := NextZM;
     FSettings.Save;
+  end;
+end;
+
+procedure TPluginForm.CopyFrameToClipboard;
+var
+  Idx: Integer;
+begin
+  if Length(FFrameView.FCells) = 0 then Exit;
+  Idx := FFrameView.CurrentFrameIndex;
+  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
+    Idx := 0;
+  if FFrameView.FCells[Idx].State <> fcsLoaded then Exit;
+  Clipboard.Assign(FFrameView.FCells[Idx].Bitmap);
+end;
+
+procedure TPluginForm.CopyAllToClipboard;
+var
+  Bmp: TBitmap;
+begin
+  if Length(FFrameView.FCells) = 0 then Exit;
+  Bmp := TBitmap.Create;
+  try
+    Bmp.SetSize(FFrameView.Width, FFrameView.Height);
+    Bmp.Canvas.Brush.Color := FFrameView.BackColor;
+    Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
+    FFrameView.PaintTo(Bmp.Canvas, 0, 0);
+    Clipboard.Assign(Bmp);
+  finally
+    Bmp.Free;
   end;
 end;
 
@@ -1721,6 +1752,15 @@ begin
   end;
 
   case Key of
+    Ord('C'):
+      if ssCtrl in Shift then
+      begin
+        if ssShift in Shift then
+          CopyAllToClipboard
+        else
+          CopyFrameToClipboard;
+        Key := 0;
+      end;
     VK_TAB:
       begin
         SelectNext(ActiveControl, not (ssShift in Shift), True);
@@ -1940,17 +1980,38 @@ end;
 
 procedure TPluginForm.OnContextMenuPopup(Sender: TObject);
 var
-  I: Integer;
+  I, Idx: Integer;
+  MI: TMenuItem;
+  HasFrames, HasCurrentFrame: Boolean;
 begin
-  { All actions disabled until their respective features are implemented }
+  HasFrames := Length(FFrameView.FCells) > 0;
+  Idx := FFrameView.CurrentFrameIndex;
+  HasCurrentFrame := HasFrames
+    and (Idx >= 0) and (Idx < Length(FFrameView.FCells))
+    and (FFrameView.FCells[Idx].State = fcsLoaded);
+
   for I := 0 to FContextMenu.Items.Count - 1 do
-    if FContextMenu.Items[I].Tag > 0 then
-      FContextMenu.Items[I].Enabled := False;
+  begin
+    MI := FContextMenu.Items[I];
+    case MI.Tag of
+      CM_COPY_FRAME:    MI.Enabled := HasCurrentFrame;
+      CM_COPY_ALL:      MI.Enabled := HasFrames;
+      CM_SAVE_FRAME,
+      CM_SAVE_SELECTED,
+      CM_SAVE_ALL,
+      CM_SELECT_ALL,
+      CM_DESELECT_ALL,
+      CM_SETTINGS:      MI.Enabled := False;
+    end;
+  end;
 end;
 
 procedure TPluginForm.OnContextMenuClick(Sender: TObject);
 begin
-  { Handlers will be added as features are implemented }
+  case TMenuItem(Sender).Tag of
+    CM_COPY_FRAME: CopyFrameToClipboard;
+    CM_COPY_ALL:   CopyAllToClipboard;
+  end;
 end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
