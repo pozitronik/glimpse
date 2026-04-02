@@ -10,3 +10,4 @@ src/VideoThumb.delphilsp.json
 /src/VideoThumb.dproj.local
 /tests/VideoThumbTests.res
 /coverage
+/src/VideoThumb.identcache

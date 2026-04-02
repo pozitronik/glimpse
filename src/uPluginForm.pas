@@ -1421,9 +1421,9 @@ begin
 
   FBtnTimecode := TSpeedButton.Create(FToolbar);
   FBtnTimecode.Parent := FToolbar;
-  BW := Canvas.TextWidth('TC') + BTN_PAD;
+  BW := Canvas.TextWidth('Timecodes') + BTN_PAD;
   FBtnTimecode.SetBounds(X, CY, BW, CtrlH);
-  FBtnTimecode.Caption := 'TC';
+  FBtnTimecode.Caption := 'Timecodes';
   FBtnTimecode.GroupIndex := 1;
   FBtnTimecode.AllowAllUp := True;
   FBtnTimecode.OnClick := OnTimecodeButtonClick;
