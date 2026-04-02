@@ -188,6 +188,7 @@ type
     procedure SaveSelectedFrames;
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
+    procedure RefreshExtraction;
     procedure StartExtraction;
     procedure StopExtraction;
     procedure ProcessPendingFrames;
@@ -290,6 +291,7 @@ const
   CM_SELECT_ALL    = 7;
   CM_DESELECT_ALL  = 8;
   CM_SETTINGS      = 9;
+  CM_REFRESH       = 10;
 
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
@@ -1464,6 +1466,7 @@ begin
   AddItem('Select all'#9'Ctrl+A', CM_SELECT_ALL);
   AddItem('Deselect all', CM_DESELECT_ALL);
   AddSeparator;
+  AddItem('Refresh'#9'R', CM_REFRESH);
   AddItem('Settings...', CM_SETTINGS);
 
   FFrameView.PopupMenu := FContextMenu;
@@ -2128,6 +2131,12 @@ begin
         FFrameView.SelectAll;
         Key := 0;
       end;
+    Ord('R'):
+      if Shift = [] then
+      begin
+        RefreshExtraction;
+        Key := 0;
+      end;
     VK_TAB:
       begin
         SelectNext(ActiveControl, not (ssShift in Shift), True);
@@ -2378,6 +2387,7 @@ begin
         end;
       CM_SELECT_ALL:    MI.Enabled := HasFrames;
       CM_DESELECT_ALL:  MI.Enabled := FFrameView.SelectedCount > 0;
+      CM_REFRESH:       MI.Enabled := HasFrames;
       CM_SETTINGS:      MI.Enabled := False;
     end;
   end;
@@ -2394,6 +2404,7 @@ begin
     CM_COPY_ALL:      CopyAllToClipboard;
     CM_SELECT_ALL:    FFrameView.SelectAll;
     CM_DESELECT_ALL:  FFrameView.DeselectAll;
+    CM_REFRESH:       RefreshExtraction;
   end;
 end;
 
@@ -2412,6 +2423,12 @@ begin
   FSettings.FramesCount := FUpDown.Position;
   FSettings.Save;
 
+  RefreshExtraction;
+end;
+
+procedure TPluginForm.RefreshExtraction;
+begin
+  { TODO: when cache is implemented, this must bypass it }
   if not FVideoInfo.IsValid then Exit;
   StopExtraction;
   DrainPendingFrameMessages;
