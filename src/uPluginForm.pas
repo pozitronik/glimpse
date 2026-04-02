@@ -1399,8 +1399,9 @@ begin
   else
     NormY := 0.5;
 
-  { Guard: prevent OnScrollBoxResize/Resize from re-entering layout
-    while we change zoom factor, layout, and scroll position }
+  { Suppress repainting while layout and scroll positions change
+    to avoid flickering from intermediate visual states }
+  SendMessage(FScrollBox.Handle, WM_SETREDRAW, WPARAM(False), 0);
   FUpdatingLayout := True;
   try
     FFrameView.ZoomFactor := NewF;
@@ -1413,6 +1414,9 @@ begin
       Max(0, Round(NormY * FFrameView.Height - FScrollBox.ClientHeight / 2));
   finally
     FUpdatingLayout := False;
+    SendMessage(FScrollBox.Handle, WM_SETREDRAW, WPARAM(True), 0);
+    RedrawWindow(FScrollBox.Handle, nil, 0,
+      RDW_ERASE or RDW_FRAME or RDW_INVALIDATE or RDW_ALLCHILDREN);
   end;
 end;
 
