@@ -168,6 +168,7 @@ type
     procedure ActivateMode(AMode: TViewMode);
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
+    procedure SwitchOrCycleMode(AKey: Word);
     procedure StartExtraction;
     procedure StopExtraction;
     procedure ProcessPendingFrames;
@@ -1150,6 +1151,9 @@ begin
   FParentWnd := AParentWin;
   SetWindowSubclass(AParentWin, @ParentSubclassProc, 1, DWORD_PTR(Self));
   Visible := True;
+  { A child control must own Win32 focus for KeyPreview to fire in a WLX plugin }
+  if FFrameView.HandleAllocated then
+    Winapi.Windows.SetFocus(FFrameView.Handle);
 
   FPendingFrames := TList<TPendingFrame>.Create;
   FPendingLock := TCriticalSection.Create;
@@ -1429,6 +1433,41 @@ begin
   UpdateFrameViewSize;
 end;
 
+procedure TPluginForm.SwitchOrCycleMode(AKey: Word);
+const
+  KEY_TO_MODE: array[0..4] of TViewMode =
+    (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
+var
+  Idx: Integer;
+  Target: TViewMode;
+  NextZM: TZoomMode;
+begin
+  case AKey of
+    Ord('1')..Ord('5'): Idx := AKey - Ord('1');
+    VK_NUMPAD1..VK_NUMPAD5: Idx := AKey - VK_NUMPAD1;
+  else
+    Exit;
+  end;
+  Target := KEY_TO_MODE[Idx];
+
+  if FFrameView.ViewMode <> Target then
+    ActivateMode(Target)
+  else if FModePopups[Target] <> nil then
+  begin
+    { Cycle to next zoom submode }
+    NextZM := TZoomMode((Ord(FFrameView.ZoomMode) + 1) mod (Ord(High(TZoomMode)) + 1));
+    FFrameView.ZoomMode := NextZM;
+    UpdateFrameViewSize;
+    { Update popup check marks }
+    for var I := 0 to FModePopups[Target].Items.Count - 1 do
+      FModePopups[Target].Items[I].Checked :=
+        TZoomMode(FModePopups[Target].Items[I].Tag) = NextZM;
+    { Persist }
+    FSettings.ModeZoom[Target] := NextZM;
+    FSettings.Save;
+  end;
+end;
+
 procedure TPluginForm.LoadFile(const AFileName: string);
 var
   FFmpeg: TFFmpegExe;
@@ -1641,6 +1680,12 @@ begin
     Ord('0'), VK_NUMPAD0:
       begin
         ResetZoom;
+        Key := 0;
+      end;
+    Ord('1')..Ord('5'), VK_NUMPAD1..VK_NUMPAD5:
+      if ssCtrl in Shift then
+      begin
+        SwitchOrCycleMode(Key);
         Key := 0;
       end;
   end;
