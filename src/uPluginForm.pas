@@ -253,6 +253,7 @@ const
   ZOOM_OUT_FACTOR = 1 / 1.25;
   MIN_ZOOM = 0.1;
   MAX_ZOOM = 10.0;
+  ZOOM_EPSILON = 0.0001;
 
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
@@ -412,7 +413,7 @@ begin
   FViewportH := AH;
   { Freeze base viewport when at zoom=1.0; keep frozen while zoomed so
     cell sizes stay constant across window resizes }
-  if SameValue(FZoomFactor, 1.0, 0.001) then
+  if SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
   begin
     FBaseViewportW := AW;
     FBaseViewportH := AH;
@@ -421,7 +422,7 @@ end;
 
 function TFrameView.BaseW: Integer;
 begin
-  if (FBaseViewportW > 0) and not SameValue(FZoomFactor, 1.0, 0.001) then
+  if (FBaseViewportW > 0) and not SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
     Result := FBaseViewportW
   else
     Result := FViewportW;
@@ -429,7 +430,7 @@ end;
 
 function TFrameView.BaseH: Integer;
 begin
-  if (FBaseViewportH > 0) and not SameValue(FZoomFactor, 1.0, 0.001) then
+  if (FBaseViewportH > 0) and not SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
     Result := FBaseViewportH
   else
     Result := FViewportH;
@@ -606,9 +607,9 @@ begin
   CellH := Max(1, Round(CellH * FZoomFactor));
   CellW := Max(1, Round(CellH / FAspectRatio));
 
-  { Center vertically when cell is shorter than available height }
+  { Center vertically within control (ClientHeight reflects post-RecalcSize size) }
   if CellH < AvailH then
-    TopY := (FViewportH - CellH - FTimecodeHeight) div 2
+    TopY := (ClientHeight - CellH - FTimecodeHeight) div 2
   else
     TopY := FCellGap;
 
@@ -709,7 +710,7 @@ begin
         Result.Bottom := RowTop + RowH;
 
       { Apply continuous zoom }
-      if FZoomFactor <> 1.0 then
+      if not SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
       begin
         Result.Left   := Round(Result.Left * FZoomFactor);
         Result.Top    := Round(Result.Top * FZoomFactor);
@@ -1381,7 +1382,7 @@ var
 begin
   OldF := FFrameView.ZoomFactor;
   NewF := EnsureRange(OldF * AFactor, MIN_ZOOM, MAX_ZOOM);
-  if SameValue(NewF, OldF, 0.0001) then
+  if SameValue(NewF, OldF, ZOOM_EPSILON) then
     Exit;
 
   { Normalized position (0..1) of the viewport center within the control.
@@ -1422,7 +1423,7 @@ end;
 
 procedure TPluginForm.ResetZoom;
 begin
-  if SameValue(FFrameView.ZoomFactor, 1.0, 0.0001) then
+  if SameValue(FFrameView.ZoomFactor, 1.0, ZOOM_EPSILON) then
     Exit;
   FFrameView.ZoomFactor := 1.0;
   UpdateFrameViewSize;
@@ -1688,7 +1689,7 @@ var
   VW, VH: Integer;
   Zoomed: Boolean;
 begin
-  Zoomed := not SameValue(FFrameView.ZoomFactor, 1.0, 0.001);
+  Zoomed := not SameValue(FFrameView.ZoomFactor, 1.0, ZOOM_EPSILON);
 
   { Configure scrollbox FIRST so ClientWidth/ClientHeight reflect scrollbar state }
   case FFrameView.ViewMode of
