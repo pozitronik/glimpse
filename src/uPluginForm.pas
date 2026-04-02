@@ -139,6 +139,7 @@ type
     FUpDown: TUpDown;
     FModeButtons: array[TViewMode] of TButton;
     FModePopups: array[TViewMode] of TPopupMenu;
+    FContextMenu: TPopupMenu;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
     { Content }
@@ -157,6 +158,7 @@ type
 
     procedure CreateToolbar;
     procedure CreateFrameView;
+    procedure CreateContextMenu;
     procedure CreateErrorLabel;
     function CreateModePopup(AMode: TViewMode): TPopupMenu;
     procedure ApplySettings;
@@ -179,6 +181,8 @@ type
     procedure OnModeButtonClick(Sender: TObject);
     procedure OnSizingMenuClick(Sender: TObject);
     procedure OnScrollBoxResize(Sender: TObject);
+    procedure OnContextMenuPopup(Sender: TObject);
+    procedure OnContextMenuClick(Sender: TObject);
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
@@ -255,6 +259,16 @@ const
   MIN_ZOOM = 0.1;
   MAX_ZOOM = 10.0;
   ZOOM_EPSILON = 0.0001;
+
+  { Context menu item tags }
+  CM_SAVE_FRAME    = 1;
+  CM_SAVE_SELECTED = 2;
+  CM_SAVE_ALL      = 3;
+  CM_COPY_FRAME    = 4;
+  CM_COPY_ALL      = 5;
+  CM_SELECT_ALL    = 6;
+  CM_DESELECT_ALL  = 7;
+  CM_SETTINGS      = 8;
 
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
@@ -1140,6 +1154,7 @@ begin
 
   CreateToolbar;
   CreateFrameView;
+  CreateContextMenu;
   CreateErrorLabel;
   ApplySettings;
 
@@ -1313,6 +1328,45 @@ begin
   FFrameView.Parent := FScrollBox;
   FFrameView.Left := 0;
   FFrameView.Top := 0;
+end;
+
+procedure TPluginForm.CreateContextMenu;
+
+  function AddItem(const ACaption: string; ATag: Integer): TMenuItem;
+  begin
+    Result := TMenuItem.Create(FContextMenu);
+    Result.Caption := ACaption;
+    Result.Tag := ATag;
+    Result.OnClick := OnContextMenuClick;
+    FContextMenu.Items.Add(Result);
+  end;
+
+  procedure AddSeparator;
+  var
+    MI: TMenuItem;
+  begin
+    MI := TMenuItem.Create(FContextMenu);
+    MI.Caption := '-';
+    FContextMenu.Items.Add(MI);
+  end;
+
+begin
+  FContextMenu := TPopupMenu.Create(Self);
+  FContextMenu.OnPopup := OnContextMenuPopup;
+
+  AddItem('Save frame...', CM_SAVE_FRAME);
+  AddItem('Save selected...', CM_SAVE_SELECTED);
+  AddItem('Save all...', CM_SAVE_ALL);
+  AddSeparator;
+  AddItem('Copy frame', CM_COPY_FRAME);
+  AddItem('Copy all', CM_COPY_ALL);
+  AddSeparator;
+  AddItem('Select all', CM_SELECT_ALL);
+  AddItem('Deselect all', CM_DESELECT_ALL);
+  AddSeparator;
+  AddItem('Settings...', CM_SETTINGS);
+
+  FFrameView.PopupMenu := FContextMenu;
 end;
 
 procedure TPluginForm.CreateErrorLabel;
@@ -1882,6 +1936,21 @@ procedure TPluginForm.OnScrollBoxResize(Sender: TObject);
 begin
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
+end;
+
+procedure TPluginForm.OnContextMenuPopup(Sender: TObject);
+var
+  I: Integer;
+begin
+  { All actions disabled until their respective features are implemented }
+  for I := 0 to FContextMenu.Items.Count - 1 do
+    if FContextMenu.Items[I].Tag > 0 then
+      FContextMenu.Items[I].Enabled := False;
+end;
+
+procedure TPluginForm.OnContextMenuClick(Sender: TObject);
+begin
+  { Handlers will be added as features are implemented }
 end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
