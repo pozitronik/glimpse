@@ -1735,30 +1735,43 @@ end;
 
 procedure TPluginForm.SaveAllFrames;
 var
-  Dlg: TFileOpenDialog;
+  Dlg: TSaveDialog;
   I: Integer;
   Dir: string;
+  Fmt: TSaveFormat;
 begin
   if Length(FFrameView.FCells) = 0 then Exit;
 
-  Dlg := TFileOpenDialog.Create(nil);
+  Dlg := TSaveDialog.Create(nil);
   try
     Dlg.Title := 'Save all frames';
-    Dlg.Options := Dlg.Options + [fdoPickFolders];
+    Dlg.Filter := 'PNG images (*.png)|*.png|JPEG images (*.jpg)|*.jpg';
+    case FSettings.SaveFormat of
+      sfJPEG: Dlg.FilterIndex := 2;
+    else
+      Dlg.FilterIndex := 1;
+    end;
+    Dlg.DefaultExt := 'png';
+    { Show a sample filename so user sees the pattern and picks the folder }
+    Dlg.FileName := FrameFileName(0, FSettings.SaveFormat);
     if FSettings.SaveFolder <> '' then
-      Dlg.DefaultFolder := FSettings.SaveFolder;
+      Dlg.InitialDir := FSettings.SaveFolder;
 
     if Dlg.Execute then
     begin
-      Dir := IncludeTrailingPathDelimiter(Dlg.FileName);
+      case Dlg.FilterIndex of
+        2: Fmt := sfJPEG;
+      else
+        Fmt := sfPNG;
+      end;
+      Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Dlg.FileName));
       for I := 0 to High(FFrameView.FCells) do
       begin
         if FFrameView.FCells[I].State <> fcsLoaded then Continue;
         SaveBitmapToFile(FFrameView.FCells[I].Bitmap,
-          Dir + FrameFileName(I, FSettings.SaveFormat),
-          FSettings.SaveFormat);
+          Dir + FrameFileName(I, Fmt), Fmt);
       end;
-      FSettings.SaveFolder := Dlg.FileName;
+      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
       FSettings.Save;
     end;
   finally
