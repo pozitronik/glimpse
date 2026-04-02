@@ -181,7 +181,6 @@ type
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
     procedure SwitchOrCycleMode(AKey: Word);
-    procedure CopyFrameToClipboard;
     procedure CopyAllToClipboard;
     function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
     procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat);
@@ -214,6 +213,7 @@ type
       ASettings: TPluginSettings; const AFFmpegPath: string);
     destructor Destroy; override;
     procedure LoadFile(const AFileName: string);
+    procedure CopyFrameToClipboard;
   end;
 
 implementation

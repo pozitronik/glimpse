@@ -208,10 +208,17 @@ begin
 end;
 
 function ListSendCommand(ListWin: HWND; Command, Parameter: Integer): Integer; stdcall;
+var
+  Ctrl: TWinControl;
 begin
   case Command of
     lc_Copy:
-      Result := LISTPLUGIN_OK;
+      begin
+        Ctrl := FindControl(ListWin);
+        if Ctrl is TPluginForm then
+          TPluginForm(Ctrl).CopyFrameToClipboard;
+        Result := LISTPLUGIN_OK;
+      end;
     lc_NewParams:
       Result := LISTPLUGIN_OK;
   else
