@@ -101,6 +101,7 @@ type
     FCells: TArray<TFrameCell>;
     constructor Create(AOwner: TComponent); override;
     function GetCellRect(AIndex: Integer): TRect;
+    function CellIndexAt(const APoint: TPoint): Integer;
     procedure SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
     procedure SetFrame(AIndex: Integer; ABitmap: TBitmap);
     procedure SetCellError(AIndex: Integer);
@@ -140,6 +141,7 @@ type
     FModeButtons: array[TViewMode] of TButton;
     FModePopups: array[TViewMode] of TPopupMenu;
     FContextMenu: TPopupMenu;
+    FContextCellIndex: Integer;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
     { Content }
@@ -1136,6 +1138,23 @@ begin
   end;
 end;
 
+function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
+var
+  I: Integer;
+begin
+  if FViewMode = vmSingle then
+  begin
+    if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < Length(FCells))
+      and GetCellRect(FCurrentFrameIndex).Contains(APoint) then
+      Exit(FCurrentFrameIndex);
+    Exit(-1);
+  end;
+  for I := 0 to High(FCells) do
+    if GetCellRect(I).Contains(APoint) then
+      Exit(I);
+  Result := -1;
+end;
+
 { TPluginForm }
 
 constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string;
@@ -1150,6 +1169,7 @@ begin
 
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
+  FContextCellIndex := -1;
 
   Winapi.Windows.GetClientRect(AParentWin, R);
   SetBounds(0, 0, R.Right, R.Bottom);
@@ -1529,7 +1549,10 @@ var
   Idx: Integer;
 begin
   if Length(FFrameView.FCells) = 0 then Exit;
-  Idx := FFrameView.CurrentFrameIndex;
+  { Context menu passes the right-clicked cell; keyboard uses current frame }
+  Idx := FContextCellIndex;
+  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
+    Idx := FFrameView.CurrentFrameIndex;
   if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
     Idx := 0;
   if FFrameView.FCells[Idx].State <> fcsLoaded then Exit;
@@ -1980,21 +2003,24 @@ end;
 
 procedure TPluginForm.OnContextMenuPopup(Sender: TObject);
 var
-  I, Idx: Integer;
+  I: Integer;
   MI: TMenuItem;
-  HasFrames, HasCurrentFrame: Boolean;
+  Pt: TPoint;
+  HasFrames, HasClickedFrame: Boolean;
 begin
   HasFrames := Length(FFrameView.FCells) > 0;
-  Idx := FFrameView.CurrentFrameIndex;
-  HasCurrentFrame := HasFrames
-    and (Idx >= 0) and (Idx < Length(FFrameView.FCells))
-    and (FFrameView.FCells[Idx].State = fcsLoaded);
+
+  { Hit-test: which cell was right-clicked? }
+  Pt := FFrameView.ScreenToClient(FContextMenu.PopupPoint);
+  FContextCellIndex := FFrameView.CellIndexAt(Pt);
+  HasClickedFrame := (FContextCellIndex >= 0)
+    and (FFrameView.FCells[FContextCellIndex].State = fcsLoaded);
 
   for I := 0 to FContextMenu.Items.Count - 1 do
   begin
     MI := FContextMenu.Items[I];
     case MI.Tag of
-      CM_COPY_FRAME:    MI.Enabled := HasCurrentFrame;
+      CM_COPY_FRAME:    MI.Enabled := HasClickedFrame;
       CM_COPY_ALL:      MI.Enabled := HasFrames;
       CM_SAVE_FRAME,
       CM_SAVE_SELECTED,
