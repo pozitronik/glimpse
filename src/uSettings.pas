@@ -53,6 +53,7 @@ type
     class function ZoomModeToStr(AMode: TZoomMode): string; static;
     class function StrToSaveFormat(const AValue: string): TSaveFormat; static;
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
+    class function TryParseHexRGB(const AHex: string; out AColor: TColor): Boolean; static;
     class function HexToColor(const AValue: string; ADefault: TColor): TColor; static;
     class function ColorToHex(AColor: TColor): string; static;
     class procedure HexToColorAlpha(const AValue: string; ADefColor: TColor;
@@ -362,26 +363,32 @@ begin
   end;
 end;
 
-class function TPluginSettings.HexToColor(const AValue: string; ADefault: TColor): TColor;
+{ Parses #RRGGBB from a hex string starting at position 1.
+  Returns True on success, setting AColor. }
+class function TPluginSettings.TryParseHexRGB(const AHex: string; out AColor: TColor): Boolean;
 var
   R, G, B: Integer;
+begin
+  Result := False;
+  try
+    R := StrToInt('$' + Copy(AHex, 2, 2));
+    G := StrToInt('$' + Copy(AHex, 4, 2));
+    B := StrToInt('$' + Copy(AHex, 6, 2));
+    { TColor is stored as $00BBGGRR }
+    AColor := TColor(R or (G shl 8) or (B shl 16));
+    Result := True;
+  except
+  end;
+end;
+
+class function TPluginSettings.HexToColor(const AValue: string; ADefault: TColor): TColor;
+var
   Hex: string;
 begin
   Hex := AValue.Trim;
-  if (Length(Hex) = 7) and (Hex[1] = '#') then
-  begin
-    try
-      R := StrToInt('$' + Copy(Hex, 2, 2));
-      G := StrToInt('$' + Copy(Hex, 4, 2));
-      B := StrToInt('$' + Copy(Hex, 6, 2));
-      { TColor is stored as $00BBGGRR }
-      Result := TColor(R or (G shl 8) or (B shl 16));
-    except
-      Result := ADefault;
-    end;
-  end
-  else
-    Result := ADefault;
+  if (Length(Hex) = 7) and (Hex[1] = '#') and TryParseHexRGB(Hex, Result) then
+    Exit;
+  Result := ADefault;
 end;
 
 class function TPluginSettings.ColorToHex(AColor: TColor): string;
@@ -399,19 +406,13 @@ end;
 class procedure TPluginSettings.HexToColorAlpha(const AValue: string;
   ADefColor: TColor; ADefAlpha: Byte; out AColor: TColor; out AAlpha: Byte);
 var
-  R, G, B, A: Integer;
   Hex: string;
 begin
   Hex := AValue.Trim;
-  if (Length(Hex) = 9) and (Hex[1] = '#') then
+  if (Length(Hex) = 9) and (Hex[1] = '#') and TryParseHexRGB(Hex, AColor) then
   begin
     try
-      R := StrToInt('$' + Copy(Hex, 2, 2));
-      G := StrToInt('$' + Copy(Hex, 4, 2));
-      B := StrToInt('$' + Copy(Hex, 6, 2));
-      A := StrToInt('$' + Copy(Hex, 8, 2));
-      AColor := TColor(R or (G shl 8) or (B shl 16));
-      AAlpha := Byte(A);
+      AAlpha := Byte(StrToInt('$' + Copy(Hex, 8, 2)));
       Exit;
     except
     end;
