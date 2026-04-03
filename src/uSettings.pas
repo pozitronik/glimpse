@@ -53,7 +53,6 @@ type
     class function ZoomModeToStr(AMode: TZoomMode): string; static;
     class function StrToSaveFormat(const AValue: string): TSaveFormat; static;
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
-    class function TryParseHexRGB(const AHex: string; out AColor: TColor): Boolean; static;
     class function HexToColor(const AValue: string; ADefault: TColor): TColor; static;
     class function ColorToHex(AColor: TColor): string; static;
     class procedure HexToColorAlpha(const AValue: string; ADefColor: TColor;
@@ -64,6 +63,7 @@ type
     function GetActiveZoom: TZoomMode;
     procedure SetActiveZoom(AValue: TZoomMode);
   public
+    class function TryParseHexRGB(const AHex: string; out AColor: TColor): Boolean; static;
     constructor Create(const AIniPath: string);
 
     { Loads all settings from the INI file. Missing or invalid values get defaults. }
