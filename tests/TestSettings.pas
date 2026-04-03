@@ -65,6 +65,12 @@ type
     procedure TestEffectiveCacheFolderReturnsConfigured;
     [Test]
     procedure TestEffectiveCacheFolderReturnsDefaultWhenEmpty;
+    [Test]
+    procedure TestTimecodeBackColorAlphaRoundTrip;
+    [Test]
+    procedure TestTimecodeBackColorAlphaMalformedFallback;
+    [Test]
+    procedure TestTimecodeBackColorAlphaEdgeCases;
   end;
 
 implementation
@@ -133,6 +139,8 @@ begin
     S1.ZoomMode := zmActual;
     S1.Background := TColor($00FF8040);
     S1.ShowTimecode := False;
+    S1.TimecodeBackColor := TColor($0055AA00);
+    S1.TimecodeBackAlpha := 200;
     S1.ExtensionList := 'mp4,mkv,avi';
     S1.SaveFormat := sfJPEG;
     S1.JpegQuality := 75;
@@ -159,6 +167,8 @@ begin
     Assert.AreEqual(Ord(zmActual), Ord(S2.ZoomMode));
     Assert.AreEqual(Integer(TColor($00FF8040)), Integer(S2.Background));
     Assert.IsFalse(S2.ShowTimecode);
+    Assert.AreEqual(Integer(TColor($0055AA00)), Integer(S2.TimecodeBackColor));
+    Assert.AreEqual(200, Integer(S2.TimecodeBackAlpha));
     Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);
     Assert.AreEqual(Ord(sfJPEG), Ord(S2.SaveFormat));
     Assert.AreEqual(75, S2.JpegQuality);
@@ -692,6 +702,104 @@ end;
 procedure TTestPluginSettings.TestEffectiveCacheFolderReturnsDefaultWhenEmpty;
 begin
   Assert.AreEqual(DefaultCacheFolder, EffectiveCacheFolder(''), 'Should return DefaultCacheFolder when empty');
+end;
+
+procedure TTestPluginSettings.TestTimecodeBackColorAlphaRoundTrip;
+var
+  S1, S2: TPluginSettings;
+
+  procedure CheckRoundTrip(AColor: TColor; AAlpha: Byte; const ALabel: string);
+  begin
+    S1.TimecodeBackColor := AColor;
+    S1.TimecodeBackAlpha := AAlpha;
+    S1.Save;
+    S2.Load;
+    Assert.AreEqual(Integer(AColor), Integer(S2.TimecodeBackColor), ALabel + ' color');
+    Assert.AreEqual(Integer(AAlpha), Integer(S2.TimecodeBackAlpha), ALabel + ' alpha');
+  end;
+
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    CheckRoundTrip(TColor($002D2D2D), 180, 'Default-like');
+    CheckRoundTrip(TColor($00000000), 0, 'Black fully transparent');
+    CheckRoundTrip(TColor($00FFFFFF), 255, 'White fully opaque');
+    CheckRoundTrip(TColor($00FF0000), 128, 'Red half-transparent');
+    CheckRoundTrip(TColor($000000FF), 1, 'Blue near-transparent');
+  finally
+    S2.Free;
+    S1.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimecodeBackColorAlphaMalformedFallback;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Write various malformed RGBA values; all should fall back to defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimecodeBackground', 'not_a_color');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor),
+      'Malformed string should fall back to default color');
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
+      'Malformed string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimecodeBackColorAlphaEdgeCases;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { 7-char hex (no alpha component) should fall back to defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimecodeBackground', '#FF8040');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor),
+      '7-char hex (missing alpha) should fall back to default color');
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
+      '7-char hex (missing alpha) should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+
+  { Empty string should fall back to defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimecodeBackground', '');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor),
+      'Empty string should fall back to default color');
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
+      'Empty string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
 end;
 
 initialization
