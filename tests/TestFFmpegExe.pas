@@ -40,6 +40,39 @@ type
     [Test] procedure TestParseVersionEmpty;
     [Test] procedure TestParseVersionNotFFmpeg;
     [Test] procedure TestParseVersionCaseInsensitive;
+    { Bitrate parsing }
+    [Test] procedure TestParseBitrateFromDurationLine;
+    [Test] procedure TestParseBitrateFullOutput;
+    [Test] procedure TestParseBitrateMissing;
+    { FPS parsing }
+    [Test] procedure TestParseFpsInteger;
+    [Test] procedure TestParseFpsFractional;
+    [Test] procedure TestParseFpsFullOutput;
+    [Test] procedure TestParseFpsNoVideo;
+    { Video bitrate parsing }
+    [Test] procedure TestParseVideoBitrateFromStream;
+    [Test] procedure TestParseVideoBitrateFullOutput;
+    [Test] procedure TestParseVideoBitrateMissing;
+    { Audio codec parsing }
+    [Test] procedure TestParseAudioCodecAac;
+    [Test] procedure TestParseAudioCodecMp3;
+    [Test] procedure TestParseAudioCodecFullOutput;
+    [Test] procedure TestParseAudioCodecNoAudio;
+    { Audio sample rate }
+    [Test] procedure TestParseAudioSampleRate44100;
+    [Test] procedure TestParseAudioSampleRate48000;
+    [Test] procedure TestParseAudioSampleRateFullOutput;
+    [Test] procedure TestParseAudioSampleRateNoAudio;
+    { Audio channels }
+    [Test] procedure TestParseAudioChannelsStereo;
+    [Test] procedure TestParseAudioChannelsMono;
+    [Test] procedure TestParseAudioChannels51;
+    [Test] procedure TestParseAudioChannelsFullOutput;
+    [Test] procedure TestParseAudioChannelsNoAudio;
+    { Audio bitrate }
+    [Test] procedure TestParseAudioBitrateFromStream;
+    [Test] procedure TestParseAudioBitrateFullOutput;
+    [Test] procedure TestParseAudioBitrateNoAudio;
     { Edge cases }
     [Test] procedure TestParseDurationEmptyString;
     [Test] procedure TestParseDurationTrailingDot;
@@ -264,6 +297,151 @@ procedure TTestFFmpegParsing.TestParseVersionCaseInsensitive;
 begin
   Assert.AreEqual('6.0',
     ParseFFmpegVersion('FFmpeg version 6.0 Copyright'));
+end;
+
+{ TTestFFmpegParsing: Bitrate }
+
+procedure TTestFFmpegParsing.TestParseBitrateFromDurationLine;
+begin
+  Assert.AreEqual(2000, ParseBitrate('Duration: 00:10:30.50, start: 0.000000, bitrate: 2000 kb/s'));
+end;
+
+procedure TTestFFmpegParsing.TestParseBitrateFullOutput;
+begin
+  Assert.AreEqual(2000, ParseBitrate(SAMPLE_FFMPEG_OUTPUT));
+end;
+
+procedure TTestFFmpegParsing.TestParseBitrateMissing;
+begin
+  Assert.AreEqual(0, ParseBitrate('Duration: 00:01:00.00, start: 0.0'));
+end;
+
+{ TTestFFmpegParsing: FPS }
+
+procedure TTestFFmpegParsing.TestParseFpsInteger;
+begin
+  Assert.AreEqual(30.0, ParseFps('Video: h264, yuv420p, 1920x1080, 30 fps'), 0.01);
+end;
+
+procedure TTestFFmpegParsing.TestParseFpsFractional;
+begin
+  Assert.AreEqual(23.976, ParseFps('Video: h264, yuv420p, 1920x1080, 23.976 fps'), 0.001);
+end;
+
+procedure TTestFFmpegParsing.TestParseFpsFullOutput;
+begin
+  Assert.AreEqual(30.0, ParseFps(SAMPLE_FFMPEG_OUTPUT), 0.01);
+end;
+
+procedure TTestFFmpegParsing.TestParseFpsNoVideo;
+begin
+  Assert.AreEqual(0.0, ParseFps('Audio: aac, 44100 Hz, stereo'), 0.001);
+end;
+
+{ TTestFFmpegParsing: Video bitrate }
+
+procedure TTestFFmpegParsing.TestParseVideoBitrateFromStream;
+begin
+  Assert.AreEqual(1800, ParseVideoBitrate(
+    'Video: h264 (High), yuv420p, 1920x1080, 1800 kb/s, 30 fps'));
+end;
+
+procedure TTestFFmpegParsing.TestParseVideoBitrateFullOutput;
+begin
+  Assert.AreEqual(1800, ParseVideoBitrate(SAMPLE_FFMPEG_OUTPUT));
+end;
+
+procedure TTestFFmpegParsing.TestParseVideoBitrateMissing;
+begin
+  Assert.AreEqual(0, ParseVideoBitrate('Video: h264, yuv420p, 1920x1080, 30 fps'));
+end;
+
+{ TTestFFmpegParsing: Audio codec }
+
+procedure TTestFFmpegParsing.TestParseAudioCodecAac;
+begin
+  Assert.AreEqual('aac', ParseAudioCodec('Audio: aac (LC), 44100 Hz, stereo'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioCodecMp3;
+begin
+  Assert.AreEqual('mp3', ParseAudioCodec('Audio: mp3, 44100 Hz, stereo, fltp, 320 kb/s'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioCodecFullOutput;
+begin
+  Assert.AreEqual('aac', ParseAudioCodec(SAMPLE_FFMPEG_OUTPUT));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioCodecNoAudio;
+begin
+  Assert.AreEqual('', ParseAudioCodec('Video: h264, 1920x1080'));
+end;
+
+{ TTestFFmpegParsing: Audio sample rate }
+
+procedure TTestFFmpegParsing.TestParseAudioSampleRate44100;
+begin
+  Assert.AreEqual(44100, ParseAudioSampleRate('Audio: aac, 44100 Hz, stereo'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioSampleRate48000;
+begin
+  Assert.AreEqual(48000, ParseAudioSampleRate('Audio: aac (LC), 48000 Hz, 5.1, fltp'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioSampleRateFullOutput;
+begin
+  Assert.AreEqual(44100, ParseAudioSampleRate(SAMPLE_FFMPEG_OUTPUT));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioSampleRateNoAudio;
+begin
+  Assert.AreEqual(0, ParseAudioSampleRate('Video: h264, 1920x1080'));
+end;
+
+{ TTestFFmpegParsing: Audio channels }
+
+procedure TTestFFmpegParsing.TestParseAudioChannelsStereo;
+begin
+  Assert.AreEqual('stereo', ParseAudioChannels('Audio: aac, 44100 Hz, stereo, fltp'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannelsMono;
+begin
+  Assert.AreEqual('mono', ParseAudioChannels('Audio: aac, 22050 Hz, mono, fltp'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannels51;
+begin
+  Assert.AreEqual('5.1', ParseAudioChannels('Audio: ac3, 48000 Hz, 5.1, fltp, 384 kb/s'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannelsFullOutput;
+begin
+  Assert.AreEqual('stereo', ParseAudioChannels(SAMPLE_FFMPEG_OUTPUT));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannelsNoAudio;
+begin
+  Assert.AreEqual('', ParseAudioChannels('Video: h264, 1920x1080'));
+end;
+
+{ TTestFFmpegParsing: Audio bitrate }
+
+procedure TTestFFmpegParsing.TestParseAudioBitrateFromStream;
+begin
+  Assert.AreEqual(128, ParseAudioBitrate('Audio: aac (LC), 44100 Hz, stereo, fltp, 128 kb/s'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioBitrateFullOutput;
+begin
+  Assert.AreEqual(128, ParseAudioBitrate(SAMPLE_FFMPEG_OUTPUT));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioBitrateNoAudio;
+begin
+  Assert.AreEqual(0, ParseAudioBitrate('Video: h264, 1920x1080'));
 end;
 
 { TTestFFmpegParsing: Edge cases }

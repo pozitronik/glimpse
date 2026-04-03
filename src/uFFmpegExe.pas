@@ -13,7 +13,14 @@ type
     Width: Integer;
     Height: Integer;
     VideoCodec: string;
-    IsValid: Boolean;      { True if at least duration was parsed }
+    VideoBitrateKbps: Integer;  { 0 if unknown }
+    Fps: Double;                { 0 if unknown }
+    Bitrate: Integer;           { overall bitrate in kb/s; 0 if unknown }
+    AudioCodec: string;         { empty if no audio }
+    AudioSampleRate: Integer;   { Hz; 0 if unknown }
+    AudioChannels: string;      { 'mono', 'stereo', '5.1', etc. }
+    AudioBitrateKbps: Integer;  { 0 if unknown }
+    IsValid: Boolean;           { True if at least duration was parsed }
     ErrorMessage: string;
   end;
 
@@ -43,6 +50,27 @@ function ParseResolution(const AText: string; out AWidth, AHeight: Integer): Boo
 
 { Parses video codec name from ffmpeg stderr output. }
 function ParseVideoCodec(const AText: string): string;
+
+{ Parses overall bitrate from ffmpeg stderr Duration line. Returns kb/s, or 0. }
+function ParseBitrate(const AText: string): Integer;
+
+{ Parses video framerate from ffmpeg stderr Video stream line. Returns fps, or 0. }
+function ParseFps(const AText: string): Double;
+
+{ Parses video stream bitrate from ffmpeg stderr. Returns kb/s, or 0. }
+function ParseVideoBitrate(const AText: string): Integer;
+
+{ Parses audio codec from ffmpeg stderr Audio stream line. }
+function ParseAudioCodec(const AText: string): string;
+
+{ Parses audio sample rate from ffmpeg stderr. Returns Hz, or 0. }
+function ParseAudioSampleRate(const AText: string): Integer;
+
+{ Parses audio channel layout from ffmpeg stderr (mono, stereo, 5.1, etc.). }
+function ParseAudioChannels(const AText: string): string;
+
+{ Parses audio bitrate from ffmpeg stderr Audio stream line. Returns kb/s, or 0. }
+function ParseAudioBitrate(const AText: string): Integer;
 
 { Parses version string from `ffmpeg -version` output.
   Expects first line like "ffmpeg version 6.1.1 ...".
@@ -356,6 +384,182 @@ begin
     Result := Copy(AText, Start, P - Start);
 end;
 
+function ParseBitrate(const AText: string): Integer;
+var
+  P, Start: Integer;
+  NumStr: string;
+begin
+  Result := 0;
+  { Look for "bitrate:" on the Duration line (before any Stream lines) }
+  P := Pos('bitrate:', AText);
+  if P = 0 then Exit;
+  P := P + Length('bitrate:');
+  while (P <= Length(AText)) and (AText[P] = ' ') do Inc(P);
+  Start := P;
+  while (P <= Length(AText)) and CharInSet(AText[P], ['0'..'9']) do Inc(P);
+  if P > Start then
+  begin
+    NumStr := Copy(AText, Start, P - Start);
+    Result := StrToIntDef(NumStr, 0);
+  end;
+end;
+
+{ Extracts the Video stream line from ffmpeg output }
+function ExtractVideoLine(const AText: string): string;
+var
+  P, LineEnd: Integer;
+begin
+  Result := '';
+  P := Pos('Video:', AText);
+  if P = 0 then Exit;
+  LineEnd := P;
+  while (LineEnd <= Length(AText)) and not CharInSet(AText[LineEnd], [#13, #10]) do
+    Inc(LineEnd);
+  Result := Copy(AText, P, LineEnd - P);
+end;
+
+{ Extracts the Audio stream line from ffmpeg output }
+function ExtractAudioLine(const AText: string): string;
+var
+  P, LineEnd: Integer;
+begin
+  Result := '';
+  P := Pos('Audio:', AText);
+  if P = 0 then Exit;
+  LineEnd := P;
+  while (LineEnd <= Length(AText)) and not CharInSet(AText[LineEnd], [#13, #10]) do
+    Inc(LineEnd);
+  Result := Copy(AText, P, LineEnd - P);
+end;
+
+function ParseFps(const AText: string): Double;
+var
+  Line: string;
+  P, Start: Integer;
+  NumStr: string;
+begin
+  Result := 0;
+  Line := ExtractVideoLine(AText);
+  if Line = '' then Exit;
+  { Look for "NN fps" or "NN.NN fps" pattern }
+  P := Pos(' fps', Line);
+  if P < 2 then Exit;
+  { Walk backwards to find the number }
+  Dec(P);
+  while (P > 0) and (Line[P] = ' ') do Dec(P);
+  Start := P;
+  while (Start > 0) and CharInSet(Line[Start], ['0'..'9', '.']) do Dec(Start);
+  Inc(Start);
+  if Start <= P then
+  begin
+    NumStr := Copy(Line, Start, P - Start + 1);
+    Result := StrToFloatDef(NumStr, 0, TFormatSettings.Invariant);
+  end;
+end;
+
+{ Parses bitrate (kb/s) from a single stream line }
+function ParseStreamBitrate(const ALine: string): Integer;
+var
+  P, Start: Integer;
+  NumStr: string;
+begin
+  Result := 0;
+  { Find last occurrence of "kb/s" on the line }
+  P := Length(ALine);
+  while P > 4 do
+  begin
+    if (ALine[P] = 's') and (Copy(ALine, P - 3, 4) = 'kb/s') then
+    begin
+      P := P - 4; { position before "kb/s" }
+      while (P > 0) and (ALine[P] = ' ') do Dec(P);
+      Start := P;
+      while (Start > 0) and CharInSet(ALine[Start], ['0'..'9']) do Dec(Start);
+      Inc(Start);
+      if Start <= P then
+      begin
+        NumStr := Copy(ALine, Start, P - Start + 1);
+        Result := StrToIntDef(NumStr, 0);
+      end;
+      Exit;
+    end;
+    Dec(P);
+  end;
+end;
+
+function ParseVideoBitrate(const AText: string): Integer;
+begin
+  Result := ParseStreamBitrate(ExtractVideoLine(AText));
+end;
+
+function ParseAudioCodec(const AText: string): string;
+var
+  P, Start: Integer;
+begin
+  Result := '';
+  P := Pos('Audio:', AText);
+  if P = 0 then Exit;
+  P := P + Length('Audio:');
+  while (P <= Length(AText)) and (AText[P] = ' ') do Inc(P);
+  Start := P;
+  while (P <= Length(AText)) and CharInSet(AText[P], ['a'..'z', 'A'..'Z', '0'..'9', '_']) do
+    Inc(P);
+  if P > Start then
+    Result := Copy(AText, Start, P - Start);
+end;
+
+function ParseAudioSampleRate(const AText: string): Integer;
+var
+  Line: string;
+  P, Start: Integer;
+  NumStr: string;
+begin
+  Result := 0;
+  Line := ExtractAudioLine(AText);
+  if Line = '' then Exit;
+  P := Pos(' Hz', Line);
+  if P < 2 then Exit;
+  Dec(P);
+  Start := P;
+  while (Start > 0) and CharInSet(Line[Start], ['0'..'9']) do Dec(Start);
+  Inc(Start);
+  if Start <= P then
+  begin
+    NumStr := Copy(Line, Start, P - Start + 1);
+    Result := StrToIntDef(NumStr, 0);
+  end;
+end;
+
+function ParseAudioChannels(const AText: string): string;
+var
+  Line: string;
+  Parts: TArray<string>;
+  I: Integer;
+  S: string;
+begin
+  Result := '';
+  Line := ExtractAudioLine(AText);
+  if Line = '' then Exit;
+  { Audio line format: "Audio: codec (profile) (fourcc), rate Hz, channels, fmt, bitrate"
+    Channel layout is a comma-separated field: mono, stereo, 5.1, 7.1, etc. }
+  Parts := Line.Split([',']);
+  for I := 0 to High(Parts) do
+  begin
+    S := Parts[I].Trim.ToLower;
+    if (S = 'mono') or (S = 'stereo') or (S = '5.1') or (S = '7.1')
+      or (S = '5.1(side)') or (S = '4.0') or (S = '2.1') or (S = '6.1')
+      or (S = '5.0') then
+    begin
+      Result := Parts[I].Trim;
+      Exit;
+    end;
+  end;
+end;
+
+function ParseAudioBitrate(const AText: string): Integer;
+begin
+  Result := ParseStreamBitrate(ExtractAudioLine(AText));
+end;
+
 function ParseFFmpegVersion(const AText: string): string;
 var
   Line, Prefix: string;
@@ -437,6 +641,13 @@ begin
   Result.Duration := ParseDuration(StdErrStr);
   ParseResolution(StdErrStr, Result.Width, Result.Height);
   Result.VideoCodec := ParseVideoCodec(StdErrStr);
+  Result.Bitrate := ParseBitrate(StdErrStr);
+  Result.Fps := ParseFps(StdErrStr);
+  Result.VideoBitrateKbps := ParseVideoBitrate(StdErrStr);
+  Result.AudioCodec := ParseAudioCodec(StdErrStr);
+  Result.AudioSampleRate := ParseAudioSampleRate(StdErrStr);
+  Result.AudioChannels := ParseAudioChannels(StdErrStr);
+  Result.AudioBitrateKbps := ParseAudioBitrate(StdErrStr);
   Result.IsValid := Result.Duration > 0;
 
   if not Result.IsValid then

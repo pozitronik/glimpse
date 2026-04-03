@@ -169,6 +169,8 @@ type
     FToolbarButtons: array of TButton;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
+    { Status bar }
+    FStatusBar: TStatusBar;
     { Content }
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
@@ -187,6 +189,9 @@ type
 
     procedure CreateToolbar;
     procedure CreateFrameView;
+    procedure CreateStatusBar;
+    procedure UpdateStatusBar;
+    procedure OnStatusBarDblClick(Sender: TObject);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
     function CreateModePopup(AMode: TViewMode): TPopupMenu;
@@ -1442,6 +1447,7 @@ begin
   SetBounds(0, 0, R.Right, R.Bottom);
 
   CreateToolbar;
+  CreateStatusBar;
   CreateFrameView;
   CreateContextMenu;
   CreateErrorLabel;
@@ -1720,6 +1726,122 @@ begin
   FLblError.Visible := False;
 end;
 
+procedure TPluginForm.CreateStatusBar;
+begin
+  FStatusBar := TStatusBar.Create(Self);
+  FStatusBar.Parent := Self;
+  FStatusBar.Height := 25;
+  FStatusBar.SimplePanel := False;
+  FStatusBar.SizeGrip := True;
+  FStatusBar.Font.Size := 9;
+  FStatusBar.OnDblClick := OnStatusBarDblClick;
+  FStatusBar.Visible := False;
+end;
+
+procedure TPluginForm.UpdateStatusBar;
+
+  function FormatDuration(ASeconds: Double): string;
+  var
+    H, M, S: Integer;
+    Total: Integer;
+  begin
+    if ASeconds <= 0 then
+      Exit('?');
+    Total := Round(ASeconds);
+    H := Total div 3600;
+    M := (Total mod 3600) div 60;
+    S := Total mod 60;
+    if H > 0 then
+      Result := Format('%d:%.2d:%.2d', [H, M, S])
+    else
+      Result := Format('%d:%.2d', [M, S]);
+  end;
+
+  function FormatBitrate(AKbps: Integer): string;
+  begin
+    if AKbps >= 1000 then
+      Result := Format('%.1f Mbps', [AKbps / 1000])
+    else
+      Result := Format('%d kbps', [AKbps]);
+  end;
+
+  procedure AddPanel(const AText: string; AWidth: Integer);
+  var
+    Panel: TStatusPanel;
+  begin
+    Panel := FStatusBar.Panels.Add;
+    Panel.Text := AText;
+    Panel.Width := AWidth;
+  end;
+
+var
+  AudioStr: string;
+begin
+  FStatusBar.Panels.Clear;
+
+  if not FVideoInfo.IsValid then
+    Exit;
+
+  { Resolution }
+  if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
+    AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), 120);
+
+  { Framerate }
+  if FVideoInfo.Fps > 0 then
+    AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), 100);
+
+  { Duration }
+  if FVideoInfo.Duration > 0 then
+    AddPanel(FormatDuration(FVideoInfo.Duration), 100);
+
+  { Overall bitrate }
+  if FVideoInfo.Bitrate > 0 then
+    AddPanel(FormatBitrate(FVideoInfo.Bitrate), 100);
+
+  { Video codec }
+  if FVideoInfo.VideoCodec <> '' then
+    AddPanel(FVideoInfo.VideoCodec, 90);
+
+  { Audio section }
+  if FVideoInfo.AudioCodec <> '' then
+  begin
+    AudioStr := FVideoInfo.AudioCodec;
+    if FVideoInfo.AudioSampleRate > 0 then
+      AudioStr := AudioStr + Format(' %d Hz', [FVideoInfo.AudioSampleRate]);
+    if FVideoInfo.AudioChannels <> '' then
+      AudioStr := AudioStr + ' ' + FVideoInfo.AudioChannels;
+    if FVideoInfo.AudioBitrateKbps > 0 then
+      AudioStr := AudioStr + Format(' %d kbps', [FVideoInfo.AudioBitrateKbps]);
+    AddPanel(AudioStr, 200);
+  end
+  else
+    AddPanel('No audio', 110);
+end;
+
+procedure TPluginForm.OnStatusBarDblClick(Sender: TObject);
+var
+  Pt: TPoint;
+  PanelLeft, I: Integer;
+begin
+  if FStatusBar.Panels.Count = 0 then
+    Exit;
+
+  Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
+  PanelLeft := 0;
+  for I := 0 to FStatusBar.Panels.Count - 1 do
+  begin
+    if Pt.X < PanelLeft + FStatusBar.Panels[I].Width then
+    begin
+      Clipboard.AsText := FStatusBar.Panels[I].Text;
+      Exit;
+    end;
+    Inc(PanelLeft, FStatusBar.Panels[I].Width);
+  end;
+
+  { Click past last panel: copy last panel }
+  Clipboard.AsText := FStatusBar.Panels[FStatusBar.Panels.Count - 1].Text;
+end;
+
 procedure TPluginForm.ApplySettings;
 var
   VM: TViewMode;
@@ -1740,6 +1862,7 @@ begin
 
   UpdateViewModeButtons;
   FToolbar.Visible := FSettings.ShowToolbar;
+  FStatusBar.Visible := FSettings.ShowStatusBar;
   FFrameView.ShowTimecode := FSettings.ShowTimecode;
   FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
   FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
@@ -2129,6 +2252,8 @@ begin
     FFmpeg.Free;
   end;
 
+  UpdateStatusBar;
+
   if not FVideoInfo.IsValid then
   begin
     ShowError('Could not read video file.'#13#10 + FVideoInfo.ErrorMessage);
@@ -2430,6 +2555,13 @@ begin
     VK_F2:
       begin
         ShowSettings;
+        Key := 0;
+      end;
+    VK_F3:
+      begin
+        FStatusBar.Visible := not FStatusBar.Visible;
+        FSettings.ShowStatusBar := FStatusBar.Visible;
+        FSettings.Save;
         Key := 0;
       end;
     VK_F4:

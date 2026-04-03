@@ -249,6 +249,14 @@ object SettingsForm: TSettingsForm
       Caption = 'Show toolbar (F4 to toggle)'
       TabOrder = 6
     end
+    object ChkShowStatusBar: TCheckBox
+      Left = 230
+      Top = 111
+      Width = 200
+      Height = 17
+      Caption = 'Show status bar (F3 to toggle)'
+      TabOrder = 7
+    end
   end
   object GbxSave: TGroupBox
     Left = 8

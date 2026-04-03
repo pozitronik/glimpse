@@ -40,6 +40,7 @@ type
     UdTCAlpha: TUpDown;
     LblTCAlphaHint: TLabel;
     ChkShowToolbar: TCheckBox;
+    ChkShowStatusBar: TCheckBox;
     GbxSave: TGroupBox;
     LblSaveFormat: TLabel;
     CbxSaveFormat: TComboBox;
@@ -125,6 +126,7 @@ begin
   PnlTCBack.Color := ASettings.TimecodeBackColor;
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
+  ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
 
   CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
@@ -167,6 +169,7 @@ begin
   ASettings.TimecodeBackColor := PnlTCBack.Color;
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
+  ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
 
   ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
