@@ -1058,6 +1058,10 @@ begin
   SrcR.Right  := SrcR.Left + SrcW;
   SrcR.Bottom := SrcR.Top + SrcH;
 
+  { HALFTONE averages source pixels properly; default BLACKONWHITE ANDs
+    channel values independently, corrupting colors when downscaling }
+  SetStretchBltMode(Canvas.Handle, HALFTONE);
+  SetBrushOrgEx(Canvas.Handle, 0, 0, nil);
   Canvas.CopyRect(ARect, Bmp.Canvas, SrcR);
 end;
 
