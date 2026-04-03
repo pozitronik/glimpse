@@ -66,6 +66,7 @@ begin
   try
     Log(Format('DoListLoad: ffmpegPath=%s', [GFFmpegPath]));
     Form := TPluginForm.CreateForPlugin(ParentWin, AFileName, GSettings, GFFmpegPath);
+    Form.ApplyListerParams(ShowFlags);
     Result := Form.Handle;
     Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s',
       [IntToHex(Result), BoolToStr(IsWindow(Result), True),
@@ -102,6 +103,7 @@ begin
   if Ctrl is TPluginForm then
   begin
     TPluginForm(Ctrl).LoadFile(AFileName);
+    TPluginForm(Ctrl).ApplyListerParams(ShowFlags);
     Result := LISTPLUGIN_OK;
   end
   else
@@ -175,7 +177,12 @@ begin
         Result := LISTPLUGIN_OK;
       end;
     lc_NewParams:
-      Result := LISTPLUGIN_OK;
+      begin
+        Ctrl := FindControl(ListWin);
+        if Ctrl is TPluginForm then
+          TPluginForm(Ctrl).ApplyListerParams(Parameter);
+        Result := LISTPLUGIN_OK;
+      end;
   else
     Result := LISTPLUGIN_ERROR;
   end;

@@ -11,7 +11,7 @@ uses
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
   Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
-  uSettings, uFrameOffsets, uFFmpegExe, uCache;
+  uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI;
 
 const
   WM_FRAME_READY     = WM_USER + 100; { Notification: pending frames available in queue }
@@ -241,6 +241,7 @@ type
     destructor Destroy; override;
     procedure LoadFile(const AFileName: string);
     procedure CopyFrameToClipboard;
+    procedure ApplyListerParams(AParams: Integer);
   end;
 
 implementation
@@ -1856,6 +1857,41 @@ var
 begin
   if not ResolveFrameIndex(Idx) then Exit;
   Clipboard.Assign(FFrameView.CellBitmap(Idx));
+end;
+
+procedure TPluginForm.ApplyListerParams(AParams: Integer);
+var
+  NewZM: TZoomMode;
+  VM: TViewMode;
+  I: Integer;
+begin
+  { Map Lister flags to our zoom modes }
+  if (AParams and lcp_FitToWindow) <> 0 then
+  begin
+    if (AParams and lcp_FitLargerOnly) <> 0 then
+      NewZM := zmFitIfLarger
+    else
+      NewZM := zmFitWindow;
+  end
+  else
+    NewZM := zmActual; { Center / no fit = original size }
+
+  if FFrameView.ZoomMode = NewZM then
+    Exit;
+
+  FFrameView.ZoomFactor := 1.0;
+  FFrameView.ZoomMode := NewZM;
+  UpdateFrameViewSize;
+
+  { Sync the sizing popup checkmarks for the active view mode }
+  VM := FFrameView.ViewMode;
+  if FModePopups[VM] <> nil then
+    for I := 0 to FModePopups[VM].Items.Count - 1 do
+      FModePopups[VM].Items[I].Checked :=
+        TZoomMode(FModePopups[VM].Items[I].Tag) = NewZM;
+
+  FSettings.ZoomMode := NewZM;
+  FSettings.Save;
 end;
 
 procedure TPluginForm.CopyAllToClipboard;
