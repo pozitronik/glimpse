@@ -66,7 +66,6 @@ type
     FBackColor: TColor;
     FAnimStep: Integer;
     FCellGap: Integer;
-    FTimecodeHeight: Integer;
     FColumnCount: Integer;
     FCurrentFrameIndex: Integer;
     FAspectRatio: Double;
@@ -448,7 +447,6 @@ begin
   FShowTimecode := True;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
-  FTimecodeHeight := 0;
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
   FZoomMode := zmFitWindow;
@@ -602,7 +600,7 @@ begin
   begin
     CellW := Max(1, (AViewportW - (C + 1) * FCellGap) div C);
     CellH := Max(1, Round(CellW * FAspectRatio));
-    RowH := CellH + FTimecodeHeight + FCellGap;
+    RowH := CellH + FCellGap;
     Rows := (Length(FCells) + C - 1) div C;
     TotalH := FCellGap + Rows * RowH;
     if TotalH <= AViewportH then
@@ -645,7 +643,7 @@ begin
   Col := AIndex mod Cols;
   Row := AIndex div Cols;
   Rows := Ceil(Length(FCells) / Max(1, Cols));
-  RowH := Sz.cy + FTimecodeHeight + FCellGap;
+  RowH := Sz.cy + FCellGap;
 
   GridW := Cols * (Sz.cx + FCellGap) + FCellGap;
   GridH := FCellGap + Rows * RowH;
@@ -702,7 +700,7 @@ begin
   else
     LeftX := FCellGap;
 
-  RowH := CellH + FTimecodeHeight + FCellGap;
+  RowH := CellH + FCellGap;
   Result.Left   := LeftX;
   Result.Top    := FCellGap + AIndex * RowH;
   Result.Right  := Result.Left + CellW;
@@ -713,7 +711,7 @@ function TFrameView.GetCellRectFilmstrip(AIndex: Integer): TRect;
 var
   CellH, CellW, AvailH, TopY: Integer;
 begin
-  AvailH := Max(1, BaseH - FTimecodeHeight - 2 * FCellGap);
+  AvailH := Max(1, BaseH - 2 * FCellGap);
 
   case FZoomMode of
     zmActual:
@@ -734,7 +732,7 @@ begin
 
   { Center vertically within control (ClientHeight reflects post-RecalcSize size) }
   if CellH < AvailH then
-    TopY := (ClientHeight - CellH - FTimecodeHeight) div 2
+    TopY := (ClientHeight - CellH) div 2
   else
     TopY := FCellGap;
 
@@ -751,7 +749,7 @@ var
 begin
   { Base available space from frozen viewport, not control size }
   AvailW := Max(1, BaseW - 2 * FCellGap);
-  AvailH := Max(1, BaseH - FTimecodeHeight - 2 * FCellGap);
+  AvailH := Max(1, BaseH - 2 * FCellGap);
 
   case FZoomMode of
     zmActual:
@@ -796,7 +794,7 @@ begin
 
   { Center in control (ClientWidth may exceed viewport when zoomed) }
   Result.Left   := (ClientWidth - CellW) div 2;
-  Result.Top    := FCellGap + (Max(1, ClientHeight - 2 * FCellGap - FTimecodeHeight) - CellH) div 2;
+  Result.Top    := FCellGap + (Max(1, ClientHeight - 2 * FCellGap) - CellH) div 2;
   Result.Right  := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
@@ -1245,19 +1243,19 @@ begin
       begin
         R0 := GetCellRectSingle(FCurrentFrameIndex);
         Width := Max(FViewportW, R0.Width + 2 * FCellGap);
-        Height := Max(FViewportH, R0.Height + FTimecodeHeight + 2 * FCellGap);
+        Height := Max(FViewportH, R0.Height + 2 * FCellGap);
       end;
     vmFilmstrip:
       begin
         R0 := GetCellRectFilmstrip(0);
         Width := Max(FViewportW, FCellGap + N * (R0.Width + FCellGap));
-        Height := Max(FViewportH, R0.Height + FTimecodeHeight + 2 * FCellGap);
+        Height := Max(FViewportH, R0.Height + 2 * FCellGap);
       end;
     vmScroll:
       begin
         R0 := GetCellRectScroll(0);
         Width := Max(FViewportW, R0.Width + 2 * FCellGap);
-        Height := Max(FViewportH, FCellGap + N * (R0.Height + FTimecodeHeight + FCellGap));
+        Height := Max(FViewportH, FCellGap + N * (R0.Height + FCellGap));
       end;
   else { vmGrid }
     begin
@@ -1266,7 +1264,7 @@ begin
       Rows := Ceil(N / Cols);
       GridW := Cols * (Sz.cx + FCellGap) + FCellGap;
       Width := Max(FViewportW, GridW);
-      Height := Max(FViewportH, FCellGap + Rows * (Sz.cy + FTimecodeHeight + FCellGap));
+      Height := Max(FViewportH, FCellGap + Rows * (Sz.cy + FCellGap));
     end;
   end;
 end;
