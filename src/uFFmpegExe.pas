@@ -327,7 +327,7 @@ begin
 
   { Scan for NNNxNNN pattern after "Video:" }
   P := VideoPos + 6;
-  while P < Length(AText) - 1 do
+  while P < Length(AText) do
   begin
     if (AText[P] = 'x') and
        CharInSet(AText[P - 1], ['0'..'9']) and
