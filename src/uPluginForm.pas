@@ -201,6 +201,7 @@ type
     procedure HideError;
     procedure UpdateFrameViewSize;
     procedure UpdateViewModeButtons;
+    procedure SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
     procedure UpdateTimecodeButton;
     procedure UpdateToolbarButtons;
     procedure OnToolbarButtonClick(Sender: TObject);
@@ -208,6 +209,7 @@ type
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
     procedure SwitchOrCycleMode(AKey: Word);
+    function RenderFrameView: TBitmap;
     procedure CopyAllToClipboard;
     function ResolveFrameIndex(out AIndex: Integer): Boolean;
     function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
@@ -255,28 +257,9 @@ uses
   uSettingsDlg;
 
 {$IFDEF DEBUG}
-var
-  GFormLogPath: string;
-
 procedure FormLog(const AMsg: string);
-var
-  F: TextFile;
 begin
-  if GFormLogPath = '' then Exit;
-  try
-    AssignFile(F, GFormLogPath);
-    if FileExists(GFormLogPath) then
-      Append(F)
-    else
-      Rewrite(F);
-    try
-      WriteLn(F, Format('%s  [tid=%d] %s', [FormatDateTime('hh:nn:ss.zzz', Now), GetCurrentThreadId, AMsg]));
-    finally
-      CloseFile(F);
-    end;
-  except
-    { Logging must never crash the plugin }
-  end;
+  DebugLog('Form', AMsg);
 end;
 {$ENDIF}
 
@@ -340,6 +323,12 @@ const
   MIN_ZOOM = 0.1;
   MAX_ZOOM = 10.0;
   ZOOM_EPSILON = 0.0001;
+
+  { UI layout }
+  ANIM_INTERVAL_MS = 80;   { placeholder spinner animation tick }
+  MAX_FRAME_COUNT  = 99;   { upper limit for frame count spin edit }
+  STATUSBAR_HEIGHT = 21;
+  STATUSBAR_FONT   = 9;
 
   { Context menu item tags }
   CM_SAVE_FRAME    = 1;
@@ -1469,8 +1458,7 @@ begin
   FPendingLock := TCriticalSection.Create;
 
   {$IFDEF DEBUG}
-  GFormLogPath := ExtractFilePath(FSettings.IniPath) + 'videothumb_debug.log';
-  uCache.GCacheLogPath := GFormLogPath;
+  uCache.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'videothumb_debug.log';
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
   {$ENDIF}
 
@@ -1482,7 +1470,7 @@ begin
     FCache := TNullFrameCache.Create;
 
   FAnimTimer := TTimer.Create(Self);
-  FAnimTimer.Interval := 80;
+  FAnimTimer.Interval := ANIM_INTERVAL_MS;
   FAnimTimer.OnTimer := OnAnimTimer;
   FAnimTimer.Enabled := True;
 
@@ -1552,7 +1540,7 @@ begin
   FUpDown.Parent := FToolbar;
   FUpDown.Associate := FEditFrameCount;
   FUpDown.Min := 1;
-  FUpDown.Max := 99;
+  FUpDown.Max := MAX_FRAME_COUNT;
   Inc(X, 40 + FUpDown.Width + CTRL_GAP);
 
   { Create 5 mode buttons }
@@ -1730,10 +1718,10 @@ procedure TPluginForm.CreateStatusBar;
 begin
   FStatusBar := TStatusBar.Create(Self);
   FStatusBar.Parent := Self;
-  FStatusBar.Height := 25;
+  FStatusBar.Height := STATUSBAR_HEIGHT;
   FStatusBar.SimplePanel := False;
-  FStatusBar.SizeGrip := True;
-  FStatusBar.Font.Size := 9;
+  FStatusBar.SizeGrip := False;
+  FStatusBar.Font.Size := STATUSBAR_FONT;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
   FStatusBar.Visible := False;
 end;
@@ -1845,7 +1833,6 @@ end;
 procedure TPluginForm.ApplySettings;
 var
   VM: TViewMode;
-  I: Integer;
 begin
   if FSettings = nil then Exit;
 
@@ -1855,10 +1842,7 @@ begin
 
   { Restore per-mode zoom selections in all popup menus }
   for VM := Low(TViewMode) to High(TViewMode) do
-    if FModePopups[VM] <> nil then
-      for I := 0 to FModePopups[VM].Items.Count - 1 do
-        FModePopups[VM].Items[I].Checked :=
-          I = Ord(FSettings.ModeZoom[VM]);
+    SyncZoomMenuChecks(VM, FSettings.ModeZoom[VM]);
 
   UpdateViewModeButtons;
   FToolbar.Visible := FSettings.ShowToolbar;
@@ -1978,10 +1962,7 @@ begin
     NextZM := TZoomMode((Ord(FFrameView.ZoomMode) + 1) mod (Ord(High(TZoomMode)) + 1));
     FFrameView.ZoomMode := NextZM;
     UpdateFrameViewSize;
-    { Update popup check marks }
-    for var I := 0 to FModePopups[Target].Items.Count - 1 do
-      FModePopups[Target].Items[I].Checked :=
-        TZoomMode(FModePopups[Target].Items[I].Tag) = NextZM;
+    SyncZoomMenuChecks(Target, NextZM);
     { Persist }
     FSettings.ModeZoom[Target] := NextZM;
     FSettings.Save;
@@ -1999,8 +1980,6 @@ end;
 procedure TPluginForm.ApplyListerParams(AParams: Integer);
 var
   NewZM: TZoomMode;
-  VM: TViewMode;
-  I: Integer;
 begin
   { Map Lister flags to our zoom modes }
   if (AParams and lcp_FitToWindow) <> 0 then
@@ -2021,14 +2000,20 @@ begin
   UpdateFrameViewSize;
 
   { Sync the sizing popup checkmarks for the active view mode }
-  VM := FFrameView.ViewMode;
-  if FModePopups[VM] <> nil then
-    for I := 0 to FModePopups[VM].Items.Count - 1 do
-      FModePopups[VM].Items[I].Checked :=
-        TZoomMode(FModePopups[VM].Items[I].Tag) = NewZM;
+  SyncZoomMenuChecks(FFrameView.ViewMode, NewZM);
 
   FSettings.ZoomMode := NewZM;
   FSettings.Save;
+end;
+
+{ Renders the entire frame view into a new bitmap. Caller owns the result. }
+function TPluginForm.RenderFrameView: TBitmap;
+begin
+  Result := TBitmap.Create;
+  Result.SetSize(FFrameView.Width, FFrameView.Height);
+  Result.Canvas.Brush.Color := FFrameView.BackColor;
+  Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
+  FFrameView.PaintTo(Result.Canvas, 0, 0);
 end;
 
 procedure TPluginForm.CopyAllToClipboard;
@@ -2036,12 +2021,8 @@ var
   Bmp: TBitmap;
 begin
   if FFrameView.CellCount = 0 then Exit;
-  Bmp := TBitmap.Create;
+  Bmp := RenderFrameView;
   try
-    Bmp.SetSize(FFrameView.Width, FFrameView.Height);
-    Bmp.Canvas.Brush.Color := FFrameView.BackColor;
-    Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
-    FFrameView.PaintTo(Bmp.Canvas, 0, 0);
     Clipboard.Assign(Bmp);
   finally
     Bmp.Free;
@@ -2195,12 +2176,8 @@ begin
   if not ShowSaveDialog('Save combined image', BaseName + '_combined.png', True, Path, Fmt) then
     Exit;
 
-  Bmp := TBitmap.Create;
+  Bmp := RenderFrameView;
   try
-    Bmp.SetSize(FFrameView.Width, FFrameView.Height);
-    Bmp.Canvas.Brush.Color := FFrameView.BackColor;
-    Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
-    FFrameView.PaintTo(Bmp.Canvas, 0, 0);
     SaveBitmapToFile(Bmp, Path, Fmt);
   finally
     Bmp.Free;
@@ -2361,6 +2338,8 @@ begin
   { Drain the queue under lock, then process outside the lock }
   FPendingLock.Enter;
   try
+    if FPendingFrames.Count = 0 then
+      Exit;
     Snapshot := FPendingFrames.ToArray;
     FPendingFrames.Clear;
   finally
@@ -2687,6 +2666,16 @@ begin
     else
       FModeButtons[VM].Font.Style := [];
   end;
+end;
+
+procedure TPluginForm.SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
+var
+  I: Integer;
+begin
+  if FModePopups[AMode] = nil then Exit;
+  for I := 0 to FModePopups[AMode].Items.Count - 1 do
+    FModePopups[AMode].Items[I].Checked :=
+      TZoomMode(FModePopups[AMode].Items[I].Tag) = AZoom;
 end;
 
 procedure TPluginForm.UpdateTimecodeButton;
