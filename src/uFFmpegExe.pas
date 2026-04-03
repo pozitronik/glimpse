@@ -72,6 +72,9 @@ function ParseAudioChannels(const AText: string): string;
 { Parses audio bitrate from ffmpeg stderr Audio stream line. Returns kb/s, or 0. }
 function ParseAudioBitrate(const AText: string): Integer;
 
+{ Extracts the first line containing APrefix from ffmpeg output. }
+function ExtractStreamLine(const AText, APrefix: string): string;
+
 { Parses version string from `ffmpeg -version` output.
   Expects first line like "ffmpeg version 6.1.1 ...".
   Returns version string (e.g. "6.1.1") or empty if not recognized. }

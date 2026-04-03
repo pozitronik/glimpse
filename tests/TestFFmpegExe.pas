@@ -89,6 +89,10 @@ type
     [Test] procedure TestParseNoAudioStream;
     [Test] procedure TestParseVideoBitrateNoVideoStream;
     [Test] procedure TestParseResolutionAtEndOfString;
+    [Test] procedure TestParseDurationSubSecond;
+    [Test] procedure TestParseDurationSingleDigitFraction;
+    [Test] procedure TestExtractStreamLineVideo;
+    [Test] procedure TestExtractStreamLineNoMatch;
   end;
 
   [TestFixture]
@@ -553,6 +557,34 @@ begin
     'Should parse resolution at end of string');
   Assert.AreEqual(1920, W);
   Assert.AreEqual(1080, H);
+end;
+
+procedure TTestFFmpegParsing.TestParseDurationSubSecond;
+begin
+  { Duration less than 1 second }
+  Assert.AreEqual(0.50, ParseDuration('Duration: 00:00:00.50,'), 0.001);
+end;
+
+procedure TTestFFmpegParsing.TestParseDurationSingleDigitFraction;
+begin
+  { Single fractional digit: 0.5 seconds, not 0.05 }
+  Assert.AreEqual(90.5, ParseDuration('Duration: 00:01:30.5,'), 0.001);
+end;
+
+procedure TTestFFmpegParsing.TestExtractStreamLineVideo;
+var
+  Input: string;
+begin
+  { ExtractStreamLine returns from the prefix position to end of line }
+  Input := 'Stream #0:0: Video: h264, 1920x1080' + #13#10 +
+           'Stream #0:1: Audio: aac, 48000 Hz';
+  Assert.AreEqual('Video: h264, 1920x1080',
+    ExtractStreamLine(Input, 'Video:'));
+end;
+
+procedure TTestFFmpegParsing.TestExtractStreamLineNoMatch;
+begin
+  Assert.AreEqual('', ExtractStreamLine('no streams here', 'Video:'));
 end;
 
 { TTestFFmpegLocator }

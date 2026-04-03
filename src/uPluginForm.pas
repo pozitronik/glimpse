@@ -92,14 +92,14 @@ type
     function GetCellRectFilmstrip(AIndex: Integer): TRect;
     function GetCellRectSingle(AIndex: Integer): TRect;
     function GetCellRectSmartGrid(AIndex: Integer): TRect;
-    function GetTimecodeRect(AIndex: Integer): TRect;
+    function TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
     procedure CalcSmartGridLayout;
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
     procedure PaintCropToFill(AIndex: Integer; const ARect: TRect);
     procedure PaintArc(const ARect: TRect);
-    procedure PaintTimecode(AIndex: Integer);
+    procedure PaintTimecode(AIndex: Integer; const ACellRect: TRect);
     procedure PaintErrorCell(const ARect: TRect);
     procedure SetShowTimecode(AValue: Boolean);
     procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
@@ -313,8 +313,10 @@ const
   FONT_NAME         = 'Segoe UI';
   FONT_TIMECODE     = 8;
   FONT_ERROR        = 9;
+  TIMECODE_PADDING  = 8;  { horizontal padding inside timecode label }
   ARC_PEN_WIDTH     = 3;
   ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
+  MIN_ARC_RADIUS    = 5;  { skip spinner if cell too small }
 
   { UI layout }
   ANIM_INTERVAL_MS = 80;   { placeholder spinner animation tick }
@@ -938,16 +940,15 @@ begin
   FSmartRows := Rows;
 end;
 
-function TFrameView.GetTimecodeRect(AIndex: Integer): TRect;
+function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
 var
-  CR: TRect;
   TW: Integer;
 begin
-  CR := GetCellRect(AIndex);
   Canvas.Font.Name := FONT_NAME;
   Canvas.Font.Size := FONT_TIMECODE;
-  TW := Canvas.TextWidth(FCells[AIndex].Timecode) + 8;
-  Result := Rect(CR.Left, CR.Bottom - TIMECODE_H, CR.Left + TW, CR.Bottom);
+  TW := Canvas.TextWidth(FCells[AIndex].Timecode) + TIMECODE_PADDING;
+  Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H,
+    ACellRect.Left + TW, ACellRect.Bottom);
 end;
 
 procedure TFrameView.Paint;
@@ -985,7 +986,7 @@ begin
         PaintLoadedFrame(AIndex, R);
     fcsError: PaintErrorCell(R);
   end;
-  PaintTimecode(AIndex);
+  PaintTimecode(AIndex, R);
   if FCells[AIndex].Selected then
   begin
     Canvas.Pen.Color := CLR_SELECTION;
@@ -1072,7 +1073,7 @@ begin
   CX := (ARect.Left + ARect.Right) div 2;
   CY := (ARect.Top + ARect.Bottom) div 2;
   Radius := Min(ARect.Width, ARect.Height) div ARC_RADIUS_DIV;
-  if Radius < 5 then Exit;
+  if Radius < MIN_ARC_RADIUS then Exit;
 
   StartAngle := FAnimStep * 45.0;
   Canvas.Pen.Color := CLR_ARC;
@@ -1097,14 +1098,14 @@ begin
   FShowTimecode := AValue;
 end;
 
-procedure TFrameView.PaintTimecode(AIndex: Integer);
+procedure TFrameView.PaintTimecode(AIndex: Integer; const ACellRect: TRect);
 var
   R: TRect;
   BF: TBlendFunction;
 begin
   if not FShowTimecode then Exit;
   if FCells[AIndex].Timecode = '' then Exit;
-  R := GetTimecodeRect(AIndex);
+  R := TimecodeRectFromCell(ACellRect, AIndex);
   Canvas.Font.Name := FONT_NAME;
   Canvas.Font.Size := FONT_TIMECODE;
 
