@@ -55,6 +55,11 @@
         <DCCReference Include="uFFmpegExe.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="uCache.pas"/>
+        <DCCReference Include="uFrameFileNames.pas"/>
+        <DCCReference Include="uBitmapSaver.pas"/>
+        <DCCReference Include="uZoomController.pas"/>
+        <DCCReference Include="uViewModeLogic.pas"/>
+        <DCCReference Include="uExtractionPlanner.pas"/>
         <DCCReference Include="uSettingsDlg.pas">
             <Form>SettingsForm</Form>
         </DCCReference>

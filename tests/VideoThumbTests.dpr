@@ -18,7 +18,17 @@ uses
   uPluginForm in '..\src\uPluginForm.pas',
   TestFrameView in 'TestFrameView.pas',
   uCache in '..\src\uCache.pas',
-  TestCache in 'TestCache.pas';
+  TestCache in 'TestCache.pas',
+  uFrameFileNames in '..\src\uFrameFileNames.pas',
+  TestFrameFileNames in 'TestFrameFileNames.pas',
+  uBitmapSaver in '..\src\uBitmapSaver.pas',
+  TestBitmapSaver in 'TestBitmapSaver.pas',
+  uZoomController in '..\src\uZoomController.pas',
+  TestZoomController in 'TestZoomController.pas',
+  uViewModeLogic in '..\src\uViewModeLogic.pas',
+  TestViewModeLogic in 'TestViewModeLogic.pas',
+  uExtractionPlanner in '..\src\uExtractionPlanner.pas',
+  TestExtractionPlanner in 'TestExtractionPlanner.pas';
 
 var
   Runner: ITestRunner;

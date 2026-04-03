@@ -82,6 +82,18 @@
         <DCCReference Include="TestFFmpegExe.pas"/>
         <DCCReference Include="..\src\uPluginForm.pas"/>
         <DCCReference Include="TestFrameView.pas"/>
+        <DCCReference Include="..\src\uCache.pas"/>
+        <DCCReference Include="TestCache.pas"/>
+        <DCCReference Include="..\src\uFrameFileNames.pas"/>
+        <DCCReference Include="TestFrameFileNames.pas"/>
+        <DCCReference Include="..\src\uBitmapSaver.pas"/>
+        <DCCReference Include="TestBitmapSaver.pas"/>
+        <DCCReference Include="..\src\uZoomController.pas"/>
+        <DCCReference Include="TestZoomController.pas"/>
+        <DCCReference Include="..\src\uViewModeLogic.pas"/>
+        <DCCReference Include="TestViewModeLogic.pas"/>
+        <DCCReference Include="..\src\uExtractionPlanner.pas"/>
+        <DCCReference Include="TestExtractionPlanner.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>

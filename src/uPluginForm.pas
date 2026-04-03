@@ -10,8 +10,9 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
-  Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
-  uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI;
+  uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
+  uFrameFileNames, uBitmapSaver, uZoomController, uViewModeLogic,
+  uExtractionPlanner;
 
 const
   WM_FRAME_READY     = WM_USER + 100; { Notification: pending frames available in queue }
@@ -212,8 +213,6 @@ type
     function RenderFrameView: TBitmap;
     procedure CopyAllToClipboard;
     function ResolveFrameIndex(out AIndex: Integer): Boolean;
-    function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
-    procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat);
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     procedure SaveSingleFrame;
     procedure SaveSelectedFrames;
@@ -316,13 +315,6 @@ const
   FONT_ERROR        = 9;
   ARC_PEN_WIDTH     = 3;
   ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
-
-  { Continuous zoom }
-  ZOOM_IN_FACTOR  = 1.25;
-  ZOOM_OUT_FACTOR = 1 / 1.25;
-  MIN_ZOOM = 0.1;
-  MAX_ZOOM = 10.0;
-  ZOOM_EPSILON = 0.0001;
 
   { UI layout }
   ANIM_INTERVAL_MS = 80;   { placeholder spinner animation tick }
@@ -1886,41 +1878,26 @@ end;
 
 procedure TPluginForm.ZoomBy(AFactor: Double);
 var
-  OldF, NewF, NormX, NormY: Double;
+  NewF, NormX, NormY: Double;
 begin
-  OldF := FFrameView.ZoomFactor;
-  NewF := EnsureRange(OldF * AFactor, MIN_ZOOM, MAX_ZOOM);
-  if SameValue(NewF, OldF, ZOOM_EPSILON) then
+  NewF := ClampZoomFactor(FFrameView.ZoomFactor, AFactor);
+  if NewF = 0 then
     Exit;
 
-  { Normalized position (0..1) of the viewport center within the control.
-    When content is centered with offsets, the center maps to 0.5.
-    When content exceeds viewport, scroll position maps correctly.
-    This handles the centering-offset transition on zoom boundary. }
-  if FFrameView.Width > 0 then
-    NormX := (FScrollBox.HorzScrollBar.Position + FScrollBox.ClientWidth / 2)
-             / FFrameView.Width
-  else
-    NormX := 0.5;
-  if FFrameView.Height > 0 then
-    NormY := (FScrollBox.VertScrollBar.Position + FScrollBox.ClientHeight / 2)
-             / FFrameView.Height
-  else
-    NormY := 0.5;
+  NormX := NormalizeViewportCenter(
+    FScrollBox.HorzScrollBar.Position, FScrollBox.ClientWidth, FFrameView.Width);
+  NormY := NormalizeViewportCenter(
+    FScrollBox.VertScrollBar.Position, FScrollBox.ClientHeight, FFrameView.Height);
 
-  { Suppress repainting while layout and scroll positions change
-    to avoid flickering from intermediate visual states }
   SendMessage(FScrollBox.Handle, WM_SETREDRAW, WPARAM(False), 0);
   FUpdatingLayout := True;
   try
     FFrameView.ZoomFactor := NewF;
     UpdateFrameViewSize;
-
-    { Map normalized position to new control dimensions }
     FScrollBox.HorzScrollBar.Position :=
-      Max(0, Round(NormX * FFrameView.Width - FScrollBox.ClientWidth / 2));
+      DenormalizeViewportCenter(NormX, FFrameView.Width, FScrollBox.ClientWidth);
     FScrollBox.VertScrollBar.Position :=
-      Max(0, Round(NormY * FFrameView.Height - FScrollBox.ClientHeight / 2));
+      DenormalizeViewportCenter(NormY, FFrameView.Height, FScrollBox.ClientHeight);
   finally
     FUpdatingLayout := False;
     SendMessage(FScrollBox.Handle, WM_SETREDRAW, WPARAM(True), 0);
@@ -1938,32 +1915,21 @@ begin
 end;
 
 procedure TPluginForm.SwitchOrCycleMode(AKey: Word);
-const
-  KEY_TO_MODE: array[0..4] of TViewMode =
-    (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
 var
-  Idx: Integer;
   Target: TViewMode;
   NextZM: TZoomMode;
 begin
-  case AKey of
-    Ord('1')..Ord('5'): Idx := AKey - Ord('1');
-    VK_NUMPAD1..VK_NUMPAD5: Idx := AKey - VK_NUMPAD1;
-  else
+  if not KeyToViewMode(AKey, Target) then
     Exit;
-  end;
-  Target := KEY_TO_MODE[Idx];
 
   if FFrameView.ViewMode <> Target then
     ActivateMode(Target)
-  else if FModePopups[Target] <> nil then
+  else if ModeHasZoomSubmodes(Target) then
   begin
-    { Cycle to next zoom submode }
-    NextZM := TZoomMode((Ord(FFrameView.ZoomMode) + 1) mod (Ord(High(TZoomMode)) + 1));
+    NextZM := NextZoomMode(FFrameView.ZoomMode);
     FFrameView.ZoomMode := NextZM;
     UpdateFrameViewSize;
     SyncZoomMenuChecks(Target, NextZM);
-    { Persist }
     FSettings.ModeZoom[Target] := NextZM;
     FSettings.Save;
   end;
@@ -1981,27 +1947,14 @@ procedure TPluginForm.ApplyListerParams(AParams: Integer);
 var
   NewZM: TZoomMode;
 begin
-  { Map Lister flags to our zoom modes }
-  if (AParams and lcp_FitToWindow) <> 0 then
-  begin
-    if (AParams and lcp_FitLargerOnly) <> 0 then
-      NewZM := zmFitIfLarger
-    else
-      NewZM := zmFitWindow;
-  end
-  else
-    NewZM := zmActual; { Center / no fit = original size }
-
+  NewZM := ListerParamsToZoomMode(AParams);
   if FFrameView.ZoomMode = NewZM then
     Exit;
 
   FFrameView.ZoomFactor := 1.0;
   FFrameView.ZoomMode := NewZM;
   UpdateFrameViewSize;
-
-  { Sync the sizing popup checkmarks for the active view mode }
   SyncZoomMenuChecks(FFrameView.ViewMode, NewZM);
-
   FSettings.ZoomMode := NewZM;
   FSettings.Save;
 end;
@@ -2040,52 +1993,6 @@ begin
   if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
     AIndex := 0;
   Result := FFrameView.CellState(AIndex) = fcsLoaded;
-end;
-
-function TPluginForm.FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
-var
-  BaseName, Ext: string;
-begin
-  BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
-  case AFormat of
-    sfJPEG: Ext := '.jpg';
-  else
-    Ext := '.png';
-  end;
-  Result := Format('%s_frame_%.2d_%s%s',
-    [BaseName, AIndex + 1, FormatTimecodeForFilename(FFrameView.CellTimeOffset(AIndex)), Ext]);
-end;
-
-procedure TPluginForm.SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
-  AFormat: TSaveFormat);
-var
-  Png: TPngImage;
-  Jpg: TJPEGImage;
-begin
-  case AFormat of
-    sfPNG:
-      begin
-        Png := TPngImage.Create;
-        try
-          Png.CompressionLevel := FSettings.PngCompression;
-          Png.Assign(ABitmap);
-          Png.SaveToFile(APath);
-        finally
-          Png.Free;
-        end;
-      end;
-    sfJPEG:
-      begin
-        Jpg := TJPEGImage.Create;
-        try
-          Jpg.CompressionQuality := FSettings.JpegQuality;
-          Jpg.Assign(ABitmap);
-          Jpg.SaveToFile(APath);
-        finally
-          Jpg.Free;
-        end;
-      end;
-  end;
 end;
 
 function TPluginForm.ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean;
@@ -2135,8 +2042,11 @@ var
 begin
   if not ResolveFrameIndex(Idx) then Exit;
 
-  if ShowSaveDialog('Save frame', FrameFileName(Idx, FSettings.SaveFormat), True, Path, Fmt) then
-    SaveBitmapToFile(FFrameView.CellBitmap(Idx), Path, Fmt);
+  if ShowSaveDialog('Save frame',
+    GenerateFrameFileName(FFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat),
+    True, Path, Fmt) then
+    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(Idx), Path, Fmt,
+      FSettings.JpegQuality, FSettings.PngCompression);
 end;
 
 procedure TPluginForm.SaveSelectedFrames;
@@ -2152,7 +2062,9 @@ begin
   for I := 0 to FFrameView.CellCount - 1 do
     if FFrameView.CellSelected(I) then begin FirstSel := I; Break; end;
 
-  if not ShowSaveDialog('Save selected frames', FrameFileName(FirstSel, FSettings.SaveFormat), False, Path, Fmt) then
+  if not ShowSaveDialog('Save selected frames',
+    GenerateFrameFileName(FFileName, FirstSel, FFrameView.CellTimeOffset(FirstSel), FSettings.SaveFormat),
+    False, Path, Fmt) then
     Exit;
 
   Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
@@ -2160,7 +2072,9 @@ begin
   begin
     if not FFrameView.CellSelected(I) then Continue;
     if FFrameView.CellState(I) <> fcsLoaded then Continue;
-    SaveBitmapToFile(FFrameView.CellBitmap(I), Dir + FrameFileName(I, Fmt), Fmt);
+    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I),
+      Dir + GenerateFrameFileName(FFileName, I, FFrameView.CellTimeOffset(I), Fmt), Fmt,
+      FSettings.JpegQuality, FSettings.PngCompression);
   end;
 end;
 
@@ -2178,7 +2092,8 @@ begin
 
   Bmp := RenderFrameView;
   try
-    SaveBitmapToFile(Bmp, Path, Fmt);
+    uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt,
+      FSettings.JpegQuality, FSettings.PngCompression);
   finally
     Bmp.Free;
   end;
@@ -2193,14 +2108,18 @@ begin
   if FFrameView.CellCount = 0 then Exit;
 
   { Show a sample filename so user sees the pattern and picks the folder }
-  if not ShowSaveDialog('Save all frames', FrameFileName(0, FSettings.SaveFormat), False, Path, Fmt) then
+  if not ShowSaveDialog('Save all frames',
+    GenerateFrameFileName(FFileName, 0, FFrameView.CellTimeOffset(0), FSettings.SaveFormat),
+    False, Path, Fmt) then
     Exit;
 
   Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
   for I := 0 to FFrameView.CellCount - 1 do
   begin
     if FFrameView.CellState(I) <> fcsLoaded then Continue;
-    SaveBitmapToFile(FFrameView.CellBitmap(I), Dir + FrameFileName(I, Fmt), Fmt);
+    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I),
+      Dir + GenerateFrameFileName(FFileName, I, FFrameView.CellTimeOffset(I), Fmt), Fmt,
+      FSettings.JpegQuality, FSettings.PngCompression);
   end;
 end;
 
@@ -2268,7 +2187,8 @@ end;
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
   ThreadCache: IFrameCache;
-  WorkerCount, FrameCount, ChunkSize, Start, Len, W: Integer;
+  Chunks: TArray<TWorkerChunk>;
+  W: Integer;
   Chunk: TFrameOffsetArray;
 begin
   StopExtraction;
@@ -2288,29 +2208,19 @@ begin
   else
     ThreadCache := FCache;
 
-  FrameCount := Length(FOffsets);
-  if FSettings.MaxWorkers = 0 then
-    WorkerCount := FrameCount  { 0 = one worker per frame }
-  else
-    WorkerCount := Min(FSettings.MaxWorkers, FrameCount);
-  if WorkerCount < 1 then
-    WorkerCount := 1;
+  Chunks := PlanWorkerChunks(Length(FOffsets), FSettings.MaxWorkers);
+  FActiveWorkerCount := Length(Chunks);
+  SetLength(FWorkerThreads, Length(Chunks));
 
-  FActiveWorkerCount := WorkerCount;
-  SetLength(FWorkerThreads, WorkerCount);
-  ChunkSize := (FrameCount + WorkerCount - 1) div WorkerCount; { ceil division }
-
-  for W := 0 to WorkerCount - 1 do
+  for W := 0 to High(Chunks) do
   begin
-    Start := W * ChunkSize;
-    Len := Min(ChunkSize, FrameCount - Start);
-    Chunk := Copy(FOffsets, Start, Len);
+    Chunk := Copy(FOffsets, Chunks[W].Start, Chunks[W].Len);
     FWorkerThreads[W] := TExtractionThread.Create(FFFmpegPath, FFileName, Chunk,
       Handle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount);
   end;
 
   { Start all threads after creation to minimize scheduling skew }
-  for W := 0 to WorkerCount - 1 do
+  for W := 0 to High(Chunks) do
     FWorkerThreads[W].Start;
 end;
 
@@ -2865,17 +2775,10 @@ end;
 
 procedure TPluginForm.ShowSettings;
 var
-  OldCacheEnabled: Boolean;
-  OldCacheFolder: string;
-  OldCacheMaxSizeMB: Integer;
-  OldSkipEdges: Integer;
-  OldFFmpegPath: string;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
 begin
-  OldCacheEnabled := FSettings.CacheEnabled;
-  OldCacheFolder := FSettings.CacheFolder;
-  OldCacheMaxSizeMB := FSettings.CacheMaxSizeMB;
-  OldSkipEdges := FSettings.SkipEdgesPercent;
-  OldFFmpegPath := FSettings.FFmpegExePath;
+  Snap := TakeSettingsSnapshot(FSettings);
 
   if not ShowSettingsDialog(FSettings, FFFmpegPath) then
     Exit;
@@ -2883,23 +2786,20 @@ begin
   FSettings.Save;
   ApplySettings;
 
+  Changes := DetectSettingsChanges(Snap, FSettings);
+
   { Recreate cache if cache settings changed }
-  if (FSettings.CacheEnabled <> OldCacheEnabled)
-    or (FSettings.CacheFolder <> OldCacheFolder)
-    or (FSettings.CacheMaxSizeMB <> OldCacheMaxSizeMB) then
+  if scCacheChanged in Changes then
   begin
     if FSettings.CacheEnabled then
-    begin
-      FCache := TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB);
-    end
+      FCache := TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB)
     else
       FCache := TNullFrameCache.Create;
   end;
 
   { FFmpeg path changed: update and reload from scratch (LoadFile re-probes
     the video, which is needed when ffmpeg was previously missing) }
-  if (FSettings.FFmpegExePath <> OldFFmpegPath)
-    and (FSettings.FFmpegExePath <> '') then
+  if (scFFmpegPathChanged in Changes) and (FSettings.FFmpegExePath <> '') then
   begin
     FFFmpegPath := FSettings.FFmpegExePath;
     LoadFile(FFileName);
@@ -2907,7 +2807,7 @@ begin
   end;
 
   { Re-extract if skip edges changed }
-  if FSettings.SkipEdgesPercent <> OldSkipEdges then
+  if scSkipEdgesChanged in Changes then
     RefreshExtraction;
 end;
 

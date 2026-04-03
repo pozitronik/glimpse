@@ -16,7 +16,12 @@ uses
   uFFmpegExe in 'uFFmpegExe.pas',
   uPluginForm in 'uPluginForm.pas',
   uCache in 'uCache.pas',
-  uSettingsDlg in 'uSettingsDlg.pas';
+  uSettingsDlg in 'uSettingsDlg.pas',
+  uFrameFileNames in 'uFrameFileNames.pas',
+  uBitmapSaver in 'uBitmapSaver.pas',
+  uZoomController in 'uZoomController.pas',
+  uViewModeLogic in 'uViewModeLogic.pas',
+  uExtractionPlanner in 'uExtractionPlanner.pas';
 
 exports
   ListLoad,
