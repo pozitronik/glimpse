@@ -2638,7 +2638,6 @@ var
   OldCacheMaxSizeMB: Integer;
   OldSkipEdges: Integer;
   OldFFmpegPath: string;
-  NeedRefresh: Boolean;
   CacheDir: string;
 begin
   OldCacheEnabled := FSettings.CacheEnabled;
@@ -2652,7 +2651,6 @@ begin
 
   FSettings.Save;
   ApplySettings;
-  NeedRefresh := False;
 
   { Recreate cache if cache settings changed }
   if (FSettings.CacheEnabled <> OldCacheEnabled)
@@ -2670,19 +2668,18 @@ begin
       FCache := TNullFrameCache.Create;
   end;
 
-  { Update FFmpeg path if explicitly set }
+  { FFmpeg path changed: update and reload from scratch (LoadFile re-probes
+    the video, which is needed when ffmpeg was previously missing) }
   if (FSettings.FFmpegExePath <> OldFFmpegPath)
     and (FSettings.FFmpegExePath <> '') then
   begin
     FFFmpegPath := FSettings.FFmpegExePath;
-    NeedRefresh := True;
+    LoadFile(FFileName);
+    Exit;
   end;
 
   { Re-extract if skip edges changed }
   if FSettings.SkipEdgesPercent <> OldSkipEdges then
-    NeedRefresh := True;
-
-  if NeedRefresh then
     RefreshExtraction;
 end;
 

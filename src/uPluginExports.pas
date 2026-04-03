@@ -23,14 +23,13 @@ implementation
 
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
-  uSettings, uFFmpegLocator, uFFmpegSetupDlg, uPluginForm, uCache;
+  uSettings, uFFmpegLocator, uPluginForm, uCache;
 
 var
   GSettings: TPluginSettings;
   GPluginDir: string;
   GFFmpegPath: string;
   GLogPath: string;
-  GPromptShown: Boolean;
 
 procedure Log(const AMsg: string);
 {$IFDEF DEBUG}
@@ -57,31 +56,6 @@ begin
   {$ENDIF}
 end;
 
-{ Ensures ffmpeg is available; shows setup dialog if needed. }
-procedure EnsureFFmpeg;
-var
-  Path: string;
-begin
-  if GFFmpegPath <> '' then
-    Exit;
-  if GPromptShown then
-    Exit;
-
-  Log('EnsureFFmpeg: showing setup dialog');
-  GPromptShown := True;
-  case ShowFFmpegSetupDialog(Path) of
-    fsrBrowsed:
-      begin
-        GFFmpegPath := Path;
-        Log(Format('EnsureFFmpeg: user browsed, path=%s', [Path]));
-        GSettings.FFmpegExePath := Path;
-        GSettings.Save;
-      end;
-    fsrCancel:
-      Log('EnsureFFmpeg: user cancelled');
-  end;
-end;
-
 { Internal handler shared by ListLoad and ListLoadW. }
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
 var
@@ -90,7 +64,6 @@ begin
   Result := 0;
   Log(Format('DoListLoad: ParentWin=$%s File=%s Flags=%d', [IntToHex(ParentWin), AFileName, ShowFlags]));
   try
-    EnsureFFmpeg;
     Log(Format('DoListLoad: ffmpegPath=%s', [GFFmpegPath]));
     Form := TPluginForm.CreateForPlugin(ParentWin, AFileName, GSettings, GFFmpegPath);
     Result := Form.Handle;
