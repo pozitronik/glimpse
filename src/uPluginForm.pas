@@ -1479,8 +1479,10 @@ begin
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
   StopExtraction;
-  DrainPendingFrameMessages;
-  FFrameView.ClearCells;
+  if Assigned(FPendingLock) then
+    DrainPendingFrameMessages;
+  if Assigned(FFrameView) then
+    FFrameView.ClearCells;
   FPendingLock.Free;
   FPendingFrames.Free;
   { FCache is an interface reference, released automatically }
