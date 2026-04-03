@@ -100,7 +100,7 @@ implementation
 
 uses
   System.IOUtils,
-  uFFmpegExe;
+  uFFmpegExe, uCache;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
@@ -240,10 +240,9 @@ end;
 procedure TSettingsForm.BtnClearCacheClick(Sender: TObject);
 var
   Dir: string;
+  Cache: TFrameCache;
 begin
-  Dir := EdtCacheFolder.Text;
-  if Dir = '' then
-    Dir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+  Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
 
   if not TDirectory.Exists(Dir) then
   begin
@@ -255,12 +254,11 @@ begin
     'VideoThumb', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
 
+  Cache := TFrameCache.Create(Dir, 0);
   try
-    TDirectory.Delete(Dir, True);
-    TDirectory.CreateDirectory(Dir);
-  except
-    on E: Exception do
-      MessageBox(Handle, PChar(Format('Failed to clear cache: %s', [E.Message])), 'VideoThumb', MB_OK or MB_ICONWARNING);
+    Cache.Clear;
+  finally
+    Cache.Free;
   end;
   UpdateCacheSizeInfo;
 end;
@@ -350,8 +348,7 @@ end;
 procedure TSettingsForm.UpdateCacheFolderInfo;
 begin
   if EdtCacheFolder.Text = '' then
-    LblCacheFolderInfo.Caption := Format('Default: %s',
-      [TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache')])
+    LblCacheFolderInfo.Caption := Format('Default: %s', [DefaultCacheFolder])
   else
     LblCacheFolderInfo.Caption := '';
 end;
@@ -359,13 +356,10 @@ end;
 procedure TSettingsForm.UpdateCacheSizeInfo;
 var
   Dir: string;
-  Files: TArray<string>;
-  FileName: string;
+  Cache: TFrameCache;
   Total: Int64;
 begin
-  Dir := EdtCacheFolder.Text;
-  if Dir = '' then
-    Dir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+  Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
 
   if not TDirectory.Exists(Dir) then
   begin
@@ -373,13 +367,11 @@ begin
     Exit;
   end;
 
-  Total := 0;
+  Cache := TFrameCache.Create(Dir, 0);
   try
-    Files := TDirectory.GetFiles(Dir, '*.png', TSearchOption.soAllDirectories);
-    for FileName in Files do
-      Total := Total + TFile.GetSize(FileName);
-  except
-    { Folder inaccessible }
+    Total := Cache.GetTotalSize;
+  finally
+    Cache.Free;
   end;
 
   if Total > 0 then

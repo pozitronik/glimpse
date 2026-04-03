@@ -5,7 +5,7 @@ unit uSettings;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.IniFiles, System.UITypes, System.Math;
+  System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math;
 
 type
   TFFmpegMode = (fmAuto, fmExe);
@@ -132,7 +132,26 @@ const
   DEF_CACHE_FOLDER       = '';
   DEF_CACHE_MAX_SIZE_MB  = 500;
 
+{ Returns the default cache folder path used when CacheFolder setting is empty. }
+function DefaultCacheFolder: string;
+
+{ Returns the effective cache folder: the configured value, or the default if empty. }
+function EffectiveCacheFolder(const ACacheFolder: string): string;
+
 implementation
+
+function DefaultCacheFolder: string;
+begin
+  Result := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+end;
+
+function EffectiveCacheFolder(const ACacheFolder: string): string;
+begin
+  if ACacheFolder <> '' then
+    Result := ACacheFolder
+  else
+    Result := DefaultCacheFolder;
+end;
 
 { TPluginSettings }
 

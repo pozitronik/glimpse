@@ -207,15 +207,14 @@ begin
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
 
-  { Run cache eviction once per session }
+  { Run cache eviction once per session, only when over budget }
   if GSettings.CacheEnabled then
   begin
-    var CacheDir := GSettings.CacheFolder;
-    if CacheDir = '' then
-      CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+    var CacheDir := EffectiveCacheFolder(GSettings.CacheFolder);
     with TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB) do
     try
-      Evict;
+      if GetTotalSize > Int64(GSettings.CacheMaxSizeMB) * 1024 * 1024 then
+        Evict;
     finally
       Free;
     end;

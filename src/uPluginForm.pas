@@ -1401,10 +1401,7 @@ begin
 
   if FSettings.CacheEnabled then
   begin
-    var CacheDir := FSettings.CacheFolder;
-    if CacheDir = '' then
-      CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
-    FCache := TFrameCache.Create(CacheDir, FSettings.CacheMaxSizeMB);
+    FCache := TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB);
   end
   else
     FCache := TNullFrameCache.Create;
@@ -2638,7 +2635,6 @@ var
   OldCacheMaxSizeMB: Integer;
   OldSkipEdges: Integer;
   OldFFmpegPath: string;
-  CacheDir: string;
 begin
   OldCacheEnabled := FSettings.CacheEnabled;
   OldCacheFolder := FSettings.CacheFolder;
@@ -2659,10 +2655,7 @@ begin
   begin
     if FSettings.CacheEnabled then
     begin
-      CacheDir := FSettings.CacheFolder;
-      if CacheDir = '' then
-        CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
-      FCache := TFrameCache.Create(CacheDir, FSettings.CacheMaxSizeMB);
+      FCache := TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB);
     end
     else
       FCache := TNullFrameCache.Create;
