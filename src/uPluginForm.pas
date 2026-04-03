@@ -2349,6 +2349,11 @@ begin
         SwitchOrCycleMode(Key);
         Key := 0;
       end;
+    VK_F2:
+      begin
+        ShowSettings;
+        Key := 0;
+      end;
   end;
 end;
 
