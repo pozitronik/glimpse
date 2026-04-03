@@ -8,7 +8,7 @@ interface
 uses
   System.SysUtils, System.IOUtils, System.Classes, System.Hash,
   System.Generics.Collections, System.Generics.Defaults,
-  Vcl.Graphics, Vcl.Imaging.pngimage;
+  Vcl.Graphics, Vcl.Imaging.pngimage, uBitmapSaver;
 
 type
   { Core cache contract: retrieve and store video frames by file identity
@@ -203,8 +203,6 @@ function TFrameCache.TryGet(const AFilePath: string; ATimeOffset: Double): TBitm
 var
   Key, Path: string;
   Data: TBytes;
-  Stream: TMemoryStream;
-  Png: TPngImage;
 begin
   Result := nil;
   Key := FrameKey(AFilePath, ATimeOffset);
@@ -220,25 +218,11 @@ begin
 
     Data := TFile.ReadAllBytes(Path);
     {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));{$ENDIF}
-    Stream := TMemoryStream.Create;
-    try
-      Stream.WriteBuffer(Data[0], Length(Data));
-      Stream.Position := 0;
-      Png := TPngImage.Create;
-      try
-        Png.LoadFromStream(Stream);
-        {$IFDEF DEBUG}DebugLog('Cache',Format('  PNG loaded: %dx%d', [Png.Width, Png.Height]));{$ENDIF}
-        Result := TBitmap.Create;
-        Result.Assign(Png);
-        Result.PixelFormat := pf24bit; { Force DIB for thread-safe rendering }
-        {$IFDEF DEBUG}DebugLog('Cache',Format('  BMP assigned: %dx%d empty=%s pf=%d',
-          [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));{$ENDIF}
-      finally
-        Png.Free;
-      end;
-    finally
-      Stream.Free;
-    end;
+    Result := PngBytesToBitmap(Data);
+    {$IFDEF DEBUG}
+    DebugLog('Cache',Format('  BMP loaded: %dx%d empty=%s pf=%d',
+      [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));
+    {$ENDIF}
   except
     on E: Exception do
     begin

@@ -76,6 +76,10 @@ type
     { Eviction edge cases }
     [Test]
     procedure TestEvictionSkipsLockedFiles;
+
+    { Overwrite test }
+    [Test]
+    procedure TestPutOverwritesExistingEntry;
   end;
 
 implementation
@@ -650,6 +654,45 @@ begin
       finally
         LockedStream.Free;
       end;
+    end;
+  finally
+    Cache.Free;
+  end;
+end;
+
+procedure TTestFrameCache.TestPutOverwritesExistingEntry;
+var
+  Cache: TFrameCache;
+  Bmp1, Bmp2, Got: TBitmap;
+  VideoPath: string;
+begin
+  VideoPath := CreateDummyFile('overwrite.mp4', 512);
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  try
+    { First put: 10x10 bitmap }
+    Bmp1 := CreateTestBitmap(10, 10);
+    try
+      Cache.Put(VideoPath, 1.0, Bmp1);
+    finally
+      Bmp1.Free;
+    end;
+
+    { Second put: 20x15 bitmap at same offset }
+    Bmp2 := CreateTestBitmap(20, 15);
+    try
+      Cache.Put(VideoPath, 1.0, Bmp2);
+    finally
+      Bmp2.Free;
+    end;
+
+    { Get should return the second bitmap's dimensions }
+    Got := Cache.TryGet(VideoPath, 1.0);
+    try
+      Assert.IsNotNull(Got, 'Should retrieve overwritten entry');
+      Assert.AreEqual(20, Got.Width, 'Width should match second put');
+      Assert.AreEqual(15, Got.Height, 'Height should match second put');
+    finally
+      Got.Free;
     end;
   finally
     Cache.Free;

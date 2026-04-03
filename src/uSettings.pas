@@ -378,6 +378,7 @@ begin
     AColor := TColor(R or (G shl 8) or (B shl 16));
     Result := True;
   except
+    on EConvertError do; { Invalid hex digits }
   end;
 end;
 
@@ -415,6 +416,7 @@ begin
       AAlpha := Byte(StrToInt('$' + Copy(Hex, 8, 2)));
       Exit;
     except
+      on EConvertError do; { Invalid hex digits for alpha }
     end;
   end;
   AColor := ADefColor;

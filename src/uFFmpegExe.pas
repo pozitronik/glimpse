@@ -84,7 +84,7 @@ function ValidateFFmpeg(const AExePath: string): string;
 implementation
 
 uses
-  System.Math, Vcl.Imaging.pngimage;
+  System.Math, uBitmapSaver;
 
 { Pipe reading helper }
 
@@ -219,31 +219,6 @@ begin
   CloseHandle(StdErrRead);
   CloseHandle(PI.hProcess);
   CloseHandle(PI.hThread);
-end;
-
-{ PNG conversion }
-
-function PngBytesToBitmap(const AData: TBytes): TBitmap;
-var
-  Stream: TMemoryStream;
-  Png: TPngImage;
-begin
-  Stream := TMemoryStream.Create;
-  try
-    Stream.WriteBuffer(AData[0], Length(AData));
-    Stream.Position := 0;
-    Png := TPngImage.Create;
-    try
-      Png.LoadFromStream(Stream);
-      Result := TBitmap.Create;
-      Result.Assign(Png);
-      Result.PixelFormat := pf24bit; { Force DIB for thread-safe rendering }
-    finally
-      Png.Free;
-    end;
-  finally
-    Stream.Free;
-  end;
 end;
 
 { Parsing }
@@ -661,7 +636,8 @@ begin
   try
     Result := PngBytesToBitmap(StdOut);
   except
-    FreeAndNil(Result);
+    on E: Exception do { Corrupt or truncated PNG data }
+      FreeAndNil(Result);
   end;
 end;
 

@@ -19,12 +19,15 @@ type
     [Test] procedure TestSaveJPEGReadable;
     [Test] procedure TestSaveJPEGQualityAffectsSize;
     [Test] procedure TestSavePNGCompressionAffectsSize;
+    [Test] procedure TestPngBytesToBitmapValid;
+    [Test] procedure TestPngBytesToBitmapDimensions;
+    [Test] procedure TestPngBytesToBitmapEmptyRaises;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, Winapi.Windows, Vcl.Graphics,
+  System.SysUtils, System.IOUtils, System.Classes, Winapi.Windows, Vcl.Graphics,
   Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
   uSettings, uBitmapSaver;
 
@@ -165,6 +168,83 @@ begin
   end;
   Assert.IsTrue(TFile.GetSize(PathMax) < TFile.GetSize(PathNone),
     'Max compression should produce smaller file');
+end;
+
+function BitmapToPngBytes(ABmp: TBitmap): TBytes;
+var
+  Png: TPngImage;
+  Stream: TMemoryStream;
+begin
+  Png := TPngImage.Create;
+  try
+    Png.Assign(ABmp);
+    Stream := TMemoryStream.Create;
+    try
+      Png.SaveToStream(Stream);
+      SetLength(Result, Stream.Size);
+      Move(Stream.Memory^, Result[0], Stream.Size);
+    finally
+      Stream.Free;
+    end;
+  finally
+    Png.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestPngBytesToBitmapValid;
+var
+  Src: TBitmap;
+  Data: TBytes;
+  Dst: TBitmap;
+begin
+  Src := CreateTestBitmap(30, 20);
+  try
+    Data := BitmapToPngBytes(Src);
+  finally
+    Src.Free;
+  end;
+  Dst := PngBytesToBitmap(Data);
+  try
+    Assert.IsNotNull(Dst);
+    Assert.AreEqual(30, Dst.Width);
+    Assert.AreEqual(20, Dst.Height);
+    Assert.AreEqual(Ord(pf24bit), Ord(Dst.PixelFormat), 'Must be pf24bit');
+  finally
+    Dst.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestPngBytesToBitmapDimensions;
+var
+  Src: TBitmap;
+  Data: TBytes;
+  Dst: TBitmap;
+begin
+  { Verify a different aspect ratio round-trips correctly }
+  Src := CreateTestBitmap(1, 200);
+  try
+    Data := BitmapToPngBytes(Src);
+  finally
+    Src.Free;
+  end;
+  Dst := PngBytesToBitmap(Data);
+  try
+    Assert.AreEqual(1, Dst.Width);
+    Assert.AreEqual(200, Dst.Height);
+  finally
+    Dst.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestPngBytesToBitmapEmptyRaises;
+var
+  Data: TBytes;
+begin
+  SetLength(Data, 0);
+  Assert.WillRaise(
+    procedure begin PngBytesToBitmap(Data); end,
+    nil,
+    'Empty bytes should raise');
 end;
 
 initialization

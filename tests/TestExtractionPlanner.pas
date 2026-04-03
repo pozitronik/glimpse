@@ -22,6 +22,7 @@ type
     [Test] procedure TestPlanChunksSumToTotal;
     [Test] procedure TestPlanChunksNoGaps;
     [Test] procedure TestPlanZeroFrames;
+    [Test] procedure TestPlanNegativeMaxWorkers;
     [Test] procedure TestTakeSettingsSnapshotCaptures;
     [Test] procedure TestDetectSettingsChangesNoChange;
     [Test] procedure TestDetectSettingsChangesCacheEnabled;
@@ -141,6 +142,20 @@ var
 begin
   Chunks := PlanWorkerChunks(0, 4);
   Assert.AreEqual(0, Integer(Length(Chunks)));
+end;
+
+procedure TTestExtractionPlanner.TestPlanNegativeMaxWorkers;
+var
+  Chunks: TArray<TWorkerChunk>;
+  Total, I: Integer;
+begin
+  { Negative MaxWorkers should clamp to 1 worker }
+  Chunks := PlanWorkerChunks(6, -3);
+  Assert.AreEqual(1, Integer(Length(Chunks)), 'Negative workers should clamp to 1');
+  Total := 0;
+  for I := 0 to High(Chunks) do
+    Inc(Total, Chunks[I].Len);
+  Assert.AreEqual(6, Total, 'All frames must be assigned');
 end;
 
 procedure TTestExtractionPlanner.TestTakeSettingsSnapshotCaptures;
