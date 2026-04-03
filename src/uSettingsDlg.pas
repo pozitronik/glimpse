@@ -58,6 +58,7 @@ type
     UdCacheMaxSize: TUpDown;
     LblCacheMaxSizeUnit: TLabel;
     LblCacheSizeInfo: TLabel;
+    BtnClearCache: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
     BtnDefaults: TButton;
@@ -71,6 +72,7 @@ type
     procedure BtnFFmpegPathClick(Sender: TObject);
     procedure EdtFFmpegPathChange(Sender: TObject);
     procedure EdtCacheFolderChange(Sender: TObject);
+    procedure BtnClearCacheClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
     FResolvedFFmpegPath: string;
@@ -214,9 +216,7 @@ begin
     begin
       if ValidateFFmpeg(Dlg.FileName) = '' then
       begin
-        MessageBox(Handle,
-          PChar('The selected file is not a valid ffmpeg executable.'),
-          'VideoThumb', MB_OK or MB_ICONWARNING);
+        MessageBox(Handle, PChar('The selected file is not a valid ffmpeg executable.'), 'VideoThumb', MB_OK or MB_ICONWARNING);
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
@@ -235,6 +235,34 @@ end;
 procedure TSettingsForm.EdtCacheFolderChange(Sender: TObject);
 begin
   UpdateCacheFolderInfo;
+end;
+
+procedure TSettingsForm.BtnClearCacheClick(Sender: TObject);
+var
+  Dir: string;
+begin
+  Dir := EdtCacheFolder.Text;
+  if Dir = '' then
+    Dir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+
+  if not TDirectory.Exists(Dir) then
+  begin
+    UpdateCacheSizeInfo;
+    Exit;
+  end;
+
+  if MessageBox(Handle, PChar(Format('Delete all cached frames in %s?', [Dir])),
+    'VideoThumb', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
+    Exit;
+
+  try
+    TDirectory.Delete(Dir, True);
+    TDirectory.CreateDirectory(Dir);
+  except
+    on E: Exception do
+      MessageBox(Handle, PChar(Format('Failed to clear cache: %s', [E.Message])), 'VideoThumb', MB_OK or MB_ICONWARNING);
+  end;
+  UpdateCacheSizeInfo;
 end;
 
 procedure TSettingsForm.BtnDefaultsClick(Sender: TObject);

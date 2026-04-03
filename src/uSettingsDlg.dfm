@@ -370,6 +370,15 @@ object SettingsForm: TSettingsForm
       TabOrder = 0
       OnClick = ChkCacheEnabledClick
     end
+    object BtnClearCache: TButton
+      Left = 348
+      Top = 18
+      Width = 88
+      Height = 25
+      Caption = 'Clear Cache'
+      TabOrder = 5
+      OnClick = BtnClearCacheClick
+    end
     object EdtCacheFolder: TEdit
       Left = 130
       Top = 49
