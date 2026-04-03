@@ -23,6 +23,7 @@ type
     LblFFmpegPath: TLabel;
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
+    LblFFmpegInfo: TLabel;
     GbxAppearance: TGroupBox;
     LblBackground: TLabel;
     PnlBackground: TPanel;
@@ -51,6 +52,7 @@ type
     LblCacheFolder: TLabel;
     EdtCacheFolder: TEdit;
     BtnCacheFolder: TButton;
+    LblCacheFolderInfo: TLabel;
     LblCacheMaxSize: TLabel;
     EdtCacheMaxSize: TEdit;
     UdCacheMaxSize: TUpDown;
@@ -66,26 +68,34 @@ type
     procedure ChkCacheEnabledClick(Sender: TObject);
     procedure BtnCacheFolderClick(Sender: TObject);
     procedure BtnFFmpegPathClick(Sender: TObject);
+    procedure EdtFFmpegPathChange(Sender: TObject);
+    procedure EdtCacheFolderChange(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
+    FResolvedFFmpegPath: string;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
     procedure UpdateSaveFormatControls;
     procedure UpdateCacheControls;
+    procedure UpdateFFmpegInfo;
+    procedure UpdateCacheFolderInfo;
     procedure PickColor(APanel: TPanel);
     procedure BrowseFolder(AEdit: TEdit);
   end;
 
 { Shows the settings dialog.
+  AResolvedFFmpegPath is the currently active ffmpeg path (may differ from settings
+  when auto-detected). Shown as informational text when the explicit path is empty.
   Returns True if the user pressed OK (ASettings is updated).
   Returns False if dismissed (ASettings unchanged). }
-function ShowSettingsDialog(ASettings: TPluginSettings): Boolean;
+function ShowSettingsDialog(ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
 
 implementation
 
 {$R *.dfm}
 
 uses
+  System.IOUtils,
   uFFmpegExe;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
@@ -109,6 +119,8 @@ begin
 
   UpdateSaveFormatControls;
   UpdateCacheControls;
+  UpdateFFmpegInfo;
+  UpdateCacheFolderInfo;
 end;
 
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
@@ -205,10 +217,21 @@ begin
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
+      { OnChange fires automatically and updates the info label }
     end;
   finally
     Dlg.Free;
   end;
+end;
+
+procedure TSettingsForm.EdtFFmpegPathChange(Sender: TObject);
+begin
+  UpdateFFmpegInfo;
+end;
+
+procedure TSettingsForm.EdtCacheFolderChange(Sender: TObject);
+begin
+  UpdateCacheFolderInfo;
 end;
 
 procedure TSettingsForm.BtnDefaultsClick(Sender: TObject);
@@ -260,13 +283,56 @@ begin
   LblCacheMaxSizeUnit.Enabled := CacheOn;
 end;
 
-function ShowSettingsDialog(ASettings: TPluginSettings): Boolean;
+procedure TSettingsForm.UpdateFFmpegInfo;
+var
+  Path, Ver: string;
+begin
+  if EdtFFmpegPath.Text <> '' then
+    Path := EdtFFmpegPath.Text
+  else
+    Path := FResolvedFFmpegPath;
+
+  if Path = '' then
+  begin
+    LblFFmpegInfo.Caption := 'Not found';
+    Exit;
+  end;
+
+  if not FileExists(Path) then
+  begin
+    LblFFmpegInfo.Caption := Format('Not found: %s', [Path]);
+    Exit;
+  end;
+
+  Ver := ValidateFFmpeg(Path);
+  if Ver <> '' then
+  begin
+    if EdtFFmpegPath.Text = '' then
+      LblFFmpegInfo.Caption := Format('Detected: %s (%s)', [Path, Ver])
+    else
+      LblFFmpegInfo.Caption := Format('Version: %s', [Ver]);
+  end
+  else
+    LblFFmpegInfo.Caption := Format('Invalid executable: %s', [Path]);
+end;
+
+procedure TSettingsForm.UpdateCacheFolderInfo;
+begin
+  if EdtCacheFolder.Text = '' then
+    LblCacheFolderInfo.Caption := Format('Default: %s',
+      [TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache')])
+  else
+    LblCacheFolderInfo.Caption := '';
+end;
+
+function ShowSettingsDialog(ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
 var
   Form: TSettingsForm;
 begin
   Result := False;
   Form := TSettingsForm.Create(nil);
   try
+    Form.FResolvedFFmpegPath := AResolvedFFmpegPath;
     Form.SettingsToControls(ASettings);
     if Form.ShowModal = mrOK then
     begin

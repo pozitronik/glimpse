@@ -2642,7 +2642,7 @@ begin
   OldSkipEdges := FSettings.SkipEdgesPercent;
   OldFFmpegPath := FSettings.FFmpegExePath;
 
-  if not ShowSettingsDialog(FSettings) then
+  if not ShowSettingsDialog(FSettings, FFFmpegPath) then
     Exit;
 
   FSettings.Save;

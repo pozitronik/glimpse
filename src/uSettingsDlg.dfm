@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'VideoThumb Settings'
-  ClientHeight = 535
+  ClientHeight = 570
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 8
     Width = 444
-    Height = 109
+    Height = 126
     Caption = ' General '
     TabOrder = 0
     object LblSkipEdges: TLabel
@@ -48,6 +48,18 @@ object SettingsForm: TSettingsForm
       Width = 76
       Height = 15
       Caption = 'FFmpeg path:'
+    end
+    object LblFFmpegInfo: TLabel
+      Left = 130
+      Top = 103
+      Width = 3
+      Height = 15
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
     end
     object EdtSkipEdges: TEdit
       Left = 130
@@ -81,6 +93,7 @@ object SettingsForm: TSettingsForm
       Height = 23
       TabOrder = 3
       TextHint = 'Auto-detect'
+      OnChange = EdtFFmpegPathChange
     end
     object BtnFFmpegPath: TButton
       Left = 408
@@ -94,7 +107,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxAppearance: TGroupBox
     Left = 8
-    Top = 123
+    Top = 140
     Width = 444
     Height = 109
     Caption = ' Appearance '
@@ -196,7 +209,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxSave: TGroupBox
     Left = 8
-    Top = 238
+    Top = 255
     Width = 444
     Height = 138
     Caption = ' Save '
@@ -298,9 +311,9 @@ object SettingsForm: TSettingsForm
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 382
+    Top = 399
     Width = 444
-    Height = 105
+    Height = 123
     Caption = ' Cache '
     TabOrder = 3
     object LblCacheFolder: TLabel
@@ -310,16 +323,28 @@ object SettingsForm: TSettingsForm
       Height = 15
       Caption = 'Folder:'
     end
+    object LblCacheFolderInfo: TLabel
+      Left = 130
+      Top = 73
+      Width = 3
+      Height = 15
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
     object LblCacheMaxSize: TLabel
       Left = 12
-      Top = 82
+      Top = 96
       Width = 52
       Height = 15
       Caption = 'Max size:'
     end
     object LblCacheMaxSizeUnit: TLabel
       Left = 218
-      Top = 82
+      Top = 96
       Width = 18
       Height = 15
       Caption = 'MB'
@@ -340,6 +365,7 @@ object SettingsForm: TSettingsForm
       Height = 23
       TabOrder = 1
       TextHint = 'Leave empty for default'
+      OnChange = EdtCacheFolderChange
     end
     object BtnCacheFolder: TButton
       Left = 408
@@ -352,7 +378,7 @@ object SettingsForm: TSettingsForm
     end
     object EdtCacheMaxSize: TEdit
       Left = 130
-      Top = 78
+      Top = 92
       Width = 65
       Height = 23
       NumbersOnly = True
@@ -360,7 +386,7 @@ object SettingsForm: TSettingsForm
     end
     object UdCacheMaxSize: TUpDown
       Left = 195
-      Top = 78
+      Top = 92
       Width = 17
       Height = 23
       Associate = EdtCacheMaxSize
@@ -372,7 +398,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 499
+    Top = 534
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -381,7 +407,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 499
+    Top = 534
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -391,7 +417,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 499
+    Top = 534
     Width = 75
     Height = 28
     Cancel = True
