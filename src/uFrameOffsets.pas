@@ -38,8 +38,8 @@ var
   EffStart, EffEnd, EffDuration: Double;
   I: Integer;
 begin
-  if ADuration <= 0 then
-    raise EArgumentException.Create('Duration must be positive');
+  if IsNaN(ADuration) or IsInfinite(ADuration) or (ADuration <= 0) then
+    raise EArgumentException.Create('Duration must be a finite positive number');
   if AFrameCount < 1 then
     raise EArgumentException.Create('Frame count must be at least 1');
   if (ASkipEdgesPercent < 0) or (ASkipEdgesPercent > 49) then
