@@ -755,7 +755,7 @@ begin
 
   { Apply continuous zoom }
   CellH := Max(1, Round(CellH * FZoomFactor));
-  CellW := Max(1, Round(CellH / FAspectRatio));
+  CellW := Max(1, Round(CellH / Max(FAspectRatio, DEF_ASPECT_RATIO)));
 
   { Center vertically within control (ClientHeight reflects post-RecalcSize size) }
   if CellH < AvailH then
@@ -799,7 +799,7 @@ begin
           if CellH > AvailH then
           begin
             CellH := AvailH;
-            CellW := Round(CellH / FAspectRatio);
+            CellW := Round(CellH / Max(FAspectRatio, DEF_ASPECT_RATIO));
           end;
         end;
       end;
@@ -810,7 +810,7 @@ begin
       if CellH > AvailH then
       begin
         CellH := AvailH;
-        CellW := Round(CellH / FAspectRatio);
+        CellW := Round(CellH / Max(FAspectRatio, DEF_ASPECT_RATIO));
       end;
     end;
   end;

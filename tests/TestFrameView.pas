@@ -126,6 +126,16 @@ type
   end;
 
   [TestFixture]
+  TTestFrameViewEdgeCases = class
+  public
+    [Test] procedure TestFilmstripSingleFrame;
+    [Test] procedure TestGridSingleFrame;
+    [Test] procedure TestZeroAspectRatioFallback;
+    [Test] procedure TestMinimalViewport;
+    [Test] procedure TestSingleModeZeroNative;
+  end;
+
+  [TestFixture]
   TTestFrameViewZoom = class
   public
     [Test] procedure TestZoomFactorDefaultsToOne;
@@ -2100,6 +2110,110 @@ begin
   end;
 end;
 
+{ TTestFrameViewEdgeCases }
+
+procedure TTestFrameViewEdgeCases.TestFilmstripSingleFrame;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { N=1 in filmstrip: should produce a single valid cell rect }
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Width > 0, 'Single filmstrip cell must have positive width');
+    Assert.IsTrue(R.Height > 0, 'Single filmstrip cell must have positive height');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewEdgeCases.TestGridSingleFrame;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { N=1 in grid: should produce one cell }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Width > 0, 'Single grid cell must have positive width');
+    Assert.IsTrue(R.Height > 0, 'Single grid cell must have positive height');
+    Assert.IsTrue(R.Right <= 800, 'Single grid cell must fit in viewport width');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewEdgeCases.TestZeroAspectRatioFallback;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { Setting AspectRatio=0 should not cause division by zero }
+  V := CreateTestFrameView(800, vmFilmstrip);
+  try
+    V.AspectRatio := 0;
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 400);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Width > 0, 'Zero aspect ratio must fall back to default');
+    Assert.IsTrue(R.Height > 0, 'Cell height must be positive');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewEdgeCases.TestMinimalViewport;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { Tiny 1x1 viewport should not crash }
+  V := CreateTestFrameView(1, vmGrid);
+  try
+    V.Height := 1;
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(1, 1);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    Assert.IsTrue(R.Width >= 1, 'Cell width must be at least 1');
+    Assert.IsTrue(R.Height >= 1, 'Cell height must be at least 1');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewEdgeCases.TestSingleModeZeroNative;
+var
+  V: TFrameView;
+  R: TRect;
+begin
+  { NativeW=0, NativeH=0 in zmActual should still produce valid rects }
+  V := CreateTestFrameView(800, vmSingle);
+  try
+    V.NativeW := 0;
+    V.NativeH := 0;
+    V.ZoomMode := zmActual;
+    V.SetCellCount(1, MakeOffsets(1));
+    V.SetViewport(800, 600);
+    V.RecalcSize;
+    R := V.GetCellRect(0);
+    { With Max(1, FNativeW/H), should clamp to 1x1 }
+    Assert.IsTrue(R.Width >= 1, 'Zero native in actual mode must clamp to at least 1');
+    Assert.IsTrue(R.Height >= 1, 'Zero native in actual mode must clamp to at least 1');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewLayout);
   TDUnitX.RegisterTestFixture(TTestFrameViewFit);
@@ -2111,5 +2225,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
   TDUnitX.RegisterTestFixture(TTestFrameViewMisc);
   TDUnitX.RegisterTestFixture(TTestFrameViewZoom);
+  TDUnitX.RegisterTestFixture(TTestFrameViewEdgeCases);
 
 end.

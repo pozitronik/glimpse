@@ -62,6 +62,14 @@ type
     procedure TestInfinityDurationRaises;
     [Test]
     procedure TestNegativeInfinityDurationRaises;
+    [Test]
+    procedure TestFormatTimecodeLargeHours;
+    [Test]
+    procedure TestFormatTimecodeSubMillisecondRounding;
+    [Test]
+    procedure TestSingleFrameWithEdgeGuard;
+    [Test]
+    procedure TestEdgeGuard50Raises;
   end;
 
 implementation
@@ -326,6 +334,45 @@ begin
   Assert.WillRaise(
     procedure begin CalculateFrameOffsets(NegInfinity, 4, 0); end,
     EArgumentException, 'NegInfinity duration must raise');
+end;
+
+procedure TTestFrameOffsets.TestFormatTimecodeLargeHours;
+begin
+  { 24-hour video: 86400 seconds }
+  Assert.AreEqual('24:00:00.000', FormatTimecode(86400.0));
+  { 100-hour video: 360000 seconds }
+  Assert.AreEqual('100:00:00.000', FormatTimecode(360000.0));
+  { 27h46m40s = 100000 seconds }
+  Assert.AreEqual('27:46:40.000', FormatTimecode(100000.0));
+end;
+
+procedure TTestFrameOffsets.TestFormatTimecodeSubMillisecondRounding;
+begin
+  { 1.9999s rounds to 2000ms }
+  Assert.AreEqual('00:00:02.000', FormatTimecode(1.9999));
+  { 0.0004s rounds to 0ms }
+  Assert.AreEqual('00:00:00.000', FormatTimecode(0.0004));
+  { 59.9995s rounds to 60000ms = 1:00 }
+  Assert.AreEqual('00:01:00.000', FormatTimecode(59.9995));
+end;
+
+procedure TTestFrameOffsets.TestSingleFrameWithEdgeGuard;
+var
+  Offsets: TFrameOffsetArray;
+begin
+  { N=1, 10% edge guard on 100s video: midpoint of [10..90] = 50 }
+  Offsets := CalculateFrameOffsets(100.0, 1, 10);
+  Assert.AreEqual(1, Integer(Length(Offsets)));
+  Assert.AreEqual(50.0, Offsets[0].TimeOffset, 0.001,
+    'Single frame with edge guard should be at midpoint of effective range');
+end;
+
+procedure TTestFrameOffsets.TestEdgeGuard50Raises;
+begin
+  { SkipEdgesPercent must be 0..49; 50 leaves zero effective duration }
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(100.0, 4, 50); end,
+    EArgumentException, 'SkipEdgesPercent=50 must raise');
 end;
 
 initialization
