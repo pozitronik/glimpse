@@ -42,8 +42,8 @@ begin
     raise EArgumentException.Create('Duration must be positive');
   if AFrameCount < 1 then
     raise EArgumentException.Create('Frame count must be at least 1');
-
-  ASkipEdgesPercent := EnsureRange(ASkipEdgesPercent, 0, 49);
+  if (ASkipEdgesPercent < 0) or (ASkipEdgesPercent > 49) then
+    raise EArgumentException.CreateFmt('SkipEdgesPercent must be 0..49, got %d', [ASkipEdgesPercent]);
 
   if ASkipEdgesPercent > 0 then
   begin
