@@ -1295,8 +1295,8 @@ begin
     Offsets := MakeOffsets(2);
     V.SetCellCount(2, Offsets);
     { Timecodes should match FormatTimecode of the offsets }
-    Assert.AreEqual(FormatTimecode(10.0), V.FCells[0].Timecode);
-    Assert.AreEqual(FormatTimecode(20.0), V.FCells[1].Timecode);
+    Assert.AreEqual(FormatTimecode(10.0), V.CellTimecode(0));
+    Assert.AreEqual(FormatTimecode(20.0), V.CellTimecode(1));
   finally
     FreeTestFrameView(V);
   end;
@@ -1310,9 +1310,9 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(3, nil);
-    Assert.AreEqual(3, Integer(Length(V.FCells)));
-    Assert.AreEqual('', V.FCells[0].Timecode, 'Nil offsets: timecode should be empty');
-    Assert.AreEqual(0.0, V.FCells[0].TimeOffset, 0.001, 'Nil offsets: time should be 0');
+    Assert.AreEqual(3, V.CellCount);
+    Assert.AreEqual('', V.CellTimecode(0), 'Nil offsets: timecode should be empty');
+    Assert.AreEqual(0.0, V.CellTimeOffset(0), 0.001, 'Nil offsets: time should be 0');
   finally
     FreeTestFrameView(V);
   end;
@@ -1328,13 +1328,13 @@ begin
   try
     Offsets := MakeOffsets(2);
     V.SetCellCount(4, Offsets);
-    Assert.AreEqual(4, Integer(Length(V.FCells)));
+    Assert.AreEqual(4, V.CellCount);
     { First 2 cells should have timecodes from offsets }
-    Assert.AreEqual(FormatTimecode(10.0), V.FCells[0].Timecode);
-    Assert.AreEqual(FormatTimecode(20.0), V.FCells[1].Timecode);
+    Assert.AreEqual(FormatTimecode(10.0), V.CellTimecode(0));
+    Assert.AreEqual(FormatTimecode(20.0), V.CellTimecode(1));
     { Extra cells beyond offsets array should have empty timecodes }
-    Assert.AreEqual('', V.FCells[2].Timecode, 'Beyond offsets: timecode should be empty');
-    Assert.AreEqual('', V.FCells[3].Timecode, 'Beyond offsets: timecode should be empty');
+    Assert.AreEqual('', V.CellTimecode(2), 'Beyond offsets: timecode should be empty');
+    Assert.AreEqual('', V.CellTimecode(3), 'Beyond offsets: timecode should be empty');
   finally
     FreeTestFrameView(V);
   end;
@@ -1352,11 +1352,11 @@ begin
     Bmp.Width := 100;
     Bmp.Height := 50;
     V.SetFrame(0, Bmp); { SetFrame takes ownership and copies the bitmap }
-    Assert.AreEqual(Ord(fcsLoaded), Ord(V.FCells[0].State));
-    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[1].State));
-    Assert.IsNotNull(V.FCells[0].Bitmap);
-    Assert.AreEqual(100, V.FCells[0].Bitmap.Width);
-    Assert.AreEqual(50, V.FCells[0].Bitmap.Height);
+    Assert.AreEqual(Ord(fcsLoaded), Ord(V.CellState(0)));
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(1)));
+    Assert.IsNotNull(V.CellBitmap(0));
+    Assert.AreEqual(100, V.CellBitmap(0).Width);
+    Assert.AreEqual(50, V.CellBitmap(0).Height);
   finally
     FreeTestFrameView(V);
   end;
@@ -1370,8 +1370,8 @@ begin
   try
     V.SetCellCount(2, MakeOffsets(2));
     V.SetCellError(1);
-    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[0].State));
-    Assert.AreEqual(Ord(fcsError), Ord(V.FCells[1].State));
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(0)));
+    Assert.AreEqual(Ord(fcsError), Ord(V.CellState(1)));
   finally
     FreeTestFrameView(V);
   end;
@@ -1391,7 +1391,7 @@ begin
     V.SetFrame(0, Bmp);
     V.ClearCells;
     { After clear, cell array should be empty }
-    Assert.AreEqual(0, Integer(Length(V.FCells)));
+    Assert.AreEqual(0, V.CellCount);
   finally
     FreeTestFrameView(V);
   end;
@@ -1405,7 +1405,7 @@ begin
   try
     V.SetCellCount(5, MakeOffsets(5));
     V.ClearCells;
-    Assert.AreEqual(0, Integer(Length(V.FCells)));
+    Assert.AreEqual(0, V.CellCount);
     Assert.IsFalse(V.HasPlaceholders, 'Empty cell list has no placeholders');
   finally
     FreeTestFrameView(V);
@@ -1480,8 +1480,8 @@ begin
     Bmp := TBitmap.Create;
     Bmp.SetSize(10, 10);
     V.SetFrame(-1, Bmp);
-    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[0].State));
-    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[1].State));
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(0)));
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(1)));
   finally
     FreeTestFrameView(V);
   end;
@@ -1497,8 +1497,8 @@ begin
     V.SetCellError(10);
     V.SetCellError(-1);
     { No crash, cells unchanged }
-    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[0].State));
-    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.FCells[1].State));
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(0)));
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(1)));
   finally
     FreeTestFrameView(V);
   end;

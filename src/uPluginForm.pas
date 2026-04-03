@@ -60,6 +60,8 @@ type
 
   { Custom control that renders frame cells in various layout modes. }
   TFrameView = class(TCustomControl)
+  strict private
+    FCells: TArray<TFrameCell>;
   private
     FViewMode: TViewMode;
     FZoomMode: TZoomMode;
@@ -108,7 +110,6 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
       X, Y: Integer); override;
   public
-    FCells: TArray<TFrameCell>;
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     function GetCellRect(AIndex: Integer): TRect;
@@ -128,6 +129,12 @@ type
     function DefaultColumnCount: Integer;
     procedure NavigateFrame(ADelta: Integer);
     procedure SetViewport(AW, AH: Integer);
+    function CellCount: Integer;
+    function CellState(AIndex: Integer): TFrameCellState;
+    function CellBitmap(AIndex: Integer): TBitmap;
+    function CellTimeOffset(AIndex: Integer): Double;
+    function CellTimecode(AIndex: Integer): string;
+    function CellSelected(AIndex: Integer): Boolean;
     property ColumnCount: Integer read FColumnCount write FColumnCount;
     property ViewMode: TViewMode read FViewMode write FViewMode;
     property ZoomMode: TZoomMode read FZoomMode write FZoomMode;
@@ -195,6 +202,7 @@ type
     procedure ResetZoom;
     procedure SwitchOrCycleMode(AKey: Word);
     procedure CopyAllToClipboard;
+    function ResolveFrameIndex(out AIndex: Integer): Boolean;
     function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
     procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat);
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
@@ -1286,6 +1294,36 @@ begin
   end;
 end;
 
+function TFrameView.CellCount: Integer;
+begin
+  Result := Length(FCells);
+end;
+
+function TFrameView.CellState(AIndex: Integer): TFrameCellState;
+begin
+  Result := FCells[AIndex].State;
+end;
+
+function TFrameView.CellBitmap(AIndex: Integer): TBitmap;
+begin
+  Result := FCells[AIndex].Bitmap;
+end;
+
+function TFrameView.CellTimeOffset(AIndex: Integer): Double;
+begin
+  Result := FCells[AIndex].TimeOffset;
+end;
+
+function TFrameView.CellTimecode(AIndex: Integer): string;
+begin
+  Result := FCells[AIndex].Timecode;
+end;
+
+function TFrameView.CellSelected(AIndex: Integer): Boolean;
+begin
+  Result := FCells[AIndex].Selected;
+end;
+
 function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
 var
   I: Integer;
@@ -1779,22 +1817,15 @@ procedure TPluginForm.CopyFrameToClipboard;
 var
   Idx: Integer;
 begin
-  if Length(FFrameView.FCells) = 0 then Exit;
-  { Context menu passes the right-clicked cell; keyboard uses current frame }
-  Idx := FContextCellIndex;
-  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
-    Idx := FFrameView.CurrentFrameIndex;
-  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
-    Idx := 0;
-  if FFrameView.FCells[Idx].State <> fcsLoaded then Exit;
-  Clipboard.Assign(FFrameView.FCells[Idx].Bitmap);
+  if not ResolveFrameIndex(Idx) then Exit;
+  Clipboard.Assign(FFrameView.CellBitmap(Idx));
 end;
 
 procedure TPluginForm.CopyAllToClipboard;
 var
   Bmp: TBitmap;
 begin
-  if Length(FFrameView.FCells) = 0 then Exit;
+  if FFrameView.CellCount = 0 then Exit;
   Bmp := TBitmap.Create;
   try
     Bmp.SetSize(FFrameView.Width, FFrameView.Height);
@@ -1805,6 +1836,19 @@ begin
   finally
     Bmp.Free;
   end;
+end;
+
+function TPluginForm.ResolveFrameIndex(out AIndex: Integer): Boolean;
+begin
+  Result := False;
+  if FFrameView.CellCount = 0 then Exit;
+  { Prefer the right-clicked cell, fall back to current frame, then index 0 }
+  AIndex := FContextCellIndex;
+  if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
+    AIndex := FFrameView.CurrentFrameIndex;
+  if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
+    AIndex := 0;
+  Result := FFrameView.CellState(AIndex) = fcsLoaded;
 end;
 
 function TPluginForm.FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
@@ -1818,7 +1862,7 @@ begin
     Ext := '.png';
   end;
   Result := Format('%s_frame_%.2d_%s%s',
-    [BaseName, AIndex + 1, FormatTimecodeForFilename(FFrameView.FCells[AIndex].TimeOffset), Ext]);
+    [BaseName, AIndex + 1, FormatTimecodeForFilename(FFrameView.CellTimeOffset(AIndex)), Ext]);
 end;
 
 procedure TPluginForm.SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
@@ -1898,17 +1942,10 @@ var
   Fmt: TSaveFormat;
   Path: string;
 begin
-  if Length(FFrameView.FCells) = 0 then Exit;
-  { Same selection logic as CopyFrameToClipboard }
-  Idx := FContextCellIndex;
-  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
-    Idx := FFrameView.CurrentFrameIndex;
-  if (Idx < 0) or (Idx >= Length(FFrameView.FCells)) then
-    Idx := 0;
-  if FFrameView.FCells[Idx].State <> fcsLoaded then Exit;
+  if not ResolveFrameIndex(Idx) then Exit;
 
   if ShowSaveDialog('Save frame', FrameFileName(Idx, FSettings.SaveFormat), True, Path, Fmt) then
-    SaveBitmapToFile(FFrameView.FCells[Idx].Bitmap, Path, Fmt);
+    SaveBitmapToFile(FFrameView.CellBitmap(Idx), Path, Fmt);
 end;
 
 procedure TPluginForm.SaveSelectedFrames;
@@ -1921,18 +1958,18 @@ begin
 
   { Find first selected frame for the sample filename }
   FirstSel := 0;
-  for I := 0 to High(FFrameView.FCells) do
-    if FFrameView.FCells[I].Selected then begin FirstSel := I; Break; end;
+  for I := 0 to FFrameView.CellCount - 1 do
+    if FFrameView.CellSelected(I) then begin FirstSel := I; Break; end;
 
   if not ShowSaveDialog('Save selected frames', FrameFileName(FirstSel, FSettings.SaveFormat), False, Path, Fmt) then
     Exit;
 
   Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
-  for I := 0 to High(FFrameView.FCells) do
+  for I := 0 to FFrameView.CellCount - 1 do
   begin
-    if not FFrameView.FCells[I].Selected then Continue;
-    if FFrameView.FCells[I].State <> fcsLoaded then Continue;
-    SaveBitmapToFile(FFrameView.FCells[I].Bitmap, Dir + FrameFileName(I, Fmt), Fmt);
+    if not FFrameView.CellSelected(I) then Continue;
+    if FFrameView.CellState(I) <> fcsLoaded then Continue;
+    SaveBitmapToFile(FFrameView.CellBitmap(I), Dir + FrameFileName(I, Fmt), Fmt);
   end;
 end;
 
@@ -1942,7 +1979,7 @@ var
   Fmt: TSaveFormat;
   Path, BaseName: string;
 begin
-  if Length(FFrameView.FCells) = 0 then Exit;
+  if FFrameView.CellCount = 0 then Exit;
 
   BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
   if not ShowSaveDialog('Save combined image', BaseName + '_combined.png', True, Path, Fmt) then
@@ -1966,17 +2003,17 @@ var
   Dir, Path: string;
   Fmt: TSaveFormat;
 begin
-  if Length(FFrameView.FCells) = 0 then Exit;
+  if FFrameView.CellCount = 0 then Exit;
 
   { Show a sample filename so user sees the pattern and picks the folder }
   if not ShowSaveDialog('Save all frames', FrameFileName(0, FSettings.SaveFormat), False, Path, Fmt) then
     Exit;
 
   Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
-  for I := 0 to High(FFrameView.FCells) do
+  for I := 0 to FFrameView.CellCount - 1 do
   begin
-    if FFrameView.FCells[I].State <> fcsLoaded then Continue;
-    SaveBitmapToFile(FFrameView.FCells[I].Bitmap, Dir + FrameFileName(I, Fmt), Fmt);
+    if FFrameView.CellState(I) <> fcsLoaded then Continue;
+    SaveBitmapToFile(FFrameView.CellBitmap(I), Dir + FrameFileName(I, Fmt), Fmt);
   end;
 end;
 
@@ -2489,13 +2526,13 @@ var
   Pt: TPoint;
   HasFrames, HasClickedFrame: Boolean;
 begin
-  HasFrames := Length(FFrameView.FCells) > 0;
+  HasFrames := FFrameView.CellCount > 0;
 
   { Hit-test: which cell was right-clicked? }
   Pt := FFrameView.ScreenToClient(FContextMenu.PopupPoint);
   FContextCellIndex := FFrameView.CellIndexAt(Pt);
   HasClickedFrame := (FContextCellIndex >= 0)
-    and (FFrameView.FCells[FContextCellIndex].State = fcsLoaded);
+    and (FFrameView.CellState(FContextCellIndex) = fcsLoaded);
 
   for I := 0 to FContextMenu.Items.Count - 1 do
   begin
