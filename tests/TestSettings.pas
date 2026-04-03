@@ -637,7 +637,13 @@ var
 begin
   S := TPluginSettings.Create(FTempIniPath);
   try
-    { Minimum boundary }
+    { Zero = one per frame mode }
+    S.MaxWorkers := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(0, S.MaxWorkers, 'Zero (one per frame) should round-trip');
+
+    { Minimum fixed boundary }
     S.MaxWorkers := 1;
     S.Save;
     S.Load;

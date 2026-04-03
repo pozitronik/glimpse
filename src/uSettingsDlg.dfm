@@ -42,18 +42,14 @@ object SettingsForm: TSettingsForm
       Height = 15
       Caption = 'Max workers:'
     end
-    object LblMaxWorkersHint: TLabel
+    object ChkMaxWorkersAuto: TCheckBox
       Left = 198
       Top = 53
-      Width = 186
-      Height = 15
-      Caption = '(parallel ffmpeg processes)'
-      Font.Charset = DEFAULT_CHARSET
-      Font.Color = clGray
-      Font.Height = -12
-      Font.Name = 'Segoe UI'
-      Font.Style = []
-      ParentFont = False
+      Width = 130
+      Height = 17
+      Caption = 'One per frame'
+      TabOrder = 7
+      OnClick = ChkMaxWorkersAutoClick
     end
     object LblExtensions: TLabel
       Left = 12

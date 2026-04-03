@@ -2101,7 +2101,10 @@ begin
     ThreadCache := FCache;
 
   FrameCount := Length(FOffsets);
-  WorkerCount := Min(FSettings.MaxWorkers, FrameCount);
+  if FSettings.MaxWorkers = 0 then
+    WorkerCount := FrameCount  { 0 = one worker per frame }
+  else
+    WorkerCount := Min(FSettings.MaxWorkers, FrameCount);
   if WorkerCount < 1 then
     WorkerCount := 1;
 

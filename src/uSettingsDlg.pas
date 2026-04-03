@@ -21,7 +21,7 @@ type
     LblMaxWorkers: TLabel;
     EdtMaxWorkers: TEdit;
     UdMaxWorkers: TUpDown;
-    LblMaxWorkersHint: TLabel;
+    ChkMaxWorkersAuto: TCheckBox;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -71,6 +71,7 @@ type
     procedure PnlTCBackClick(Sender: TObject);
     procedure CbxSaveFormatChange(Sender: TObject);
     procedure BtnSaveFolderClick(Sender: TObject);
+    procedure ChkMaxWorkersAutoClick(Sender: TObject);
     procedure ChkCacheEnabledClick(Sender: TObject);
     procedure BtnCacheFolderClick(Sender: TObject);
     procedure BtnFFmpegPathClick(Sender: TObject);
@@ -82,6 +83,7 @@ type
     FResolvedFFmpegPath: string;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
+    procedure UpdateMaxWorkersControls;
     procedure UpdateSaveFormatControls;
     procedure UpdateCacheControls;
     procedure UpdateFFmpegInfo;
@@ -109,7 +111,12 @@ uses
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
   UdSkipEdges.Position := ASettings.SkipEdgesPercent;
-  UdMaxWorkers.Position := ASettings.MaxWorkers;
+  ChkMaxWorkersAuto.Checked := ASettings.MaxWorkers = 0;
+  if ASettings.MaxWorkers > 0 then
+    UdMaxWorkers.Position := ASettings.MaxWorkers
+  else
+    UdMaxWorkers.Position := 1;
+  UpdateMaxWorkersControls;
   EdtExtensions.Text := ASettings.ExtensionList;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
@@ -136,7 +143,10 @@ end;
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
 begin
   ASettings.SkipEdgesPercent := UdSkipEdges.Position;
-  ASettings.MaxWorkers := UdMaxWorkers.Position;
+  if ChkMaxWorkersAuto.Checked then
+    ASettings.MaxWorkers := 0
+  else
+    ASettings.MaxWorkers := UdMaxWorkers.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
   { Switch to explicit mode when user provides a path }
@@ -286,9 +296,24 @@ begin
   UpdateSaveFormatControls;
 end;
 
+procedure TSettingsForm.ChkMaxWorkersAutoClick(Sender: TObject);
+begin
+  UpdateMaxWorkersControls;
+end;
+
 procedure TSettingsForm.ChkCacheEnabledClick(Sender: TObject);
 begin
   UpdateCacheControls;
+end;
+
+procedure TSettingsForm.UpdateMaxWorkersControls;
+var
+  Manual: Boolean;
+begin
+  Manual := not ChkMaxWorkersAuto.Checked;
+  LblMaxWorkers.Enabled := Manual;
+  EdtMaxWorkers.Enabled := Manual;
+  UdMaxWorkers.Enabled := Manual;
 end;
 
 procedure TSettingsForm.UpdateSaveFormatControls;

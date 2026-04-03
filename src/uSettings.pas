@@ -202,7 +202,7 @@ begin
 
     FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
     FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
-    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 1, 16);
+    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 0, 16);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
