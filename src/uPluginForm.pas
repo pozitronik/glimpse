@@ -82,6 +82,8 @@ type
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
     FSmartRows: TArray<TSmartRow>;
+    FBlendBmp: TBitmap;          { reusable 1x1 bitmap for alpha-blended timecode background }
+    FBlendBmpColor: TColor;      { cached color to avoid redundant Pixels[] writes }
     function BaseW: Integer;
     function BaseH: Integer;
     function GetColumnCount: Integer;
@@ -110,6 +112,7 @@ type
   public
     FCells: TArray<TFrameCell>;
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
     function GetCellRect(AIndex: Integer): TRect;
     function CellIndexAt(const APoint: TPoint): Integer;
     procedure ToggleSelection(AIndex: Integer);
@@ -196,6 +199,7 @@ type
     procedure CopyAllToClipboard;
     function FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
     procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat);
+    function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     procedure SaveSingleFrame;
     procedure SaveSelectedFrames;
     procedure SaveCombinedFrame;
@@ -461,6 +465,15 @@ begin
   FBaseViewportW := 0;
   FBaseViewportH := 0;
   FZoomFactor := 1.0;
+  FBlendBmp := TBitmap.Create;
+  FBlendBmp.SetSize(1, 1);
+  FBlendBmpColor := TColor(-1); { force first-use update }
+end;
+
+destructor TFrameView.Destroy;
+begin
+  FBlendBmp.Free;
+  inherited;
 end;
 
 procedure TFrameView.WMEraseBkgnd(var Message: TWMEraseBkgnd);
@@ -1070,7 +1083,6 @@ end;
 procedure TFrameView.PaintTimecode(AIndex: Integer);
 var
   R: TRect;
-  Bmp: TBitmap;
   BF: TBlendFunction;
 begin
   if not FShowTimecode then Exit;
@@ -1090,20 +1102,17 @@ begin
     end
     else
     begin
-      Bmp := TBitmap.Create;
-      try
-        Bmp.SetSize(1, 1);
-        Bmp.Canvas.Pixels[0, 0] := FTimecodeBackColor;
-        BF.BlendOp := AC_SRC_OVER;
-        BF.BlendFlags := 0;
-        BF.SourceConstantAlpha := FTimecodeBackAlpha;
-        BF.AlphaFormat := 0;
-        Winapi.Windows.AlphaBlend(Canvas.Handle,
-          R.Left, R.Top, R.Width, R.Height,
-          Bmp.Canvas.Handle, 0, 0, 1, 1, BF);
-      finally
-        Bmp.Free;
+      if FBlendBmpColor <> FTimecodeBackColor then
+      begin
+        FBlendBmp.Canvas.Pixels[0, 0] := FTimecodeBackColor;
+        FBlendBmpColor := FTimecodeBackColor;
       end;
+      BF.BlendOp := AC_SRC_OVER;
+      BF.BlendFlags := 0;
+      BF.SourceConstantAlpha := FTimecodeBackAlpha;
+      BF.AlphaFormat := 0;
+      Winapi.Windows.AlphaBlend(Canvas.Handle, R.Left, R.Top, R.Width, R.Height,
+        FBlendBmp.Canvas.Handle, 0, 0, 1, 1, BF);
     end;
   end;
 
@@ -1809,22 +1818,15 @@ end;
 function TPluginForm.FrameFileName(AIndex: Integer; AFormat: TSaveFormat): string;
 var
   BaseName, Ext: string;
-  T: Double;
-  H, M, S, MS: Integer;
 begin
   BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
-  T := FFrameView.FCells[AIndex].TimeOffset;
-  H := Trunc(T) div 3600;
-  M := (Trunc(T) mod 3600) div 60;
-  S := Trunc(T) mod 60;
-  MS := Round(Frac(T) * 1000);
   case AFormat of
     sfJPEG: Ext := '.jpg';
   else
     Ext := '.png';
   end;
-  Result := Format('%s_frame_%.2d_%.2d-%.2d-%.2d.%.3d%s',
-    [BaseName, AIndex + 1, H, M, S, MS, Ext]);
+  Result := Format('%s_frame_%.2d_%s%s',
+    [BaseName, AIndex + 1, FormatTimecodeForFilename(FFrameView.FCells[AIndex].TimeOffset), Ext]);
 end;
 
 procedure TPluginForm.SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
@@ -1859,11 +1861,50 @@ begin
   end;
 end;
 
-procedure TPluginForm.SaveSingleFrame;
+function TPluginForm.ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean;
+  out APath: string; out AFormat: TSaveFormat): Boolean;
 var
   Dlg: TSaveDialog;
+begin
+  Result := False;
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title := ATitle;
+    Dlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
+    case FSettings.SaveFormat of
+      sfJPEG: Dlg.FilterIndex := 2;
+    else
+      Dlg.FilterIndex := 1;
+    end;
+    Dlg.DefaultExt := 'png';
+    Dlg.FileName := ADefaultName;
+    if FSettings.SaveFolder <> '' then
+      Dlg.InitialDir := FSettings.SaveFolder;
+    if AOverwritePrompt then
+      Dlg.Options := Dlg.Options + [ofOverwritePrompt];
+
+    if Dlg.Execute then
+    begin
+      case Dlg.FilterIndex of
+        2: AFormat := sfJPEG;
+      else
+        AFormat := sfPNG;
+      end;
+      APath := Dlg.FileName;
+      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
+      FSettings.Save;
+      Result := True;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TPluginForm.SaveSingleFrame;
+var
   Idx: Integer;
   Fmt: TSaveFormat;
+  Path: string;
 begin
   if Length(FFrameView.FCells) = 0 then Exit;
   { Same selection logic as CopyFrameToClipboard }
@@ -1874,42 +1915,14 @@ begin
     Idx := 0;
   if FFrameView.FCells[Idx].State <> fcsLoaded then Exit;
 
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title := 'Save frame';
-    Dlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
-    case FSettings.SaveFormat of
-      sfJPEG: Dlg.FilterIndex := 2;
-    else
-      Dlg.FilterIndex := 1;
-    end;
-    Dlg.DefaultExt := 'png';
-    Dlg.FileName := FrameFileName(Idx, FSettings.SaveFormat);
-    if FSettings.SaveFolder <> '' then
-      Dlg.InitialDir := FSettings.SaveFolder;
-    Dlg.Options := Dlg.Options + [ofOverwritePrompt];
-
-    if Dlg.Execute then
-    begin
-      case Dlg.FilterIndex of
-        2: Fmt := sfJPEG;
-      else
-        Fmt := sfPNG;
-      end;
-      SaveBitmapToFile(FFrameView.FCells[Idx].Bitmap, Dlg.FileName, Fmt);
-      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
-      FSettings.Save;
-    end;
-  finally
-    Dlg.Free;
-  end;
+  if ShowSaveDialog('Save frame', FrameFileName(Idx, FSettings.SaveFormat), True, Path, Fmt) then
+    SaveBitmapToFile(FFrameView.FCells[Idx].Bitmap, Path, Fmt);
 end;
 
 procedure TPluginForm.SaveSelectedFrames;
 var
-  Dlg: TSaveDialog;
   I, FirstSel: Integer;
-  Dir: string;
+  Dir, Path: string;
   Fmt: TSaveFormat;
 begin
   if FFrameView.SelectedCount < 2 then Exit;
@@ -1919,136 +1932,59 @@ begin
   for I := 0 to High(FFrameView.FCells) do
     if FFrameView.FCells[I].Selected then begin FirstSel := I; Break; end;
 
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title := 'Save selected frames';
-    Dlg.Filter := 'PNG images (*.png)|*.png|JPEG images (*.jpg)|*.jpg';
-    case FSettings.SaveFormat of
-      sfJPEG: Dlg.FilterIndex := 2;
-    else
-      Dlg.FilterIndex := 1;
-    end;
-    Dlg.DefaultExt := 'png';
-    Dlg.FileName := FrameFileName(FirstSel, FSettings.SaveFormat);
-    if FSettings.SaveFolder <> '' then
-      Dlg.InitialDir := FSettings.SaveFolder;
+  if not ShowSaveDialog('Save selected frames', FrameFileName(FirstSel, FSettings.SaveFormat), False, Path, Fmt) then
+    Exit;
 
-    if Dlg.Execute then
-    begin
-      case Dlg.FilterIndex of
-        2: Fmt := sfJPEG;
-      else
-        Fmt := sfPNG;
-      end;
-      Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Dlg.FileName));
-      for I := 0 to High(FFrameView.FCells) do
-      begin
-        if not FFrameView.FCells[I].Selected then Continue;
-        if FFrameView.FCells[I].State <> fcsLoaded then Continue;
-        SaveBitmapToFile(FFrameView.FCells[I].Bitmap,
-          Dir + FrameFileName(I, Fmt), Fmt);
-      end;
-      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
-      FSettings.Save;
-    end;
-  finally
-    Dlg.Free;
+  Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
+  for I := 0 to High(FFrameView.FCells) do
+  begin
+    if not FFrameView.FCells[I].Selected then Continue;
+    if FFrameView.FCells[I].State <> fcsLoaded then Continue;
+    SaveBitmapToFile(FFrameView.FCells[I].Bitmap, Dir + FrameFileName(I, Fmt), Fmt);
   end;
 end;
 
 procedure TPluginForm.SaveCombinedFrame;
 var
-  Dlg: TSaveDialog;
   Bmp: TBitmap;
   Fmt: TSaveFormat;
-  BaseName: string;
+  Path, BaseName: string;
 begin
   if Length(FFrameView.FCells) = 0 then Exit;
 
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title := 'Save combined image';
-    Dlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
-    case FSettings.SaveFormat of
-      sfJPEG: Dlg.FilterIndex := 2;
-    else
-      Dlg.FilterIndex := 1;
-    end;
-    Dlg.DefaultExt := 'png';
-    BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
-    Dlg.FileName := BaseName + '_combined.png';
-    if FSettings.SaveFolder <> '' then
-      Dlg.InitialDir := FSettings.SaveFolder;
-    Dlg.Options := Dlg.Options + [ofOverwritePrompt];
+  BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
+  if not ShowSaveDialog('Save combined image', BaseName + '_combined.png', True, Path, Fmt) then
+    Exit;
 
-    if Dlg.Execute then
-    begin
-      case Dlg.FilterIndex of
-        2: Fmt := sfJPEG;
-      else
-        Fmt := sfPNG;
-      end;
-      Bmp := TBitmap.Create;
-      try
-        Bmp.SetSize(FFrameView.Width, FFrameView.Height);
-        Bmp.Canvas.Brush.Color := FFrameView.BackColor;
-        Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
-        FFrameView.PaintTo(Bmp.Canvas, 0, 0);
-        SaveBitmapToFile(Bmp, Dlg.FileName, Fmt);
-      finally
-        Bmp.Free;
-      end;
-      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
-      FSettings.Save;
-    end;
+  Bmp := TBitmap.Create;
+  try
+    Bmp.SetSize(FFrameView.Width, FFrameView.Height);
+    Bmp.Canvas.Brush.Color := FFrameView.BackColor;
+    Bmp.Canvas.FillRect(Rect(0, 0, Bmp.Width, Bmp.Height));
+    FFrameView.PaintTo(Bmp.Canvas, 0, 0);
+    SaveBitmapToFile(Bmp, Path, Fmt);
   finally
-    Dlg.Free;
+    Bmp.Free;
   end;
 end;
 
 procedure TPluginForm.SaveAllFrames;
 var
-  Dlg: TSaveDialog;
   I: Integer;
-  Dir: string;
+  Dir, Path: string;
   Fmt: TSaveFormat;
 begin
   if Length(FFrameView.FCells) = 0 then Exit;
 
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title := 'Save all frames';
-    Dlg.Filter := 'PNG images (*.png)|*.png|JPEG images (*.jpg)|*.jpg';
-    case FSettings.SaveFormat of
-      sfJPEG: Dlg.FilterIndex := 2;
-    else
-      Dlg.FilterIndex := 1;
-    end;
-    Dlg.DefaultExt := 'png';
-    { Show a sample filename so user sees the pattern and picks the folder }
-    Dlg.FileName := FrameFileName(0, FSettings.SaveFormat);
-    if FSettings.SaveFolder <> '' then
-      Dlg.InitialDir := FSettings.SaveFolder;
+  { Show a sample filename so user sees the pattern and picks the folder }
+  if not ShowSaveDialog('Save all frames', FrameFileName(0, FSettings.SaveFormat), False, Path, Fmt) then
+    Exit;
 
-    if Dlg.Execute then
-    begin
-      case Dlg.FilterIndex of
-        2: Fmt := sfJPEG;
-      else
-        Fmt := sfPNG;
-      end;
-      Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Dlg.FileName));
-      for I := 0 to High(FFrameView.FCells) do
-      begin
-        if FFrameView.FCells[I].State <> fcsLoaded then Continue;
-        SaveBitmapToFile(FFrameView.FCells[I].Bitmap,
-          Dir + FrameFileName(I, Fmt), Fmt);
-      end;
-      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
-      FSettings.Save;
-    end;
-  finally
-    Dlg.Free;
+  Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
+  for I := 0 to High(FFrameView.FCells) do
+  begin
+    if FFrameView.FCells[I].State <> fcsLoaded then Continue;
+    SaveBitmapToFile(FFrameView.FCells[I].Bitmap, Dir + FrameFileName(I, Fmt), Fmt);
   end;
 end;
 

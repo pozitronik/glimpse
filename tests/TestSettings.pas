@@ -59,6 +59,12 @@ type
     procedure TestMaxWorkersBoundaryValues;
     [Test]
     procedure TestPartialIniPreservesDefaults;
+    [Test]
+    procedure TestDefaultCacheFolderNonEmpty;
+    [Test]
+    procedure TestEffectiveCacheFolderReturnsConfigured;
+    [Test]
+    procedure TestEffectiveCacheFolderReturnsDefaultWhenEmpty;
   end;
 
 implementation
@@ -666,6 +672,26 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TTestPluginSettings.TestDefaultCacheFolderNonEmpty;
+var
+  Path: string;
+begin
+  Path := DefaultCacheFolder;
+  Assert.IsNotEmpty(Path, 'DefaultCacheFolder should return a non-empty path');
+  Assert.IsTrue(Path.EndsWith('cache'), 'DefaultCacheFolder should end with "cache"');
+  Assert.IsTrue(Path.Contains('VideoThumb'), 'DefaultCacheFolder should contain "VideoThumb"');
+end;
+
+procedure TTestPluginSettings.TestEffectiveCacheFolderReturnsConfigured;
+begin
+  Assert.AreEqual('C:\MyCache', EffectiveCacheFolder('C:\MyCache'), 'Should return configured path when non-empty');
+end;
+
+procedure TTestPluginSettings.TestEffectiveCacheFolderReturnsDefaultWhenEmpty;
+begin
+  Assert.AreEqual(DefaultCacheFolder, EffectiveCacheFolder(''), 'Should return DefaultCacheFolder when empty');
 end;
 
 initialization

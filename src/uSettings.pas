@@ -56,7 +56,6 @@ type
     class procedure HexToColorAlpha(const AValue: string; ADefColor: TColor;
       ADefAlpha: Byte; out AColor: TColor; out AAlpha: Byte); static;
     class function ColorAlphaToHex(AColor: TColor; AAlpha: Byte): string; static;
-    class function Clamp(AValue, AMin, AMax: Integer): Integer; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
     function GetActiveZoom: TZoomMode;
@@ -201,9 +200,9 @@ begin
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', DEF_FFMPEG_EXE_PATH);
     FFFmpegAutoDownloaded := Ini.ReadBool('ffmpeg', 'AutoDownloaded', DEF_FFMPEG_AUTO_DL);
 
-    FFramesCount := Clamp(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
-    FSkipEdgesPercent := Clamp(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
-    FMaxWorkers := Clamp(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 1, 16);
+    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
+    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
+    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 1, 16);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
@@ -219,13 +218,13 @@ begin
       FExtensionList := DEF_EXTENSION_LIST;
 
     FSaveFormat := StrToSaveFormat(Ini.ReadString('save', 'Format', ''));
-    FJpegQuality := Clamp(Ini.ReadInteger('save', 'JpegQuality', DEF_JPEG_QUALITY), 1, 100);
-    FPngCompression := Clamp(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), 0, 9);
+    FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality', DEF_JPEG_QUALITY), 1, 100);
+    FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), 0, 9);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
-    FCacheMaxSizeMB := Clamp(Ini.ReadInteger('cache', 'MaxSizeMB', DEF_CACHE_MAX_SIZE_MB), 10, 10000);
+    FCacheMaxSizeMB := EnsureRange(Ini.ReadInteger('cache', 'MaxSizeMB', DEF_CACHE_MAX_SIZE_MB), 10, 10000);
   finally
     Ini.Free;
   end;
@@ -420,11 +419,6 @@ begin
     (C shr 16) and $FF,
     AAlpha
   ]);
-end;
-
-class function TPluginSettings.Clamp(AValue, AMin, AMax: Integer): Integer;
-begin
-  Result := EnsureRange(AValue, AMin, AMax);
 end;
 
 function TPluginSettings.GetModeZoom(AMode: TViewMode): TZoomMode;
