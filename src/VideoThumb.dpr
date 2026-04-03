@@ -16,7 +16,8 @@ uses
   uFFmpegExe in 'uFFmpegExe.pas',
   uFFmpegSetupDlg in 'uFFmpegSetupDlg.pas',
   uPluginForm in 'uPluginForm.pas',
-  uCache in 'uCache.pas';
+  uCache in 'uCache.pas',
+  uSettingsDlg in 'uSettingsDlg.pas';
 
 exports
   ListLoad,

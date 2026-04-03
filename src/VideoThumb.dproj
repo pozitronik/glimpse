@@ -58,6 +58,9 @@
         </DCCReference>
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="uCache.pas"/>
+        <DCCReference Include="uSettingsDlg.pas">
+            <Form>SettingsForm</Form>
+        </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -200,6 +200,7 @@ type
     procedure SaveSelectedFrames;
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
+    procedure ShowSettings;
     procedure RefreshExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
     procedure StopExtraction;
@@ -231,6 +232,9 @@ type
   end;
 
 implementation
+
+uses
+  uSettingsDlg;
 
 {$IFDEF DEBUG}
 var
@@ -2582,7 +2586,7 @@ begin
       CM_SELECT_ALL:    MI.Enabled := HasFrames;
       CM_DESELECT_ALL:  MI.Enabled := FFrameView.SelectedCount > 0;
       CM_REFRESH:       MI.Enabled := HasFrames;
-      CM_SETTINGS:      MI.Enabled := False;
+      CM_SETTINGS:      ; { always enabled }
     end;
   end;
 end;
@@ -2599,6 +2603,7 @@ begin
     CM_SELECT_ALL:    FFrameView.SelectAll;
     CM_DESELECT_ALL:  FFrameView.DeselectAll;
     CM_REFRESH:       RefreshExtraction;
+    CM_SETTINGS:      ShowSettings;
   end;
 end;
 
@@ -2619,6 +2624,61 @@ begin
   FSettings.Save;
 
   RefreshExtraction;
+end;
+
+procedure TPluginForm.ShowSettings;
+var
+  OldCacheEnabled: Boolean;
+  OldCacheFolder: string;
+  OldCacheMaxSizeMB: Integer;
+  OldSkipEdges: Integer;
+  OldFFmpegPath: string;
+  NeedRefresh: Boolean;
+  CacheDir: string;
+begin
+  OldCacheEnabled := FSettings.CacheEnabled;
+  OldCacheFolder := FSettings.CacheFolder;
+  OldCacheMaxSizeMB := FSettings.CacheMaxSizeMB;
+  OldSkipEdges := FSettings.SkipEdgesPercent;
+  OldFFmpegPath := FSettings.FFmpegExePath;
+
+  if not ShowSettingsDialog(FSettings) then
+    Exit;
+
+  FSettings.Save;
+  ApplySettings;
+  NeedRefresh := False;
+
+  { Recreate cache if cache settings changed }
+  if (FSettings.CacheEnabled <> OldCacheEnabled)
+    or (FSettings.CacheFolder <> OldCacheFolder)
+    or (FSettings.CacheMaxSizeMB <> OldCacheMaxSizeMB) then
+  begin
+    if FSettings.CacheEnabled then
+    begin
+      CacheDir := FSettings.CacheFolder;
+      if CacheDir = '' then
+        CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+      FCache := TFrameCache.Create(CacheDir, FSettings.CacheMaxSizeMB);
+    end
+    else
+      FCache := TNullFrameCache.Create;
+  end;
+
+  { Update FFmpeg path if explicitly set }
+  if (FSettings.FFmpegExePath <> OldFFmpegPath)
+    and (FSettings.FFmpegExePath <> '') then
+  begin
+    FFFmpegPath := FSettings.FFmpegExePath;
+    NeedRefresh := True;
+  end;
+
+  { Re-extract if skip edges changed }
+  if FSettings.SkipEdgesPercent <> OldSkipEdges then
+    NeedRefresh := True;
+
+  if NeedRefresh then
+    RefreshExtraction;
 end;
 
 procedure TPluginForm.RefreshExtraction;

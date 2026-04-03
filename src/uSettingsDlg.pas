@@ -1,0 +1,281 @@
+{ Settings dialog for configuring plugin behavior.
+  Works on TPluginSettings directly; changes take effect only when OK is pressed. }
+unit uSettingsDlg;
+
+interface
+
+uses
+  System.SysUtils, System.Classes,
+  Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Vcl.ExtCtrls,
+  Vcl.ComCtrls, Vcl.Dialogs,
+  Winapi.Windows,
+  uSettings;
+
+type
+  TSettingsForm = class(TForm)
+    GbxGeneral: TGroupBox;
+    LblSkipEdges: TLabel;
+    EdtSkipEdges: TEdit;
+    UdSkipEdges: TUpDown;
+    LblSkipEdgesUnit: TLabel;
+    LblExtensions: TLabel;
+    EdtExtensions: TEdit;
+    LblFFmpegPath: TLabel;
+    EdtFFmpegPath: TEdit;
+    BtnFFmpegPath: TButton;
+    GbxAppearance: TGroupBox;
+    LblBackground: TLabel;
+    PnlBackground: TPanel;
+    BtnBackground: TButton;
+    LblTCBack: TLabel;
+    PnlTCBack: TPanel;
+    BtnTCBack: TButton;
+    LblTCAlpha: TLabel;
+    EdtTCAlpha: TEdit;
+    UdTCAlpha: TUpDown;
+    LblTCAlphaHint: TLabel;
+    GbxSave: TGroupBox;
+    LblSaveFormat: TLabel;
+    CbxSaveFormat: TComboBox;
+    LblJpegQuality: TLabel;
+    EdtJpegQuality: TEdit;
+    UdJpegQuality: TUpDown;
+    LblPngCompression: TLabel;
+    EdtPngCompression: TEdit;
+    UdPngCompression: TUpDown;
+    LblSaveFolder: TLabel;
+    EdtSaveFolder: TEdit;
+    BtnSaveFolder: TButton;
+    GbxCache: TGroupBox;
+    ChkCacheEnabled: TCheckBox;
+    LblCacheFolder: TLabel;
+    EdtCacheFolder: TEdit;
+    BtnCacheFolder: TButton;
+    LblCacheMaxSize: TLabel;
+    EdtCacheMaxSize: TEdit;
+    UdCacheMaxSize: TUpDown;
+    LblCacheMaxSizeUnit: TLabel;
+    BtnOK: TButton;
+    BtnCancel: TButton;
+    BtnDefaults: TButton;
+    ColorDlg: TColorDialog;
+    procedure PnlBackgroundClick(Sender: TObject);
+    procedure PnlTCBackClick(Sender: TObject);
+    procedure CbxSaveFormatChange(Sender: TObject);
+    procedure BtnSaveFolderClick(Sender: TObject);
+    procedure ChkCacheEnabledClick(Sender: TObject);
+    procedure BtnCacheFolderClick(Sender: TObject);
+    procedure BtnFFmpegPathClick(Sender: TObject);
+    procedure BtnDefaultsClick(Sender: TObject);
+  private
+    procedure SettingsToControls(ASettings: TPluginSettings);
+    procedure ControlsToSettings(ASettings: TPluginSettings);
+    procedure UpdateSaveFormatControls;
+    procedure UpdateCacheControls;
+    procedure PickColor(APanel: TPanel);
+    procedure BrowseFolder(AEdit: TEdit);
+  end;
+
+{ Shows the settings dialog.
+  Returns True if the user pressed OK (ASettings is updated).
+  Returns False if dismissed (ASettings unchanged). }
+function ShowSettingsDialog(ASettings: TPluginSettings): Boolean;
+
+implementation
+
+{$R *.dfm}
+
+uses
+  uFFmpegExe;
+
+procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
+begin
+  UdSkipEdges.Position := ASettings.SkipEdgesPercent;
+  EdtExtensions.Text := ASettings.ExtensionList;
+  EdtFFmpegPath.Text := ASettings.FFmpegExePath;
+
+  PnlBackground.Color := ASettings.Background;
+  PnlTCBack.Color := ASettings.TimecodeBackColor;
+  UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
+
+  CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
+  UdJpegQuality.Position := ASettings.JpegQuality;
+  UdPngCompression.Position := ASettings.PngCompression;
+  EdtSaveFolder.Text := ASettings.SaveFolder;
+
+  ChkCacheEnabled.Checked := ASettings.CacheEnabled;
+  EdtCacheFolder.Text := ASettings.CacheFolder;
+  UdCacheMaxSize.Position := ASettings.CacheMaxSizeMB;
+
+  UpdateSaveFormatControls;
+  UpdateCacheControls;
+end;
+
+procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
+begin
+  ASettings.SkipEdgesPercent := UdSkipEdges.Position;
+  ASettings.ExtensionList := EdtExtensions.Text;
+
+  { Switch to explicit mode when user provides a path }
+  if EdtFFmpegPath.Text <> '' then
+  begin
+    ASettings.FFmpegExePath := EdtFFmpegPath.Text;
+    ASettings.FFmpegMode := fmExe;
+  end
+  else
+  begin
+    ASettings.FFmpegExePath := '';
+    ASettings.FFmpegMode := fmAuto;
+  end;
+
+  ASettings.Background := PnlBackground.Color;
+  ASettings.TimecodeBackColor := PnlTCBack.Color;
+  ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
+
+  ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
+  ASettings.JpegQuality := UdJpegQuality.Position;
+  ASettings.PngCompression := UdPngCompression.Position;
+  ASettings.SaveFolder := EdtSaveFolder.Text;
+
+  ASettings.CacheEnabled := ChkCacheEnabled.Checked;
+  ASettings.CacheFolder := EdtCacheFolder.Text;
+  ASettings.CacheMaxSizeMB := UdCacheMaxSize.Position;
+end;
+
+procedure TSettingsForm.PickColor(APanel: TPanel);
+begin
+  ColorDlg.Color := APanel.Color;
+  if ColorDlg.Execute then
+    APanel.Color := ColorDlg.Color;
+end;
+
+procedure TSettingsForm.PnlBackgroundClick(Sender: TObject);
+begin
+  PickColor(PnlBackground);
+end;
+
+procedure TSettingsForm.PnlTCBackClick(Sender: TObject);
+begin
+  PickColor(PnlTCBack);
+end;
+
+procedure TSettingsForm.BrowseFolder(AEdit: TEdit);
+var
+  Dlg: TFileOpenDialog;
+begin
+  Dlg := TFileOpenDialog.Create(Self);
+  try
+    Dlg.Options := [fdoPickFolders, fdoPathMustExist];
+    if AEdit.Text <> '' then
+      Dlg.DefaultFolder := AEdit.Text;
+    if Dlg.Execute then
+      AEdit.Text := Dlg.FileName;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TSettingsForm.BtnSaveFolderClick(Sender: TObject);
+begin
+  BrowseFolder(EdtSaveFolder);
+end;
+
+procedure TSettingsForm.BtnCacheFolderClick(Sender: TObject);
+begin
+  BrowseFolder(EdtCacheFolder);
+end;
+
+procedure TSettingsForm.BtnFFmpegPathClick(Sender: TObject);
+var
+  Dlg: TOpenDialog;
+begin
+  Dlg := TOpenDialog.Create(Self);
+  try
+    Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files (*.*)|*.*';
+    Dlg.Title := 'Locate ffmpeg.exe';
+    if EdtFFmpegPath.Text <> '' then
+      Dlg.InitialDir := ExtractFilePath(EdtFFmpegPath.Text);
+    if Dlg.Execute and FileExists(Dlg.FileName) then
+    begin
+      if ValidateFFmpeg(Dlg.FileName) = '' then
+      begin
+        MessageBox(Handle,
+          PChar('The selected file is not a valid ffmpeg executable.'),
+          'VideoThumb', MB_OK or MB_ICONWARNING);
+        Exit;
+      end;
+      EdtFFmpegPath.Text := Dlg.FileName;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TSettingsForm.BtnDefaultsClick(Sender: TObject);
+var
+  Defaults: TPluginSettings;
+begin
+  Defaults := TPluginSettings.Create('');
+  try
+    SettingsToControls(Defaults);
+  finally
+    Defaults.Free;
+  end;
+end;
+
+procedure TSettingsForm.CbxSaveFormatChange(Sender: TObject);
+begin
+  UpdateSaveFormatControls;
+end;
+
+procedure TSettingsForm.ChkCacheEnabledClick(Sender: TObject);
+begin
+  UpdateCacheControls;
+end;
+
+procedure TSettingsForm.UpdateSaveFormatControls;
+var
+  IsPNG: Boolean;
+begin
+  IsPNG := CbxSaveFormat.ItemIndex = Ord(sfPNG);
+  LblJpegQuality.Enabled := not IsPNG;
+  EdtJpegQuality.Enabled := not IsPNG;
+  UdJpegQuality.Enabled := not IsPNG;
+  LblPngCompression.Enabled := IsPNG;
+  EdtPngCompression.Enabled := IsPNG;
+  UdPngCompression.Enabled := IsPNG;
+end;
+
+procedure TSettingsForm.UpdateCacheControls;
+var
+  CacheOn: Boolean;
+begin
+  CacheOn := ChkCacheEnabled.Checked;
+  LblCacheFolder.Enabled := CacheOn;
+  EdtCacheFolder.Enabled := CacheOn;
+  BtnCacheFolder.Enabled := CacheOn;
+  LblCacheMaxSize.Enabled := CacheOn;
+  EdtCacheMaxSize.Enabled := CacheOn;
+  UdCacheMaxSize.Enabled := CacheOn;
+  LblCacheMaxSizeUnit.Enabled := CacheOn;
+end;
+
+function ShowSettingsDialog(ASettings: TPluginSettings): Boolean;
+var
+  Form: TSettingsForm;
+begin
+  Result := False;
+  Form := TSettingsForm.Create(nil);
+  try
+    Form.SettingsToControls(ASettings);
+    if Form.ShowModal = mrOK then
+    begin
+      Form.ControlsToSettings(ASettings);
+      Result := True;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+end.
