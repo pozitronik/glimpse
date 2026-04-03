@@ -110,6 +110,7 @@ begin
     Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
     Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background));
     Assert.AreEqual(DEF_SHOW_TIMECODE, S.ShowTimecode);
+    Assert.AreEqual(DEF_SHOW_TOOLBAR, S.ShowToolbar);
     Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
     Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat));
     Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
@@ -139,6 +140,7 @@ begin
     S1.ZoomMode := zmActual;
     S1.Background := TColor($00FF8040);
     S1.ShowTimecode := False;
+    S1.ShowToolbar := False;
     S1.TimecodeBackColor := TColor($0055AA00);
     S1.TimecodeBackAlpha := 200;
     S1.ExtensionList := 'mp4,mkv,avi';
@@ -167,6 +169,7 @@ begin
     Assert.AreEqual(Ord(zmActual), Ord(S2.ZoomMode));
     Assert.AreEqual(Integer(TColor($00FF8040)), Integer(S2.Background));
     Assert.IsFalse(S2.ShowTimecode);
+    Assert.IsFalse(S2.ShowToolbar);
     Assert.AreEqual(Integer(TColor($0055AA00)), Integer(S2.TimecodeBackColor));
     Assert.AreEqual(200, Integer(S2.TimecodeBackAlpha));
     Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);

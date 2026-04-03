@@ -29,6 +29,7 @@ type
     FModeZoom: array[TViewMode] of TZoomMode;
     FBackground: TColor;
     FShowTimecode: Boolean;
+    FShowToolbar: Boolean;
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
     { [extensions] }
@@ -90,6 +91,7 @@ type
     property ZoomMode: TZoomMode read GetActiveZoom write SetActiveZoom;
     property Background: TColor read FBackground write FBackground;
     property ShowTimecode: Boolean read FShowTimecode write FShowTimecode;
+    property ShowToolbar: Boolean read FShowToolbar write FShowToolbar;
     property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
 
@@ -120,6 +122,7 @@ const
   DEF_ZOOM_MODE          = zmFitWindow;
   DEF_BACKGROUND         = TColor($001E1E1E);
   DEF_SHOW_TIMECODE      = True;
+  DEF_SHOW_TOOLBAR       = True;
   DEF_TC_BACK_COLOR      = TColor($002D2D2D);
   DEF_TC_BACK_ALPHA      = 180;
   DEF_EXTENSION_LIST     = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
@@ -174,6 +177,7 @@ begin
     FModeZoom[VM] := DEF_ZOOM_MODE;
   FBackground := DEF_BACKGROUND;
   FShowTimecode := DEF_SHOW_TIMECODE;
+  FShowToolbar := DEF_SHOW_TOOLBAR;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
   FExtensionList := DEF_EXTENSION_LIST;
@@ -210,6 +214,7 @@ begin
         'view.' + ViewModeToStr(VM), 'ZoomMode', ''));
     FBackground := HexToColor(Ini.ReadString('view', 'Background', ''), DEF_BACKGROUND);
     FShowTimecode := Ini.ReadBool('view', 'ShowTimecode', DEF_SHOW_TIMECODE);
+    FShowToolbar := Ini.ReadBool('view', 'ShowToolbar', DEF_SHOW_TOOLBAR);
     HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''),
       DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
 
@@ -252,6 +257,7 @@ begin
         ZoomModeToStr(FModeZoom[VM]));
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
     Ini.WriteBool('view', 'ShowTimecode', FShowTimecode);
+    Ini.WriteBool('view', 'ShowToolbar', FShowToolbar);
     Ini.WriteString('view', 'TimecodeBackground',
       ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
 

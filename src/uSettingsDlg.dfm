@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'VideoThumb Settings'
-  ClientHeight = 599
+  ClientHeight = 628
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -144,7 +144,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 169
     Width = 444
-    Height = 109
+    Height = 138
     Caption = ' Appearance '
     TabOrder = 1
     object LblBackground: TLabel
@@ -241,10 +241,18 @@ object SettingsForm: TSettingsForm
       Thousands = False
       TabOrder = 5
     end
+    object ChkShowToolbar: TCheckBox
+      Left = 12
+      Top = 111
+      Width = 200
+      Height = 17
+      Caption = 'Show toolbar (F4 to toggle)'
+      TabOrder = 6
+    end
   end
   object GbxSave: TGroupBox
     Left = 8
-    Top = 284
+    Top = 313
     Width = 444
     Height = 138
     Caption = ' Save '
@@ -346,7 +354,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 428
+    Top = 457
     Width = 444
     Height = 123
     Caption = ' Cache '
@@ -454,7 +462,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 563
+    Top = 592
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -463,7 +471,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 563
+    Top = 592
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -473,7 +481,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 563
+    Top = 592
     Width = 75
     Height = 28
     Cancel = True

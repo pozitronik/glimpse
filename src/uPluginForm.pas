@@ -1726,6 +1726,7 @@ begin
           I = Ord(FSettings.ModeZoom[VM]);
 
   UpdateViewModeButtons;
+  FToolbar.Visible := FSettings.ShowToolbar;
   FFrameView.ShowTimecode := FSettings.ShowTimecode;
   FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
   FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
@@ -2416,6 +2417,13 @@ begin
     VK_F2:
       begin
         ShowSettings;
+        Key := 0;
+      end;
+    VK_F4:
+      begin
+        FToolbar.Visible := not FToolbar.Visible;
+        FSettings.ShowToolbar := FToolbar.Visible;
+        FSettings.Save;
         Key := 0;
       end;
   end;
