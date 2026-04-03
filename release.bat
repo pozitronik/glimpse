@@ -113,6 +113,7 @@ powershell -NoProfile -Command ^
         "'description=Video frame preview - extract and display evenly-spaced frames (32bit+64bit)', " ^
         "'type=wlx', " ^
         "'file=VideoThumb.wlx', " ^
+        "'file64=VideoThumb.wlx64', " ^
         "'defaultdir=VideoThumb', " ^
         "\"version=$version\", " ^
         "'defaultextension=mp4'" ^

@@ -5,14 +5,13 @@ A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced 
 ## Features
 
 - Fast, non-blocking preview: placeholders appear immediately, frames load in background
-- Grid and scroll view modes
+- Five view modes: smart grid, grid, scroll, filmstrip, single frame
 - Configurable number of frames (1-99)
-- Frame selection (single, multi-select, range) with save and clipboard support
+- Frame selection (Ctrl+Click to toggle, Ctrl+A to select all) with save and clipboard support
 - Save frames as PNG or JPEG with configurable quality
-- Drag-and-drop frames to file manager or desktop
 - Zoom controls: fit window, fit if larger, actual size, manual zoom
 - Optional disk cache for instant re-preview
-- Uses FFmpeg shared libraries (primary) with `ffmpeg.exe` CLI fallback
+- Parallel frame extraction with configurable worker count
 
 ## Installation
 
@@ -29,8 +28,8 @@ Open the VideoThumb `.zip` archive in Total Commander. TC will detect `pluginst.
 ## Requirements
 
 - Total Commander 10.x or later
-- FFmpeg: either shared libraries (`avcodec`, `avformat`, `avutil`, `swscale`) or `ffmpeg.exe`
-- If FFmpeg is not found, the plugin will offer to download it automatically
+- `ffmpeg.exe` in plugin directory, configured path, or system PATH
+- If FFmpeg is not found, the plugin will prompt to browse for it
 
 ## Supported Formats
 
@@ -42,20 +41,22 @@ Additional extensions can be configured in Settings (F2).
 
 | Key | Action |
 |-----|--------|
-| Tab | Toggle Grid / Scroll mode |
-| G / S | Switch to Grid / Scroll mode |
+| Ctrl+1..5 | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
 | +/- | Zoom in / out |
-| Ctrl+0 | Reset zoom |
-| Arrow keys | Move focus |
-| Space | Toggle selection |
+| 0 | Reset zoom to 1x |
+| Left/Right | Previous / next frame (single mode) |
+| Ctrl+Up/Down | Increase / decrease frame count |
 | Ctrl+A | Select all |
-| Escape | Deselect all |
-| Enter | Save focused frame |
-| Ctrl+S | Save all frames |
-| Ctrl+Shift+S | Save selected frames |
+| Ctrl+Click | Toggle frame selection |
+| Ctrl+S | Save focused frame |
+| Ctrl+Alt+S | Save all frames |
+| Ctrl+Shift+S | Save combined image |
 | Ctrl+C | Copy focused frame to clipboard |
-| R | Reload (re-extract) |
+| Ctrl+Shift+C | Copy combined image to clipboard |
+| R | Refresh (re-extract all frames) |
 | F2 | Settings |
+| F3 | Toggle status bar |
+| F4 | Toggle toolbar |
 
 ## Configuration
 
