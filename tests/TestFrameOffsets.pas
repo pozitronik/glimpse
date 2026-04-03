@@ -133,23 +133,19 @@ begin
 end;
 
 procedure TTestFrameOffsets.TestEdgeGuardMaxClamped;
-var
-  Offsets: TFrameOffsetArray;
 begin
-  { SkipEdges=60 should be clamped to 49 }
-  { EffStart=49, EffEnd=51, EffD=2 }
-  { N=1: offset = 49 + 2*0.5 = 50.0 }
-  Offsets := CalculateFrameOffsets(100.0, 1, 60);
-  Assert.AreEqual(50.0, Offsets[0].TimeOffset, 0.001, 'Over-49 clamped to 49');
+  { SkipEdges above 49 must raise }
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(100.0, 1, 60) end,
+    EArgumentException);
 end;
 
 procedure TTestFrameOffsets.TestNegativeEdgeGuardClamped;
-var
-  Offsets: TFrameOffsetArray;
 begin
-  { Negative skip should be clamped to 0 }
-  Offsets := CalculateFrameOffsets(100.0, 1, -5);
-  Assert.AreEqual(50.0, Offsets[0].TimeOffset, 0.001, 'Negative clamped to 0');
+  { Negative skip must raise }
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(100.0, 1, -5) end,
+    EArgumentException);
 end;
 
 procedure TTestFrameOffsets.TestVeryShortVideo;

@@ -71,6 +71,8 @@ type
     procedure TestTimecodeBackColorAlphaMalformedFallback;
     [Test]
     procedure TestTimecodeBackColorAlphaEdgeCases;
+    [Test]
+    procedure TestCacheMaxSizeBoundaries;
   end;
 
 implementation
@@ -809,6 +811,60 @@ begin
       'Empty string should fall back to default color');
     Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
       'Empty string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCacheMaxSizeBoundaries;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { At minimum boundary (10 MB) }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(10, S.CacheMaxSizeMB, 'Min boundary 10 preserved');
+  finally
+    S.Free;
+  end;
+
+  { At maximum boundary (10000 MB) }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 10000);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(10000, S.CacheMaxSizeMB, 'Max boundary 10000 preserved');
+  finally
+    S.Free;
+  end;
+
+  { Below minimum (9) clamped to 10 }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 9);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(10, S.CacheMaxSizeMB, 'Below min clamped to 10');
   finally
     S.Free;
   end;

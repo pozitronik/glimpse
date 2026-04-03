@@ -72,6 +72,10 @@ type
     procedure TestBypassCacheTryGetReturnsNil;
     [Test]
     procedure TestBypassCachePutDelegates;
+
+    { Eviction edge cases }
+    [Test]
+    procedure TestEvictionSkipsLockedFiles;
   end;
 
 implementation
@@ -591,6 +595,64 @@ begin
     Assert.AreEqual(48, Bmp.Height, 'Height must match');
   finally
     Bmp.Free;
+  end;
+end;
+
+procedure TTestFrameCache.TestEvictionSkipsLockedFiles;
+var
+  Cache: TFrameCache;
+  Bmp: TBitmap;
+  FilePath1, FilePath2, FilePath3: string;
+  CachedPath: string;
+  LockedStream: TFileStream;
+  SizeAfter: Int64;
+begin
+  { Create 3 files so total exceeds a tiny budget }
+  FilePath1 := CreateDummyFile('lock1.mp4', 100);
+  FilePath2 := CreateDummyFile('lock2.mp4', 200);
+  FilePath3 := CreateDummyFile('lock3.mp4', 300);
+
+  { Use a very small max so eviction will be needed }
+  Cache := TFrameCache.Create(FCacheDir, 1); { 1 MB limit }
+  try
+    Bmp := CreateTestBitmap(64, 64);
+    try
+      Cache.Put(FilePath1, 1.0, Bmp);
+      Sleep(50);
+      Cache.Put(FilePath2, 2.0, Bmp);
+      Sleep(50);
+      Cache.Put(FilePath3, 3.0, Bmp);
+    finally
+      Bmp.Free;
+    end;
+
+    { Total size should be within budget, so check we have files }
+    Assert.IsTrue(Cache.GetTotalSize > 0, 'Cache should have files');
+
+    { Now create a cache with a budget smaller than total to force eviction.
+      Lock the oldest file so eviction must skip it. }
+    CachedPath := '';
+    for var F in TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories) do
+    begin
+      CachedPath := F;
+      Break; { Just grab any file to lock }
+    end;
+
+    if CachedPath <> '' then
+    begin
+      LockedStream := TFileStream.Create(CachedPath, fmOpenRead or fmShareExclusive);
+      try
+        { Eviction should not crash when it cannot delete the locked file }
+        Cache.Evict;
+        SizeAfter := Cache.GetTotalSize;
+        { Locked file remains, so size should be > 0 }
+        Assert.IsTrue(SizeAfter > 0, 'Locked file should survive eviction');
+      finally
+        LockedStream.Free;
+      end;
+    end;
+  finally
+    Cache.Free;
   end;
 end;
 

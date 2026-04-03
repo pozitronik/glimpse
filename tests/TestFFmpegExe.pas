@@ -79,6 +79,15 @@ type
     [Test] procedure TestParseResolutionSingleDigitRejected;
     [Test] procedure TestParseVideoCodecEmptyInput;
     [Test] procedure TestParseVideoCodecExtraSpaces;
+    { Parser edge cases for metadata fields }
+    [Test] procedure TestParseFpsFractional2997;
+    [Test] procedure TestParseFpsNoFpsToken;
+    [Test] procedure TestParseBitrateNoKbsToken;
+    [Test] procedure TestParseAudioChannels71;
+    [Test] procedure TestParseAudioChannelsQuad;
+    [Test] procedure TestParseAudioChannelsUnknownLayout;
+    [Test] procedure TestParseNoAudioStream;
+    [Test] procedure TestParseVideoBitrateNoVideoStream;
   end;
 
   [TestFixture]
@@ -476,6 +485,62 @@ procedure TTestFFmpegParsing.TestParseVideoCodecExtraSpaces;
 begin
   { Multiple spaces between "Video:" and codec name should be skipped }
   Assert.AreEqual('vp9', ParseVideoCodec('Video:    vp9 (Profile 0)'));
+end;
+
+procedure TTestFFmpegParsing.TestParseFpsFractional2997;
+begin
+  Assert.AreEqual(29.97,
+    ParseFps('Stream #0:0: Video: h264, 1920x1080, 29.97 fps'), 0.01);
+end;
+
+procedure TTestFFmpegParsing.TestParseFpsNoFpsToken;
+begin
+  { Video line without " fps" token returns 0 }
+  Assert.AreEqual(Double(0),
+    ParseFps('Stream #0:0: Video: h264, 1920x1080, 30 tbr'), 0.001);
+end;
+
+procedure TTestFFmpegParsing.TestParseBitrateNoKbsToken;
+begin
+  { Duration line without "kb/s" returns 0 }
+  Assert.AreEqual(0, ParseBitrate('Duration: 00:01:00.00, start: 0.0'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannels71;
+begin
+  Assert.AreEqual('7.1',
+    ParseAudioChannels('Stream #0:1: Audio: eac3, 48000 Hz, 7.1, fltp, 640 kb/s'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannelsQuad;
+begin
+  { "quad" is a valid ffmpeg channel layout }
+  Assert.AreEqual('quad',
+    ParseAudioChannels('Stream #0:1: Audio: pcm_s16le, 44100 Hz, quad, s16'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioChannelsUnknownLayout;
+begin
+  { Channel layout not in our known list returns empty }
+  Assert.AreEqual('',
+    ParseAudioChannels('Stream #0:1: Audio: aac, 44100 Hz, fltp, 128 kb/s'));
+end;
+
+procedure TTestFFmpegParsing.TestParseNoAudioStream;
+const
+  VIDEO_ONLY =
+    'Duration: 00:01:00.00, start: 0.0, bitrate: 5000 kb/s'#13#10 +
+    'Stream #0:0: Video: h264, 1920x1080, 30 fps'#13#10;
+begin
+  Assert.AreEqual('', ParseAudioCodec(VIDEO_ONLY));
+  Assert.AreEqual(0, ParseAudioSampleRate(VIDEO_ONLY));
+  Assert.AreEqual('', ParseAudioChannels(VIDEO_ONLY));
+  Assert.AreEqual(0, ParseAudioBitrate(VIDEO_ONLY));
+end;
+
+procedure TTestFFmpegParsing.TestParseVideoBitrateNoVideoStream;
+begin
+  Assert.AreEqual(0, ParseVideoBitrate('Stream #0:0: Audio: aac, 44100 Hz'));
 end;
 
 { TTestFFmpegLocator }
