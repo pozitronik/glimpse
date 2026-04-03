@@ -49,13 +49,11 @@ type
     FQueue: TList<TPendingFrame>;
     FQueueLock: TCriticalSection;
     FCache: IFrameCache;
+    FActiveWorkerCount: PInteger; { shared counter; last thread posts WM_EXTRACTION_DONE }
   protected
     procedure Execute; override;
   public
-    constructor Create(const AFFmpegPath, AFileName: string;
-      const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
-      AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
-      const ACache: IFrameCache);
+    constructor Create(const AFFmpegPath, AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>;  AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger);
   end;
 
   { Custom control that renders frame cells in various layout modes. }
@@ -175,7 +173,8 @@ type
     FFrameView: TFrameView;
     FLblError: TLabel;
     { Worker }
-    FWorkerThread: TExtractionThread;
+    FWorkerThreads: TArray<TExtractionThread>;
+    FActiveWorkerCount: Integer;
     FFramesLoaded: Integer;
     FPendingFrames: TList<TPendingFrame>;
     FPendingLock: TCriticalSection;
@@ -360,10 +359,7 @@ const
 
 { TExtractionThread }
 
-constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
-  const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
-  AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
-  const ACache: IFrameCache);
+constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -374,6 +370,7 @@ begin
   FQueue := AQueue;
   FQueueLock := AQueueLock;
   FCache := ACache;
+  FActiveWorkerCount := AActiveWorkerCount;
 end;
 
 procedure TExtractionThread.Execute;
@@ -381,68 +378,73 @@ var
   FFmpeg: TFFmpegExe;
   Bmp: TBitmap;
   Frame: TPendingFrame;
-  I: Integer;
+  I, CellIdx: Integer;
   Source: string;
 begin
   {$IFDEF DEBUG}FormLog(Format('Thread.Execute START frames=%d', [Length(FOffsets)]));{$ENDIF}
-  FFmpeg := TFFmpegExe.Create(FFFmpegPath);
   try
-    for I := 0 to High(FOffsets) do
-    begin
-      if Terminated then
+    FFmpeg := TFFmpegExe.Create(FFFmpegPath);
+    try
+      for I := 0 to High(FOffsets) do
       begin
-        {$IFDEF DEBUG}FormLog(Format('Thread.Execute TERMINATED at i=%d', [I]));{$ENDIF}
-        Exit;
-      end;
-
-      Source := 'none';
-
-      Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
-      if Bmp <> nil then
-        Source := 'cache';
-
-      { Cache miss: extract via ffmpeg }
-      if Bmp = nil then
-      begin
-        Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
-        if Bmp <> nil then
+        if Terminated then
         begin
-          Source := 'ffmpeg';
-          FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
+          {$IFDEF DEBUG}FormLog(Format('Thread.Execute TERMINATED at i=%d', [I]));{$ENDIF}
+          Exit;
         end;
-      end;
 
-      {$IFDEF DEBUG}
-      if Bmp <> nil then
-        FormLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
-          [I, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
-      else
-        FormLog(Format('Frame[%d] source=%s Bmp=NIL', [I, Source]));
-      {$ENDIF}
+        CellIdx := FOffsets[I].Index - 1; { 1-based offset index to 0-based cell index }
+        Source := 'none';
 
-      if Terminated then
-      begin
-        Bmp.Free;
-        Exit;
-      end;
+        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
+        if Bmp <> nil then
+          Source := 'cache';
 
-      { Enqueue frame for the UI thread; PostMessage is just a notification }
-      Frame.Index := I;
-      Frame.Bitmap := Bmp;
-      FQueueLock.Enter;
-      try
-        FQueue.Add(Frame);
-      finally
-        FQueueLock.Leave;
+        { Cache miss: extract via ffmpeg }
+        if Bmp = nil then
+        begin
+          Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+          if Bmp <> nil then
+          begin
+            Source := 'ffmpeg';
+            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
+          end;
+        end;
+
+        {$IFDEF DEBUG}
+        if Bmp <> nil then
+          FormLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
+            [CellIdx, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
+        else
+          FormLog(Format('Frame[%d] source=%s Bmp=NIL', [CellIdx, Source]));
+        {$ENDIF}
+
+        if Terminated then
+        begin
+          Bmp.Free;
+          Exit;
+        end;
+
+        { Enqueue frame for the UI thread; PostMessage is just a notification }
+        Frame.Index := CellIdx;
+        Frame.Bitmap := Bmp;
+        FQueueLock.Enter;
+        try
+          FQueue.Add(Frame);
+        finally
+          FQueueLock.Leave;
+        end;
+        PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
       end;
-      PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
+    finally
+      FFmpeg.Free;
     end;
   finally
-    FFmpeg.Free;
+    { Always decrement; last worker to finish notifies the UI }
+    if InterlockedDecrement(FActiveWorkerCount^) = 0 then
+      if not Terminated then
+        PostMessage(FNotifyWnd, WM_EXTRACTION_DONE, 0, 0);
   end;
-
-  if not Terminated then
-    PostMessage(FNotifyWnd, WM_EXTRACTION_DONE, 0, 0);
 end;
 
 { TFrameView }
@@ -2079,6 +2081,8 @@ end;
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
   ThreadCache: IFrameCache;
+  WorkerCount, FrameCount, ChunkSize, Start, Len, W: Integer;
+  Chunk: TFrameOffsetArray;
 begin
   StopExtraction;
   FFramesLoaded := 0;
@@ -2096,21 +2100,43 @@ begin
   else
     ThreadCache := FCache;
 
-  FWorkerThread := TExtractionThread.Create(FFFmpegPath, FFileName, FOffsets,
-    Handle, FPendingFrames, FPendingLock, ThreadCache);
-  FWorkerThread.Start;
+  FrameCount := Length(FOffsets);
+  WorkerCount := Min(FSettings.MaxWorkers, FrameCount);
+  if WorkerCount < 1 then
+    WorkerCount := 1;
+
+  FActiveWorkerCount := WorkerCount;
+  SetLength(FWorkerThreads, WorkerCount);
+  ChunkSize := (FrameCount + WorkerCount - 1) div WorkerCount; { ceil division }
+
+  for W := 0 to WorkerCount - 1 do
+  begin
+    Start := W * ChunkSize;
+    Len := Min(ChunkSize, FrameCount - Start);
+    Chunk := Copy(FOffsets, Start, Len);
+    FWorkerThreads[W] := TExtractionThread.Create(FFFmpegPath, FFileName, Chunk,
+      Handle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount);
+  end;
+
+  { Start all threads after creation to minimize scheduling skew }
+  for W := 0 to WorkerCount - 1 do
+    FWorkerThreads[W].Start;
 end;
 
 procedure TPluginForm.StopExtraction;
+var
+  W: Integer;
 begin
-  { Thread is a transient resource: exists only during active extraction,
-    nil between extractions and before the first one }
-  if Assigned(FWorkerThread) then
+  { Signal all workers to stop }
+  for W := 0 to High(FWorkerThreads) do
+    FWorkerThreads[W].Terminate;
+  { Wait for all workers to finish, then free }
+  for W := 0 to High(FWorkerThreads) do
   begin
-    FWorkerThread.Terminate;
-    FWorkerThread.WaitFor;
-    FreeAndNil(FWorkerThread);
+    FWorkerThreads[W].WaitFor;
+    FWorkerThreads[W].Free;
   end;
+  FWorkerThreads := nil;
 end;
 
 procedure TPluginForm.ProcessPendingFrames;
