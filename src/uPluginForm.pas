@@ -1615,7 +1615,7 @@ begin
   AddItem('Deselect all', CM_DESELECT_ALL);
   AddSeparator;
   AddItem('Refresh'#9'R', CM_REFRESH);
-  AddItem('Settings...', CM_SETTINGS);
+  AddItem('Settings...'#9'F2', CM_SETTINGS);
 
   FFrameView.PopupMenu := FContextMenu;
 end;

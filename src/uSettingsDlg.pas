@@ -57,6 +57,7 @@ type
     EdtCacheMaxSize: TEdit;
     UdCacheMaxSize: TUpDown;
     LblCacheMaxSizeUnit: TLabel;
+    LblCacheSizeInfo: TLabel;
     BtnOK: TButton;
     BtnCancel: TButton;
     BtnDefaults: TButton;
@@ -79,6 +80,7 @@ type
     procedure UpdateCacheControls;
     procedure UpdateFFmpegInfo;
     procedure UpdateCacheFolderInfo;
+    procedure UpdateCacheSizeInfo;
     procedure PickColor(APanel: TPanel);
     procedure BrowseFolder(AEdit: TEdit);
   end;
@@ -121,6 +123,7 @@ begin
   UpdateCacheControls;
   UpdateFFmpegInfo;
   UpdateCacheFolderInfo;
+  UpdateCacheSizeInfo;
 end;
 
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
@@ -323,6 +326,38 @@ begin
       [TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache')])
   else
     LblCacheFolderInfo.Caption := '';
+end;
+
+procedure TSettingsForm.UpdateCacheSizeInfo;
+var
+  Dir: string;
+  Files: TArray<string>;
+  FileName: string;
+  Total: Int64;
+begin
+  Dir := EdtCacheFolder.Text;
+  if Dir = '' then
+    Dir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+
+  if not TDirectory.Exists(Dir) then
+  begin
+    LblCacheSizeInfo.Caption := '(current: empty)';
+    Exit;
+  end;
+
+  Total := 0;
+  try
+    Files := TDirectory.GetFiles(Dir, '*.png', TSearchOption.soAllDirectories);
+    for FileName in Files do
+      Total := Total + TFile.GetSize(FileName);
+  except
+    { Folder inaccessible }
+  end;
+
+  if Total > 0 then
+    LblCacheSizeInfo.Caption := Format('(current: %.1f MB)', [Total / (1024 * 1024)])
+  else
+    LblCacheSizeInfo.Caption := '(current: empty)';
 end;
 
 function ShowSettingsDialog(ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;

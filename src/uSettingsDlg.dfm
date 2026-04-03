@@ -349,6 +349,18 @@ object SettingsForm: TSettingsForm
       Height = 15
       Caption = 'MB'
     end
+    object LblCacheSizeInfo: TLabel
+      Left = 244
+      Top = 96
+      Width = 3
+      Height = 15
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
     object ChkCacheEnabled: TCheckBox
       Left = 12
       Top = 22
