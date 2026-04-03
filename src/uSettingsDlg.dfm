@@ -66,7 +66,7 @@ object SettingsForm: TSettingsForm
       Caption = 'FFmpeg path:'
     end
     object LblFFmpegInfo: TLabel
-      Left = 130
+      Left = 12
       Top = 132
       Width = 3
       Height = 15
@@ -166,7 +166,7 @@ object SettingsForm: TSettingsForm
       Top = 82
       Width = 65
       Height = 15
-      Caption = 'TC opacity:'
+      Caption = 'Timecode opacity:'
     end
     object LblTCAlphaHint: TLabel
       Left = 198
@@ -367,7 +367,7 @@ object SettingsForm: TSettingsForm
       Caption = 'Folder:'
     end
     object LblCacheFolderInfo: TLabel
-      Left = 130
+      Left = 12
       Top = 73
       Width = 3
       Height = 15
