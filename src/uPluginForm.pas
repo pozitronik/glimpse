@@ -2774,7 +2774,10 @@ end;
 
 procedure TPluginForm.OnFrameCountChange(Sender: TObject);
 begin
-  { Persist user preference }
+  { VCL re-fires OnChange when a hidden TUpDown+TEdit pair becomes visible
+    (handle recreation re-sends the position). Ignore if value unchanged. }
+  if FUpDown.Position = FSettings.FramesCount then Exit;
+
   FSettings.FramesCount := FUpDown.Position;
   FSettings.Save;
 
