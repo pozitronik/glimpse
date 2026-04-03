@@ -78,7 +78,10 @@ type
 
 {$IFDEF DEBUG}
 var
-  GCacheLogPath: string;
+  GDebugLogPath: string;
+
+{ Thread-safe debug logging to file. Tag identifies the subsystem. }
+procedure DebugLog(const ATag, AMsg: string);
 {$ENDIF}
 
 implementation
@@ -86,24 +89,27 @@ implementation
 uses
   System.DateUtils;
 
+function GetCurrentThreadId: Cardinal; stdcall; external 'kernel32.dll';
+
 { Invariant format settings for deterministic key strings }
 var
   InvFmt: TFormatSettings;
 
 {$IFDEF DEBUG}
-procedure CacheLog(const AMsg: string);
+procedure DebugLog(const ATag, AMsg: string);
 var
   F: TextFile;
 begin
-  if GCacheLogPath = '' then Exit;
+  if GDebugLogPath = '' then Exit;
   try
-    AssignFile(F, GCacheLogPath);
-    if FileExists(GCacheLogPath) then
+    AssignFile(F, GDebugLogPath);
+    if FileExists(GDebugLogPath) then
       Append(F)
     else
       Rewrite(F);
     try
-      WriteLn(F, FormatDateTime('hh:nn:ss.zzz', Now) + '  [Cache] ' + AMsg);
+      WriteLn(F, Format('%s  [tid=%d] [%s] %s',
+        [FormatDateTime('hh:nn:ss.zzz', Now), GetCurrentThreadId, ATag, AMsg]));
     finally
       CloseFile(F);
     end;
@@ -153,7 +159,7 @@ begin
   if not TDirectory.Exists(FCacheDir) then
     TDirectory.CreateDirectory(FCacheDir);
   {$IFDEF DEBUG}
-  CacheLog(Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
+  DebugLog('Cache',Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
   {$ENDIF}
 end;
 
@@ -208,12 +214,12 @@ begin
     Path := KeyToPath(Key);
     if not TFile.Exists(Path) then
     begin
-      {$IFDEF DEBUG}CacheLog(Format('TryGet MISS (no file) key=%s', [Key]));{$ENDIF}
+      {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet MISS (no file) key=%s', [Key]));{$ENDIF}
       Exit;
     end;
 
     Data := TFile.ReadAllBytes(Path);
-    {$IFDEF DEBUG}CacheLog(Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));{$ENDIF}
+    {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));{$ENDIF}
     Stream := TMemoryStream.Create;
     try
       Stream.WriteBuffer(Data[0], Length(Data));
@@ -221,11 +227,11 @@ begin
       Png := TPngImage.Create;
       try
         Png.LoadFromStream(Stream);
-        {$IFDEF DEBUG}CacheLog(Format('  PNG loaded: %dx%d', [Png.Width, Png.Height]));{$ENDIF}
+        {$IFDEF DEBUG}DebugLog('Cache',Format('  PNG loaded: %dx%d', [Png.Width, Png.Height]));{$ENDIF}
         Result := TBitmap.Create;
         Result.Assign(Png);
         Result.PixelFormat := pf24bit; { Force DIB for thread-safe rendering }
-        {$IFDEF DEBUG}CacheLog(Format('  BMP assigned: %dx%d empty=%s pf=%d',
+        {$IFDEF DEBUG}DebugLog('Cache',Format('  BMP assigned: %dx%d empty=%s pf=%d',
           [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));{$ENDIF}
       finally
         Png.Free;
@@ -236,7 +242,7 @@ begin
   except
     on E: Exception do
     begin
-      {$IFDEF DEBUG}CacheLog(Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
+      {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
       FreeAndNil(Result);
     end;
   end;
@@ -261,7 +267,7 @@ begin
   Key := FrameKey(AFilePath, ATimeOffset);
   if Key = '' then
     Exit;
-  {$IFDEF DEBUG}CacheLog(Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));{$ENDIF}
+  {$IFDEF DEBUG}DebugLog('Cache',Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));{$ENDIF}
   try
     FinalPath := KeyToPath(Key);
     SubDir := ExtractFilePath(FinalPath);
@@ -275,7 +281,7 @@ begin
       Png.Assign(ABitmap);
       Png.CompressionLevel := 1; { Fast compression for cache writes }
       Png.SaveToFile(TempPath);
-      {$IFDEF DEBUG}CacheLog(Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));{$ENDIF}
+      {$IFDEF DEBUG}DebugLog('Cache',Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));{$ENDIF}
     finally
       Png.Free;
     end;
@@ -284,11 +290,11 @@ begin
     if TFile.Exists(FinalPath) then
       TFile.Delete(FinalPath);
     TFile.Move(TempPath, FinalPath);
-    {$IFDEF DEBUG}CacheLog(Format('  moved to %s', [FinalPath]));{$ENDIF}
+    {$IFDEF DEBUG}DebugLog('Cache',Format('  moved to %s', [FinalPath]));{$ENDIF}
   except
     on E: Exception do
     begin
-      {$IFDEF DEBUG}CacheLog(Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
+      {$IFDEF DEBUG}DebugLog('Cache',Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
       try
         if TFile.Exists(TempPath) then
           TFile.Delete(TempPath);
@@ -318,37 +324,33 @@ type
     AccessTime: TDateTime;
   end;
 var
-  Files: TArray<string>;
   Infos: TList<TCacheFileInfo>;
   Info: TCacheFileInfo;
   TotalSize: Int64;
-  FileName: string;
   Dirs: TArray<string>;
   Dir: string;
 begin
   if not TDirectory.Exists(FCacheDir) then
     Exit;
 
-  try
-    Files := TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories);
-  except
-    Exit; { Directory inaccessible; nothing to evict }
-  end;
-
   Infos := TList<TCacheFileInfo>.Create;
   try
     TotalSize := 0;
-    for FileName in Files do
-    begin
-      try
-        Info.Path := FileName;
-        Info.Size := TFile.GetSize(FileName);
-        Info.AccessTime := TFile.GetLastAccessTime(FileName);
-        Infos.Add(Info);
-        TotalSize := TotalSize + Info.Size;
-      except
-        { Skip files we cannot stat }
+    try
+      for var FileName in TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories) do
+      begin
+        try
+          Info.Path := FileName;
+          Info.Size := TFile.GetSize(FileName);
+          Info.AccessTime := TFile.GetLastAccessTime(FileName);
+          Infos.Add(Info);
+          TotalSize := TotalSize + Info.Size;
+        except
+          { Skip files we cannot stat }
+        end;
       end;
+    except
+      Exit; { Directory inaccessible; nothing to evict }
     end;
 
     if TotalSize <= FMaxSizeBytes then
