@@ -49,15 +49,14 @@ type
     FNotifyWnd: HWND;
     FQueue: TList<TPendingFrame>;
     FQueueLock: TCriticalSection;
-    FCache: TFrameCache;     { nil if cache disabled }
-    FBypassCache: Boolean;   { True to skip cache reads (Refresh) }
+    FCache: IFrameCache;
   protected
     procedure Execute; override;
   public
     constructor Create(const AFFmpegPath, AFileName: string;
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
-      ACache: TFrameCache; ABypassCache: Boolean);
+      const ACache: IFrameCache);
   end;
 
   /// Custom control that renders frame cells in various layout modes.
@@ -172,7 +171,7 @@ type
     FFramesLoaded: Integer;
     FPendingFrames: TList<TPendingFrame>;
     FPendingLock: TCriticalSection;
-    FCache: TFrameCache;
+    FCache: IFrameCache;
     { Animation }
     FAnimTimer: TTimer;
     { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
@@ -202,7 +201,7 @@ type
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
     procedure RefreshExtraction;
-    procedure StartExtraction(ABypassCache: Boolean = False);
+    procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
     procedure StopExtraction;
     procedure ProcessPendingFrames;
     procedure DrainPendingFrameMessages;
@@ -351,7 +350,7 @@ const
 constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
   AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
-  ACache: TFrameCache; ABypassCache: Boolean);
+  const ACache: IFrameCache);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -362,7 +361,6 @@ begin
   FQueue := AQueue;
   FQueueLock := AQueueLock;
   FCache := ACache;
-  FBypassCache := ABypassCache;
 end;
 
 procedure TExtractionThread.Execute;
@@ -371,11 +369,9 @@ var
   Bmp: TBitmap;
   Frame: TPendingFrame;
   I: Integer;
-  Key: string;
   Source: string;
 begin
-  {$IFDEF DEBUG}FormLog('Thread.Execute START frames=' + IntToStr(Length(FOffsets))
-    + ' bypass=' + BoolToStr(FBypassCache, True));{$ENDIF}
+  {$IFDEF DEBUG}FormLog('Thread.Execute START frames=' + IntToStr(Length(FOffsets)));{$ENDIF}
   FFmpeg := TFFmpegExe.Create(FFFmpegPath);
   try
     for I := 0 to High(FOffsets) do
@@ -386,18 +382,11 @@ begin
         Exit;
       end;
 
-      Bmp := nil;
-      Key := '';
       Source := 'none';
 
-      { Try cache first unless bypassed }
-      if Assigned(FCache) and (not FBypassCache) then
-      begin
-        Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
-        Bmp := FCache.TryGet(Key);
-        if Bmp <> nil then
-          Source := 'cache';
-      end;
+      Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
+      if Bmp <> nil then
+        Source := 'cache';
 
       { Cache miss: extract via ffmpeg }
       if Bmp = nil then
@@ -406,13 +395,7 @@ begin
         if Bmp <> nil then
         begin
           Source := 'ffmpeg';
-          { Write to cache on successful extraction }
-          if Assigned(FCache) then
-          begin
-            if Key = '' then
-              Key := TFrameCache.FrameKey(FFileName, FOffsets[I].TimeOffset);
-            FCache.Put(Key, Bmp);
-          end;
+          FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
         end;
       end;
 
@@ -1413,14 +1396,15 @@ begin
   FormLog('CreateForPlugin: file=' + AFileName + ' handle=$' + IntToHex(Handle));
   {$ENDIF}
 
-  { Create cache if enabled }
   if FSettings.CacheEnabled then
   begin
     var CacheDir := FSettings.CacheFolder;
     if CacheDir = '' then
       CacheDir := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
     FCache := TFrameCache.Create(CacheDir, FSettings.CacheMaxSizeMB);
-  end;
+  end
+  else
+    FCache := TNullFrameCache.Create;
 
   FAnimTimer := TTimer.Create(Self);
   FAnimTimer.Interval := 80;
@@ -1434,6 +1418,8 @@ destructor TPluginForm.Destroy;
 begin
   if FParentWnd <> 0 then
     RemoveWindowSubclass(FParentWnd, @ParentSubclassProc, 1);
+  { FAnimTimer may not exist yet if destructor runs during CreateForPlugin
+    (VCL can destroy a windowed control before the constructor finishes) }
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
   StopExtraction;
@@ -1441,7 +1427,7 @@ begin
   FFrameView.ClearCells;
   FPendingLock.Free;
   FPendingFrames.Free;
-  FCache.Free;
+  { FCache is an interface reference, released automatically }
   inherited;
 end;
 
@@ -2125,7 +2111,9 @@ begin
   UpdateFrameViewSize;
 end;
 
-procedure TPluginForm.StartExtraction(ABypassCache: Boolean);
+procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
+var
+  ThreadCache: IFrameCache;
 begin
   StopExtraction;
   FFramesLoaded := 0;
@@ -2138,13 +2126,20 @@ begin
 
   FAnimTimer.Enabled := True;
 
+  if ACacheOverride <> nil then
+    ThreadCache := ACacheOverride
+  else
+    ThreadCache := FCache;
+
   FWorkerThread := TExtractionThread.Create(FFFmpegPath, FFileName, FOffsets,
-    Handle, FPendingFrames, FPendingLock, FCache, ABypassCache);
+    Handle, FPendingFrames, FPendingLock, ThreadCache);
   FWorkerThread.Start;
 end;
 
 procedure TPluginForm.StopExtraction;
 begin
+  { Thread is a transient resource: exists only during active extraction,
+    nil between extractions and before the first one }
   if Assigned(FWorkerThread) then
   begin
     FWorkerThread.Terminate;
@@ -2512,6 +2507,8 @@ procedure TPluginForm.Resize;
 begin
   inherited;
   Realign;
+  { VCL fires Resize during window creation, before CreateForPlugin finishes
+    constructing sub-controls, so FFrameView may not exist yet }
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
@@ -2532,7 +2529,8 @@ begin
     Exit;
   end;
 
-  { Forward to TFrameView so wheel logic lives in one place (WMMouseWheel) }
+  { Forward to TFrameView so wheel logic lives in one place (WMMouseWheel).
+    Guards needed: VCL fires DoMouseWheel before constructor finishes. }
   if Assigned(FFrameView) and Assigned(FScrollBox) and FScrollBox.Visible then
   begin
     ZeroMemory(@Msg, SizeOf(Msg));
@@ -2547,6 +2545,7 @@ end;
 
 procedure TPluginForm.OnScrollBoxResize(Sender: TObject);
 begin
+  { Same VCL lifecycle guard as Resize: FFrameView may not exist yet }
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
@@ -2610,6 +2609,7 @@ begin
   { Drain any frames that arrived since the last notification.
     Covers the case where PostMessage notifications miss the HWND. }
   ProcessPendingFrames;
+  { Timer fires during construction; FFrameView may not be ready yet }
   if Assigned(FFrameView) and FFrameView.Visible then
     FFrameView.AdvanceAnimation;
 end;
@@ -2630,7 +2630,7 @@ begin
   DrainPendingFrameMessages;
   FFrameView.ClearCells;
   SetupPlaceholders;
-  StartExtraction(True); { bypass cache reads, still write }
+  StartExtraction(TBypassFrameCache.Create(FCache));
 end;
 
 end.

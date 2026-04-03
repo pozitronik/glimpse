@@ -27,6 +27,7 @@ type
     [TearDown]
     procedure TearDown;
 
+    { Key generation tests }
     [Test]
     procedure TestKeyDeterministic;
     [Test]
@@ -39,6 +40,8 @@ type
     procedure TestKeyChangesOnOffset;
     [Test]
     procedure TestKeyPathCaseInsensitive;
+
+    { TFrameCache read/write tests }
     [Test]
     procedure TestPutAndGet;
     [Test]
@@ -47,6 +50,8 @@ type
     procedure TestGetCorruptFileReturnsNil;
     [Test]
     procedure TestPutCreatesSubdirectory;
+
+    { Eviction tests }
     [Test]
     procedure TestEvictionRemovesOldest;
     [Test]
@@ -55,6 +60,18 @@ type
     procedure TestClear;
     [Test]
     procedure TestGetTotalSize;
+
+    { TNullFrameCache tests }
+    [Test]
+    procedure TestNullCacheTryGetReturnsNil;
+    [Test]
+    procedure TestNullCachePutDoesNothing;
+
+    { TBypassFrameCache tests }
+    [Test]
+    procedure TestBypassCacheTryGetReturnsNil;
+    [Test]
+    procedure TestBypassCachePutDelegates;
   end;
 
 implementation
@@ -109,7 +126,7 @@ begin
   TFile.SetLastWriteTime(APath, ATime);
 end;
 
-{ Key generation tests }
+{ Key generation tests -- these test the static FrameKey method directly }
 
 procedure TTestFrameCache.TestKeyDeterministic;
 var
@@ -141,8 +158,6 @@ var
 begin
   Path1 := CreateDummyFile('size_a.mp4', 1000);
   Path2 := CreateDummyFile('size_b.mp4', 2000);
-  { Rename so paths are identical but sizes differ }
-  { Use separate files directly since paths differ anyway }
   Assert.AreNotEqual(
     TFrameCache.FrameKey(Path1, 5.0),
     TFrameCache.FrameKey(Path2, 5.0),
@@ -183,14 +198,10 @@ var
   KeyLower, KeyUpper: string;
 begin
   { FrameKey lowercases the path internally, so identical file metadata
-    with different-case paths should yield the same key. We test the
-    BuildKeyString logic by calling FrameKey on the same file but with
-    different casing in the path string. Since FrameKey reads actual
-    file metadata, we use the same physical file. }
+    with different-case paths should yield the same key. On Windows both
+    paths resolve to the same physical file. }
   FilePath := CreateDummyFile('CaseTest.mp4', 512);
 
-  { FrameKey normalises via AnsiLowerCase, so casing in the path should
-    not affect the result. On Windows both paths resolve to the same file. }
   KeyLower := TFrameCache.FrameKey(AnsiLowerCase(FilePath), 1.0);
   KeyUpper := TFrameCache.FrameKey(AnsiUpperCase(FilePath), 1.0);
 
@@ -198,23 +209,25 @@ begin
     'Path casing must not affect cache key');
 end;
 
-{ Read/write tests }
+{ TFrameCache read/write tests }
 
 procedure TTestFrameCache.TestPutAndGet;
 var
   Cache: TFrameCache;
   Bmp, Retrieved: TBitmap;
+  FilePath: string;
 begin
+  FilePath := CreateDummyFile('putget.mp4', 1024);
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
     Bmp := CreateTestBitmap(64, 48);
     try
-      Cache.Put('aabbccdd11223344aabbccdd11223344', Bmp);
+      Cache.Put(FilePath, 5.0, Bmp);
     finally
       Bmp.Free;
     end;
 
-    Retrieved := Cache.TryGet('aabbccdd11223344aabbccdd11223344');
+    Retrieved := Cache.TryGet(FilePath, 5.0);
     try
       Assert.IsNotNull(Retrieved, 'Cached bitmap must be retrievable');
       Assert.AreEqual(64, Retrieved.Width, 'Width must match');
@@ -230,12 +243,14 @@ end;
 procedure TTestFrameCache.TestGetMissReturnsNil;
 var
   Cache: TFrameCache;
+  FilePath: string;
   Bmp: TBitmap;
 begin
+  FilePath := CreateDummyFile('miss.mp4', 256);
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
-    Bmp := Cache.TryGet('00000000000000000000000000000000');
-    Assert.IsNull(Bmp, 'Non-existent key must return nil');
+    Bmp := Cache.TryGet(FilePath, 99.0);
+    Assert.IsNull(Bmp, 'Non-existent cache entry must return nil');
   finally
     Cache.Free;
   end;
@@ -244,26 +259,29 @@ end;
 procedure TTestFrameCache.TestGetCorruptFileReturnsNil;
 var
   Cache: TFrameCache;
-  Key, Path, SubDir: string;
+  FilePath, Key, SubDir, CachePath: string;
   FS: TFileStream;
   Bmp: TBitmap;
 begin
+  FilePath := CreateDummyFile('corrupt.mp4', 512);
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
-    Key := 'ff112233445566778899aabbccddeeff';
-    { Manually create a corrupt file at the expected cache path }
+    { Compute the key to find where the cache file would be stored }
+    Key := TFrameCache.FrameKey(FilePath, 1.0);
+    Assert.IsNotEmpty(Key, 'Key must not be empty for existing file');
+
+    { Manually place a corrupt file at the expected cache path }
     SubDir := TPath.Combine(FCacheDir, Copy(Key, 1, 2));
     TDirectory.CreateDirectory(SubDir);
-    Path := TPath.Combine(SubDir, Key + '.png');
-    FS := TFileStream.Create(Path, fmCreate);
+    CachePath := TPath.Combine(SubDir, Key + '.png');
+    FS := TFileStream.Create(CachePath, fmCreate);
     try
-      { Write garbage data }
       FS.WriteBuffer(PAnsiChar('NOT_A_PNG')^, 9);
     finally
       FS.Free;
     end;
 
-    Bmp := Cache.TryGet(Key);
+    Bmp := Cache.TryGet(FilePath, 1.0);
     Assert.IsNull(Bmp, 'Corrupt PNG must return nil, not raise exception');
   finally
     Cache.Free;
@@ -274,19 +292,20 @@ procedure TTestFrameCache.TestPutCreatesSubdirectory;
 var
   Cache: TFrameCache;
   Bmp: TBitmap;
-  Key, ExpectedSubDir, ExpectedFile: string;
+  FilePath, Key, ExpectedSubDir, ExpectedFile: string;
 begin
+  FilePath := CreateDummyFile('subdir.mp4', 256);
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
-    Key := 'a3f4b200112233445566778899aabbcc';
     Bmp := CreateTestBitmap(16, 16);
     try
-      Cache.Put(Key, Bmp);
+      Cache.Put(FilePath, 5.0, Bmp);
     finally
       Bmp.Free;
     end;
 
-    ExpectedSubDir := TPath.Combine(FCacheDir, 'a3');
+    Key := TFrameCache.FrameKey(FilePath, 5.0);
+    ExpectedSubDir := TPath.Combine(FCacheDir, Copy(Key, 1, 2));
     ExpectedFile := TPath.Combine(ExpectedSubDir, Key + '.png');
 
     Assert.IsTrue(TDirectory.Exists(ExpectedSubDir),
@@ -304,55 +323,46 @@ procedure TTestFrameCache.TestEvictionRemovesOldest;
 var
   Cache: TFrameCache;
   Bmp: TBitmap;
+  FilePath1, FilePath2, FilePath3: string;
   Key1, Key2, Key3: string;
 begin
-  { Create cache with very small max size (1 KB) so that any bitmap exceeds it }
+  FilePath1 := CreateDummyFile('evict1.mp4', 100);
+  FilePath2 := CreateDummyFile('evict2.mp4', 200);
+  FilePath3 := CreateDummyFile('evict3.mp4', 300);
+
   Cache := TFrameCache.Create(FCacheDir, 1);
   try
-    Key1 := 'aa00000000000000000000000000001a';
-    Key2 := 'bb00000000000000000000000000002b';
-    Key3 := 'cc00000000000000000000000000003c';
-
     Bmp := CreateTestBitmap(100, 100);
     try
-      Cache.Put(Key1, Bmp);
+      Cache.Put(FilePath1, 1.0, Bmp);
+      Cache.Put(FilePath2, 1.0, Bmp);
+      Cache.Put(FilePath3, 1.0, Bmp);
     finally
       Bmp.Free;
     end;
-    { Set oldest access time }
-    TFile.SetLastAccessTime(Cache.CacheDir + PathDelim + 'aa' + PathDelim +
-      Key1 + '.png', EncodeDateTime(2020, 1, 1, 0, 0, 0, 0));
 
-    Bmp := CreateTestBitmap(100, 100);
-    try
-      Cache.Put(Key2, Bmp);
-    finally
-      Bmp.Free;
-    end;
-    TFile.SetLastAccessTime(Cache.CacheDir + PathDelim + 'bb' + PathDelim +
-      Key2 + '.png', EncodeDateTime(2023, 6, 1, 0, 0, 0, 0));
+    { Set access times so we can verify eviction order }
+    Key1 := TFrameCache.FrameKey(FilePath1, 1.0);
+    Key2 := TFrameCache.FrameKey(FilePath2, 1.0);
+    Key3 := TFrameCache.FrameKey(FilePath3, 1.0);
 
-    Bmp := CreateTestBitmap(100, 100);
-    try
-      Cache.Put(Key3, Bmp);
-    finally
-      Bmp.Free;
-    end;
-    TFile.SetLastAccessTime(Cache.CacheDir + PathDelim + 'cc' + PathDelim +
-      Key3 + '.png', EncodeDateTime(2025, 1, 1, 0, 0, 0, 0));
-
-    { Max size is 1 MB = 1048576 bytes. Total of three 100x100 PNGs exceeds this.
-      Actually 1 MB might be enough. Let me use a tiny max. }
-    { Re-create with 0 MB max -- forces eviction of everything beyond budget }
+    TFile.SetLastAccessTime(
+      TPath.Combine(TPath.Combine(FCacheDir, Copy(Key1, 1, 2)), Key1 + '.png'),
+      EncodeDateTime(2020, 1, 1, 0, 0, 0, 0));
+    TFile.SetLastAccessTime(
+      TPath.Combine(TPath.Combine(FCacheDir, Copy(Key2, 1, 2)), Key2 + '.png'),
+      EncodeDateTime(2023, 6, 1, 0, 0, 0, 0));
+    TFile.SetLastAccessTime(
+      TPath.Combine(TPath.Combine(FCacheDir, Copy(Key3, 1, 2)), Key3 + '.png'),
+      EncodeDateTime(2025, 1, 1, 0, 0, 0, 0));
   finally
     Cache.Free;
   end;
 
-  { Re-open with 0 MB limit (actually minimum is not enforced in constructor) }
+  { Re-open with 0 MB limit: forces eviction of everything }
   Cache := TFrameCache.Create(FCacheDir, 0);
   try
     Cache.Evict;
-    { All files should be evicted since 0 bytes budget }
     Assert.AreEqual(Int64(0), Cache.GetTotalSize,
       'All files must be evicted when max size is 0');
   finally
@@ -364,36 +374,35 @@ procedure TTestFrameCache.TestEvictionPreservesNewest;
 var
   Cache: TFrameCache;
   Bmp: TBitmap;
+  FilePathOld, FilePathNew: string;
   KeyOld, KeyNew: string;
   PathOld, PathNew: string;
 begin
+  FilePathOld := CreateDummyFile('old.mp4', 100);
+  FilePathNew := CreateDummyFile('new.mp4', 200);
+
   Cache := TFrameCache.Create(FCacheDir, 500);
   try
-    KeyOld := 'dd0000000000000000000000000000aa';
-    KeyNew := 'ee0000000000000000000000000000bb';
-
     Bmp := CreateTestBitmap(50, 50);
     try
-      Cache.Put(KeyOld, Bmp);
+      Cache.Put(FilePathOld, 1.0, Bmp);
+      Cache.Put(FilePathNew, 1.0, Bmp);
     finally
       Bmp.Free;
     end;
-    PathOld := TPath.Combine(TPath.Combine(FCacheDir, 'dd'), KeyOld + '.png');
+
+    KeyOld := TFrameCache.FrameKey(FilePathOld, 1.0);
+    KeyNew := TFrameCache.FrameKey(FilePathNew, 1.0);
+    PathOld := TPath.Combine(TPath.Combine(FCacheDir, Copy(KeyOld, 1, 2)), KeyOld + '.png');
+    PathNew := TPath.Combine(TPath.Combine(FCacheDir, Copy(KeyNew, 1, 2)), KeyNew + '.png');
+
     TFile.SetLastAccessTime(PathOld, EncodeDateTime(2020, 1, 1, 0, 0, 0, 0));
-
-    Bmp := CreateTestBitmap(50, 50);
-    try
-      Cache.Put(KeyNew, Bmp);
-    finally
-      Bmp.Free;
-    end;
-    PathNew := TPath.Combine(TPath.Combine(FCacheDir, 'ee'), KeyNew + '.png');
     TFile.SetLastAccessTime(PathNew, EncodeDateTime(2025, 12, 31, 23, 59, 59, 0));
   finally
     Cache.Free;
   end;
 
-  { With 0 budget, eviction removes everything -- oldest first }
+  { With 0 budget, eviction removes everything }
   Cache := TFrameCache.Create(FCacheDir, 0);
   try
     Cache.Evict;
@@ -408,13 +417,13 @@ begin
   try
     Bmp := CreateTestBitmap(50, 50);
     try
-      Cache.Put(KeyNew, Bmp);
+      Cache.Put(FilePathNew, 1.0, Bmp);
     finally
       Bmp.Free;
     end;
     Cache.Evict;
     Assert.IsTrue(TFile.Exists(
-      TPath.Combine(TPath.Combine(FCacheDir, 'ee'), KeyNew + '.png')),
+      TPath.Combine(TPath.Combine(FCacheDir, Copy(KeyNew, 1, 2)), KeyNew + '.png')),
       'File must survive eviction when within budget');
   finally
     Cache.Free;
@@ -425,13 +434,17 @@ procedure TTestFrameCache.TestClear;
 var
   Cache: TFrameCache;
   Bmp: TBitmap;
+  FilePath1, FilePath2: string;
 begin
+  FilePath1 := CreateDummyFile('clear1.mp4', 128);
+  FilePath2 := CreateDummyFile('clear2.mp4', 256);
+
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
     Bmp := CreateTestBitmap(32, 32);
     try
-      Cache.Put('1100000000000000000000000000aa11', Bmp);
-      Cache.Put('2200000000000000000000000000bb22', Bmp);
+      Cache.Put(FilePath1, 1.0, Bmp);
+      Cache.Put(FilePath2, 2.0, Bmp);
     finally
       Bmp.Free;
     end;
@@ -451,8 +464,12 @@ procedure TTestFrameCache.TestGetTotalSize;
 var
   Cache: TFrameCache;
   Bmp: TBitmap;
+  FilePath1, FilePath2: string;
   Size1, Size2: Int64;
 begin
+  FilePath1 := CreateDummyFile('size1.mp4', 128);
+  FilePath2 := CreateDummyFile('size2.mp4', 256);
+
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
     Assert.AreEqual(Int64(0), Cache.GetTotalSize,
@@ -460,7 +477,7 @@ begin
 
     Bmp := CreateTestBitmap(32, 32);
     try
-      Cache.Put('5500000000000000000000000000cc55', Bmp);
+      Cache.Put(FilePath1, 1.0, Bmp);
     finally
       Bmp.Free;
     end;
@@ -469,7 +486,7 @@ begin
 
     Bmp := CreateTestBitmap(64, 64);
     try
-      Cache.Put('6600000000000000000000000000dd66', Bmp);
+      Cache.Put(FilePath2, 2.0, Bmp);
     finally
       Bmp.Free;
     end;
@@ -478,6 +495,102 @@ begin
       'Size must increase after putting a second frame');
   finally
     Cache.Free;
+  end;
+end;
+
+{ TNullFrameCache tests }
+
+procedure TTestFrameCache.TestNullCacheTryGetReturnsNil;
+var
+  Cache: IFrameCache;
+  FilePath: string;
+  Bmp: TBitmap;
+begin
+  FilePath := CreateDummyFile('null_get.mp4', 128);
+  Cache := TNullFrameCache.Create;
+  Bmp := Cache.TryGet(FilePath, 5.0);
+  Assert.IsNull(Bmp, 'Null cache must always return nil');
+end;
+
+procedure TTestFrameCache.TestNullCachePutDoesNothing;
+var
+  Cache: IFrameCache;
+  FilePath: string;
+  Bmp: TBitmap;
+begin
+  { Verify Put does not raise and creates no files }
+  FilePath := CreateDummyFile('null_put.mp4', 128);
+  Cache := TNullFrameCache.Create;
+  Bmp := CreateTestBitmap(16, 16);
+  try
+    Cache.Put(FilePath, 1.0, Bmp);
+  finally
+    Bmp.Free;
+  end;
+  Assert.IsFalse(TDirectory.Exists(FCacheDir),
+    'Null cache must not create any cache directory');
+end;
+
+{ TBypassFrameCache tests }
+
+procedure TTestFrameCache.TestBypassCacheTryGetReturnsNil;
+var
+  RealCache: IFrameCache;
+  Bypass: IFrameCache;
+  FilePath: string;
+  Bmp: TBitmap;
+begin
+  FilePath := CreateDummyFile('bypass_get.mp4', 256);
+  { Use interface reference throughout to avoid mixing class/interface lifetimes }
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+
+  { Store a frame in the real cache }
+  Bmp := CreateTestBitmap(32, 32);
+  try
+    RealCache.Put(FilePath, 5.0, Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  { Verify the frame is in the real cache }
+  Bmp := RealCache.TryGet(FilePath, 5.0);
+  Assert.IsNotNull(Bmp, 'Frame must exist in real cache');
+  Bmp.Free;
+
+  { Bypass must return nil even though the frame is cached }
+  Bypass := TBypassFrameCache.Create(RealCache);
+  Bmp := Bypass.TryGet(FilePath, 5.0);
+  Assert.IsNull(Bmp, 'Bypass cache must always return nil on TryGet');
+end;
+
+procedure TTestFrameCache.TestBypassCachePutDelegates;
+var
+  RealCache: IFrameCache;
+  Bypass: IFrameCache;
+  FilePath: string;
+  Bmp: TBitmap;
+begin
+  FilePath := CreateDummyFile('bypass_put.mp4', 256);
+  { Use interface reference throughout to avoid mixing class/interface lifetimes }
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+
+  { Put via bypass }
+  Bypass := TBypassFrameCache.Create(RealCache);
+  Bmp := CreateTestBitmap(48, 48);
+  try
+    Bypass.Put(FilePath, 3.0, Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  { Verify the frame landed in the real cache }
+  Bmp := RealCache.TryGet(FilePath, 3.0);
+  try
+    Assert.IsNotNull(Bmp, 'Bypass Put must delegate to inner cache');
+    Assert.AreEqual(48, Bmp.Width, 'Width must match');
+    Assert.AreEqual(48, Bmp.Height, 'Height must match');
+  finally
+    Bmp.Free;
   end;
 end;
 

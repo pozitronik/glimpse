@@ -76,11 +76,8 @@ begin
       begin
         GFFmpegPath := Path;
         Log('EnsureFFmpeg: user browsed, path=' + Path);
-        if Assigned(GSettings) then
-        begin
-          GSettings.FFmpegExePath := Path;
-          GSettings.Save;
-        end;
+        GSettings.FFmpegExePath := Path;
+        GSettings.Save;
       end;
     fsrCancel:
       Log('EnsureFFmpeg: user cancelled');
@@ -169,10 +166,7 @@ var
   I: Integer;
   DS: AnsiString;
 begin
-  if Assigned(GSettings) then
-    Extensions := GSettings.ExtensionList.Split([',', ' '])
-  else
-    Extensions := DEF_EXTENSION_LIST.Split([',', ' ']);
+  Extensions := GSettings.ExtensionList.Split([',', ' ']);
 
   Builder := '';
   for I := 0 to High(Extensions) do
@@ -223,6 +217,7 @@ end;
 procedure ListSetDefaultParams(dps: PListDefaultParamStruct); stdcall;
 var
   ModulePath: array[0..MAX_PATH] of Char;
+  NewSettings: TPluginSettings;
 begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
@@ -236,9 +231,11 @@ begin
   Log('  PluginDir=' + GPluginDir);
   Log('  DLL HInstance=$' + IntToHex(HInstance));
 
-  FreeAndNil(GSettings);
-  GSettings := TPluginSettings.Create(GPluginDir + 'VideoThumb.ini');
-  GSettings.Load;
+  { Swap: GSettings is never nil (created at initialization with defaults) }
+  NewSettings := TPluginSettings.Create(GPluginDir + 'VideoThumb.ini');
+  NewSettings.Load;
+  GSettings.Free;
+  GSettings := NewSettings;
 
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log('  FFmpegPath=' + GFFmpegPath);
@@ -278,6 +275,7 @@ begin
 end;
 
 initialization
+  GSettings := TPluginSettings.Create('');
 
 finalization
   Log('finalization');

@@ -216,6 +216,8 @@ procedure TPluginSettings.Save;
 var
   Ini: TIniFile;
 begin
+  if FIniPath = '' then
+    Exit;
   Ini := TIniFile.Create(FIniPath);
   try
     Ini.WriteString('ffmpeg', 'Mode', FFmpegModeToStr(FFFmpegMode));
