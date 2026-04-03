@@ -1,5 +1,5 @@
-/// Plugin settings manager backed by an INI file.
-/// Handles defaults, validation, type-safe access, and persistence.
+{ Plugin settings manager backed by an INI file.
+  Handles defaults, validation, type-safe access, and persistence. }
 unit uSettings;
 
 interface
@@ -64,11 +64,11 @@ type
   public
     constructor Create(const AIniPath: string);
 
-    /// Loads all settings from the INI file. Missing or invalid values get defaults.
+    { Loads all settings from the INI file. Missing or invalid values get defaults. }
     procedure Load;
-    /// Writes all current settings to the INI file.
+    { Writes all current settings to the INI file. }
     procedure Save;
-    /// Resets all fields to default values without touching the file.
+    { Resets all fields to default values without touching the file. }
     procedure ResetDefaults;
 
     property IniPath: string read FIniPath;

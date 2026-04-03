@@ -1,4 +1,4 @@
-/// ffmpeg.exe backend: process execution, video probing, and frame extraction.
+{ ffmpeg.exe backend: process execution, video probing, and frame extraction. }
 unit uFFmpegExe;
 
 interface
@@ -23,42 +23,38 @@ type
   public
     constructor Create(const AExePath: string);
 
-    /// Probes a video file for metadata (duration, resolution, codec).
+    { Probes a video file for metadata (duration, resolution, codec). }
     function ProbeVideo(const AFileName: string): TVideoInfo;
 
-    /// Extracts a single frame at the given time offset.
-    /// Returns a new TBitmap on success, nil on failure.
-    /// Caller owns the returned bitmap.
+    { Extracts a single frame at the given time offset.
+      Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double): TBitmap;
 
-    /// Extracts N frames at the given offsets (sequential).
-    /// Returns array where nil entries indicate failed extractions.
-    /// Caller owns each non-nil bitmap.
-    function ExtractFrames(const AFileName: string;
-      const AOffsets: TFrameOffsetArray): TArray<TBitmap>;
+    { Extracts N frames at the given offsets (sequential).
+      Returns array where nil entries indicate failed extractions. Caller owns each non-nil bitmap. }
+    function ExtractFrames(const AFileName: string; const AOffsets: TFrameOffsetArray): TArray<TBitmap>;
 
     property ExePath: string read FExePath;
   end;
 
 { Parsing functions exposed for unit testing }
 
-/// Parses duration from ffmpeg stderr output.
-/// Returns seconds, or -1 if not found.
+{ Parses duration from ffmpeg stderr output. Returns seconds, or -1 if not found. }
 function ParseDuration(const AText: string): Double;
 
-/// Parses video resolution from ffmpeg stderr output.
+{ Parses video resolution from ffmpeg stderr output. }
 function ParseResolution(const AText: string; out AWidth, AHeight: Integer): Boolean;
 
-/// Parses video codec name from ffmpeg stderr output.
+{ Parses video codec name from ffmpeg stderr output. }
 function ParseVideoCodec(const AText: string): string;
 
-/// Parses version string from `ffmpeg -version` output.
-/// Expects first line like "ffmpeg version 6.1.1 ...".
-/// Returns version string (e.g. "6.1.1") or empty if not recognized.
+{ Parses version string from `ffmpeg -version` output.
+  Expects first line like "ffmpeg version 6.1.1 ...".
+  Returns version string (e.g. "6.1.1") or empty if not recognized. }
 function ParseFFmpegVersion(const AText: string): string;
 
-/// Runs `ffmpeg -version` and returns the version string.
-/// Returns empty string if the executable is not a valid ffmpeg.
+{ Runs `ffmpeg -version` and returns the version string.
+  Returns empty string if the executable is not a valid ffmpeg. }
 function ValidateFFmpeg(const AExePath: string): string;
 
 implementation
@@ -91,8 +87,8 @@ end;
 
 { Process execution }
 
-/// Runs a process with redirected stdout/stderr, captures both outputs.
-/// Returns the process exit code, or -1 on launch failure or timeout.
+{ Runs a process with redirected stdout/stderr, captures both outputs.
+  Returns the process exit code, or -1 on launch failure or timeout. }
 function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
   ATimeoutMs: DWORD = 30000): Integer;
 var

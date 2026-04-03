@@ -1,4 +1,4 @@
-/// ffmpeg-not-found dialog shown when the plugin cannot locate ffmpeg.exe.
+{ ffmpeg-not-found dialog shown when the plugin cannot locate ffmpeg.exe. }
 unit uFFmpegSetupDlg;
 
 interface
@@ -22,9 +22,9 @@ type
     property SelectedPath: string read FSelectedPath;
   end;
 
-/// Shows the ffmpeg setup dialog.
-/// Returns fsrBrowsed if user selected a valid path (written to APath).
-/// Returns fsrCancel if dismissed.
+{ Shows the ffmpeg setup dialog.
+  Returns fsrBrowsed if user selected a valid path (written to APath).
+  Returns fsrCancel if dismissed. }
 function ShowFFmpegSetupDialog(out APath: string): TFFmpegSetupResult;
 
 implementation

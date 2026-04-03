@@ -1,5 +1,5 @@
-/// Main plugin form, frame view control, and extraction worker thread.
-/// The form is parented to TC's Lister window and hosts the toolbar and frame display.
+{ Main plugin form, frame view control, and extraction worker thread.
+  The form is parented to TC's Lister window and hosts the toolbar and frame display. }
 unit uPluginForm;
 
 interface
@@ -39,8 +39,8 @@ type
     Bitmap: TBitmap; { nil = extraction error }
   end;
 
-  /// Worker thread that extracts frames sequentially via ffmpeg.exe.
-  /// Stores results in a thread-safe queue and posts notifications.
+  { Worker thread that extracts frames sequentially via ffmpeg.exe.
+    Stores results in a thread-safe queue and posts notifications. }
   TExtractionThread = class(TThread)
   private
     FFFmpegPath: string;
@@ -59,7 +59,7 @@ type
       const ACache: IFrameCache);
   end;
 
-  /// Custom control that renders frame cells in various layout modes.
+  { Custom control that renders frame cells in various layout modes. }
   TFrameView = class(TCustomControl)
   private
     FViewMode: TViewMode;
@@ -141,7 +141,7 @@ type
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
   end;
 
-  /// Plugin form created as a child of TC's Lister window.
+  { Plugin form created as a child of TC's Lister window. }
   TPluginForm = class(TForm)
   private
     FFileName: string;
@@ -248,12 +248,12 @@ begin
     else
       Rewrite(F);
     try
-      WriteLn(F, FormatDateTime('hh:nn:ss.zzz', Now)
-        + '  [tid=' + IntToStr(GetCurrentThreadId) + '] ' + AMsg);
+      WriteLn(F, Format('%s  [tid=%d] %s', [FormatDateTime('hh:nn:ss.zzz', Now), GetCurrentThreadId, AMsg]));
     finally
       CloseFile(F);
     end;
   except
+    { Logging must never crash the plugin }
   end;
 end;
 {$ENDIF}
@@ -269,9 +269,9 @@ function DefSubclassProc(hWnd: HWND; uMsg: UINT; wParam: WPARAM;
   lParam: LPARAM): LRESULT; stdcall;
   external 'comctl32.dll' name 'DefSubclassProc';
 
-/// Subclass callback on TC's Lister parent window.
-/// TC may not resize the plugin child for all resize directions;
-/// this ensures the plugin always fills the parent's client rect.
+{ Subclass callback on TC's Lister parent window.
+  TC may not resize the plugin child for all resize directions;
+  this ensures the plugin always fills the parent's client rect. }
 function ParentSubclassProc(hWnd: HWND; uMsg: UINT; wParam: WPARAM;
   lParam: LPARAM; uIdSubclass: UINT_PTR;
   dwRefData: DWORD_PTR): LRESULT; stdcall;
@@ -371,14 +371,14 @@ var
   I: Integer;
   Source: string;
 begin
-  {$IFDEF DEBUG}FormLog('Thread.Execute START frames=' + IntToStr(Length(FOffsets)));{$ENDIF}
+  {$IFDEF DEBUG}FormLog(Format('Thread.Execute START frames=%d', [Length(FOffsets)]));{$ENDIF}
   FFmpeg := TFFmpegExe.Create(FFFmpegPath);
   try
     for I := 0 to High(FOffsets) do
     begin
       if Terminated then
       begin
-        {$IFDEF DEBUG}FormLog('Thread.Execute TERMINATED at i=' + IntToStr(I));{$ENDIF}
+        {$IFDEF DEBUG}FormLog(Format('Thread.Execute TERMINATED at i=%d', [I]));{$ENDIF}
         Exit;
       end;
 
@@ -401,11 +401,10 @@ begin
 
       {$IFDEF DEBUG}
       if Bmp <> nil then
-        FormLog('Frame[' + IntToStr(I) + '] source=' + Source
-          + ' size=' + IntToStr(Bmp.Width) + 'x' + IntToStr(Bmp.Height)
-          + ' empty=' + BoolToStr(Bmp.Empty, True))
+        FormLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
+          [I, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
       else
-        FormLog('Frame[' + IntToStr(I) + '] source=' + Source + ' Bmp=NIL');
+        FormLog(Format('Frame[%d] source=%s Bmp=NIL', [I, Source]));
       {$ENDIF}
 
       if Terminated then
@@ -1393,7 +1392,7 @@ begin
   {$IFDEF DEBUG}
   GFormLogPath := ExtractFilePath(FSettings.IniPath) + 'videothumb_debug.log';
   uCache.GCacheLogPath := GFormLogPath;
-  FormLog('CreateForPlugin: file=' + AFileName + ' handle=$' + IntToHex(Handle));
+  FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
   {$ENDIF}
 
   if FSettings.CacheEnabled then
@@ -2056,7 +2055,7 @@ procedure TPluginForm.LoadFile(const AFileName: string);
 var
   FFmpeg: TFFmpegExe;
 begin
-  {$IFDEF DEBUG}FormLog('LoadFile: ' + AFileName);{$ENDIF}
+  {$IFDEF DEBUG}FormLog(Format('LoadFile: %s', [AFileName]));{$ENDIF}
   FFileName := AFileName;
   StopExtraction;
   DrainPendingFrameMessages;
@@ -2164,7 +2163,7 @@ begin
 
   {$IFDEF DEBUG}
   if Length(Snapshot) > 0 then
-    FormLog('ProcessPending: count=' + IntToStr(Length(Snapshot)));
+    FormLog(Format('ProcessPending: count=%d', [Length(Snapshot)]));
   {$ENDIF}
 
   for I := 0 to High(Snapshot) do
@@ -2172,15 +2171,15 @@ begin
     if Snapshot[I].Bitmap <> nil then
     begin
       {$IFDEF DEBUG}
-      FormLog('  SetFrame[' + IntToStr(Snapshot[I].Index) + '] bmp='
-        + IntToStr(Snapshot[I].Bitmap.Width) + 'x' + IntToStr(Snapshot[I].Bitmap.Height)
-        + ' empty=' + BoolToStr(Snapshot[I].Bitmap.Empty, True));
+      FormLog(Format('  SetFrame[%d] bmp=%dx%d empty=%s',
+        [Snapshot[I].Index, Snapshot[I].Bitmap.Width, Snapshot[I].Bitmap.Height,
+         BoolToStr(Snapshot[I].Bitmap.Empty, True)]));
       {$ENDIF}
       FFrameView.SetFrame(Snapshot[I].Index, Snapshot[I].Bitmap);
     end
     else
     begin
-      {$IFDEF DEBUG}FormLog('  SetCellError[' + IntToStr(Snapshot[I].Index) + ']');{$ENDIF}
+      {$IFDEF DEBUG}FormLog(Format('  SetCellError[%d]', [Snapshot[I].Index]));{$ENDIF}
       FFrameView.SetCellError(Snapshot[I].Index);
     end;
     Inc(FFramesLoaded);
@@ -2236,15 +2235,14 @@ end;
 
 procedure TPluginForm.WMExtractionDone(var Message: TMessage);
 begin
-  {$IFDEF DEBUG}FormLog('WMExtractionDone: framesLoaded=' + IntToStr(FFramesLoaded)
-    + ' total=' + IntToStr(Length(FOffsets)));{$ENDIF}
+  {$IFDEF DEBUG}FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FFramesLoaded, Length(FOffsets)]));{$ENDIF}
   { Safety net: process any frames that arrived after the last notification }
   ProcessPendingFrames;
   FProgressBar.Visible := False;
   FLblProgress.Visible := False;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
-  {$IFDEF DEBUG}FormLog('  hasPlaceholders=' + BoolToStr(FFrameView.HasPlaceholders, True)
-    + ' timerEnabled=' + BoolToStr(FAnimTimer.Enabled, True));{$ENDIF}
+  {$IFDEF DEBUG}FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
+    [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));{$ENDIF}
 end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);

@@ -1,6 +1,6 @@
-/// Disk cache for extracted video frames.
-/// Stores frames as PNG files in a sharded directory structure, keyed by
-/// video file metadata and frame time offset. Provides LRU eviction.
+{ Disk cache for extracted video frames.
+  Stores frames as PNG files in a sharded directory structure, keyed by
+  video file metadata and frame time offset. Provides LRU eviction. }
 unit uCache;
 
 interface
@@ -11,35 +11,35 @@ uses
   Vcl.Graphics, Vcl.Imaging.pngimage;
 
 type
-  /// Core cache contract: retrieve and store video frames by file identity
-  /// and time offset. Implementations decide whether caching actually occurs.
+  { Core cache contract: retrieve and store video frames by file identity
+    and time offset. Implementations decide whether caching actually occurs. }
   IFrameCache = interface
     ['{A7E3B2C1-4D5F-6E7A-8B9C-0D1E2F3A4B5C}']
-    /// Loads a cached frame for the given video file at the specified offset.
-    /// Returns nil on miss or if caching is not supported. Caller owns the bitmap.
+    { Loads a cached frame for the given video file at the specified offset.
+      Returns nil on miss or if caching is not supported. Caller owns the bitmap. }
     function TryGet(const AFilePath: string; ATimeOffset: Double): TBitmap;
-    /// Stores a frame bitmap for the given video file at the specified offset.
+    { Stores a frame bitmap for the given video file at the specified offset. }
     procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap);
   end;
 
-  /// Abstract base providing the IFrameCache contract for concrete implementations.
+  { Abstract base providing the IFrameCache contract for concrete implementations. }
   TFrameCacheBase = class(TInterfacedObject, IFrameCache)
   public
     function TryGet(const AFilePath: string; ATimeOffset: Double): TBitmap; virtual; abstract;
     procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap); virtual; abstract;
   end;
 
-  /// No-op cache: always misses, never stores. Used when caching is disabled
-  /// so callers don't need nil checks.
+  { No-op cache: always misses, never stores. Used when caching is disabled
+    so callers don't need nil checks. }
   TNullFrameCache = class(TFrameCacheBase)
   public
     function TryGet(const AFilePath: string; ATimeOffset: Double): TBitmap; override;
     procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap); override;
   end;
 
-  /// Decorator that skips cache reads but delegates writes to the inner cache.
-  /// Used for forced re-extraction (Refresh) where we want fresh frames
-  /// but still want to update the cache with the new results.
+  { Decorator that skips cache reads but delegates writes to the inner cache.
+    Used for forced re-extraction (Refresh) where we want fresh frames
+    but still want to update the cache with the new results. }
   TBypassFrameCache = class(TFrameCacheBase)
   strict private
     FInner: IFrameCache;
@@ -49,45 +49,28 @@ type
     procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap); override;
   end;
 
-  /// Real disk cache with sharded PNG storage and LRU eviction.
+  { Real disk cache with sharded PNG storage and LRU eviction. }
   TFrameCache = class(TFrameCacheBase)
   strict private
     FCacheDir: string;
     FMaxSizeBytes: Int64;
 
-    /// Builds the canonical string that uniquely identifies a cached frame.
-    class function BuildKeyString(const AFilePath: string;
-      AFileSize: Int64; AFileTime: TDateTime;
-      ATimeOffset: Double): string; static;
-
-    /// Hashes a key string to a 32-char lowercase hex MD5 digest.
+    class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double): string; static;
     class function HashKey(const AKeyString: string): string; static;
-
-    /// Maps a hash key to its full file path in the sharded directory.
     function KeyToPath(const AKey: string): string;
 
   public
     constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
 
-    /// Generates a cache key for a frame by reading file metadata from disk.
-    /// Returns empty string if the file cannot be stat'd.
-    class function FrameKey(const AFilePath: string;
-      ATimeOffset: Double): string; static;
+    { Generates a cache key for a frame by reading file metadata from disk.
+      Returns empty string if the file cannot be stat'd. }
+    class function FrameKey(const AFilePath: string; ATimeOffset: Double): string; static;
 
-    /// Loads a cached frame for the given video file at the specified offset.
-    /// Returns nil on miss or any error. Caller owns the returned bitmap.
     function TryGet(const AFilePath: string; ATimeOffset: Double): TBitmap; override;
-
-    /// Stores a frame bitmap as PNG in the cache. Silent on failure.
     procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap); override;
 
-    /// Deletes all cached files and recreates the root directory.
     procedure Clear;
-
-    /// Evicts oldest-accessed files until total size <= MaxSizeBytes.
     procedure Evict;
-
-    /// Returns total size of all cached PNG files in bytes.
     function GetTotalSize: Int64;
 
     property CacheDir: string read FCacheDir;
@@ -125,6 +108,7 @@ begin
       CloseFile(F);
     end;
   except
+    { Logging must never crash the plugin }
   end;
 end;
 {$ENDIF}
@@ -169,7 +153,7 @@ begin
   if not TDirectory.Exists(FCacheDir) then
     TDirectory.CreateDirectory(FCacheDir);
   {$IFDEF DEBUG}
-  CacheLog('Create: dir=' + ACacheDir + ' maxMB=' + IntToStr(AMaxSizeMB));
+  CacheLog(Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
   {$ENDIF}
 end;
 
@@ -189,17 +173,13 @@ end;
 
 function TFrameCache.KeyToPath(const AKey: string): string;
 begin
-  Result := TPath.Combine(
-    TPath.Combine(FCacheDir, Copy(AKey, 1, 2)),
-    AKey + '.png');
+  Result := TPath.Combine(TPath.Combine(FCacheDir, Copy(AKey, 1, 2)), AKey + '.png');
 end;
 
-class function TFrameCache.FrameKey(const AFilePath: string;
-  ATimeOffset: Double): string;
+class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double): string;
 var
   FileSize: Int64;
   FileTime: TDateTime;
-  KeyStr: string;
 begin
   Result := '';
   try
@@ -207,10 +187,9 @@ begin
       Exit;
     FileSize := TFile.GetSize(AFilePath);
     FileTime := TFile.GetLastWriteTime(AFilePath);
-    KeyStr := BuildKeyString(AFilePath, FileSize, FileTime, ATimeOffset);
-    Result := HashKey(KeyStr);
+    Result := HashKey(BuildKeyString(AFilePath, FileSize, FileTime, ATimeOffset));
   except
-    { File inaccessible -- return empty, caller treats as cache miss }
+    { File inaccessible - return empty, caller treats as cache miss }
   end;
 end;
 
@@ -229,12 +208,12 @@ begin
     Path := KeyToPath(Key);
     if not TFile.Exists(Path) then
     begin
-      {$IFDEF DEBUG}CacheLog('TryGet MISS (no file) key=' + Key);{$ENDIF}
+      {$IFDEF DEBUG}CacheLog(Format('TryGet MISS (no file) key=%s', [Key]));{$ENDIF}
       Exit;
     end;
 
     Data := TFile.ReadAllBytes(Path);
-    {$IFDEF DEBUG}CacheLog('TryGet key=' + Key + ' fileBytes=' + IntToStr(Length(Data)));{$ENDIF}
+    {$IFDEF DEBUG}CacheLog(Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));{$ENDIF}
     Stream := TMemoryStream.Create;
     try
       Stream.WriteBuffer(Data[0], Length(Data));
@@ -242,13 +221,12 @@ begin
       Png := TPngImage.Create;
       try
         Png.LoadFromStream(Stream);
-        {$IFDEF DEBUG}CacheLog('  PNG loaded: ' + IntToStr(Png.Width) + 'x' + IntToStr(Png.Height));{$ENDIF}
+        {$IFDEF DEBUG}CacheLog(Format('  PNG loaded: %dx%d', [Png.Width, Png.Height]));{$ENDIF}
         Result := TBitmap.Create;
         Result.Assign(Png);
         Result.PixelFormat := pf24bit; { Force DIB for thread-safe rendering }
-        {$IFDEF DEBUG}CacheLog('  BMP assigned: ' + IntToStr(Result.Width) + 'x' + IntToStr(Result.Height)
-          + ' empty=' + BoolToStr(Result.Empty, True)
-          + ' pf=' + IntToStr(Ord(Result.PixelFormat)));{$ENDIF}
+        {$IFDEF DEBUG}CacheLog(Format('  BMP assigned: %dx%d empty=%s pf=%d',
+          [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));{$ENDIF}
       finally
         Png.Free;
       end;
@@ -258,7 +236,7 @@ begin
   except
     on E: Exception do
     begin
-      {$IFDEF DEBUG}CacheLog('TryGet EXCEPTION key=' + Key + ' ' + E.ClassName + ': ' + E.Message);{$ENDIF}
+      {$IFDEF DEBUG}CacheLog(Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
       FreeAndNil(Result);
     end;
   end;
@@ -269,6 +247,7 @@ begin
   try
     TFile.SetLastAccessTime(KeyToPath(Key), Now);
   except
+    { Access time is cosmetic for LRU; failure is harmless }
   end;
 end;
 
@@ -282,7 +261,7 @@ begin
   Key := FrameKey(AFilePath, ATimeOffset);
   if Key = '' then
     Exit;
-  {$IFDEF DEBUG}CacheLog('Put key=' + Key + ' bmp=' + IntToStr(ABitmap.Width) + 'x' + IntToStr(ABitmap.Height));{$ENDIF}
+  {$IFDEF DEBUG}CacheLog(Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));{$ENDIF}
   try
     FinalPath := KeyToPath(Key);
     SubDir := ExtractFilePath(FinalPath);
@@ -296,7 +275,7 @@ begin
       Png.Assign(ABitmap);
       Png.CompressionLevel := 1; { Fast compression for cache writes }
       Png.SaveToFile(TempPath);
-      {$IFDEF DEBUG}CacheLog('  saved tmp=' + TempPath + ' pngSize=' + IntToStr(TFile.GetSize(TempPath)));{$ENDIF}
+      {$IFDEF DEBUG}CacheLog(Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));{$ENDIF}
     finally
       Png.Free;
     end;
@@ -305,15 +284,16 @@ begin
     if TFile.Exists(FinalPath) then
       TFile.Delete(FinalPath);
     TFile.Move(TempPath, FinalPath);
-    {$IFDEF DEBUG}CacheLog('  moved to ' + FinalPath);{$ENDIF}
+    {$IFDEF DEBUG}CacheLog(Format('  moved to %s', [FinalPath]));{$ENDIF}
   except
     on E: Exception do
     begin
-      {$IFDEF DEBUG}CacheLog('Put EXCEPTION key=' + Key + ' ' + E.ClassName + ': ' + E.Message);{$ENDIF}
+      {$IFDEF DEBUG}CacheLog(Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
       try
         if TFile.Exists(TempPath) then
           TFile.Delete(TempPath);
       except
+        { Best-effort temp file cleanup }
       end;
     end;
   end;
@@ -326,6 +306,7 @@ begin
       TDirectory.Delete(FCacheDir, True);
     TDirectory.CreateDirectory(FCacheDir);
   except
+    { Best-effort clear; directory may be locked }
   end;
 end;
 
@@ -351,7 +332,7 @@ begin
   try
     Files := TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories);
   except
-    Exit;
+    Exit; { Directory inaccessible; nothing to evict }
   end;
 
   Infos := TList<TCacheFileInfo>.Create;
@@ -402,9 +383,11 @@ begin
           if Length(TDirectory.GetFiles(Dir)) = 0 then
             TDirectory.Delete(Dir, False);
         except
+          { Skip dirs that can't be removed }
         end;
       end;
     except
+      { Subdirectory enumeration failed; not critical }
     end;
   finally
     Infos.Free;
@@ -426,9 +409,11 @@ begin
       try
         Result := Result + TFile.GetSize(FileName);
       except
+        { Skip files we cannot stat }
       end;
     end;
   except
+    { Directory enumeration failed; return partial result }
   end;
 end;
 

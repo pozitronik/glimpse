@@ -1,5 +1,5 @@
-/// Total Commander WLX (Lister) plugin API types and constants.
-/// Reference: TC Lister Plugin Interface documentation.
+{ Total Commander WLX (Lister) plugin API types and constants.
+  Reference: TC Lister Plugin Interface documentation. }
 unit uWlxAPI;
 
 interface

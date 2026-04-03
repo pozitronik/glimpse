@@ -1,13 +1,13 @@
-/// Locates ffmpeg.exe on the system using a defined search order.
+{ Locates ffmpeg.exe on the system using a defined search order. }
 unit uFFmpegLocator;
 
 interface
 
-/// Searches for ffmpeg.exe in order:
-///   1. Plugin directory (next to the DLL)
-///   2. Configured path from INI
-///   3. System PATH
-/// Returns the full validated path, or empty string if not found.
+{ Searches for ffmpeg.exe in order:
+    1. Plugin directory (next to the DLL)
+    2. Configured path from INI
+    3. System PATH
+  Returns the full validated path, or empty string if not found. }
 function FindFFmpegExe(const APluginDir, AConfiguredPath: string): string;
 
 implementation

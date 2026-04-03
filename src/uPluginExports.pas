@@ -1,5 +1,5 @@
-/// WLX plugin API exported functions.
-/// These are called by Total Commander to interact with the plugin.
+{ WLX plugin API exported functions.
+  These are called by Total Commander to interact with the plugin. }
 unit uPluginExports;
 
 interface
@@ -16,10 +16,8 @@ procedure ListGetDetectString(DetectString: PAnsiChar; MaxLen: Integer); stdcall
 function ListSearchText(ListWin: HWND; SearchString: PAnsiChar; SearchParameter: Integer): Integer; stdcall;
 function ListSendCommand(ListWin: HWND; Command, Parameter: Integer): Integer; stdcall;
 procedure ListSetDefaultParams(dps: PListDefaultParamStruct); stdcall;
-function ListGetPreviewBitmap(FileToLoad: PAnsiChar; Width, Height: Integer;
-  ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
-function ListGetPreviewBitmapW(FileToLoad: PWideChar; Width, Height: Integer;
-  ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
+function ListGetPreviewBitmap(FileToLoad: PAnsiChar; Width, Height: Integer; ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
+function ListGetPreviewBitmapW(FileToLoad: PWideChar; Width, Height: Integer; ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
 
 implementation
 
@@ -59,7 +57,7 @@ begin
   {$ENDIF}
 end;
 
-/// Ensures ffmpeg is available; shows setup dialog if needed.
+{ Ensures ffmpeg is available; shows setup dialog if needed. }
 procedure EnsureFFmpeg;
 var
   Path: string;
@@ -75,7 +73,7 @@ begin
     fsrBrowsed:
       begin
         GFFmpegPath := Path;
-        Log('EnsureFFmpeg: user browsed, path=' + Path);
+        Log(Format('EnsureFFmpeg: user browsed, path=%s', [Path]));
         GSettings.FFmpegExePath := Path;
         GSettings.Save;
       end;
@@ -84,28 +82,26 @@ begin
   end;
 end;
 
-/// Internal handler shared by ListLoad and ListLoadW.
+{ Internal handler shared by ListLoad and ListLoadW. }
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
 var
   Form: TPluginForm;
 begin
   Result := 0;
-  Log('DoListLoad: ParentWin=$' + IntToHex(ParentWin) +
-      ' File=' + AFileName + ' Flags=' + IntToStr(ShowFlags));
+  Log(Format('DoListLoad: ParentWin=$%s File=%s Flags=%d', [IntToHex(ParentWin), AFileName, ShowFlags]));
   try
     EnsureFFmpeg;
-    Log('DoListLoad: ffmpegPath=' + GFFmpegPath);
+    Log(Format('DoListLoad: ffmpegPath=%s', [GFFmpegPath]));
     Form := TPluginForm.CreateForPlugin(ParentWin, AFileName, GSettings, GFFmpegPath);
     Result := Form.Handle;
-    Log('DoListLoad: Form created, Handle=$' + IntToHex(Result) +
-        ' IsWindow=' + BoolToStr(IsWindow(Result), True) +
-        ' Visible=' + BoolToStr(IsWindowVisible(Result), True) +
-        ' Parent=$' + IntToHex(GetParent(Result)));
+    Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s',
+      [IntToHex(Result), BoolToStr(IsWindow(Result), True),
+       BoolToStr(IsWindowVisible(Result), True), IntToHex(GetParent(Result))]));
   except
     on E: Exception do
     begin
-      Log('DoListLoad: EXCEPTION ' + E.ClassName + ': ' + E.Message);
-      MessageBox(ParentWin, PChar('VideoThumb: ' + E.Message),
+      Log(Format('DoListLoad: EXCEPTION %s: %s', [E.ClassName, E.Message]));
+      MessageBox(ParentWin, PChar(Format('VideoThumb: %s', [E.Message])),
         'VideoThumb', MB_OK or MB_ICONERROR);
     end;
   end;
@@ -123,12 +119,12 @@ begin
   Result := DoListLoad(ParentWin, string(FileToLoad), ShowFlags);
 end;
 
-/// Reuses an existing plugin window for a new file (smoother navigation).
+{ Reuses an existing plugin window for a new file (smoother navigation). }
 function DoListLoadNext(ParentWin: HWND; ListWin: HWND; const AFileName: string; ShowFlags: Integer): Integer;
 var
   Ctrl: TWinControl;
 begin
-  Log('DoListLoadNext: ListWin=$' + IntToHex(ListWin) + ' File=' + AFileName);
+  Log(Format('DoListLoadNext: ListWin=$%s File=%s', [IntToHex(ListWin), AFileName]));
   Ctrl := FindControl(ListWin);
   if Ctrl is TPluginForm then
   begin
@@ -153,7 +149,7 @@ procedure ListCloseWindow(ListWin: HWND); stdcall;
 var
   Ctrl: TWinControl;
 begin
-  Log('ListCloseWindow: $' + IntToHex(ListWin));
+  Log(Format('ListCloseWindow: $%s', [IntToHex(ListWin)]));
   Ctrl := FindControl(ListWin);
   if Ctrl is TPluginForm then
     Ctrl.Free;
@@ -185,9 +181,7 @@ begin
   if MaxLen > 0 then
     System.AnsiStrings.StrLCopy(DetectString, PAnsiChar(DS), MaxLen - 1);
 
-  Log('ListGetDetectString: MaxLen=' + IntToStr(MaxLen) +
-      ' len=' + IntToStr(Length(DS)) +
-      ' str=' + string(DS));
+  Log(Format('ListGetDetectString: MaxLen=%d len=%d str=%s', [MaxLen, Length(DS), string(DS)]));
 end;
 
 function ListSearchText(ListWin: HWND; SearchString: PAnsiChar; SearchParameter: Integer): Integer; stdcall;
@@ -228,8 +222,8 @@ begin
     DeleteFile(GLogPath);
 
   Log('ListSetDefaultParams');
-  Log('  PluginDir=' + GPluginDir);
-  Log('  DLL HInstance=$' + IntToHex(HInstance));
+  Log(Format('  PluginDir=%s', [GPluginDir]));
+  Log(Format('  DLL HInstance=$%s', [IntToHex(HInstance)]));
 
   { Swap: GSettings is never nil (created at initialization with defaults) }
   NewSettings := TPluginSettings.Create(GPluginDir + 'VideoThumb.ini');
@@ -238,7 +232,7 @@ begin
   GSettings := NewSettings;
 
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
-  Log('  FFmpegPath=' + GFFmpegPath);
+  Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
 
   { Run cache eviction once per session }
   if GSettings.CacheEnabled then
@@ -252,24 +246,22 @@ begin
     finally
       Free;
     end;
-    Log('  CacheDir=' + CacheDir);
+    Log(Format('  CacheDir=%s', [CacheDir]));
   end;
 end;
 
-/// Returns a preview bitmap for TC thumbnail view.
+{ Returns a preview bitmap for TC thumbnail view. }
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 begin
   Result := 0;
 end;
 
-function ListGetPreviewBitmap(FileToLoad: PAnsiChar; Width, Height: Integer;
-  ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
+function ListGetPreviewBitmap(FileToLoad: PAnsiChar; Width, Height: Integer; ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
 begin
   Result := DoGetPreviewBitmap(string(AnsiString(FileToLoad)), Width, Height);
 end;
 
-function ListGetPreviewBitmapW(FileToLoad: PWideChar; Width, Height: Integer;
-  ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
+function ListGetPreviewBitmapW(FileToLoad: PWideChar; Width, Height: Integer; ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
 begin
   Result := DoGetPreviewBitmap(string(FileToLoad), Width, Height);
 end;

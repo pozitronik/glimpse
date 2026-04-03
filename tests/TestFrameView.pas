@@ -1473,7 +1473,7 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(2, MakeOffsets(2));
-    { SetFrame takes ownership -- out-of-range frees the bitmap }
+    { SetFrame takes ownership; out-of-range frees the bitmap }
     Bmp := TBitmap.Create;
     Bmp.SetSize(10, 10);
     V.SetFrame(5, Bmp);

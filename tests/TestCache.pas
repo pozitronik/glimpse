@@ -13,13 +13,13 @@ type
     FTempDir: string;
     FCacheDir: string;
 
-    /// Creates a dummy file with the specified size and returns its path.
+    { Creates a dummy file with the specified size and returns its path. }
     function CreateDummyFile(const AName: string; ASize: Integer): string;
 
-    /// Creates a small test bitmap of the given dimensions.
+    { Creates a small test bitmap of the given dimensions. }
     function CreateTestBitmap(AWidth, AHeight: Integer): TBitmap;
 
-    /// Sets the last write time of a file (for key generation tests).
+    { Sets the last write time of a file (for key generation tests). }
     procedure SetFileWriteTime(const APath: string; ATime: TDateTime);
   public
     [Setup]
@@ -126,7 +126,7 @@ begin
   TFile.SetLastWriteTime(APath, ATime);
 end;
 
-{ Key generation tests -- these test the static FrameKey method directly }
+{ Key generation tests: these test the static FrameKey method directly }
 
 procedure TTestFrameCache.TestKeyDeterministic;
 var

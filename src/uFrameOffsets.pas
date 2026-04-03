@@ -1,5 +1,5 @@
-/// Frame offset calculator for uniform time distribution.
-/// Pure computation: no I/O, no dependencies on UI or ffmpeg.
+{ Frame offset calculator for uniform time distribution.
+  Pure computation: no I/O, no dependencies on UI or ffmpeg. }
 unit uFrameOffsets;
 
 interface
@@ -12,23 +12,20 @@ type
 
   TFrameOffsetArray = array of TFrameOffset;
 
-/// Calculates evenly-spaced frame offsets across a video's duration.
-///
-/// Formula: offset_i = EffStart + EffDuration * (2i - 1) / (2N)
-/// where EffStart and EffDuration account for edge guard skipping.
-///
-/// @param ADuration Video duration in seconds (must be > 0)
-/// @param AFrameCount Number of frames to extract (must be >= 1)
-/// @param ASkipEdgesPercent Percentage of video to skip at start and end (0 = disabled, clamped to 0..49)
-/// @return Array of frame offsets with 1-based indices
-/// @raises EArgumentException if ADuration <= 0 or AFrameCount < 1
-function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer;
-  ASkipEdgesPercent: Integer = 0): TFrameOffsetArray;
+{ Calculates evenly-spaced frame offsets across a video's duration.
+  Formula: offset_i = EffStart + EffDuration * (2i - 1) / (2N)
+  where EffStart and EffDuration account for edge guard skipping.
+  @param ADuration Video duration in seconds (must be > 0)
+  @param AFrameCount Number of frames to extract (must be >= 1)
+  @param ASkipEdgesPercent Percentage of video to skip at start and end (0 = disabled, clamped to 0..49)
+  @return Array of frame offsets with 1-based indices
+  @raises EArgumentException if ADuration <= 0 or AFrameCount < 1 }
+function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdgesPercent: Integer = 0): TFrameOffsetArray;
 
-/// Formats a time in seconds as HH:MM:SS.mmm for display.
+{ Formats a time in seconds as HH:MM:SS.mmm for display. }
 function FormatTimecode(ASeconds: Double): string;
 
-/// Formats a time in seconds as HH-MM-SS.mmm for use in filenames.
+{ Formats a time in seconds as HH-MM-SS.mmm for use in filenames. }
 function FormatTimecodeForFilename(ASeconds: Double): string;
 
 implementation
@@ -36,8 +33,7 @@ implementation
 uses
   System.SysUtils, System.Math;
 
-function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer;
-  ASkipEdgesPercent: Integer): TFrameOffsetArray;
+function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdgesPercent: Integer): TFrameOffsetArray;
 var
   EffStart, EffEnd, EffDuration: Double;
   I: Integer;
