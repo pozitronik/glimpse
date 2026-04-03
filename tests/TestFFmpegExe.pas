@@ -88,6 +88,7 @@ type
     [Test] procedure TestParseAudioChannelsUnknownLayout;
     [Test] procedure TestParseNoAudioStream;
     [Test] procedure TestParseVideoBitrateNoVideoStream;
+    [Test] procedure TestParseResolutionAtEndOfString;
   end;
 
   [TestFixture]
@@ -541,6 +542,17 @@ end;
 procedure TTestFFmpegParsing.TestParseVideoBitrateNoVideoStream;
 begin
   Assert.AreEqual(0, ParseVideoBitrate('Stream #0:0: Audio: aac, 44100 Hz'));
+end;
+
+procedure TTestFFmpegParsing.TestParseResolutionAtEndOfString;
+var
+  W, H: Integer;
+begin
+  { Resolution pattern at the very end of the string, no trailing characters }
+  Assert.IsTrue(ParseResolution('Stream #0:0: Video: h264, 1920x1080', W, H),
+    'Should parse resolution at end of string');
+  Assert.AreEqual(1920, W);
+  Assert.AreEqual(1080, H);
 end;
 
 { TTestFFmpegLocator }

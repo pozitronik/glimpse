@@ -56,12 +56,18 @@ type
     procedure TestOffsetsEvenlySpaced;
     [Test]
     procedure TestMaxEdgeGuardMinimalRange;
+    [Test]
+    procedure TestNaNDurationRaises;
+    [Test]
+    procedure TestInfinityDurationRaises;
+    [Test]
+    procedure TestNegativeInfinityDurationRaises;
   end;
 
 implementation
 
 uses
-  System.SysUtils, uFrameOffsets;
+  System.SysUtils, System.Math, uFrameOffsets;
 
 { Offset tests }
 
@@ -299,6 +305,27 @@ begin
   { Offsets should still be ascending }
   Assert.IsTrue(Offsets[0].TimeOffset < Offsets[1].TimeOffset, 'Must be ascending');
   Assert.IsTrue(Offsets[1].TimeOffset < Offsets[2].TimeOffset, 'Must be ascending');
+end;
+
+procedure TTestFrameOffsets.TestNaNDurationRaises;
+begin
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(NaN, 4, 0); end,
+    EArgumentException, 'NaN duration must raise');
+end;
+
+procedure TTestFrameOffsets.TestInfinityDurationRaises;
+begin
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(Infinity, 4, 0); end,
+    EArgumentException, 'Infinity duration must raise');
+end;
+
+procedure TTestFrameOffsets.TestNegativeInfinityDurationRaises;
+begin
+  Assert.WillRaise(
+    procedure begin CalculateFrameOffsets(NegInfinity, 4, 0); end,
+    EArgumentException, 'NegInfinity duration must raise');
 end;
 
 initialization
