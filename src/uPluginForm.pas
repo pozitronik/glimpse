@@ -166,6 +166,7 @@ type
     FContextMenu: TPopupMenu;
     FContextCellIndex: Integer;
     FBtnTimecode: TSpeedButton;
+    FToolbarButtons: array of TButton;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
     { Content }
@@ -196,6 +197,8 @@ type
     procedure UpdateFrameViewSize;
     procedure UpdateViewModeButtons;
     procedure UpdateTimecodeButton;
+    procedure UpdateToolbarButtons;
+    procedure OnToolbarButtonClick(Sender: TObject);
     procedure ActivateMode(AMode: TViewMode);
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
@@ -346,6 +349,17 @@ const
 
   MODE_CAPTIONS: array[TViewMode] of string = (
     'Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single'
+  );
+
+  { Toolbar action buttons (excluding selection-dependent commands) }
+  TB_ACTIONS: array[0..6] of record Caption: string; Tag: Integer end = (
+    (Caption: 'Save';     Tag: CM_SAVE_FRAME),
+    (Caption: 'Save All'; Tag: CM_SAVE_ALL),
+    (Caption: 'Combined'; Tag: CM_SAVE_COMBINED),
+    (Caption: 'Copy';     Tag: CM_COPY_FRAME),
+    (Caption: 'Copy All'; Tag: CM_COPY_ALL),
+    (Caption: 'Refresh';  Tag: CM_REFRESH),
+    (Caption: 'Settings'; Tag: CM_SETTINGS)
   );
 
   { Per-mode sizing submode labels }
@@ -1481,9 +1495,10 @@ const
   SPLIT_ARROW_W = 20; { Extra width for split button dropdown arrow }
   PB_H     = 16;  { Progress bar height }
 var
-  X, CY, CtrlH, BW: Integer;
+  X, CY, CtrlH, BW, I: Integer;
   VM: TViewMode;
   TabIdx: Integer;
+  Btn: TButton;
 begin
   FToolbar := TPanel.Create(Self);
   FToolbar.Parent := Self;
@@ -1565,6 +1580,24 @@ begin
   FBtnTimecode.OnClick := OnTimecodeButtonClick;
   Inc(X, BW + CTRL_GAP);
 
+  { Action buttons matching context menu (except selection-dependent commands) }
+  SetLength(FToolbarButtons, 0);
+  for I := 0 to High(TB_ACTIONS) do
+  begin
+    Btn := TButton.Create(FToolbar);
+    Btn.Parent := FToolbar;
+    BW := Canvas.TextWidth(TB_ACTIONS[I].Caption) + BTN_PAD;
+    Btn.SetBounds(X, CY, BW, CtrlH);
+    Btn.Caption := TB_ACTIONS[I].Caption;
+    Btn.Tag := TB_ACTIONS[I].Tag;
+    Btn.Enabled := False;
+    Btn.OnClick := OnToolbarButtonClick;
+    Inc(X, BW + BTN_GAP);
+    SetLength(FToolbarButtons, Length(FToolbarButtons) + 1);
+    FToolbarButtons[High(FToolbarButtons)] := Btn;
+  end;
+  Inc(X, CTRL_GAP - BTN_GAP);
+
   FProgressBar := TProgressBar.Create(FToolbar);
   FProgressBar.Parent := FToolbar;
   FProgressBar.SetBounds(X, CY + (CtrlH - PB_H) div 2, 120, PB_H);
@@ -1573,8 +1606,10 @@ begin
   FLblProgress := TLabel.Create(FToolbar);
   FLblProgress.Parent := FToolbar;
   FLblProgress.AutoSize := True;
+  FLblProgress.Caption := 'Extracting...'; { set text for correct height measurement }
   FLblProgress.Left := X + 120 + 4;
   FLblProgress.Top := CY + (CtrlH - FLblProgress.Height) div 2;
+  FLblProgress.Caption := '';
   FLblProgress.Visible := False;
 end;
 
@@ -2086,6 +2121,7 @@ var
 begin
   StopExtraction;
   FFramesLoaded := 0;
+  UpdateToolbarButtons;
 
   { Show progress in marquee mode until first frame arrives }
   FProgressBar.Style := pbstMarquee;
@@ -2206,6 +2242,7 @@ end;
 
 procedure TPluginForm.UpdateProgress;
 begin
+  UpdateToolbarButtons;
   if FFramesLoaded >= Length(FOffsets) then
   begin
     FProgressBar.Visible := False;
@@ -2475,6 +2512,32 @@ begin
   UpdateFrameViewSize;
   FSettings.ShowTimecode := FFrameView.ShowTimecode;
   FSettings.Save;
+end;
+
+procedure TPluginForm.OnToolbarButtonClick(Sender: TObject);
+begin
+  case TButton(Sender).Tag of
+    CM_SAVE_FRAME:    SaveSingleFrame;
+    CM_SAVE_COMBINED: SaveCombinedFrame;
+    CM_SAVE_ALL:      SaveAllFrames;
+    CM_COPY_FRAME:    CopyFrameToClipboard;
+    CM_COPY_ALL:      CopyAllToClipboard;
+    CM_REFRESH:       RefreshExtraction;
+    CM_SETTINGS:      ShowSettings;
+  end;
+end;
+
+procedure TPluginForm.UpdateToolbarButtons;
+var
+  I: Integer;
+  HasFrames: Boolean;
+begin
+  HasFrames := FFramesLoaded > 0;
+  for I := 0 to High(FToolbarButtons) do
+    case FToolbarButtons[I].Tag of
+      CM_SETTINGS: FToolbarButtons[I].Enabled := True;
+      else         FToolbarButtons[I].Enabled := HasFrames;
+    end;
 end;
 
 procedure TPluginForm.OnModeButtonClick(Sender: TObject);
