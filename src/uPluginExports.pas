@@ -29,30 +29,10 @@ var
   GSettings: TPluginSettings;
   GPluginDir: string;
   GFFmpegPath: string;
-  GLogPath: string;
-
 procedure Log(const AMsg: string);
-{$IFDEF DEBUG}
-var
-  F: TextFile;
-{$ENDIF}
 begin
   {$IFDEF DEBUG}
-  if GLogPath = '' then Exit;
-  try
-    AssignFile(F, GLogPath);
-    if FileExists(GLogPath) then
-      Append(F)
-    else
-      Rewrite(F);
-    try
-      WriteLn(F, FormatDateTime('hh:nn:ss.zzz', Now) + '  ' + AMsg);
-    finally
-      CloseFile(F);
-    end;
-  except
-    { Logging must never crash the plugin }
-  end;
+  DebugLog('Plugin', AMsg);
   {$ENDIF}
 end;
 
@@ -195,11 +175,12 @@ var
 begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
-  GLogPath := GPluginDir + 'videothumb_debug.log';
-
+  {$IFDEF DEBUG}
+  uCache.GDebugLogPath := GPluginDir + 'videothumb_debug.log';
   { Start fresh log each session }
-  if FileExists(GLogPath) then
-    DeleteFile(GLogPath);
+  if FileExists(uCache.GDebugLogPath) then
+    DeleteFile(uCache.GDebugLogPath);
+  {$ENDIF}
 
   Log('ListSetDefaultParams');
   Log(Format('  PluginDir=%s', [GPluginDir]));
