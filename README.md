@@ -1,6 +1,8 @@
 # Glimpse
 
-A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced video frames when previewing a video file with F3 or Ctrl+Q. Provides an instant visual summary of a video's content without opening a media player.
+![Plugin screenshot](/img/glimpse.png)
+
+A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced video frames when previewing a video file. Provides an instant visual summary of a video's content without opening a media player.
 
 ## Features
 
@@ -22,41 +24,40 @@ Open the Glimpse `.zip` archive in Total Commander. TC will detect `pluginst.inf
 ### Manual
 
 1. Extract `Glimpse.wlx` and `Glimpse.wlx64` to a directory of your choice
-2. In Total Commander: Configuration -> Options -> Plugins -> Lister (WLX) -> Add
+2. In Total Commander: Configuration → Options → Plugins → Lister (WLX) → Add
 3. Browse to `Glimpse.wlx64` (64-bit TC) or `Glimpse.wlx` (32-bit TC)
 
 ## Requirements
 
 - Total Commander 10.x or later
 - `ffmpeg.exe` in plugin directory, configured path, or system PATH
-- If FFmpeg is not found, the plugin will prompt to browse for it
 
 ## Supported Formats
 
-MP4, MKV, AVI, MOV, WMV, WEBM, FLV, TS, M2TS, M4V, 3GP, OGV, MPG, MPEG, VOB, ASF, RM, RMVB, F4V
+MP4, MKV, AVI, MOV, WMV, WEBM, FLV, TS, M2TS, M4V, 3GP, OGV, MPG, MPEG, VOB, ASF, RM, RMVB, F4V - mostly anything that `ffmpeg` supports.
 
 Additional extensions can be configured in Settings (F2).
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| Ctrl+1..5 | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
-| +/- | Zoom in / out |
-| 0 | Reset zoom to 1x |
-| Left/Right | Previous / next frame (single mode) |
-| Ctrl+Up/Down | Increase / decrease frame count |
-| Ctrl+A | Select all |
-| Ctrl+Click | Toggle frame selection |
-| Ctrl+S | Save focused frame |
-| Ctrl+Alt+S | Save all frames |
-| Ctrl+Shift+S | Save combined image |
-| Ctrl+C | Copy focused frame to clipboard |
-| Ctrl+Shift+C | Copy combined image to clipboard |
-| R | Refresh (re-extract all frames) |
-| F2 | Settings |
-| F3 | Toggle status bar |
-| F4 | Toggle toolbar |
+| Key          | Action                                                                                            |
+|--------------|---------------------------------------------------------------------------------------------------|
+| Ctrl+1..5    | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
+| +/-          | Zoom in / out                                                                                     |
+| 0            | Reset zoom to 1x                                                                                  |
+| Left/Right   | Previous / next frame (single mode)                                                               |
+| Ctrl+Up/Down | Increase / decrease frame count                                                                   |
+| Ctrl+A       | Select all                                                                                        |
+| Ctrl+Click   | Toggle frame selection                                                                            |
+| Ctrl+S       | Save focused frame                                                                                |
+| Ctrl+Alt+S   | Save all frames                                                                                   |
+| Ctrl+Shift+S | Save combined image                                                                               |
+| Ctrl+C       | Copy focused frame to clipboard                                                                   |
+| Ctrl+Shift+C | Copy combined image to clipboard                                                                  |
+| R            | Refresh (re-extract all frames)                                                                   |
+| F2           | Settings                                                                                          |
+| F3           | Toggle status bar                                                                                 |
+| F4           | Toggle toolbar                                                                                    |
 
 ## Configuration
 
