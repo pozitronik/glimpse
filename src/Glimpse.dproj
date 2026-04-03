@@ -3,13 +3,13 @@
         <ProjectGuid>{B7E4A2F1-3C8D-4E5A-9F6B-1D2E3F4A5B6C}</ProjectGuid>
         <ProjectVersion>20.3</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
-        <MainSource>VideoThumb.dpr</MainSource>
+        <MainSource>Glimpse.dpr</MainSource>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Library</AppType>
-        <ProjectName Condition="'$(ProjectName)'==''">VideoThumb</ProjectName>
+        <ProjectName Condition="'$(ProjectName)'==''">Glimpse</ProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -33,7 +33,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <GenDll>true</GenDll>
-        <SanitizedProjectName>VideoThumb</SanitizedProjectName>
+        <SanitizedProjectName>Glimpse</SanitizedProjectName>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'=='true'">
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
@@ -82,7 +82,7 @@
             <Delphi.Personality>
                 <Excluded_Packages/>
                 <Source>
-                    <Source Name="MainSource">VideoThumb.dpr</Source>
+                    <Source Name="MainSource">Glimpse.dpr</Source>
                 </Source>
             </Delphi.Personality>
             <Platforms>

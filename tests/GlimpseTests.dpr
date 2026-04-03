@@ -1,4 +1,4 @@
-program VideoThumbTests;
+program GlimpseTests;
 
 {$STRONGLINKTYPES ON}
 {$APPTYPE CONSOLE}

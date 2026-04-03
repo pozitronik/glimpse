@@ -1,4 +1,4 @@
-library VideoThumb;
+library Glimpse;
 
 {$IFDEF WIN64}
   {$E wlx64}

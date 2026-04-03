@@ -3,7 +3,7 @@
         <ProjectGuid>{D8F2A1B3-5E7C-4D9A-B6E8-2F3A4C5D6E7F}</ProjectGuid>
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
-        <MainSource>VideoThumbTests.dpr</MainSource>
+        <MainSource>GlimpseTests.dpr</MainSource>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
@@ -41,7 +41,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'=='true'">
-        <SanitizedProjectName>VideoThumbTests</SanitizedProjectName>
+        <SanitizedProjectName>GlimpseTests</SanitizedProjectName>
         <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>

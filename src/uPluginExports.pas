@@ -68,8 +68,8 @@ begin
     on E: Exception do
     begin
       Log(Format('DoListLoad: EXCEPTION %s: %s', [E.ClassName, E.Message]));
-      MessageBox(ParentWin, PChar(Format('VideoThumb: %s', [E.Message])),
-        'VideoThumb', MB_OK or MB_ICONERROR);
+      MessageBox(ParentWin, PChar(Format('Glimpse: %s', [E.Message])),
+        'Glimpse', MB_OK or MB_ICONERROR);
     end;
   end;
 end;
@@ -196,7 +196,7 @@ begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
   {$IFDEF DEBUG}
-  uCache.GDebugLogPath := GPluginDir + 'videothumb_debug.log';
+  uCache.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
   { Start fresh log each session }
   if FileExists(uCache.GDebugLogPath) then
     DeleteFile(uCache.GDebugLogPath);
@@ -207,7 +207,7 @@ begin
   Log(Format('  DLL HInstance=$%s', [IntToHex(HInstance)]));
 
   { Swap: GSettings is never nil (created at initialization with defaults) }
-  NewSettings := TPluginSettings.Create(GPluginDir + 'VideoThumb.ini');
+  NewSettings := TPluginSettings.Create(GPluginDir + 'Glimpse.ini');
   NewSettings.Load;
   GSettings.Free;
   GSettings := NewSettings;

@@ -2,7 +2,7 @@
 setlocal
 
 echo ============================================
-echo VideoThumb Test Runner
+echo Glimpse Test Runner
 echo ============================================
 
 :: Change to script directory
@@ -21,14 +21,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "tests\VideoThumbTests.dproj" (
-    echo ERROR: Test project not found at tests\VideoThumbTests.dproj
+if not exist "tests\GlimpseTests.dproj" (
+    echo ERROR: Test project not found at tests\GlimpseTests.dproj
     echo        Create the test project first.
     pause
     exit /b 1
 )
 
-msbuild tests\VideoThumbTests.dproj /t:Build /p:Config=Debug /p:Platform=Win64 /v:m /nologo
+msbuild tests\GlimpseTests.dproj /t:Build /p:Config=Debug /p:Platform=Win64 /v:m /nologo
 if errorlevel 1 (
     echo.
     echo ERROR: Test build failed
@@ -45,7 +45,7 @@ echo.
 echo [2/2] Running tests...
 echo.
 
-tests\Win64\Debug\VideoThumbTests.exe
+tests\Win64\Debug\GlimpseTests.exe
 set TEST_RESULT=%errorlevel%
 
 echo.

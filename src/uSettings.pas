@@ -148,7 +148,7 @@ implementation
 
 function DefaultCacheFolder: string;
 begin
-  Result := TPath.Combine(TPath.GetTempPath, 'VideoThumb' + PathDelim + 'cache');
+  Result := TPath.Combine(TPath.GetTempPath, 'Glimpse' + PathDelim + 'cache');
 end;
 
 function EffectiveCacheFolder(const ACacheFolder: string): string;

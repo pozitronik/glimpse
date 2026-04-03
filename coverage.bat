@@ -2,7 +2,7 @@
 setlocal
 
 echo ============================================
-echo VideoThumb Code Coverage Report
+echo Glimpse Code Coverage Report
 echo ============================================
 
 :: Change to script directory
@@ -21,15 +21,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "tests\VideoThumbTests.dproj" (
-    echo ERROR: Test project not found at tests\VideoThumbTests.dproj
+if not exist "tests\GlimpseTests.dproj" (
+    echo ERROR: Test project not found at tests\GlimpseTests.dproj
     echo        Create the test project first.
     pause
     exit /b 1
 )
 
 :: Build with detailed MAP file (DCC_MapFile=3)
-msbuild tests\VideoThumbTests.dproj /t:Build /p:Config=Debug /p:Platform=Win64 /p:DCC_MapFile=3 /v:m /nologo
+msbuild tests\GlimpseTests.dproj /t:Build /p:Config=Debug /p:Platform=Win64 /p:DCC_MapFile=3 /v:m /nologo
 if errorlevel 1 (
     echo.
     echo ERROR: Test build failed
@@ -40,7 +40,7 @@ if errorlevel 1 (
 echo Build successful.
 
 :: Check MAP file exists
-if not exist "tests\Win64\Debug\VideoThumbTests.map" (
+if not exist "tests\Win64\Debug\GlimpseTests.map" (
     echo ERROR: MAP file not generated. Check project linker settings.
     pause
     exit /b 1
@@ -72,8 +72,8 @@ echo.
 
 :: Run CodeCoverage with source path file and unit file
 coverage\Win64\CodeCoverage.exe ^
-    -e "tests\Win64\Debug\VideoThumbTests.exe" ^
-    -m "tests\Win64\Debug\VideoThumbTests.map" ^
+    -e "tests\Win64\Debug\GlimpseTests.exe" ^
+    -m "tests\Win64\Debug\GlimpseTests.map" ^
     -spf coverage\srcpaths.lst ^
     -uf coverage\units.lst ^
     -od coverage ^

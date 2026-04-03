@@ -1,4 +1,4 @@
-# VideoThumb
+# Glimpse
 
 A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced video frames when previewing a video file with F3 or Ctrl+Q. Provides an instant visual summary of a video's content without opening a media player.
 
@@ -17,13 +17,13 @@ A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced 
 
 ### Automatic (recommended)
 
-Open the VideoThumb `.zip` archive in Total Commander. TC will detect `pluginst.inf` and offer to install the plugin automatically.
+Open the Glimpse `.zip` archive in Total Commander. TC will detect `pluginst.inf` and offer to install the plugin automatically.
 
 ### Manual
 
-1. Extract `VideoThumb.wlx` and `VideoThumb.wlx64` to a directory of your choice
+1. Extract `Glimpse.wlx` and `Glimpse.wlx64` to a directory of your choice
 2. In Total Commander: Configuration -> Options -> Plugins -> Lister (WLX) -> Add
-3. Browse to `VideoThumb.wlx64` (64-bit TC) or `VideoThumb.wlx` (32-bit TC)
+3. Browse to `Glimpse.wlx64` (64-bit TC) or `Glimpse.wlx` (32-bit TC)
 
 ## Requirements
 
@@ -60,7 +60,7 @@ Additional extensions can be configured in Settings (F2).
 
 ## Configuration
 
-All settings are stored in `VideoThumb.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu.
+All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu.
 
 ## License
 

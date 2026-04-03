@@ -3,7 +3,7 @@ object SettingsForm: TSettingsForm
   Top = 0
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
-  Caption = 'VideoThumb Settings'
+  Caption = 'Glimpse Settings'
   ClientHeight = 628
   ClientWidth = 460
   Color = clBtnFace

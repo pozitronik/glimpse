@@ -238,7 +238,7 @@ begin
     begin
       if ValidateFFmpeg(Dlg.FileName) = '' then
       begin
-        MessageBox(Handle, PChar('The selected file is not a valid ffmpeg executable.'), 'VideoThumb', MB_OK or MB_ICONWARNING);
+        MessageBox(Handle, PChar('The selected file is not a valid ffmpeg executable.'), 'Glimpse', MB_OK or MB_ICONWARNING);
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
@@ -273,7 +273,7 @@ begin
   end;
 
   if MessageBox(Handle, PChar(Format('Delete all cached frames in %s?', [Dir])),
-    'VideoThumb', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
+    'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
 
   Cache := TFrameCache.Create(Dir, 0);

@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ============================================
-echo VideoThumb Release Build Script
+echo Glimpse Release Build Script
 echo ============================================
 
 :: Change to script directory
@@ -24,17 +24,17 @@ if errorlevel 1 (
 :: Step 2: Build WLX plugin (Win32 + Win64)
 :: ============================================
 echo.
-echo [2/5] Building VideoThumb plugin...
+echo [2/5] Building Glimpse plugin...
 
 echo   Win32 Release...
-msbuild src\VideoThumb.dproj /t:Build /p:Config=Release /p:Platform=Win32 /v:m /nologo
+msbuild src\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win32 /v:m /nologo
 if errorlevel 1 (
     echo ERROR: Win32 build failed
     exit /b 1
 )
 
 echo   Win64 Release...
-msbuild src\VideoThumb.dproj /t:Build /p:Config=Release /p:Platform=Win64 /v:m /nologo
+msbuild src\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win64 /v:m /nologo
 if errorlevel 1 (
     echo ERROR: Win64 build failed
     exit /b 1
@@ -64,8 +64,8 @@ set TAG=
 for /f "tokens=*" %%i in ('git describe --tags --exact-match HEAD 2^>nul') do set TAG=%%i
 
 :: Build archive base name
-set BASE_NAME=videothumb_%BRANCH%
-if not "%TAG%"=="" set BASE_NAME=videothumb_%BRANCH%_%TAG%
+set BASE_NAME=glimpse_%BRANCH%
+if not "%TAG%"=="" set BASE_NAME=glimpse_%BRANCH%_%TAG%
 
 :: Replace invalid filename characters (/ -> -)
 set BASE_NAME=%BASE_NAME:/=-%
@@ -97,13 +97,13 @@ powershell -NoProfile -Command ^
     "if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }; " ^
     "New-Item -ItemType Directory -Path $staging | Out-Null; " ^
     "$filesToCopy = @(" ^
-        "@{Src='src\Win32\Release\VideoThumb.wlx';    Dst=\"$staging\VideoThumb.wlx\"}, " ^
-        "@{Src='src\Win64\Release\VideoThumb.wlx64';  Dst=\"$staging\VideoThumb.wlx64\"}, " ^
+        "@{Src='src\Win32\Release\Glimpse.wlx';    Dst=\"$staging\Glimpse.wlx\"}, " ^
+        "@{Src='src\Win64\Release\Glimpse.wlx64';  Dst=\"$staging\Glimpse.wlx64\"}, " ^
         "@{Src='README.md';                            Dst=\"$staging\README.md\"}, " ^
         "@{Src='LICENSE';                              Dst=\"$staging\LICENSE\"}" ^
     "); " ^
     "$optionalFiles = @(" ^
-        "@{Src='VideoThumb.ini'; Dst=\"$staging\VideoThumb.ini\"}" ^
+        "@{Src='Glimpse.ini'; Dst=\"$staging\Glimpse.ini\"}" ^
     "); " ^
     "$missing = $filesToCopy | Where-Object { -not (Test-Path $_.Src) } | ForEach-Object { $_.Src }; " ^
     "if ($missing) { Write-Host 'ERROR: Missing files:' $missing -ForegroundColor Red; exit 1 }; " ^
@@ -112,9 +112,9 @@ powershell -NoProfile -Command ^
     "$inf = @('[plugininstall]', " ^
         "'description=Video frame preview - extract and display evenly-spaced frames (32bit+64bit)', " ^
         "'type=wlx', " ^
-        "'file=VideoThumb.wlx', " ^
-        "'file64=VideoThumb.wlx64', " ^
-        "'defaultdir=VideoThumb', " ^
+        "'file=Glimpse.wlx', " ^
+        "'file64=Glimpse.wlx64', " ^
+        "'defaultdir=Glimpse', " ^
         "\"version=$version\", " ^
         "'defaultextension=mp4'" ^
     "); " ^

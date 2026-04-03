@@ -709,7 +709,7 @@ begin
   Path := DefaultCacheFolder;
   Assert.IsNotEmpty(Path, 'DefaultCacheFolder should return a non-empty path');
   Assert.IsTrue(Path.EndsWith('cache'), 'DefaultCacheFolder should end with "cache"');
-  Assert.IsTrue(Path.Contains('VideoThumb'), 'DefaultCacheFolder should contain "VideoThumb"');
+  Assert.IsTrue(Path.Contains('Glimpse'), 'DefaultCacheFolder should contain "Glimpse"');
 end;
 
 procedure TTestPluginSettings.TestEffectiveCacheFolderReturnsConfigured;

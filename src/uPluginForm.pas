@@ -1452,7 +1452,7 @@ begin
   FPendingLock := TCriticalSection.Create;
 
   {$IFDEF DEBUG}
-  uCache.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'videothumb_debug.log';
+  uCache.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
   {$ENDIF}
 

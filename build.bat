@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ============================================
-echo VideoThumb Build Script
+echo Glimpse Build Script
 echo ============================================
 
 :: Change to script directory
@@ -20,7 +20,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-msbuild src\VideoThumb.dproj /t:Build /p:Config=Debug /p:Platform=Win64 /v:m /nologo
+msbuild src\Glimpse.dproj /t:Build /p:Config=Debug /p:Platform=Win64 /v:m /nologo
 if errorlevel 1 (
     echo ERROR: Build failed
     exit /b 1
