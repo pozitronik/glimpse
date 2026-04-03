@@ -409,30 +409,42 @@ begin
         end;
 
         CellIdx := FOffsets[I].Index - 1; { 1-based offset index to 0-based cell index }
-        Source := 'none';
+        Bmp := nil;
 
-        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
-        if Bmp <> nil then
-          Source := 'cache';
+        try
+          Source := 'none';
 
-        { Cache miss: extract via ffmpeg }
-        if Bmp = nil then
-        begin
-          Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+          Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
           if Bmp <> nil then
+            Source := 'cache';
+
+          { Cache miss: extract via ffmpeg }
+          if Bmp = nil then
           begin
-            Source := 'ffmpeg';
-            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
+            Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+            if Bmp <> nil then
+            begin
+              Source := 'ffmpeg';
+              FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
+            end;
+          end;
+
+          {$IFDEF DEBUG}
+          if Bmp <> nil then
+            FormLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
+              [CellIdx, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
+          else
+            FormLog(Format('Frame[%d] source=%s Bmp=NIL', [CellIdx, Source]));
+          {$ENDIF}
+        except
+          on E: Exception do
+          begin
+            {$IFDEF DEBUG}
+            FormLog(Format('Frame[%d] EXCEPTION: %s: %s', [CellIdx, E.ClassName, E.Message]));
+            {$ENDIF}
+            FreeAndNil(Bmp);
           end;
         end;
-
-        {$IFDEF DEBUG}
-        if Bmp <> nil then
-          FormLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
-            [CellIdx, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
-        else
-          FormLog(Format('Frame[%d] source=%s Bmp=NIL', [CellIdx, Source]));
-        {$ENDIF}
 
         if Terminated then
         begin
@@ -440,7 +452,8 @@ begin
           Exit;
         end;
 
-        { Enqueue frame for the UI thread; PostMessage is just a notification }
+        { Enqueue frame for the UI thread; PostMessage is just a notification.
+          Bitmap = nil signals an error placeholder to the UI. }
         Frame.Index := CellIdx;
         Frame.Bitmap := Bmp;
         FQueueLock.Enter;
