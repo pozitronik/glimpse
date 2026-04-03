@@ -492,6 +492,7 @@ end;
 
 destructor TFrameView.Destroy;
 begin
+  ClearCells;
   FBlendBmp.Free;
   inherited;
 end;

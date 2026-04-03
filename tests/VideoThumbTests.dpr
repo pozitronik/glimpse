@@ -36,6 +36,7 @@ var
   Logger: ITestLogger;
   NUnitLogger: ITestLogger;
 begin
+  ReportMemoryLeaksOnShutdown := True;
   try
     TDUnitX.CheckCommandLine;
     Runner := TDUnitX.CreateRunner;
