@@ -18,6 +18,10 @@ type
     EdtSkipEdges: TEdit;
     UdSkipEdges: TUpDown;
     LblSkipEdgesUnit: TLabel;
+    LblMaxWorkers: TLabel;
+    EdtMaxWorkers: TEdit;
+    UdMaxWorkers: TUpDown;
+    LblMaxWorkersHint: TLabel;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -105,6 +109,7 @@ uses
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
   UdSkipEdges.Position := ASettings.SkipEdgesPercent;
+  UdMaxWorkers.Position := ASettings.MaxWorkers;
   EdtExtensions.Text := ASettings.ExtensionList;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
@@ -131,6 +136,7 @@ end;
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
 begin
   ASettings.SkipEdgesPercent := UdSkipEdges.Position;
+  ASettings.MaxWorkers := UdMaxWorkers.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
   { Switch to explicit mode when user provides a path }

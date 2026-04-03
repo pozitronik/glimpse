@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'VideoThumb Settings'
-  ClientHeight = 570
+  ClientHeight = 599
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 8
     Width = 444
-    Height = 126
+    Height = 155
     Caption = ' General '
     TabOrder = 0
     object LblSkipEdges: TLabel
@@ -35,23 +35,43 @@ object SettingsForm: TSettingsForm
       Height = 15
       Caption = '%'
     end
-    object LblExtensions: TLabel
+    object LblMaxWorkers: TLabel
       Left = 12
       Top = 53
+      Width = 74
+      Height = 15
+      Caption = 'Max workers:'
+    end
+    object LblMaxWorkersHint: TLabel
+      Left = 198
+      Top = 53
+      Width = 186
+      Height = 15
+      Caption = '(parallel ffmpeg processes)'
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
+    object LblExtensions: TLabel
+      Left = 12
+      Top = 82
       Width = 63
       Height = 15
       Caption = 'Extensions:'
     end
     object LblFFmpegPath: TLabel
       Left = 12
-      Top = 82
+      Top = 111
       Width = 76
       Height = 15
       Caption = 'FFmpeg path:'
     end
     object LblFFmpegInfo: TLabel
       Left = 130
-      Top = 103
+      Top = 132
       Width = 3
       Height = 15
       Font.Charset = DEFAULT_CHARSET
@@ -79,35 +99,54 @@ object SettingsForm: TSettingsForm
       Thousands = False
       TabOrder = 1
     end
-    object EdtExtensions: TEdit
+    object EdtMaxWorkers: TEdit
       Left = 130
       Top = 49
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 2
+    end
+    object UdMaxWorkers: TUpDown
+      Left = 175
+      Top = 49
+      Width = 17
+      Height = 23
+      Associate = EdtMaxWorkers
+      Min = 1
+      Max = 16
+      Thousands = False
+      TabOrder = 3
+    end
+    object EdtExtensions: TEdit
+      Left = 130
+      Top = 78
       Width = 306
       Height = 23
-      TabOrder = 2
+      TabOrder = 4
     end
     object EdtFFmpegPath: TEdit
       Left = 130
-      Top = 78
+      Top = 107
       Width = 274
       Height = 23
-      TabOrder = 3
+      TabOrder = 5
       TextHint = 'Auto-detect'
       OnChange = EdtFFmpegPathChange
     end
     object BtnFFmpegPath: TButton
       Left = 408
-      Top = 78
+      Top = 107
       Width = 28
       Height = 23
       Caption = '...'
-      TabOrder = 4
+      TabOrder = 6
       OnClick = BtnFFmpegPathClick
     end
   end
   object GbxAppearance: TGroupBox
     Left = 8
-    Top = 140
+    Top = 169
     Width = 444
     Height = 109
     Caption = ' Appearance '
@@ -209,7 +248,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxSave: TGroupBox
     Left = 8
-    Top = 255
+    Top = 284
     Width = 444
     Height = 138
     Caption = ' Save '
@@ -311,7 +350,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 399
+    Top = 428
     Width = 444
     Height = 123
     Caption = ' Cache '
@@ -419,7 +458,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 534
+    Top = 563
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -428,7 +467,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 534
+    Top = 563
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -438,7 +477,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 534
+    Top = 563
     Width = 75
     Height = 28
     Cancel = True
