@@ -1,6 +1,6 @@
 # Glimpse
 
-![Plugin screenshot](/img/glimpse.png)
+![Plugin screenshot](/img/glimpse.jpg)
 
 A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced video frames when previewing a video file. Provides an instant visual summary of a video's content without opening a media player.
 
