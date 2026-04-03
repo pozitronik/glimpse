@@ -30,10 +30,6 @@ type
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double): TBitmap;
 
-    { Extracts N frames at the given offsets (sequential).
-      Returns array where nil entries indicate failed extractions. Caller owns each non-nil bitmap. }
-    function ExtractFrames(const AFileName: string; const AOffsets: TFrameOffsetArray): TArray<TBitmap>;
-
     property ExePath: string read FExePath;
   end;
 
@@ -470,16 +466,6 @@ begin
   except
     FreeAndNil(Result);
   end;
-end;
-
-function TFFmpegExe.ExtractFrames(const AFileName: string;
-  const AOffsets: TFrameOffsetArray): TArray<TBitmap>;
-var
-  I: Integer;
-begin
-  SetLength(Result, Length(AOffsets));
-  for I := 0 to High(AOffsets) do
-    Result[I] := ExtractFrame(AFileName, AOffsets[I].TimeOffset);
 end;
 
 end.

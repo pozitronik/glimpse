@@ -29,7 +29,6 @@ type
   end;
 
   TSmartRow = record
-    StartIndex: Integer;
     Count: Integer;
   end;
 
@@ -308,7 +307,6 @@ const
   CLR_CELL_BG         = TColor($002D2D2D); { dark gray cell/placeholder background }
   CLR_ARC             = TColor($00707070); { loading spinner arc }
   CLR_TIMECODE_OVERLAY = TColor($00CCCCCC); { timecode text over smart grid cells }
-  CLR_TIMECODE_LOADED  = TColor($00AAAAAA); { timecode text for loaded frames }
   CLR_TIMECODE_PENDING = TColor($00555555); { timecode text for placeholders }
   CLR_ERROR_TEXT       = TColor($004040FF); { error cell label }
   CLR_SELECTION        = TColor($00F7C34F); { #4FC3F7 light blue selection border }
@@ -912,10 +910,6 @@ begin
       Rows[I].Count := Base + 1
     else
       Rows[I].Count := Base;
-    if I = 0 then
-      Rows[I].StartIndex := 0
-    else
-      Rows[I].StartIndex := Rows[I - 1].StartIndex + Rows[I - 1].Count;
   end;
 
   FSmartRows := Rows;
