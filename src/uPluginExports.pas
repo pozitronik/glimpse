@@ -29,11 +29,24 @@ var
   GSettings: TPluginSettings;
   GPluginDir: string;
   GFFmpegPath: string;
+
 procedure Log(const AMsg: string);
 begin
   {$IFDEF DEBUG}
   DebugLog('Plugin', AMsg);
   {$ENDIF}
+end;
+
+{ Resolves a TC-provided window handle to our plugin form, or nil. }
+function FindPluginForm(ListWin: HWND): TPluginForm;
+var
+  Ctrl: TWinControl;
+begin
+  Ctrl := FindControl(ListWin);
+  if Ctrl is TPluginForm then
+    Result := TPluginForm(Ctrl)
+  else
+    Result := nil;
 end;
 
 { Internal handler shared by ListLoad and ListLoadW. }
@@ -76,15 +89,23 @@ end;
 { Reuses an existing plugin window for a new file (smoother navigation). }
 function DoListLoadNext(ParentWin: HWND; ListWin: HWND; const AFileName: string; ShowFlags: Integer): Integer;
 var
-  Ctrl: TWinControl;
+  Form: TPluginForm;
 begin
   Log(Format('DoListLoadNext: ListWin=$%s File=%s', [IntToHex(ListWin), AFileName]));
-  Ctrl := FindControl(ListWin);
-  if Ctrl is TPluginForm then
+  Form := FindPluginForm(ListWin);
+  if Form <> nil then
   begin
-    TPluginForm(Ctrl).LoadFile(AFileName);
-    TPluginForm(Ctrl).ApplyListerParams(ShowFlags);
-    Result := LISTPLUGIN_OK;
+    try
+      Form.LoadFile(AFileName);
+      Form.ApplyListerParams(ShowFlags);
+      Result := LISTPLUGIN_OK;
+    except
+      on E: Exception do
+      begin
+        Log(Format('DoListLoadNext: EXCEPTION %s: %s', [E.ClassName, E.Message]));
+        Result := LISTPLUGIN_ERROR;
+      end;
+    end;
   end
   else
     Result := LISTPLUGIN_ERROR;
@@ -102,12 +123,12 @@ end;
 
 procedure ListCloseWindow(ListWin: HWND); stdcall;
 var
-  Ctrl: TWinControl;
+  Form: TPluginForm;
 begin
   Log(Format('ListCloseWindow: $%s', [IntToHex(ListWin)]));
-  Ctrl := FindControl(ListWin);
-  if Ctrl is TPluginForm then
-    Ctrl.Free;
+  Form := FindPluginForm(ListWin);
+  if Form <> nil then
+    Form.Free;
 end;
 
 procedure ListGetDetectString(DetectString: PAnsiChar; MaxLen: Integer); stdcall;
@@ -146,21 +167,20 @@ end;
 
 function ListSendCommand(ListWin: HWND; Command, Parameter: Integer): Integer; stdcall;
 var
-  Ctrl: TWinControl;
+  Form: TPluginForm;
 begin
+  Form := FindPluginForm(ListWin);
   case Command of
     lc_Copy:
       begin
-        Ctrl := FindControl(ListWin);
-        if Ctrl is TPluginForm then
-          TPluginForm(Ctrl).CopyFrameToClipboard;
+        if Form <> nil then
+          Form.CopyFrameToClipboard;
         Result := LISTPLUGIN_OK;
       end;
     lc_NewParams:
       begin
-        Ctrl := FindControl(ListWin);
-        if Ctrl is TPluginForm then
-          TPluginForm(Ctrl).ApplyListerParams(Parameter);
+        if Form <> nil then
+          Form.ApplyListerParams(Parameter);
         Result := LISTPLUGIN_OK;
       end;
   else
@@ -210,7 +230,10 @@ begin
   end;
 end;
 
-{ Returns a preview bitmap for TC thumbnail view. }
+{ Returns a preview bitmap for TC thumbnail view.
+  Not implemented: TC calls this for thumbnails panel, which requires
+  synchronous single-frame extraction; the current architecture is
+  async-only. Returns 0 so TC falls back to its default thumbnail. }
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 begin
   Result := 0;
