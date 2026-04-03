@@ -404,27 +404,13 @@ begin
   end;
 end;
 
-{ Extracts the Video stream line from ffmpeg output }
-function ExtractVideoLine(const AText: string): string;
+{ Extracts the first line containing APrefix from multi-line ffmpeg output }
+function ExtractStreamLine(const AText, APrefix: string): string;
 var
   P, LineEnd: Integer;
 begin
   Result := '';
-  P := Pos('Video:', AText);
-  if P = 0 then Exit;
-  LineEnd := P;
-  while (LineEnd <= Length(AText)) and not CharInSet(AText[LineEnd], [#13, #10]) do
-    Inc(LineEnd);
-  Result := Copy(AText, P, LineEnd - P);
-end;
-
-{ Extracts the Audio stream line from ffmpeg output }
-function ExtractAudioLine(const AText: string): string;
-var
-  P, LineEnd: Integer;
-begin
-  Result := '';
-  P := Pos('Audio:', AText);
+  P := Pos(APrefix, AText);
   if P = 0 then Exit;
   LineEnd := P;
   while (LineEnd <= Length(AText)) and not CharInSet(AText[LineEnd], [#13, #10]) do
@@ -439,7 +425,7 @@ var
   NumStr: string;
 begin
   Result := 0;
-  Line := ExtractVideoLine(AText);
+  Line := ExtractStreamLine(AText, 'Video:');
   if Line = '' then Exit;
   { Look for "NN fps" or "NN.NN fps" pattern }
   P := Pos(' fps', Line);
@@ -488,7 +474,7 @@ end;
 
 function ParseVideoBitrate(const AText: string): Integer;
 begin
-  Result := ParseStreamBitrate(ExtractVideoLine(AText));
+  Result := ParseStreamBitrate(ExtractStreamLine(AText, 'Video:'));
 end;
 
 function ParseAudioCodec(const AText: string): string;
@@ -514,7 +500,7 @@ var
   NumStr: string;
 begin
   Result := 0;
-  Line := ExtractAudioLine(AText);
+  Line := ExtractStreamLine(AText, 'Audio:');
   if Line = '' then Exit;
   P := Pos(' Hz', Line);
   if P < 2 then Exit;
@@ -537,7 +523,7 @@ var
   S: string;
 begin
   Result := '';
-  Line := ExtractAudioLine(AText);
+  Line := ExtractStreamLine(AText, 'Audio:');
   if Line = '' then Exit;
   { Audio line format: "Audio: codec (profile) (fourcc), rate Hz, channels, fmt, bitrate"
     Channel layout is a comma-separated field: mono, stereo, 5.1, 7.1, etc. }
@@ -546,8 +532,8 @@ begin
   begin
     S := Parts[I].Trim.ToLower;
     if (S = 'mono') or (S = 'stereo') or (S = '5.1') or (S = '7.1')
-      or (S = '5.1(side)') or (S = '4.0') or (S = '2.1') or (S = '6.1')
-      or (S = '5.0') then
+      or (S = '5.1(side)') or (S = '7.1(side)') or (S = '4.0') or (S = '2.1')
+      or (S = '6.1') or (S = '5.0') or (S = 'quad') then
     begin
       Result := Parts[I].Trim;
       Exit;
@@ -557,7 +543,7 @@ end;
 
 function ParseAudioBitrate(const AText: string): Integer;
 begin
-  Result := ParseStreamBitrate(ExtractAudioLine(AText));
+  Result := ParseStreamBitrate(ExtractStreamLine(AText, 'Audio:'));
 end;
 
 function ParseFFmpegVersion(const AText: string): string;
