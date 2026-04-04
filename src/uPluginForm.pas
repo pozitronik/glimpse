@@ -229,6 +229,7 @@ type
     function ResolveFrameIndex(out AIndex: Integer): Boolean;
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     procedure SaveSingleFrame;
+    procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean);
     procedure SaveSelectedFrames;
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
@@ -2156,10 +2157,24 @@ begin
       FSettings.JpegQuality, FSettings.PngCompression);
 end;
 
+procedure TPluginForm.SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean);
+var
+  I: Integer;
+begin
+  for I := 0 to FFrameView.CellCount - 1 do
+  begin
+    if ASelectedOnly and not FFrameView.CellSelected(I) then Continue;
+    if FFrameView.CellState(I) <> fcsLoaded then Continue;
+    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I),
+      ADir + GenerateFrameFileName(FFileName, I, FFrameView.CellTimeOffset(I), AFormat), AFormat,
+      FSettings.JpegQuality, FSettings.PngCompression);
+  end;
+end;
+
 procedure TPluginForm.SaveSelectedFrames;
 var
   I, FirstSel: Integer;
-  Dir, Path: string;
+  Path: string;
   Fmt: TSaveFormat;
 begin
   if FFrameView.SelectedCount < 2 then Exit;
@@ -2174,15 +2189,7 @@ begin
     False, Path, Fmt) then
     Exit;
 
-  Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
-  for I := 0 to FFrameView.CellCount - 1 do
-  begin
-    if not FFrameView.CellSelected(I) then Continue;
-    if FFrameView.CellState(I) <> fcsLoaded then Continue;
-    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I),
-      Dir + GenerateFrameFileName(FFileName, I, FFrameView.CellTimeOffset(I), Fmt), Fmt,
-      FSettings.JpegQuality, FSettings.PngCompression);
-  end;
+  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, True);
 end;
 
 procedure TPluginForm.SaveCombinedFrame;
@@ -2208,8 +2215,7 @@ end;
 
 procedure TPluginForm.SaveAllFrames;
 var
-  I: Integer;
-  Dir, Path: string;
+  Path: string;
   Fmt: TSaveFormat;
 begin
   if FFrameView.CellCount = 0 then Exit;
@@ -2220,14 +2226,7 @@ begin
     False, Path, Fmt) then
     Exit;
 
-  Dir := IncludeTrailingPathDelimiter(ExtractFilePath(Path));
-  for I := 0 to FFrameView.CellCount - 1 do
-  begin
-    if FFrameView.CellState(I) <> fcsLoaded then Continue;
-    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I),
-      Dir + GenerateFrameFileName(FFileName, I, FFrameView.CellTimeOffset(I), Fmt), Fmt,
-      FSettings.JpegQuality, FSettings.PngCompression);
-  end;
+  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, False);
 end;
 
 procedure TPluginForm.LoadFile(const AFileName: string);
