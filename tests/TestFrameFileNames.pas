@@ -17,6 +17,11 @@ type
     [Test] procedure TestGenerateFrameFileNameZeroOffset;
     [Test] procedure TestGenerateFrameFileNameLargeIndex;
     [Test] procedure TestGenerateFrameFileNameDoubleExtension;
+    [Test] procedure TestGenerateFrameFileNameEmptyInput;
+    [Test] procedure TestGenerateFrameFileNameIndexOver99;
+    [Test] procedure TestGenerateFrameFileNameNegativeOffset;
+    [Test] procedure TestGenerateFrameFileNameLargeOffset;
+    [Test] procedure TestGenerateFrameFileNameSpacesInName;
   end;
 
 implementation
@@ -73,6 +78,41 @@ begin
   { Only the last extension should be stripped }
   Assert.AreEqual('video.part_frame_01_00-00-01.000.jpg',
     GenerateFrameFileName('video.part.mp4', 0, 1.0, sfJPEG));
+end;
+
+procedure TTestFrameFileNames.TestGenerateFrameFileNameEmptyInput;
+begin
+  { Empty filename produces just the frame suffix }
+  Assert.AreEqual('_frame_01_00-00-01.000.png',
+    GenerateFrameFileName('', 0, 1.0, sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestGenerateFrameFileNameIndexOver99;
+begin
+  { Index 99 -> frame_100; %.2d widens naturally beyond 2 digits }
+  Assert.AreEqual('v_frame_100_00-00-01.000.png',
+    GenerateFrameFileName('v.mp4', 99, 1.0, sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestGenerateFrameFileNameNegativeOffset;
+begin
+  { Negative offset clamps to zero in FormatTimecode }
+  Assert.AreEqual('v_frame_01_00-00-00.000.png',
+    GenerateFrameFileName('v.mp4', 0, -5.0, sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestGenerateFrameFileNameLargeOffset;
+begin
+  { 360000s = 100 hours; verifies hours exceed 2 digits gracefully }
+  Assert.AreEqual('v_frame_01_100-00-00.000.png',
+    GenerateFrameFileName('v.mp4', 0, 360000.0, sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestGenerateFrameFileNameSpacesInName;
+begin
+  { Spaces in filename are preserved as-is }
+  Assert.AreEqual('my video_frame_01_00-00-01.000.png',
+    GenerateFrameFileName('my video.mp4', 0, 1.0, sfPNG));
 end;
 
 initialization
