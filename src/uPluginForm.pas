@@ -218,6 +218,7 @@ type
     procedure SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
     procedure UpdateTimecodeButton;
     procedure UpdateToolbarButtons;
+    procedure DispatchCommand(ATag: Integer);
     procedure OnToolbarButtonClick(Sender: TObject);
     procedure ActivateMode(AMode: TViewMode);
     procedure ZoomBy(AFactor: Double);
@@ -1716,15 +1717,7 @@ end;
 
 procedure TPluginForm.OnHamburgerActionClick(Sender: TObject);
 begin
-  case TMenuItem(Sender).Tag of
-    CM_SAVE_FRAME:    SaveSingleFrame;
-    CM_SAVE_COMBINED: SaveCombinedFrame;
-    CM_SAVE_ALL:      SaveAllFrames;
-    CM_COPY_FRAME:    CopyFrameToClipboard;
-    CM_COPY_ALL:      CopyAllToClipboard;
-    CM_REFRESH:       RefreshExtraction;
-    CM_SETTINGS:      ShowSettings;
-  end;
+  DispatchCommand(TMenuItem(Sender).Tag);
 end;
 
 function TPluginForm.CreateModePopup(AMode: TViewMode): TPopupMenu;
@@ -2716,17 +2709,25 @@ begin
   FSettings.Save;
 end;
 
-procedure TPluginForm.OnToolbarButtonClick(Sender: TObject);
+procedure TPluginForm.DispatchCommand(ATag: Integer);
 begin
-  case TButton(Sender).Tag of
+  case ATag of
     CM_SAVE_FRAME:    SaveSingleFrame;
+    CM_SAVE_SELECTED: SaveSelectedFrames;
     CM_SAVE_COMBINED: SaveCombinedFrame;
     CM_SAVE_ALL:      SaveAllFrames;
     CM_COPY_FRAME:    CopyFrameToClipboard;
     CM_COPY_ALL:      CopyAllToClipboard;
+    CM_SELECT_ALL:    FFrameView.SelectAll;
+    CM_DESELECT_ALL:  FFrameView.DeselectAll;
     CM_REFRESH:       RefreshExtraction;
     CM_SETTINGS:      ShowSettings;
   end;
+end;
+
+procedure TPluginForm.OnToolbarButtonClick(Sender: TObject);
+begin
+  DispatchCommand(TButton(Sender).Tag);
 end;
 
 procedure TPluginForm.UpdateToolbarButtons;
@@ -2855,18 +2856,7 @@ end;
 
 procedure TPluginForm.OnContextMenuClick(Sender: TObject);
 begin
-  case TMenuItem(Sender).Tag of
-    CM_SAVE_FRAME:    SaveSingleFrame;
-    CM_SAVE_SELECTED: SaveSelectedFrames;
-    CM_SAVE_COMBINED: SaveCombinedFrame;
-    CM_SAVE_ALL:      SaveAllFrames;
-    CM_COPY_FRAME:    CopyFrameToClipboard;
-    CM_COPY_ALL:      CopyAllToClipboard;
-    CM_SELECT_ALL:    FFrameView.SelectAll;
-    CM_DESELECT_ALL:  FFrameView.DeselectAll;
-    CM_REFRESH:       RefreshExtraction;
-    CM_SETTINGS:      ShowSettings;
-  end;
+  DispatchCommand(TMenuItem(Sender).Tag);
 end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
