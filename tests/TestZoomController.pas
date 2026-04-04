@@ -21,6 +21,9 @@ type
     [Test] procedure TestDenormalizeViewportCenterRoundTrip;
     [Test] procedure TestDenormalizeViewportCenterNeverNegative;
     [Test] procedure TestDenormalizeViewportCenterMiddle;
+    [Test] procedure TestClampZoomFactorNegativeFactor;
+    [Test] procedure TestClampZoomFactorZeroFactor;
+    [Test] procedure TestNormalizeViewportCenterZeroViewport;
   end;
 
 implementation
@@ -106,6 +109,27 @@ begin
   { NormPos=0.5, content fits in viewport -> scroll should be 0 }
   Assert.AreEqual(0, DenormalizeViewportCenter(0.5, 800, 800),
     'Content fitting viewport should scroll to 0');
+end;
+
+procedure TTestZoomController.TestClampZoomFactorNegativeFactor;
+begin
+  { Negative factor clamps to MIN_ZOOM (1.0 * -1.0 = -1.0, clamped to 0.1) }
+  Assert.AreEqual(MIN_ZOOM, ClampZoomFactor(1.0, -1.0), 0.001);
+end;
+
+procedure TTestZoomController.TestClampZoomFactorZeroFactor;
+begin
+  { Zero factor clamps to MIN_ZOOM (1.0 * 0.0 = 0.0, clamped to 0.1) }
+  Assert.AreEqual(MIN_ZOOM, ClampZoomFactor(1.0, 0.0), 0.001);
+end;
+
+procedure TTestZoomController.TestNormalizeViewportCenterZeroViewport;
+begin
+  { Zero viewport: center is at ScrollPos / ContentSize }
+  Assert.AreEqual(0.0, NormalizeViewportCenter(0, 0, 1000), 0.001,
+    'Zero viewport at scroll 0 should return 0');
+  Assert.AreEqual(0.5, NormalizeViewportCenter(500, 0, 1000), 0.001,
+    'Zero viewport at scroll 500/1000 should return 0.5');
 end;
 
 initialization
