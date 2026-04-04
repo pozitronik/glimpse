@@ -171,7 +171,7 @@ type
     FBtnHamburger: TButton;
     FHamburgerMenu: TPopupMenu;
     FProgressBar: TProgressBar;
-    FLblProgress: TLabel;
+    FProgressVisible: Boolean;
     { Stored X positions from initial layout for collapse threshold checks }
     FFrameCountRight: Integer;
     FModeGroupRight: Integer;
@@ -242,6 +242,9 @@ type
     procedure ProcessPendingFrames;
     procedure DrainPendingFrameMessages;
     procedure UpdateProgress;
+    procedure ShowProgress(const AText: string);
+    procedure HideProgress;
+    procedure RepositionProgressBar;
     procedure OnAnimTimer(Sender: TObject);
     procedure OnFrameCountChange(Sender: TObject);
     procedure OnModeButtonClick(Sender: TObject);
@@ -359,6 +362,17 @@ const
   MAX_FRAME_COUNT  = 99;   { upper limit for frame count spin edit }
   STATUSBAR_HEIGHT = 21;
   STATUSBAR_FONT   = 9;
+
+  { Status bar panel widths }
+  SBP_RESOLUTION_W = 120;
+  SBP_FRAMERATE_W  = 100;
+  SBP_DURATION_W   = 100;
+  SBP_BITRATE_W    = 100;
+  SBP_VIDEOCODEC_W = 90;
+  SBP_AUDIO_W      = 200;
+  SBP_NOAUDIO_W    = 110;
+  { Total width including per-panel borders added by the common control }
+  SBP_TOTAL_RIGHT  = 760;
 
   { Command tags, mode captions, sizing labels, and toolbar actions
     are defined in uToolbarLayout }
@@ -1612,20 +1626,6 @@ begin
   Inc(X, CTRL_GAP - BTN_GAP);
   FActionsRight := X;
 
-  FProgressBar := TProgressBar.Create(FToolbar);
-  FProgressBar.Parent := FToolbar;
-  FProgressBar.SetBounds(X, CY + (CtrlH - PB_H) div 2, 120, PB_H);
-  FProgressBar.Visible := False;
-
-  FLblProgress := TLabel.Create(FToolbar);
-  FLblProgress.Parent := FToolbar;
-  FLblProgress.AutoSize := True;
-  FLblProgress.Caption := 'Extracting...'; { set text for correct height measurement }
-  FLblProgress.Left := X + 120 + 4;
-  FLblProgress.Top := CY + (CtrlH - FLblProgress.Height) div 2;
-  FLblProgress.Caption := '';
-  FLblProgress.Visible := False;
-
   { Hamburger overflow button: hidden until toolbar is too narrow }
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := OnHamburgerMenuPopup;
@@ -1642,12 +1642,10 @@ end;
 procedure TPluginForm.LayoutToolbar;
 const
   CTRL_GAP = 8;
-  PB_H     = 16;
 var
   Layout: TToolbarLayoutResult;
   VM: TViewMode;
   I: Integer;
-  CY, CtrlH: Integer;
 begin
   if not Assigned(FBtnHamburger) then Exit;
 
@@ -1666,12 +1664,6 @@ begin
   { Hamburger button }
   FBtnHamburger.Visible := Layout.CollapseState <> tcsExpanded;
   FBtnHamburger.Left := Layout.HamburgerLeft;
-
-  { Reposition progress bar and label }
-  CtrlH := FEditFrameCount.Height;
-  CY := (FToolbar.Height - CtrlH) div 2;
-  FProgressBar.SetBounds(Layout.ProgressLeft, CY + (CtrlH - PB_H) div 2, 120, PB_H);
-  FLblProgress.Left := Layout.ProgressLeft + 120 + 4;
 end;
 
 procedure TPluginForm.OnHamburgerClick(Sender: TObject);
@@ -1855,6 +1847,10 @@ begin
   FStatusBar.Font.Size := STATUSBAR_FONT;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
   FStatusBar.Visible := False;
+
+  FProgressBar := TProgressBar.Create(FStatusBar);
+  FProgressBar.Parent := FStatusBar;
+  FProgressBar.Visible := False;
 end;
 
 procedure TPluginForm.UpdateStatusBar;
@@ -1903,23 +1899,23 @@ begin
 
   { Resolution }
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
-    AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), 120);
+    AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W);
 
   { Framerate }
   if FVideoInfo.Fps > 0 then
-    AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), 100);
+    AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), SBP_FRAMERATE_W);
 
   { Duration }
   if FVideoInfo.Duration > 0 then
-    AddPanel(FormatDuration(FVideoInfo.Duration), 100);
+    AddPanel(FormatDuration(FVideoInfo.Duration), SBP_DURATION_W);
 
   { Overall bitrate }
   if FVideoInfo.Bitrate > 0 then
-    AddPanel(FormatBitrate(FVideoInfo.Bitrate), 100);
+    AddPanel(FormatBitrate(FVideoInfo.Bitrate), SBP_BITRATE_W);
 
   { Video codec }
   if FVideoInfo.VideoCodec <> '' then
-    AddPanel(FVideoInfo.VideoCodec, 90);
+    AddPanel(FVideoInfo.VideoCodec, SBP_VIDEOCODEC_W);
 
   { Audio section }
   if FVideoInfo.AudioCodec <> '' then
@@ -1931,10 +1927,10 @@ begin
       AudioStr := AudioStr + ' ' + FVideoInfo.AudioChannels;
     if FVideoInfo.AudioBitrateKbps > 0 then
       AudioStr := AudioStr + Format(' %d kbps', [FVideoInfo.AudioBitrateKbps]);
-    AddPanel(AudioStr, 200);
+    AddPanel(AudioStr, SBP_AUDIO_W);
   end
   else
-    AddPanel('No audio', 110);
+    AddPanel('No audio', SBP_NOAUDIO_W);
 end;
 
 procedure TPluginForm.OnStatusBarDblClick(Sender: TObject);
@@ -2332,11 +2328,9 @@ begin
   FFramesLoaded := 0;
   UpdateToolbarButtons;
 
-  { Show progress in marquee mode until first frame arrives }
+  { Show progress bar in a dedicated status bar panel }
   FProgressBar.Style := pbstMarquee;
-  FProgressBar.Visible := True;
-  FLblProgress.Caption := 'Extracting...';
-  FLblProgress.Visible := True;
+  ShowProgress('Extracting...');
 
   FAnimTimer.Enabled := True;
 
@@ -2441,23 +2435,46 @@ begin
   PeekMessage(Msg, Handle, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE);
 end;
 
+procedure TPluginForm.ShowProgress(const AText: string);
+begin
+  FStatusBar.Visible := True;
+  FProgressVisible := True;
+  RepositionProgressBar;
+  FProgressBar.Visible := True;
+end;
+
+procedure TPluginForm.HideProgress;
+begin
+  FProgressBar.Visible := False;
+  FProgressVisible := False;
+  FStatusBar.Visible := FSettings.ShowStatusBar;
+end;
+
+procedure TPluginForm.RepositionProgressBar;
+var
+  Margin, BarWidth: Integer;
+begin
+  if not FProgressVisible then Exit;
+  Margin := (FStatusBar.ClientHeight - 14) div 2;
+  BarWidth := FStatusBar.ClientWidth - SBP_TOTAL_RIGHT - 2 * Margin;
+  if BarWidth < 40 then
+    BarWidth := 40;
+  FProgressBar.SetBounds(SBP_TOTAL_RIGHT + Margin, Margin, BarWidth, FStatusBar.ClientHeight - 2 * Margin);
+end;
+
 procedure TPluginForm.UpdateProgress;
 begin
   UpdateToolbarButtons;
   if FFramesLoaded >= Length(FOffsets) then
   begin
-    FProgressBar.Visible := False;
-    FLblProgress.Visible := False;
+    HideProgress;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   end
-  else if FFramesLoaded > 0 then
+  else if (FFramesLoaded > 0) and FProgressVisible then
   begin
-    { Switch from marquee to ranged after first frame }
     FProgressBar.Style := pbstNormal;
     FProgressBar.Max := Length(FOffsets);
     FProgressBar.Position := FFramesLoaded;
-    FLblProgress.Caption := Format('Extracting... (%d/%d)',
-      [FFramesLoaded, Length(FOffsets)]);
   end;
 end;
 
@@ -2471,8 +2488,7 @@ begin
   {$IFDEF DEBUG}FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FFramesLoaded, Length(FOffsets)]));{$ENDIF}
   { Safety net: process any frames that arrived after the last notification }
   ProcessPendingFrames;
-  FProgressBar.Visible := False;
-  FLblProgress.Visible := False;
+  HideProgress;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   {$IFDEF DEBUG}FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
     [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));{$ENDIF}
@@ -2631,8 +2647,7 @@ begin
   FLblError.Caption := AMessage;
   FLblError.Visible := True;
   FAnimTimer.Enabled := False;
-  FProgressBar.Visible := False;
-  FLblProgress.Visible := False;
+  HideProgress;
 end;
 
 procedure TPluginForm.HideError;
@@ -2808,6 +2823,7 @@ begin
   inherited;
   Realign;
   LayoutToolbar;
+  RepositionProgressBar;
   { VCL fires Resize during window creation, before CreateForPlugin finishes
     constructing sub-controls, so FFrameView may not exist yet }
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then

@@ -15,8 +15,6 @@ type
     [Test] procedure AllCollapsed_WhenWidthBelowModesPlusHamburger;
     [Test] procedure HamburgerLeftAtModeGroup_WhenActionsCollapsed;
     [Test] procedure HamburgerLeftAtFrameCount_WhenAllCollapsed;
-    [Test] procedure ProgressLeftAfterActions_WhenExpanded;
-    [Test] procedure ProgressLeftAfterHamburger_WhenCollapsed;
     [Test] procedure ExactBoundary_ActionsRight_StaysExpanded;
     [Test] procedure OneBelowBoundary_ActionsRight_Collapses;
     [Test] procedure ExactBoundary_ModesPlusHamburger_KeepsModes;
@@ -90,23 +88,6 @@ var
 begin
   R := ComputeToolbarLayout(200, FC_RIGHT, MG_RIGHT, ACT_RIGHT, HAM_W, GAP);
   Assert.AreEqual(FC_RIGHT, R.HamburgerLeft);
-end;
-
-procedure TTestToolbarLayout.ProgressLeftAfterActions_WhenExpanded;
-var
-  R: TToolbarLayoutResult;
-begin
-  R := ComputeToolbarLayout(800, FC_RIGHT, MG_RIGHT, ACT_RIGHT, HAM_W, GAP);
-  Assert.AreEqual(ACT_RIGHT, R.ProgressLeft);
-end;
-
-procedure TTestToolbarLayout.ProgressLeftAfterHamburger_WhenCollapsed;
-var
-  R: TToolbarLayoutResult;
-begin
-  R := ComputeToolbarLayout(500, FC_RIGHT, MG_RIGHT, ACT_RIGHT, HAM_W, GAP);
-  { MG_RIGHT + HAM_W + GAP = 350 + 30 + 8 = 388 }
-  Assert.AreEqual(MG_RIGHT + HAM_W + GAP, R.ProgressLeft);
 end;
 
 procedure TTestToolbarLayout.ExactBoundary_ActionsRight_StaysExpanded;

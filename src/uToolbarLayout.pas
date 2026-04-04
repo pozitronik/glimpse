@@ -13,7 +13,6 @@ type
   TToolbarLayoutResult = record
     CollapseState: TToolbarCollapseState;
     HamburgerLeft: Integer;
-    ProgressLeft: Integer;
   end;
 
   TToolbarActionDef = record
@@ -86,7 +85,6 @@ function ComputeToolbarLayout(AToolbarWidth, AFrameCountRight, AModeGroupRight,
   AActionsRight, AHamburgerWidth, ACtrlGap: Integer): TToolbarLayoutResult;
 var
   CollapseActions, CollapseModes: Boolean;
-  X: Integer;
 begin
   CollapseActions := AToolbarWidth < AActionsRight;
   CollapseModes := CollapseActions and
@@ -102,17 +100,12 @@ begin
   if CollapseActions then
   begin
     if CollapseModes then
-      X := AFrameCountRight
+      Result.HamburgerLeft := AFrameCountRight
     else
-      X := AModeGroupRight;
-    Result.HamburgerLeft := X;
-    Result.ProgressLeft := X + AHamburgerWidth + ACtrlGap;
+      Result.HamburgerLeft := AModeGroupRight;
   end
   else
-  begin
     Result.HamburgerLeft := 0;
-    Result.ProgressLeft := AActionsRight;
-  end;
 end;
 
 procedure PopulateHamburgerMenu(AMenu: TPopupMenu;
