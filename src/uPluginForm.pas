@@ -345,6 +345,7 @@ const
   CLR_TIMECODE_OVERLAY = TColor($00CCCCCC); { timecode text over smart grid cells }
   CLR_TIMECODE_PENDING = TColor($00555555); { timecode text for placeholders }
   CLR_ERROR_TEXT       = TColor($004040FF); { error cell label }
+  CLR_ERROR_LABEL      = TColor($00888888); { error message label }
   CLR_SELECTION        = TColor($00F7C34F); { #4FC3F7 light blue selection border }
   SELECTION_BORDER_W   = 2;
 
@@ -352,16 +353,21 @@ const
   FONT_NAME         = 'Segoe UI';
   FONT_TIMECODE     = 8;
   FONT_ERROR        = 9;
+  FONT_ERROR_LABEL  = 11;
   TIMECODE_PADDING  = 8;  { horizontal padding inside timecode label }
   ARC_PEN_WIDTH     = 3;
   ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
   MIN_ARC_RADIUS    = 5;  { skip spinner if cell too small }
+  ARC_ANGLE_STEP    = 45.0; { spinner rotation angle per animation tick }
 
   { UI layout }
-  ANIM_INTERVAL_MS = 80;   { placeholder spinner animation tick }
-  MAX_FRAME_COUNT  = 99;   { upper limit for frame count spin edit }
-  STATUSBAR_HEIGHT = 21;
-  STATUSBAR_FONT   = 9;
+  ANIM_INTERVAL_MS    = 80;   { placeholder spinner animation tick }
+  MAX_FRAME_COUNT     = 99;   { upper limit for frame count spin edit }
+  FRAME_COUNT_EDIT_W  = 40;   { width of the frame count edit control }
+  STATUSBAR_HEIGHT    = 21;
+  STATUSBAR_FONT      = 9;
+  PROGRESSBAR_H       = 14;   { desired height of the embedded progress bar }
+  PROGRESSBAR_MIN_W   = 40;   { minimum width before clamping }
 
   { Status bar panel widths }
   SBP_RESOLUTION_W = 120;
@@ -1096,7 +1102,7 @@ begin
   Radius := Min(ARect.Width, ARect.Height) div ARC_RADIUS_DIV;
   if Radius < MIN_ARC_RADIUS then Exit;
 
-  StartAngle := FAnimStep * 45.0;
+  StartAngle := FAnimStep * ARC_ANGLE_STEP;
   Canvas.Pen.Color := CLR_ARC;
   Canvas.Pen.Width := ARC_PEN_WIDTH;
   Canvas.Pen.Style := psSolid;
@@ -1534,7 +1540,7 @@ begin
   { Create edit first: its auto-sized height is the reference for all controls }
   FEditFrameCount := TEdit.Create(FToolbar);
   FEditFrameCount.Parent := FToolbar;
-  FEditFrameCount.Width := 40;
+  FEditFrameCount.Width := FRAME_COUNT_EDIT_W;
   FEditFrameCount.NumbersOnly := True;
   FEditFrameCount.TabOrder := 0;
   CtrlH := FEditFrameCount.Height;
@@ -1551,14 +1557,14 @@ begin
   FLblFrames.Top := CY + (CtrlH - FLblFrames.Height) div 2;
   Inc(X, FLblFrames.Width + 4);
 
-  FEditFrameCount.SetBounds(X, CY, 40, CtrlH);
+  FEditFrameCount.SetBounds(X, CY, FRAME_COUNT_EDIT_W, CtrlH);
 
   FUpDown := TUpDown.Create(FToolbar);
   FUpDown.Parent := FToolbar;
   FUpDown.Associate := FEditFrameCount;
   FUpDown.Min := 1;
   FUpDown.Max := MAX_FRAME_COUNT;
-  Inc(X, 40 + FUpDown.Width + CTRL_GAP);
+  Inc(X, FRAME_COUNT_EDIT_W + FUpDown.Width + CTRL_GAP);
   FFrameCountRight := X;
 
   { Create 5 mode buttons }
@@ -1831,8 +1837,8 @@ begin
   FLblError.Align := alClient;
   FLblError.Alignment := taCenter;
   FLblError.Layout := tlCenter;
-  FLblError.Font.Size := 11;
-  FLblError.Font.Color := $00888888;
+  FLblError.Font.Size := FONT_ERROR_LABEL;
+  FLblError.Font.Color := CLR_ERROR_LABEL;
   FLblError.WordWrap := True;
   FLblError.Visible := False;
 end;
@@ -2455,10 +2461,10 @@ var
   Margin, BarWidth: Integer;
 begin
   if not FProgressVisible then Exit;
-  Margin := (FStatusBar.ClientHeight - 14) div 2;
+  Margin := (FStatusBar.ClientHeight - PROGRESSBAR_H) div 2;
   BarWidth := FStatusBar.ClientWidth - SBP_TOTAL_RIGHT - 2 * Margin;
-  if BarWidth < 40 then
-    BarWidth := 40;
+  if BarWidth < PROGRESSBAR_MIN_W then
+    BarWidth := PROGRESSBAR_MIN_W;
   FProgressBar.SetBounds(SBP_TOTAL_RIGHT + Margin, Margin, BarWidth, FStatusBar.ClientHeight - 2 * Margin);
 end;
 
