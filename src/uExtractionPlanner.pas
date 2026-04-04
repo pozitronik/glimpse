@@ -25,9 +25,10 @@ type
   end;
 
 { Splits FrameCount frames into chunks for parallel extraction.
-  MaxWorkers=0 means one worker per frame; result is never empty
-  when FrameCount > 0. }
-function PlanWorkerChunks(FrameCount, MaxWorkers: Integer): TArray<TWorkerChunk>;
+  MaxWorkers=0 means one worker per frame.
+  MaxThreads caps the actual thread count (-1 = no limit, 0 = CPU core count).
+  Result is never empty when FrameCount > 0. }
+function PlanWorkerChunks(FrameCount, MaxWorkers, MaxThreads: Integer): TArray<TWorkerChunk>;
 
 { Captures the settings fields relevant to change detection. }
 function TakeSettingsSnapshot(ASettings: TPluginSettings): TSettingsSnapshot;
@@ -42,9 +43,9 @@ implementation
 uses
   System.Math;
 
-function PlanWorkerChunks(FrameCount, MaxWorkers: Integer): TArray<TWorkerChunk>;
+function PlanWorkerChunks(FrameCount, MaxWorkers, MaxThreads: Integer): TArray<TWorkerChunk>;
 var
-  WorkerCount, ChunkSize, W, Start, Len: Integer;
+  WorkerCount, ThreadCap, ChunkSize, W, Start, Len: Integer;
 begin
   if FrameCount <= 0 then
   begin
@@ -56,6 +57,18 @@ begin
     WorkerCount := FrameCount
   else
     WorkerCount := Min(MaxWorkers, FrameCount);
+
+  { Apply thread cap: -1 = no limit, 0 = CPU core count, >0 = explicit }
+  if MaxThreads >= 0 then
+  begin
+    if MaxThreads > 0 then
+      ThreadCap := MaxThreads
+    else
+      ThreadCap := CPUCount;
+    if WorkerCount > ThreadCap then
+      WorkerCount := ThreadCap;
+  end;
+
   if WorkerCount < 1 then
     WorkerCount := 1;
 

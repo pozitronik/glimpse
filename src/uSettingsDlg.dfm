@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 628
+  ClientHeight = 686
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 8
     Width = 444
-    Height = 155
+    Height = 213
     Caption = ' General '
     TabOrder = 0
     object LblSkipEdges: TLabel
@@ -51,23 +51,70 @@ object SettingsForm: TSettingsForm
       TabOrder = 7
       OnClick = ChkMaxWorkersAutoClick
     end
-    object LblExtensions: TLabel
+    object LblMaxThreads: TLabel
       Left = 12
       Top = 82
+      Width = 112
+      Height = 15
+      Caption = 'Limit workers count:'
+    end
+    object LblMaxThreadsAuto: TLabel
+      Left = 198
+      Top = 82
+      Width = 3
+      Height = 15
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
+    object EdtMaxThreads: TEdit
+      Left = 130
+      Top = 78
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 9
+      OnChange = EdtMaxThreadsChange
+    end
+    object UdMaxThreads: TUpDown
+      Left = 175
+      Top = 78
+      Width = 17
+      Height = 23
+      Associate = EdtMaxThreads
+      Min = -1
+      Max = 64
+      Thousands = False
+      TabOrder = 10
+    end
+    object ChkUseBmpPipe: TCheckBox
+      Left = 12
+      Top = 111
+      Width = 424
+      Height = 17
+      Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
+      TabOrder = 8
+    end
+    object LblExtensions: TLabel
+      Left = 12
+      Top = 140
       Width = 63
       Height = 15
       Caption = 'Extensions:'
     end
     object LblFFmpegPath: TLabel
       Left = 12
-      Top = 111
+      Top = 169
       Width = 76
       Height = 15
       Caption = 'FFmpeg path:'
     end
     object LblFFmpegInfo: TLabel
       Left = 12
-      Top = 132
+      Top = 190
       Width = 3
       Height = 15
       Font.Charset = DEFAULT_CHARSET
@@ -116,14 +163,14 @@ object SettingsForm: TSettingsForm
     end
     object EdtExtensions: TEdit
       Left = 130
-      Top = 78
+      Top = 136
       Width = 306
       Height = 23
       TabOrder = 4
     end
     object EdtFFmpegPath: TEdit
       Left = 130
-      Top = 107
+      Top = 165
       Width = 274
       Height = 23
       TabOrder = 5
@@ -132,7 +179,7 @@ object SettingsForm: TSettingsForm
     end
     object BtnFFmpegPath: TButton
       Left = 408
-      Top = 107
+      Top = 165
       Width = 28
       Height = 23
       Caption = '...'
@@ -142,7 +189,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxAppearance: TGroupBox
     Left = 8
-    Top = 169
+    Top = 227
     Width = 444
     Height = 138
     Caption = ' Appearance '
@@ -260,7 +307,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxSave: TGroupBox
     Left = 8
-    Top = 313
+    Top = 371
     Width = 444
     Height = 138
     Caption = ' Save '
@@ -362,7 +409,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 457
+    Top = 515
     Width = 444
     Height = 123
     Caption = ' Cache '
@@ -470,7 +517,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 592
+    Top = 650
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -479,7 +526,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 592
+    Top = 650
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -489,7 +536,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 592
+    Top = 650
     Width = 75
     Height = 28
     Cancel = True

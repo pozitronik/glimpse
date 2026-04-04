@@ -24,6 +24,8 @@ type
     FFramesCount: Integer;
     FSkipEdgesPercent: Integer;
     FMaxWorkers: Integer;
+    FMaxThreads: Integer;
+    FUseBmpPipe: Boolean;
     { [view] }
     FViewMode: TViewMode;
     FModeZoom: array[TViewMode] of TZoomMode;
@@ -84,6 +86,8 @@ type
     property FramesCount: Integer read FFramesCount write FFramesCount;
     property SkipEdgesPercent: Integer read FSkipEdgesPercent write FSkipEdgesPercent;
     property MaxWorkers: Integer read FMaxWorkers write FMaxWorkers;
+    property MaxThreads: Integer read FMaxThreads write FMaxThreads;
+    property UseBmpPipe: Boolean read FUseBmpPipe write FUseBmpPipe;
 
     { [view] }
     property ViewMode: TViewMode read FViewMode write FViewMode;
@@ -121,6 +125,8 @@ const
   DEF_FRAMES_COUNT          = 4;
   DEF_SKIP_EDGES_PERCENT = 2;
   DEF_MAX_WORKERS        = 1;
+  DEF_MAX_THREADS        = -1;  { -1 = no limit, 0 = auto (CPU core count) }
+  DEF_USE_BMP_PIPE       = True;
   DEF_VIEW_MODE          = vmGrid;
   DEF_ZOOM_MODE          = zmFitWindow;
   DEF_BACKGROUND         = TColor($001E1E1E);
@@ -176,6 +182,8 @@ begin
   FFramesCount := DEF_FRAMES_COUNT;
   FSkipEdgesPercent := DEF_SKIP_EDGES_PERCENT;
   FMaxWorkers := DEF_MAX_WORKERS;
+  FMaxThreads := DEF_MAX_THREADS;
+  FUseBmpPipe := DEF_USE_BMP_PIPE;
   FViewMode := DEF_VIEW_MODE;
   for var VM := Low(TViewMode) to High(TViewMode) do
     FModeZoom[VM] := DEF_ZOOM_MODE;
@@ -212,6 +220,8 @@ begin
     FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
     FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
     FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 0, 16);
+    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads', DEF_MAX_THREADS), -1, 64);
+    FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
@@ -256,6 +266,8 @@ begin
     Ini.WriteInteger('extraction', 'FramesCount', FFramesCount);
     Ini.WriteInteger('extraction', 'SkipEdges', FSkipEdgesPercent);
     Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
+    Ini.WriteInteger('extraction', 'MaxThreads', FMaxThreads);
+    Ini.WriteBool('extraction', 'UseBmpPipe', FUseBmpPipe);
 
     Ini.WriteString('view', 'Mode', ViewModeToStr(FViewMode));
     for var VM := Low(TViewMode) to High(TViewMode) do

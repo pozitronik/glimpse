@@ -51,10 +51,11 @@ type
     FQueueLock: TCriticalSection;
     FCache: IFrameCache;
     FActiveWorkerCount: PInteger; { shared counter; last thread posts WM_EXTRACTION_DONE }
+    FUseBmpPipe: Boolean;
   protected
     procedure Execute; override;
   public
-    constructor Create(const AFFmpegPath, AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>;  AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger);
+    constructor Create(const AFFmpegPath, AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; AUseBmpPipe: Boolean);
   end;
 
   { Custom control that renders frame cells in various layout modes. }
@@ -385,7 +386,7 @@ const
 
 { TExtractionThread }
 
-constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger);
+constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; AUseBmpPipe: Boolean);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -397,6 +398,7 @@ begin
   FQueueLock := AQueueLock;
   FCache := ACache;
   FActiveWorkerCount := AActiveWorkerCount;
+  FUseBmpPipe := AUseBmpPipe;
 end;
 
 procedure TExtractionThread.Execute;
@@ -432,7 +434,7 @@ begin
           { Cache miss: extract via ffmpeg }
           if Bmp = nil then
           begin
-            Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset);
+            Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset, FUseBmpPipe);
             if Bmp <> nil then
             begin
               Source := 'ffmpeg';
@@ -2345,7 +2347,7 @@ begin
   else
     ThreadCache := FCache;
 
-  Chunks := PlanWorkerChunks(Length(FOffsets), FSettings.MaxWorkers);
+  Chunks := PlanWorkerChunks(Length(FOffsets), FSettings.MaxWorkers, FSettings.MaxThreads);
   FActiveWorkerCount := Length(Chunks);
   SetLength(FWorkerThreads, Length(Chunks));
 
@@ -2353,7 +2355,8 @@ begin
   begin
     Chunk := Copy(FOffsets, Chunks[W].Start, Chunks[W].Len);
     FWorkerThreads[W] := TExtractionThread.Create(FFFmpegPath, FFileName, Chunk,
-      Handle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount);
+      Handle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount,
+      FSettings.UseBmpPipe);
   end;
 
   { Start all threads after creation to minimize scheduling skew }

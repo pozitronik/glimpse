@@ -22,6 +22,11 @@ type
     EdtMaxWorkers: TEdit;
     UdMaxWorkers: TUpDown;
     ChkMaxWorkersAuto: TCheckBox;
+    ChkUseBmpPipe: TCheckBox;
+    LblMaxThreads: TLabel;
+    LblMaxThreadsAuto: TLabel;
+    EdtMaxThreads: TEdit;
+    UdMaxThreads: TUpDown;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -78,6 +83,7 @@ type
     procedure BtnCacheFolderClick(Sender: TObject);
     procedure BtnFFmpegPathClick(Sender: TObject);
     procedure EdtFFmpegPathChange(Sender: TObject);
+    procedure EdtMaxThreadsChange(Sender: TObject);
     procedure EdtCacheFolderChange(Sender: TObject);
     procedure BtnClearCacheClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
@@ -118,6 +124,11 @@ begin
     UdMaxWorkers.Position := ASettings.MaxWorkers
   else
     UdMaxWorkers.Position := 1;
+  ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
+  if ASettings.MaxThreads > 0 then
+    UdMaxThreads.Position := ASettings.MaxThreads
+  else
+    UdMaxThreads.Position := 0;
   UpdateMaxWorkersControls;
   EdtExtensions.Text := ASettings.ExtensionList;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
@@ -151,6 +162,8 @@ begin
     ASettings.MaxWorkers := 0
   else
     ASettings.MaxWorkers := UdMaxWorkers.Position;
+  ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
+  ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
   { Switch to explicit mode when user provides a path }
@@ -254,6 +267,11 @@ begin
   UpdateFFmpegInfo;
 end;
 
+procedure TSettingsForm.EdtMaxThreadsChange(Sender: TObject);
+begin
+  UpdateMaxWorkersControls;
+end;
+
 procedure TSettingsForm.EdtCacheFolderChange(Sender: TObject);
 begin
   UpdateCacheFolderInfo;
@@ -314,12 +332,25 @@ end;
 
 procedure TSettingsForm.UpdateMaxWorkersControls;
 var
-  Manual: Boolean;
+  Manual, OnePerFrame: Boolean;
 begin
-  Manual := not ChkMaxWorkersAuto.Checked;
+  OnePerFrame := ChkMaxWorkersAuto.Checked;
+  Manual := not OnePerFrame;
   LblMaxWorkers.Enabled := Manual;
   EdtMaxWorkers.Enabled := Manual;
   UdMaxWorkers.Enabled := Manual;
+  { Limit workers count is only relevant in one-per-frame mode }
+  LblMaxThreads.Enabled := OnePerFrame;
+  EdtMaxThreads.Enabled := OnePerFrame;
+  UdMaxThreads.Enabled := OnePerFrame;
+  if not OnePerFrame then
+    LblMaxThreadsAuto.Caption := ''
+  else if UdMaxThreads.Position < 0 then
+    LblMaxThreadsAuto.Caption := '(no limit)'
+  else if UdMaxThreads.Position = 0 then
+    LblMaxThreadsAuto.Caption := Format('(auto: %d cores)', [CPUCount])
+  else
+    LblMaxThreadsAuto.Caption := '';
 end;
 
 procedure TSettingsForm.UpdateSaveFormatControls;

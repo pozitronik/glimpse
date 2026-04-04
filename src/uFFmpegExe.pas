@@ -34,8 +34,10 @@ type
     function ProbeVideo(const AFileName: string): TVideoInfo;
 
     { Extracts a single frame at the given time offset.
+      AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
-    function ExtractFrame(const AFileName: string; ATimeOffset: Double): TBitmap;
+    function ExtractFrame(const AFileName: string; ATimeOffset: Double;
+      AUseBmp: Boolean = False): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -618,28 +620,49 @@ begin
     Result.ErrorMessage := 'Could not parse video metadata';
 end;
 
-function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double): TBitmap;
+function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
+  AUseBmp: Boolean): TBitmap;
 var
-  CmdLine: string;
+  CmdLine, Codec: string;
   StdOut, StdErr: TBytes;
   ExitCode: Integer;
+  Stream: TMemoryStream;
 begin
   Result := nil;
 
+  if AUseBmp then
+    Codec := '-f image2pipe -vcodec bmp'
+  else
+    Codec := '-q:v 2 -f image2pipe -vcodec png';
+
   CmdLine := Format('"%s" -nostdin -loglevel error -ss %s -i "%s" ' +
-    '-frames:v 1 -q:v 2 -f image2pipe -vcodec png pipe:1',
+    '-frames:v 1 %s pipe:1',
     [FExePath,
      Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
-     AFileName]);
+     AFileName, Codec]);
 
   ExitCode := RunProcess(CmdLine, StdOut, StdErr);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then
     Exit;
 
   try
-    Result := PngBytesToBitmap(StdOut);
+    if AUseBmp then
+    begin
+      Stream := TMemoryStream.Create;
+      try
+        Stream.WriteBuffer(StdOut[0], Length(StdOut));
+        Stream.Position := 0;
+        Result := TBitmap.Create;
+        Result.LoadFromStream(Stream);
+        Result.PixelFormat := pf24bit;
+      finally
+        Stream.Free;
+      end;
+    end
+    else
+      Result := PngBytesToBitmap(StdOut);
   except
-    on E: Exception do { Corrupt or truncated PNG data }
+    on E: Exception do
       FreeAndNil(Result);
   end;
 end;
