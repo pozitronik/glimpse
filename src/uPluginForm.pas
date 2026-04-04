@@ -168,8 +168,14 @@ type
     FContextCellIndex: Integer;
     FBtnTimecode: TSpeedButton;
     FToolbarButtons: array of TButton;
+    FBtnHamburger: TButton;
+    FHamburgerMenu: TPopupMenu;
     FProgressBar: TProgressBar;
     FLblProgress: TLabel;
+    { Stored X positions from initial layout for collapse threshold checks }
+    FFrameCountRight: Integer;
+    FModeGroupRight: Integer;
+    FActionsRight: Integer;
     { Status bar }
     FStatusBar: TStatusBar;
     { Content }
@@ -189,6 +195,13 @@ type
     FUpdatingLayout: Boolean;
 
     procedure CreateToolbar;
+    procedure LayoutToolbar;
+    procedure OnHamburgerClick(Sender: TObject);
+    procedure OnHamburgerMenuPopup(Sender: TObject);
+    procedure OnHamburgerModeClick(Sender: TObject);
+    procedure OnHamburgerZoomClick(Sender: TObject);
+    procedure OnHamburgerTimecodeClick(Sender: TObject);
+    procedure OnHamburgerActionClick(Sender: TObject);
     procedure CreateFrameView;
     procedure CreateStatusBar;
     procedure UpdateStatusBar;
@@ -1542,6 +1555,7 @@ begin
   FUpDown.Min := 1;
   FUpDown.Max := MAX_FRAME_COUNT;
   Inc(X, 40 + FUpDown.Width + CTRL_GAP);
+  FFrameCountRight := X;
 
   { Create 5 mode buttons }
   TabIdx := 1;
@@ -1577,6 +1591,7 @@ begin
     else
       Inc(X, BW + CTRL_GAP);
   end;
+  FModeGroupRight := X;
 
   FBtnTimecode := TSpeedButton.Create(FToolbar);
   FBtnTimecode.Parent := FToolbar;
@@ -1605,6 +1620,7 @@ begin
     FToolbarButtons[High(FToolbarButtons)] := Btn;
   end;
   Inc(X, CTRL_GAP - BTN_GAP);
+  FActionsRight := X;
 
   FProgressBar := TProgressBar.Create(FToolbar);
   FProgressBar.Parent := FToolbar;
@@ -1619,6 +1635,197 @@ begin
   FLblProgress.Top := CY + (CtrlH - FLblProgress.Height) div 2;
   FLblProgress.Caption := '';
   FLblProgress.Visible := False;
+
+  { Hamburger overflow button: hidden until toolbar is too narrow }
+  FHamburgerMenu := TPopupMenu.Create(Self);
+  FHamburgerMenu.OnPopup := OnHamburgerMenuPopup;
+
+  FBtnHamburger := TButton.Create(FToolbar);
+  FBtnHamburger.Parent := FToolbar;
+  BW := Canvas.TextWidth(#$2630) + BTN_PAD;
+  FBtnHamburger.SetBounds(0, CY, BW, CtrlH);
+  FBtnHamburger.Caption := #$2630;
+  FBtnHamburger.OnClick := OnHamburgerClick;
+  FBtnHamburger.Visible := False;
+end;
+
+procedure TPluginForm.LayoutToolbar;
+const
+  CTRL_GAP = 8;
+  PB_H     = 16;
+var
+  AvailW, HamburgerW, X, CY, CtrlH: Integer;
+  VM: TViewMode;
+  I: Integer;
+  CollapseModes, CollapseActions: Boolean;
+begin
+  if not Assigned(FBtnHamburger) then Exit;
+
+  AvailW := FToolbar.ClientWidth;
+  HamburgerW := FBtnHamburger.Width + CTRL_GAP;
+  CtrlH := FEditFrameCount.Height;
+  CY := (FToolbar.Height - CtrlH) div 2;
+
+  { Determine what needs to collapse }
+  CollapseActions := AvailW < FActionsRight;
+  CollapseModes := CollapseActions and
+    (AvailW < FModeGroupRight + HamburgerW);
+
+  { Show/hide mode buttons }
+  for VM := Low(TViewMode) to High(TViewMode) do
+    FModeButtons[VM].Visible := not CollapseModes;
+
+  { Show/hide timecodes + action buttons }
+  FBtnTimecode.Visible := not CollapseActions;
+  for I := 0 to High(FToolbarButtons) do
+    FToolbarButtons[I].Visible := not CollapseActions;
+
+  { Hamburger button }
+  FBtnHamburger.Visible := CollapseActions;
+  if CollapseActions then
+  begin
+    if CollapseModes then
+      X := FFrameCountRight
+    else
+      X := FModeGroupRight;
+    FBtnHamburger.Left := X;
+    X := X + FBtnHamburger.Width + CTRL_GAP;
+  end
+  else
+    X := FActionsRight;
+
+  { Reposition progress bar and label after the last visible group }
+  FProgressBar.SetBounds(X, CY + (CtrlH - PB_H) div 2, 120, PB_H);
+  FLblProgress.Left := X + 120 + 4;
+end;
+
+procedure TPluginForm.OnHamburgerClick(Sender: TObject);
+var
+  P: TPoint;
+begin
+  P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
+  FHamburgerMenu.Popup(P.X, P.Y);
+end;
+
+procedure TPluginForm.OnHamburgerMenuPopup(Sender: TObject);
+var
+  VM: TViewMode;
+  ZM: TZoomMode;
+  MI, SubMI, Sep: TMenuItem;
+  I: Integer;
+  HasFrames, ModesCollapsed: Boolean;
+begin
+  FHamburgerMenu.Items.Clear;
+  HasFrames := FFramesLoaded > 0;
+  ModesCollapsed := not FModeButtons[vmSmartGrid].Visible;
+
+  { Mode items: only when mode buttons are collapsed }
+  if ModesCollapsed then
+  begin
+    for VM := Low(TViewMode) to High(TViewMode) do
+    begin
+      MI := TMenuItem.Create(FHamburgerMenu);
+      MI.Caption := MODE_CAPTIONS[VM];
+      MI.Tag := Ord(VM);
+
+      if FFrameView.ViewMode = VM then
+        MI.Default := True;
+
+      { Modes with zoom submodes get a submenu }
+      if FModePopups[VM] <> nil then
+      begin
+        for ZM := Low(TZoomMode) to High(TZoomMode) do
+        begin
+          SubMI := TMenuItem.Create(MI);
+          SubMI.Caption := SIZING_LABELS[VM, ZM];
+          SubMI.Tag := Ord(VM) shl 8 or Ord(ZM);
+          SubMI.RadioItem := True;
+          SubMI.Checked := FSettings.ModeZoom[VM] = ZM;
+          SubMI.OnClick := OnHamburgerZoomClick;
+          MI.Add(SubMI);
+        end;
+      end
+      else
+        MI.OnClick := OnHamburgerModeClick;
+
+      FHamburgerMenu.Items.Add(MI);
+    end;
+
+    Sep := TMenuItem.Create(FHamburgerMenu);
+    Sep.Caption := '-';
+    FHamburgerMenu.Items.Add(Sep);
+  end;
+
+  { Timecodes toggle }
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := 'Timecodes';
+  MI.Checked := FFrameView.ShowTimecode;
+  MI.OnClick := OnHamburgerTimecodeClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  Sep := TMenuItem.Create(FHamburgerMenu);
+  Sep.Caption := '-';
+  FHamburgerMenu.Items.Add(Sep);
+
+  { Action items }
+  for I := 0 to High(TB_ACTIONS) do
+  begin
+    MI := TMenuItem.Create(FHamburgerMenu);
+    MI.Caption := TB_ACTIONS[I].Caption;
+    MI.Tag := TB_ACTIONS[I].Tag;
+    MI.OnClick := OnHamburgerActionClick;
+    case TB_ACTIONS[I].Tag of
+      CM_SETTINGS: MI.Enabled := True;
+    else
+      MI.Enabled := HasFrames;
+    end;
+    FHamburgerMenu.Items.Add(MI);
+  end;
+end;
+
+procedure TPluginForm.OnHamburgerModeClick(Sender: TObject);
+begin
+  ActivateMode(TViewMode(TMenuItem(Sender).Tag));
+end;
+
+procedure TPluginForm.OnHamburgerZoomClick(Sender: TObject);
+var
+  AMode: TViewMode;
+  AZoom: TZoomMode;
+  Tag: Integer;
+begin
+  Tag := TMenuItem(Sender).Tag;
+  AMode := TViewMode(Tag shr 8);
+  AZoom := TZoomMode(Tag and $FF);
+
+  { First activate the mode, then override its zoom }
+  ActivateMode(AMode);
+  FFrameView.ZoomMode := AZoom;
+  UpdateFrameViewSize;
+
+  { Persist and sync the popup menu checks }
+  FSettings.ModeZoom[AMode] := AZoom;
+  FSettings.ZoomMode := AZoom;
+  FSettings.Save;
+  SyncZoomMenuChecks(AMode, AZoom);
+end;
+
+procedure TPluginForm.OnHamburgerTimecodeClick(Sender: TObject);
+begin
+  OnTimecodeButtonClick(Sender);
+end;
+
+procedure TPluginForm.OnHamburgerActionClick(Sender: TObject);
+begin
+  case TMenuItem(Sender).Tag of
+    CM_SAVE_FRAME:    SaveSingleFrame;
+    CM_SAVE_COMBINED: SaveCombinedFrame;
+    CM_SAVE_ALL:      SaveAllFrames;
+    CM_COPY_FRAME:    CopyFrameToClipboard;
+    CM_COPY_ALL:      CopyAllToClipboard;
+    CM_REFRESH:       RefreshExtraction;
+    CM_SETTINGS:      ShowSettings;
+  end;
 end;
 
 function TPluginForm.CreateModePopup(AMode: TViewMode): TPopupMenu;
@@ -2664,6 +2871,7 @@ procedure TPluginForm.Resize;
 begin
   inherited;
   Realign;
+  LayoutToolbar;
   { VCL fires Resize during window creation, before CreateForPlugin finishes
     constructing sub-controls, so FFrameView may not exist yet }
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
