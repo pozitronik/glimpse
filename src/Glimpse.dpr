@@ -21,7 +21,8 @@ uses
   uBitmapSaver in 'uBitmapSaver.pas',
   uZoomController in 'uZoomController.pas',
   uViewModeLogic in 'uViewModeLogic.pas',
-  uExtractionPlanner in 'uExtractionPlanner.pas';
+  uExtractionPlanner in 'uExtractionPlanner.pas',
+  uToolbarLayout in 'uToolbarLayout.pas';
 
 exports
   ListLoad,

@@ -60,6 +60,7 @@
         <DCCReference Include="uZoomController.pas"/>
         <DCCReference Include="uViewModeLogic.pas"/>
         <DCCReference Include="uExtractionPlanner.pas"/>
+        <DCCReference Include="uToolbarLayout.pas"/>
         <DCCReference Include="uSettingsDlg.pas">
             <Form>SettingsForm</Form>
         </DCCReference>

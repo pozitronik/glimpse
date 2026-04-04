@@ -28,7 +28,9 @@ uses
   uViewModeLogic in '..\src\uViewModeLogic.pas',
   TestViewModeLogic in 'TestViewModeLogic.pas',
   uExtractionPlanner in '..\src\uExtractionPlanner.pas',
-  TestExtractionPlanner in 'TestExtractionPlanner.pas';
+  TestExtractionPlanner in 'TestExtractionPlanner.pas',
+  uToolbarLayout in '..\src\uToolbarLayout.pas',
+  TestToolbarLayout in 'TestToolbarLayout.pas';
 
 var
   Runner: ITestRunner;
