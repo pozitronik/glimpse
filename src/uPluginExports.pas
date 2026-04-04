@@ -215,7 +215,8 @@ begin
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
 
-  { Run cache eviction once per session, only when over budget.
+  { Run cache eviction once per session.
+    Evict enumerates files and exits early if within budget, so no pre-check needed.
     Wrapped in try/except: invalid or inaccessible cache folder must not crash TC. }
   if GSettings.CacheEnabled then
   begin
@@ -223,8 +224,7 @@ begin
     try
       with TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB) do
       try
-        if GetTotalSize > Int64(GSettings.CacheMaxSizeMB) * 1024 * 1024 then
-          Evict;
+        Evict;
       finally
         Free;
       end;
