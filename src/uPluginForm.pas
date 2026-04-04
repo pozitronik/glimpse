@@ -193,6 +193,8 @@ type
     FAnimTimer: TTimer;
     { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
     FUpdatingLayout: Boolean;
+    { Prevents key-triggered reopen while Popup is still returning }
+    FHamburgerMenuOpen: Boolean;
 
     procedure CreateToolbar;
     procedure LayoutToolbar;
@@ -276,6 +278,25 @@ begin
   DebugLog('Form', AMsg);
 end;
 {$ENDIF}
+
+{ Closes the active menu on the calling thread }
+function EndMenu: BOOL; stdcall; external user32 name 'EndMenu';
+
+var
+  { Thread-local keyboard hook handle, active only during hamburger popup }
+  GMenuHook: HHOOK;
+
+{ Intercepts VK_OEM_3 (tilde) during popup menu's modal loop to close it }
+function MenuKeyboardProc(nCode: Integer; wParam: WPARAM; lParam: LPARAM): LRESULT; stdcall;
+begin
+  if (nCode = HC_ACTION) and (wParam = VK_OEM_3) and (lParam and (1 shl 31) = 0) then
+  begin
+    EndMenu;
+    Result := 1;
+  end
+  else
+    Result := CallNextHookEx(GMenuHook, nCode, wParam, lParam);
+end;
 
 { comctl32 v6 subclass API - lets us monitor the parent window's WM_SIZE }
 function SetWindowSubclass(hWnd: HWND; pfnSubclass: Pointer;
@@ -1657,8 +1678,18 @@ procedure TPluginForm.OnHamburgerClick(Sender: TObject);
 var
   P: TPoint;
 begin
-  P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
-  FHamburgerMenu.Popup(P.X, P.Y);
+  if FHamburgerMenuOpen then Exit;
+  FHamburgerMenuOpen := True;
+  GMenuHook := SetWindowsHookEx(WH_KEYBOARD, @MenuKeyboardProc, 0, GetCurrentThreadId);
+  try
+    P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
+    FHamburgerMenu.Popup(P.X, P.Y);
+  finally
+    if GMenuHook <> 0 then
+      UnhookWindowsHookEx(GMenuHook);
+    GMenuHook := 0;
+    FHamburgerMenuOpen := False;
+  end;
 end;
 
 procedure TPluginForm.OnHamburgerMenuPopup(Sender: TObject);
@@ -2564,6 +2595,12 @@ begin
         FToolbar.Visible := not FToolbar.Visible;
         FSettings.ShowToolbar := FToolbar.Visible;
         FSettings.Save;
+        Key := 0;
+      end;
+    VK_OEM_3: { ~ / ` key }
+      if FBtnHamburger.Visible then
+      begin
+        OnHamburgerClick(FBtnHamburger);
         Key := 0;
       end;
   end;
