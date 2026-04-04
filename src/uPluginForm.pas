@@ -196,6 +196,8 @@ type
     FUpdatingLayout: Boolean;
     { Prevents key-triggered reopen while Popup is still returning }
     FHamburgerMenuOpen: Boolean;
+    { Suppresses WM_CHAR after OnKeyDown consumed the keystroke }
+    FKeyConsumed: Boolean;
 
     procedure CreateToolbar;
     procedure LayoutToolbar;
@@ -255,6 +257,7 @@ type
     procedure OnContextMenuPopup(Sender: TObject);
     procedure OnContextMenuClick(Sender: TObject);
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure OnFormKeyPress(Sender: TObject; var Key: Char);
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
     procedure CMDialogKey(var Message: TWMKey); message CM_DIALOGKEY;
@@ -1450,6 +1453,7 @@ begin
   BorderStyle := bsNone;
   KeyPreview := True;
   OnKeyDown := OnFormKeyDown;
+  OnKeyPress := OnFormKeyPress;
 
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
@@ -2505,6 +2509,8 @@ end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 begin
+  FKeyConsumed := False;
+
   { Ctrl+Up/Down: adjust frame count }
   if (ssCtrl in Shift) and (Key in [VK_UP, VK_DOWN]) then
   begin
@@ -2513,6 +2519,7 @@ begin
     else
       FUpDown.Position := FUpDown.Position - 1;
     Key := 0;
+    FKeyConsumed := True;
     Exit;
   end;
 
@@ -2524,12 +2531,14 @@ begin
         begin
           FFrameView.NavigateFrame(-1);
           Key := 0;
+          FKeyConsumed := True;
           Exit;
         end;
       VK_RIGHT, VK_DOWN:
         begin
           FFrameView.NavigateFrame(1);
           Key := 0;
+          FKeyConsumed := True;
           Exit;
         end;
     end;
@@ -2628,6 +2637,21 @@ begin
         OnHamburgerClick(FBtnHamburger);
         Key := 0;
       end;
+  end;
+
+  if Key = 0 then
+    FKeyConsumed := True;
+end;
+
+procedure TPluginForm.OnFormKeyPress(Sender: TObject; var Key: Char);
+begin
+  { WM_CHAR is posted by TranslateMessage before WM_KEYDOWN is dispatched,
+    so setting Key:=0 in OnKeyDown alone cannot suppress it. Eat the char
+    here to prevent e.g. the NumbersOnly balloon on the frame count editor. }
+  if FKeyConsumed then
+  begin
+    Key := #0;
+    FKeyConsumed := False;
   end;
 end;
 
