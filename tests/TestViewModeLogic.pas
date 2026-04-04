@@ -10,8 +10,14 @@ type
   TTestViewModeLogic = class
   public
     [Test] procedure TestKeyToViewModeDigit1;
+    [Test] procedure TestKeyToViewModeDigit2;
+    [Test] procedure TestKeyToViewModeDigit3;
+    [Test] procedure TestKeyToViewModeDigit4;
     [Test] procedure TestKeyToViewModeDigit5;
     [Test] procedure TestKeyToViewModeNumpad1;
+    [Test] procedure TestKeyToViewModeNumpad2;
+    [Test] procedure TestKeyToViewModeNumpad3;
+    [Test] procedure TestKeyToViewModeNumpad4;
     [Test] procedure TestKeyToViewModeNumpad5;
     [Test] procedure TestKeyToViewModeInvalidKey;
     [Test] procedure TestKeyToViewModeLetterKey;
@@ -40,6 +46,27 @@ begin
   Assert.AreEqual(Ord(vmSmartGrid), Ord(M));
 end;
 
+procedure TTestViewModeLogic.TestKeyToViewModeDigit2;
+var M: TViewMode;
+begin
+  Assert.IsTrue(KeyToViewMode(Ord('2'), M));
+  Assert.AreEqual(Ord(vmGrid), Ord(M));
+end;
+
+procedure TTestViewModeLogic.TestKeyToViewModeDigit3;
+var M: TViewMode;
+begin
+  Assert.IsTrue(KeyToViewMode(Ord('3'), M));
+  Assert.AreEqual(Ord(vmScroll), Ord(M));
+end;
+
+procedure TTestViewModeLogic.TestKeyToViewModeDigit4;
+var M: TViewMode;
+begin
+  Assert.IsTrue(KeyToViewMode(Ord('4'), M));
+  Assert.AreEqual(Ord(vmFilmstrip), Ord(M));
+end;
+
 procedure TTestViewModeLogic.TestKeyToViewModeDigit5;
 var M: TViewMode;
 begin
@@ -52,6 +79,27 @@ var M: TViewMode;
 begin
   Assert.IsTrue(KeyToViewMode(VK_NUMPAD1, M));
   Assert.AreEqual(Ord(vmSmartGrid), Ord(M));
+end;
+
+procedure TTestViewModeLogic.TestKeyToViewModeNumpad2;
+var M: TViewMode;
+begin
+  Assert.IsTrue(KeyToViewMode(VK_NUMPAD2, M));
+  Assert.AreEqual(Ord(vmGrid), Ord(M));
+end;
+
+procedure TTestViewModeLogic.TestKeyToViewModeNumpad3;
+var M: TViewMode;
+begin
+  Assert.IsTrue(KeyToViewMode(VK_NUMPAD3, M));
+  Assert.AreEqual(Ord(vmScroll), Ord(M));
+end;
+
+procedure TTestViewModeLogic.TestKeyToViewModeNumpad4;
+var M: TViewMode;
+begin
+  Assert.IsTrue(KeyToViewMode(VK_NUMPAD4, M));
+  Assert.AreEqual(Ord(vmFilmstrip), Ord(M));
 end;
 
 procedure TTestViewModeLogic.TestKeyToViewModeNumpad5;
