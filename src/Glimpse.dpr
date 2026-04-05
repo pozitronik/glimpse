@@ -28,7 +28,8 @@ uses
   uExtractionPlanner in 'uExtractionPlanner.pas',
   uToolbarLayout in 'uToolbarLayout.pas',
   uFileNavigator in 'uFileNavigator.pas',
-  uPathExpand in 'uPathExpand.pas';
+  uPathExpand in 'uPathExpand.pas',
+  uColorConv in 'uColorConv.pas';
 
 exports
   ListLoad,

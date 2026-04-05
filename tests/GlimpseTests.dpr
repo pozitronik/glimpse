@@ -40,7 +40,9 @@ uses
   TestDebugLog in 'TestDebugLog.pas',
   uPathExpand in '..\src\uPathExpand.pas',
   TestPathExpand in 'TestPathExpand.pas',
-  TestTypes in 'TestTypes.pas';
+  TestTypes in 'TestTypes.pas',
+  uColorConv in '..\src\uColorConv.pas',
+  TestColorConv in 'TestColorConv.pas';
 
 var
   Runner: ITestRunner;

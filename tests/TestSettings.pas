@@ -87,7 +87,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uTypes, uSettings, uBitmapSaver, uPathExpand;
+  uTypes, uSettings, uBitmapSaver, uPathExpand, uColorConv;
 
 procedure TTestPluginSettings.Setup;
 begin
@@ -883,19 +883,19 @@ var
   C: TColor;
 begin
   { Standard 6-digit hex with # prefix }
-  Assert.IsTrue(TPluginSettings.TryParseHexRGB('#FF0000', C), '#FF0000 should parse');
+  Assert.IsTrue(TryParseHexRGB('#FF0000', C), '#FF0000 should parse');
   Assert.AreEqual(Integer($000000FF), Integer(C), 'Red channel');
 
-  Assert.IsTrue(TPluginSettings.TryParseHexRGB('#00FF00', C), '#00FF00 should parse');
+  Assert.IsTrue(TryParseHexRGB('#00FF00', C), '#00FF00 should parse');
   Assert.AreEqual(Integer($0000FF00), Integer(C), 'Green channel');
 
-  Assert.IsTrue(TPluginSettings.TryParseHexRGB('#0000FF', C), '#0000FF should parse');
+  Assert.IsTrue(TryParseHexRGB('#0000FF', C), '#0000FF should parse');
   Assert.AreEqual(Integer($00FF0000), Integer(C), 'Blue channel');
 
-  Assert.IsTrue(TPluginSettings.TryParseHexRGB('#000000', C), '#000000 should parse');
+  Assert.IsTrue(TryParseHexRGB('#000000', C), '#000000 should parse');
   Assert.AreEqual(Integer($00000000), Integer(C), 'Black');
 
-  Assert.IsTrue(TPluginSettings.TryParseHexRGB('#FFFFFF', C), '#FFFFFF should parse');
+  Assert.IsTrue(TryParseHexRGB('#FFFFFF', C), '#FFFFFF should parse');
   Assert.AreEqual(Integer($00FFFFFF), Integer(C), 'White');
 end;
 
@@ -904,13 +904,13 @@ var
   C: TColor;
 begin
   { Empty string }
-  Assert.IsFalse(TPluginSettings.TryParseHexRGB('', C), 'Empty string');
+  Assert.IsFalse(TryParseHexRGB('', C), 'Empty string');
   { Too short }
-  Assert.IsFalse(TPluginSettings.TryParseHexRGB('#FF00', C), 'Too short');
+  Assert.IsFalse(TryParseHexRGB('#FF00', C), 'Too short');
   { Non-hex characters }
-  Assert.IsFalse(TPluginSettings.TryParseHexRGB('#GGHHII', C), 'Non-hex chars');
+  Assert.IsFalse(TryParseHexRGB('#GGHHII', C), 'Non-hex chars');
   { Single character }
-  Assert.IsFalse(TPluginSettings.TryParseHexRGB('#', C), 'Just hash');
+  Assert.IsFalse(TryParseHexRGB('#', C), 'Just hash');
 end;
 
 procedure TTestPluginSettings.TestEffectiveCacheFolderExpandsEnvVars;

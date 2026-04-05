@@ -51,17 +51,11 @@ type
     class function ZoomModeToStr(AMode: TZoomMode): string; static;
     class function StrToSaveFormat(const AValue: string): TSaveFormat; static;
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
-    class function HexToColor(const AValue: string; ADefault: TColor): TColor; static;
-    class function ColorToHex(AColor: TColor): string; static;
-    class procedure HexToColorAlpha(const AValue: string; ADefColor: TColor;
-      ADefAlpha: Byte; out AColor: TColor; out AAlpha: Byte); static;
-    class function ColorAlphaToHex(AColor: TColor; AAlpha: Byte): string; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
     function GetActiveZoom: TZoomMode;
     procedure SetActiveZoom(AValue: TZoomMode);
   public
-    class function TryParseHexRGB(const AHex: string; out AColor: TColor): Boolean; static;
     constructor Create(const AIniPath: string);
 
     { Loads all settings from the INI file. Missing or invalid values get defaults. }
@@ -150,7 +144,7 @@ function EffectiveCacheFolder(const ACacheFolder: string): string;
 implementation
 
 uses
-  uPathExpand;
+  uPathExpand, uColorConv;
 
 function DefaultCacheFolder: string;
 begin
@@ -373,79 +367,6 @@ begin
   else
     Result := 'PNG';
   end;
-end;
-
-{ Parses #RRGGBB from a hex string starting at position 1.
-  Returns True on success, setting AColor. }
-class function TPluginSettings.TryParseHexRGB(const AHex: string; out AColor: TColor): Boolean;
-var
-  R, G, B: Integer;
-begin
-  Result := False;
-  try
-    R := StrToInt('$' + Copy(AHex, 2, 2));
-    G := StrToInt('$' + Copy(AHex, 4, 2));
-    B := StrToInt('$' + Copy(AHex, 6, 2));
-    { TColor is stored as $00BBGGRR }
-    AColor := TColor(R or (G shl 8) or (B shl 16));
-    Result := True;
-  except
-    on EConvertError do; { Invalid hex digits }
-  end;
-end;
-
-class function TPluginSettings.HexToColor(const AValue: string; ADefault: TColor): TColor;
-var
-  Hex: string;
-begin
-  Hex := AValue.Trim;
-  if (Length(Hex) = 7) and (Hex[1] = '#') and TryParseHexRGB(Hex, Result) then
-    Exit;
-  Result := ADefault;
-end;
-
-class function TPluginSettings.ColorToHex(AColor: TColor): string;
-var
-  C: Integer;
-begin
-  C := Integer(AColor);
-  Result := Format('#%.2X%.2X%.2X', [
-    C and $FF,
-    (C shr 8) and $FF,
-    (C shr 16) and $FF
-  ]);
-end;
-
-class procedure TPluginSettings.HexToColorAlpha(const AValue: string;
-  ADefColor: TColor; ADefAlpha: Byte; out AColor: TColor; out AAlpha: Byte);
-var
-  Hex: string;
-begin
-  Hex := AValue.Trim;
-  if (Length(Hex) = 9) and (Hex[1] = '#') and TryParseHexRGB(Hex, AColor) then
-  begin
-    try
-      AAlpha := Byte(StrToInt('$' + Copy(Hex, 8, 2)));
-      Exit;
-    except
-      on EConvertError do; { Invalid hex digits for alpha }
-    end;
-  end;
-  AColor := ADefColor;
-  AAlpha := ADefAlpha;
-end;
-
-class function TPluginSettings.ColorAlphaToHex(AColor: TColor; AAlpha: Byte): string;
-var
-  C: Integer;
-begin
-  C := Integer(AColor);
-  Result := Format('#%.2X%.2X%.2X%.2X', [
-    C and $FF,
-    (C shr 8) and $FF,
-    (C shr 16) and $FF,
-    AAlpha
-  ]);
 end;
 
 function TPluginSettings.GetModeZoom(AMode: TViewMode): TZoomMode;
