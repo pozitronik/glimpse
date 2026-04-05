@@ -1121,6 +1121,12 @@ begin
         RefreshExtraction;
         Key := 0;
       end;
+    Ord('T'):
+      if Shift = [] then
+      begin
+        OnTimecodeButtonClick(nil);
+        Key := 0;
+      end;
     Ord('Z'):
       if Shift = [] then
       begin
