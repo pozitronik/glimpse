@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 440
+  ClientHeight = 594
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -14,12 +14,12 @@ object WcxSettingsForm: TWcxSettingsForm
   Font.Style = []
   Position = poScreenCenter
   TextHeight = 15
-  object GbxExtraction: TGroupBox
+  object GbxGeneral: TGroupBox
     Left = 8
     Top = 8
     Width = 444
-    Height = 80
-    Caption = ' Extraction '
+    Height = 242
+    Caption = ' General '
     TabOrder = 0
     object LblFrameCount: TLabel
       Left = 12
@@ -41,6 +41,58 @@ object WcxSettingsForm: TWcxSettingsForm
       Width = 11
       Height = 15
       Caption = '%'
+    end
+    object LblMaxWorkers: TLabel
+      Left = 12
+      Top = 82
+      Width = 74
+      Height = 15
+      Caption = 'Max workers:'
+    end
+    object LblMaxThreads: TLabel
+      Left = 12
+      Top = 111
+      Width = 112
+      Height = 15
+      Caption = 'Limit workers count:'
+    end
+    object LblMaxThreadsAuto: TLabel
+      Left = 198
+      Top = 111
+      Width = 3
+      Height = 15
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
+    end
+    object LblExtensions: TLabel
+      Left = 12
+      Top = 169
+      Width = 63
+      Height = 15
+      Caption = 'Extensions:'
+    end
+    object LblFFmpegPath: TLabel
+      Left = 12
+      Top = 198
+      Width = 76
+      Height = 15
+      Caption = 'FFmpeg path:'
+    end
+    object LblFFmpegInfo: TLabel
+      Left = 12
+      Top = 221
+      Width = 3
+      Height = 15
+      Font.Charset = DEFAULT_CHARSET
+      Font.Color = clGray
+      Font.Height = -12
+      Font.Name = 'Segoe UI'
+      Font.Style = []
+      ParentFont = False
     end
     object EdtFrameCount: TEdit
       Left = 130
@@ -79,12 +131,93 @@ object WcxSettingsForm: TWcxSettingsForm
       Thousands = False
       TabOrder = 3
     end
+    object EdtMaxWorkers: TEdit
+      Left = 130
+      Top = 78
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 4
+    end
+    object UdMaxWorkers: TUpDown
+      Left = 175
+      Top = 78
+      Width = 17
+      Height = 23
+      Associate = EdtMaxWorkers
+      Min = 1
+      Max = 16
+      Thousands = False
+      TabOrder = 5
+    end
+    object ChkMaxWorkersAuto: TCheckBox
+      Left = 198
+      Top = 82
+      Width = 130
+      Height = 17
+      Caption = 'One per frame'
+      TabOrder = 6
+      OnClick = ChkMaxWorkersAutoClick
+    end
+    object EdtMaxThreads: TEdit
+      Left = 130
+      Top = 107
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 7
+      OnChange = EdtMaxThreadsChange
+    end
+    object UdMaxThreads: TUpDown
+      Left = 175
+      Top = 107
+      Width = 17
+      Height = 23
+      Associate = EdtMaxThreads
+      Min = -1
+      Max = 64
+      Thousands = False
+      TabOrder = 8
+    end
+    object ChkUseBmpPipe: TCheckBox
+      Left = 12
+      Top = 140
+      Width = 424
+      Height = 17
+      Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
+      TabOrder = 9
+    end
+    object EdtExtensions: TEdit
+      Left = 130
+      Top = 165
+      Width = 306
+      Height = 23
+      TabOrder = 10
+    end
+    object EdtFFmpegPath: TEdit
+      Left = 130
+      Top = 194
+      Width = 274
+      Height = 23
+      TabOrder = 11
+      TextHint = 'Auto-detect'
+      OnChange = EdtFFmpegPathChange
+    end
+    object BtnFFmpegPath: TButton
+      Left = 408
+      Top = 194
+      Width = 28
+      Height = 23
+      Caption = '...'
+      TabOrder = 12
+      OnClick = BtnFFmpegPathClick
+    end
   end
   object GbxOutput: TGroupBox
     Left = 8
-    Top = 96
+    Top = 258
     Width = 444
-    Height = 109
+    Height = 138
     Caption = ' Output '
     TabOrder = 1
     object LblOutputMode: TLabel
@@ -107,6 +240,13 @@ object WcxSettingsForm: TWcxSettingsForm
       Width = 76
       Height = 15
       Caption = 'JPEG quality:'
+    end
+    object LblPngCompression: TLabel
+      Left = 12
+      Top = 111
+      Width = 104
+      Height = 15
+      Caption = 'PNG compression:'
     end
     object CbxOutputMode: TComboBox
       Left = 130
@@ -150,12 +290,30 @@ object WcxSettingsForm: TWcxSettingsForm
       Thousands = False
       TabOrder = 3
     end
+    object EdtPngCompression: TEdit
+      Left = 130
+      Top = 107
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 4
+    end
+    object UdPngCompression: TUpDown
+      Left = 175
+      Top = 107
+      Width = 17
+      Height = 23
+      Associate = EdtPngCompression
+      Max = 9
+      Thousands = False
+      TabOrder = 5
+    end
   end
   object GbxCombined: TGroupBox
     Left = 8
-    Top = 213
+    Top = 404
     Width = 444
-    Height = 109
+    Height = 138
     Caption = ' Combined image '
     TabOrder = 2
     object LblColumns: TLabel
@@ -171,6 +329,13 @@ object WcxSettingsForm: TWcxSettingsForm
       Width = 72
       Height = 15
       Caption = 'Cell gap (px):'
+    end
+    object LblBackground: TLabel
+      Left = 12
+      Top = 82
+      Width = 71
+      Height = 15
+      Caption = 'Background:'
     end
     object EdtColumns: TEdit
       Left = 130
@@ -208,57 +373,68 @@ object WcxSettingsForm: TWcxSettingsForm
       Thousands = False
       TabOrder = 3
     end
+    object PnlBackground: TPanel
+      Left = 130
+      Top = 78
+      Width = 80
+      Height = 23
+      BevelOuter = bvLowered
+      Caption = ''
+      Cursor = crHandPoint
+      ParentBackground = False
+      TabOrder = 4
+      OnClick = PnlBackgroundClick
+    end
+    object BtnBackground: TButton
+      Left = 214
+      Top = 78
+      Width = 25
+      Height = 23
+      Caption = '...'
+      TabOrder = 5
+      OnClick = PnlBackgroundClick
+    end
     object ChkTimestamp: TCheckBox
       Left = 12
-      Top = 82
+      Top = 111
       Width = 200
       Height = 17
       Caption = 'Show timestamps on frames'
-      TabOrder = 4
+      TabOrder = 6
     end
   end
-  object LblFFmpegPath: TLabel
-    Left = 20
-    Top = 335
-    Width = 76
-    Height = 15
-    Caption = 'FFmpeg path:'
-  end
-  object EdtFFmpegPath: TEdit
-    Left = 138
-    Top = 331
-    Width = 290
-    Height = 23
+  object BtnDefaults: TButton
+    Left = 8
+    Top = 554
+    Width = 100
+    Height = 28
+    Caption = 'Reset Defaults'
     TabOrder = 3
-    TextHint = 'Auto-detect'
-  end
-  object BtnBrowse: TButton
-    Left = 432
-    Top = 331
-    Width = 20
-    Height = 23
-    Caption = '...'
-    TabOrder = 4
-    OnClick = BtnBrowseClick
+    OnClick = BtnDefaultsClick
   end
   object BtnOK: TButton
     Left = 296
-    Top = 404
+    Top = 554
     Width = 75
     Height = 28
     Caption = 'OK'
     Default = True
     ModalResult = 1
-    TabOrder = 5
+    TabOrder = 4
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 404
+    Top = 554
     Width = 75
     Height = 28
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 6
+    TabOrder = 5
+  end
+  object ColorDlg: TColorDialog
+    Options = [cdFullOpen]
+    Left = 408
+    Top = 554
   end
 end

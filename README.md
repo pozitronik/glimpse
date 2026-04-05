@@ -65,7 +65,18 @@ Presents a video file as a virtual archive containing frame images. Opening a vi
 
 ### Configuration
 
-The WCX plugin uses its own `Glimpse.ini` (stored in TC's plugin settings directory). Settings include frame count, output format (PNG/JPEG), quality, and ffmpeg path.
+Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin.
+
+Settings include:
+- Frame count, skip edges percentage
+- Parallel extraction: max workers, thread limit, BMP pipe mode
+- Supported file extensions
+- FFmpeg path (auto-detected if not specified)
+- Output mode: separate frame files or a single combined grid image
+- Image format (PNG/JPEG), quality and compression
+- Combined image options: column count, cell gap, background color, timestamp overlay
+
+After changing settings, re-enter the video file to see the updated listing.
 
 ## Installation
 

@@ -472,4 +472,9 @@ begin
   end;
 end;
 
+initialization
+  { Fallback: INI next to the DLL, in case SetDefaultParams is not called
+    before ConfigurePacker or OpenArchive }
+  GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
+
 end.
