@@ -37,7 +37,8 @@ uses
   uFileNavigator in '..\src\uFileNavigator.pas',
   TestFileNavigator in 'TestFileNavigator.pas',
   TestDebugLog in 'TestDebugLog.pas',
-  uPathExpand in '..\src\uPathExpand.pas';
+  uPathExpand in '..\src\uPathExpand.pas',
+  TestPathExpand in 'TestPathExpand.pas';
 
 var
   Runner: ITestRunner;
