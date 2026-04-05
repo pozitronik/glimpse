@@ -23,8 +23,7 @@ implementation
 
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
-  uSettings, uFFmpegLocator, uPluginForm, uCache
-  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
+  uSettings, uFFmpegLocator, uPluginForm, uCache, uDebugLog;
 
 var
   GSettings: TPluginSettings;
@@ -33,9 +32,7 @@ var
 
 procedure Log(const AMsg: string);
 begin
-  {$IFDEF DEBUG}
   DebugLog('Plugin', AMsg);
-  {$ENDIF}
 end;
 
 { Resolves a TC-provided window handle to our plugin form, or nil. }

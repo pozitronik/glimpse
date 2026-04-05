@@ -48,15 +48,12 @@ type
 implementation
 
 uses
-  System.SysUtils
-  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
+  System.SysUtils, uDebugLog;
 
-{$IFDEF DEBUG}
 procedure ThreadLog(const AMsg: string);
 begin
   DebugLog('Thread', AMsg);
 end;
-{$ENDIF}
 
 constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
@@ -85,7 +82,7 @@ var
   I, CellIdx: Integer;
   Source: string;
 begin
-  {$IFDEF DEBUG}ThreadLog(Format('Execute START frames=%d', [Length(FOffsets)]));{$ENDIF}
+  ThreadLog(Format('Execute START frames=%d', [Length(FOffsets)]));
   try
     FFmpeg := TFFmpegExe.Create(FFFmpegPath);
     try
@@ -93,7 +90,7 @@ begin
       begin
         if Terminated then
         begin
-          {$IFDEF DEBUG}ThreadLog(Format('Execute TERMINATED at i=%d', [I]));{$ENDIF}
+          ThreadLog(Format('Execute TERMINATED at i=%d', [I]));
           Exit;
         end;
 
@@ -118,19 +115,15 @@ begin
             end;
           end;
 
-          {$IFDEF DEBUG}
           if Bmp <> nil then
             ThreadLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
               [CellIdx, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
           else
             ThreadLog(Format('Frame[%d] source=%s Bmp=NIL', [CellIdx, Source]));
-          {$ENDIF}
         except
           on E: Exception do
           begin
-            {$IFDEF DEBUG}
             ThreadLog(Format('Frame[%d] EXCEPTION: %s: %s', [CellIdx, E.ClassName, E.Message]));
-            {$ENDIF}
             FreeAndNil(Bmp);
           end;
         end;

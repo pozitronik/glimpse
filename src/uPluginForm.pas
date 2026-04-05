@@ -147,15 +147,12 @@ type
 implementation
 
 uses
-  uSettingsDlg, uFileNavigator
-  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
+  uSettingsDlg, uFileNavigator, uDebugLog;
 
-{$IFDEF DEBUG}
 procedure FormLog(const AMsg: string);
 begin
   DebugLog('Form', AMsg);
 end;
-{$ENDIF}
 
 { Closes the active menu on the calling thread }
 function EndMenu: BOOL; stdcall; external user32 name 'EndMenu';
@@ -288,8 +285,8 @@ begin
 
   {$IFDEF DEBUG}
   uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
-  FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
   {$ENDIF}
+  FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
 
   if FSettings.CacheEnabled then
   begin
@@ -1075,7 +1072,7 @@ procedure TPluginForm.LoadFile(const AFileName: string);
 var
   FFmpeg: TFFmpegExe;
 begin
-  {$IFDEF DEBUG}FormLog(Format('LoadFile: %s', [AFileName]));{$ENDIF}
+  FormLog(Format('LoadFile: %s', [AFileName]));
   FFileName := AFileName;
   SetWindowText(FParentWnd, PChar(Format('Lister (glimpse) - [%s]', [AFileName])));
   StopExtraction;
@@ -1204,25 +1201,21 @@ begin
     FPendingLock.Leave;
   end;
 
-  {$IFDEF DEBUG}
   if Length(Snapshot) > 0 then
     FormLog(Format('ProcessPending: count=%d', [Length(Snapshot)]));
-  {$ENDIF}
 
   for I := 0 to High(Snapshot) do
   begin
     if Snapshot[I].Bitmap <> nil then
     begin
-      {$IFDEF DEBUG}
       FormLog(Format('  SetFrame[%d] bmp=%dx%d empty=%s',
         [Snapshot[I].Index, Snapshot[I].Bitmap.Width, Snapshot[I].Bitmap.Height,
          BoolToStr(Snapshot[I].Bitmap.Empty, True)]));
-      {$ENDIF}
       FFrameView.SetFrame(Snapshot[I].Index, Snapshot[I].Bitmap);
     end
     else
     begin
-      {$IFDEF DEBUG}FormLog(Format('  SetCellError[%d]', [Snapshot[I].Index]));{$ENDIF}
+      FormLog(Format('  SetCellError[%d]', [Snapshot[I].Index]));
       FFrameView.SetCellError(Snapshot[I].Index);
     end;
     Inc(FFramesLoaded);
@@ -1302,13 +1295,13 @@ end;
 
 procedure TPluginForm.WMExtractionDone(var Message: TMessage);
 begin
-  {$IFDEF DEBUG}FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FFramesLoaded, Length(FOffsets)]));{$ENDIF}
+  FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FFramesLoaded, Length(FOffsets)]));
   { Safety net: process any frames that arrived after the last notification }
   ProcessPendingFrames;
   HideProgress;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
-  {$IFDEF DEBUG}FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
-    [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));{$ENDIF}
+  FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
+    [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));
 end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);

@@ -79,8 +79,7 @@ type
 implementation
 
 uses
-  System.DateUtils
-  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
+  System.DateUtils, uDebugLog;
 
 { Invariant format settings for deterministic key strings }
 var
@@ -125,9 +124,7 @@ begin
   FMaxSizeBytes := Int64(AMaxSizeMB) * 1024 * 1024;
   if not TDirectory.Exists(FCacheDir) then
     TDirectory.CreateDirectory(FCacheDir);
-  {$IFDEF DEBUG}
-  DebugLog('Cache',Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
-  {$ENDIF}
+  DebugLog('Cache', Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
 end;
 
 class function TFrameCache.BuildKeyString(const AFilePath: string;
@@ -179,21 +176,19 @@ begin
     Path := KeyToPath(Key);
     if not TFile.Exists(Path) then
     begin
-      {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet MISS (no file) key=%s', [Key]));{$ENDIF}
+      DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]));
       Exit;
     end;
 
     Data := TFile.ReadAllBytes(Path);
-    {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));{$ENDIF}
+    DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));
     Result := PngBytesToBitmap(Data);
-    {$IFDEF DEBUG}
-    DebugLog('Cache',Format('  BMP loaded: %dx%d empty=%s pf=%d',
+    DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d',
       [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));
-    {$ENDIF}
   except
     on E: Exception do
     begin
-      {$IFDEF DEBUG}DebugLog('Cache',Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
+      DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
       FreeAndNil(Result);
     end;
   end;
@@ -218,7 +213,7 @@ begin
   Key := FrameKey(AFilePath, ATimeOffset);
   if Key = '' then
     Exit;
-  {$IFDEF DEBUG}DebugLog('Cache',Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));{$ENDIF}
+  DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
   try
     FinalPath := KeyToPath(Key);
     SubDir := ExtractFilePath(FinalPath);
@@ -232,7 +227,7 @@ begin
       Png.Assign(ABitmap);
       Png.CompressionLevel := 1; { Fast compression for cache writes }
       Png.SaveToFile(TempPath);
-      {$IFDEF DEBUG}DebugLog('Cache',Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));{$ENDIF}
+      DebugLog('Cache', Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));
     finally
       Png.Free;
     end;
@@ -241,11 +236,11 @@ begin
     if TFile.Exists(FinalPath) then
       TFile.Delete(FinalPath);
     TFile.Move(TempPath, FinalPath);
-    {$IFDEF DEBUG}DebugLog('Cache',Format('  moved to %s', [FinalPath]));{$ENDIF}
+    DebugLog('Cache', Format('  moved to %s', [FinalPath]));
   except
     on E: Exception do
     begin
-      {$IFDEF DEBUG}DebugLog('Cache',Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));{$ENDIF}
+      DebugLog('Cache', Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
       try
         if TFile.Exists(TempPath) then
           TFile.Delete(TempPath);

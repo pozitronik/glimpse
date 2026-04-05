@@ -1,23 +1,22 @@
 { Thread-safe debug logging to file.
-  Extracted so that any unit can log without depending on uCache. }
+  Logging is active when GDebugLogPath is non-empty; set automatically
+  in debug builds, can be enabled manually in release builds. }
 unit uDebugLog;
 
 interface
 
-{$IFDEF DEBUG}
 var
   GDebugLogPath: string;
 
-{ Thread-safe debug logging to file. Tag identifies the subsystem. }
+{ Thread-safe debug logging to file. Tag identifies the subsystem.
+  No-op when GDebugLogPath is empty. }
 procedure DebugLog(const ATag, AMsg: string);
-{$ENDIF}
 
 implementation
 
 uses
   System.SysUtils;
 
-{$IFDEF DEBUG}
 function GetCurrentThreadId: Cardinal; stdcall; external 'kernel32.dll';
 
 procedure DebugLog(const ATag, AMsg: string);
@@ -41,6 +40,5 @@ begin
     { Logging must never crash the plugin }
   end;
 end;
-{$ENDIF}
 
 end.
