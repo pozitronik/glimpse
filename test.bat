@@ -23,7 +23,6 @@ if errorlevel 1 (
 
 if not exist "tests\GlimpseTests.dproj" (
     echo ERROR: Test project not found at tests\GlimpseTests.dproj
-    echo        Create the test project first.
     pause
     exit /b 1
 )

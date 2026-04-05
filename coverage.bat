@@ -52,7 +52,7 @@ if not exist "tests\Win64\Debug\GlimpseTests.map" (
 echo.
 echo [2/4] Generating unit list from source files...
 
-:: Generate list of all unit names from src directory
+:: Generate list of all unit names from src and wlx directories
 if exist "coverage\units.lst" del "coverage\units.lst"
 if exist "coverage\srcpaths.lst" del "coverage\srcpaths.lst"
 if not exist "coverage" mkdir coverage
@@ -60,8 +60,12 @@ if not exist "coverage" mkdir coverage
 :: Scan src directory for .pas files
 for %%f in (src\*.pas) do echo %%~nxf>> coverage\units.lst
 
+:: Scan wlx directory for .pas files
+for %%f in (wlx\*.pas) do echo %%~nxf>> coverage\units.lst
+
 :: Source paths (absolute)
 echo %~dp0src>> coverage\srcpaths.lst
+echo %~dp0wlx>> coverage\srcpaths.lst
 
 :: ============================================
 :: Step 3: Run Code Coverage

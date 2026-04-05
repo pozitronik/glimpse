@@ -1,4 +1,4 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{B7E4A2F1-3C8D-4E5A-9F6B-1D2E3F4A5B6C}</ProjectGuid>
         <ProjectVersion>20.3</ProjectVersion>
@@ -38,6 +38,7 @@
     <PropertyGroup Condition="'$(Base)'=='true'">
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
+        <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <Debugger_HostApplication>D:\DSHELL\TOTALCMD64.EXE</Debugger_HostApplication>
@@ -49,26 +50,32 @@
         </DelphiCompile>
         <DCCReference Include="uWlxAPI.pas"/>
         <DCCReference Include="uPluginExports.pas"/>
-        <DCCReference Include="uSettings.pas"/>
-        <DCCReference Include="uFrameOffsets.pas"/>
-        <DCCReference Include="uFFmpegLocator.pas"/>
-        <DCCReference Include="uFFmpegExe.pas"/>
+        <DCCReference Include="..\src\uSettings.pas"/>
+        <DCCReference Include="..\src\uFrameOffsets.pas"/>
+        <DCCReference Include="..\src\uFFmpegLocator.pas"/>
+        <DCCReference Include="..\src\uFFmpegExe.pas"/>
         <DCCReference Include="uFrameView.pas"/>
-        <DCCReference Include="uExtractionWorker.pas"/>
+        <DCCReference Include="..\src\uExtractionWorker.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
-        <DCCReference Include="uDebugLog.pas"/>
-        <DCCReference Include="uCache.pas"/>
-        <DCCReference Include="uFrameFileNames.pas"/>
-        <DCCReference Include="uBitmapSaver.pas"/>
+        <DCCReference Include="..\src\uDebugLog.pas"/>
+        <DCCReference Include="..\src\uCache.pas"/>
+        <DCCReference Include="..\src\uFrameFileNames.pas"/>
+        <DCCReference Include="..\src\uBitmapSaver.pas"/>
         <DCCReference Include="uZoomController.pas"/>
         <DCCReference Include="uViewModeLogic.pas"/>
-        <DCCReference Include="uExtractionPlanner.pas"/>
+        <DCCReference Include="..\src\uExtractionPlanner.pas"/>
         <DCCReference Include="uToolbarLayout.pas"/>
-        <DCCReference Include="uFileNavigator.pas"/>
-        <DCCReference Include="uPathExpand.pas"/>
+        <DCCReference Include="..\src\uFileNavigator.pas"/>
+        <DCCReference Include="..\src\uPathExpand.pas"/>
         <DCCReference Include="uSettingsDlg.pas">
             <Form>SettingsForm</Form>
         </DCCReference>
+        <DCCReference Include="..\src\uColorConv.pas"/>
+        <DCCReference Include="..\src\uRunProcess.pas"/>
+        <DCCReference Include="..\src\uFrameExtractor.pas"/>
+        <DCCReference Include="uViewModeLayout.pas"/>
+        <DCCReference Include="uFrameExport.pas"/>
+        <DCCReference Include="uExtractionController.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

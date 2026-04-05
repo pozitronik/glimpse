@@ -12,7 +12,7 @@ cd /d "%~dp0"
 :: Step 1: Set up build environment
 :: ============================================
 echo.
-echo [1/5] Setting up build environment...
+echo [1/6] Setting up build environment...
 
 call "C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat"
 if errorlevel 1 (
@@ -24,29 +24,51 @@ if errorlevel 1 (
 :: Step 2: Build WLX plugin (Win32 + Win64)
 :: ============================================
 echo.
-echo [2/5] Building Glimpse plugin...
+echo [2/6] Building WLX plugin...
 
 echo   Win32 Release...
-msbuild src\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win32 /v:m /nologo
+msbuild wlx\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win32 /v:m /nologo
 if errorlevel 1 (
-    echo ERROR: Win32 build failed
+    echo ERROR: WLX Win32 build failed
     exit /b 1
 )
 
 echo   Win64 Release...
-msbuild src\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win64 /v:m /nologo
+msbuild wlx\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win64 /v:m /nologo
 if errorlevel 1 (
-    echo ERROR: Win64 build failed
+    echo ERROR: WLX Win64 build failed
     exit /b 1
 )
 
-echo Plugin builds successful.
+echo WLX builds successful.
 
 :: ============================================
-:: Step 3: Get git branch and tag
+:: Step 3: Build WCX plugin (Win32 + Win64)
 :: ============================================
 echo.
-echo [3/5] Getting git info...
+echo [3/6] Building WCX plugin...
+
+echo   Win32 Release...
+msbuild wcx\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win32 /v:m /nologo
+if errorlevel 1 (
+    echo ERROR: WCX Win32 build failed
+    exit /b 1
+)
+
+echo   Win64 Release...
+msbuild wcx\Glimpse.dproj /t:Build /p:Config=Release /p:Platform=Win64 /v:m /nologo
+if errorlevel 1 (
+    echo ERROR: WCX Win64 build failed
+    exit /b 1
+)
+
+echo WCX builds successful.
+
+:: ============================================
+:: Step 4: Get git branch and tag
+:: ============================================
+echo.
+echo [4/6] Getting git info...
 
 :: Get current branch name
 for /f "tokens=*" %%i in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set BRANCH=%%i
@@ -80,25 +102,25 @@ if not "%TAG%"=="" (
 ) else (
     echo Tag: ^(none^)
 )
-echo Archive: %BASE_NAME%.zip
+echo Archives: %BASE_NAME%_wlx.zip, %BASE_NAME%_wcx.zip
 
 :: ============================================
-:: Step 4: Create ZIP archive
+:: Step 5: Create WLX archive
 :: ============================================
 echo.
-echo [4/5] Creating archive...
+echo [5/6] Creating WLX archive...
 
-if exist "%BASE_NAME%.zip" del "%BASE_NAME%.zip"
+if exist "%BASE_NAME%_wlx.zip" del "%BASE_NAME%_wlx.zip"
 
 powershell -NoProfile -Command ^
-    "$staging = 'build_temp'; " ^
-    "$archive = '%BASE_NAME%.zip'; " ^
+    "$staging = 'build_temp_wlx'; " ^
+    "$archive = '%BASE_NAME%_wlx.zip'; " ^
     "$version = '%VERSION%'; " ^
     "if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }; " ^
     "New-Item -ItemType Directory -Path $staging | Out-Null; " ^
     "$filesToCopy = @(" ^
-        "@{Src='src\Win32\Release\Glimpse.wlx';    Dst=\"$staging\Glimpse.wlx\"}, " ^
-        "@{Src='src\Win64\Release\Glimpse.wlx64';  Dst=\"$staging\Glimpse.wlx64\"}, " ^
+        "@{Src='wlx\Win32\Release\Glimpse.wlx';    Dst=\"$staging\Glimpse.wlx\"}, " ^
+        "@{Src='wlx\Win64\Release\Glimpse.wlx64';  Dst=\"$staging\Glimpse.wlx64\"}, " ^
         "@{Src='README.md';                            Dst=\"$staging\README.md\"}, " ^
         "@{Src='LICENSE';                              Dst=\"$staging\LICENSE\"}" ^
     "); " ^
@@ -122,20 +144,64 @@ powershell -NoProfile -Command ^
     "if (Test-Path $archive) { Remove-Item $archive -Force }; " ^
     "Compress-Archive -Path \"$staging\*\" -DestinationPath $archive; " ^
     "Remove-Item $staging -Recurse -Force; " ^
-    "if ($?) { Write-Host 'Archive created successfully.' } else { exit 1 }"
+    "if ($?) { Write-Host 'WLX archive created.' } else { exit 1 }"
 
 if errorlevel 1 (
-    echo ERROR: Failed to create archive
+    echo ERROR: Failed to create WLX archive
     exit /b 1
 )
 
 :: ============================================
-:: Step 5: Summary
+:: Step 6: Create WCX archive
+:: ============================================
+echo.
+echo [6/6] Creating WCX archive...
+
+if exist "%BASE_NAME%_wcx.zip" del "%BASE_NAME%_wcx.zip"
+
+powershell -NoProfile -Command ^
+    "$staging = 'build_temp_wcx'; " ^
+    "$archive = '%BASE_NAME%_wcx.zip'; " ^
+    "$version = '%VERSION%'; " ^
+    "if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }; " ^
+    "New-Item -ItemType Directory -Path $staging | Out-Null; " ^
+    "$filesToCopy = @(" ^
+        "@{Src='wcx\Win32\Release\Glimpse.wcx';    Dst=\"$staging\Glimpse.wcx\"}, " ^
+        "@{Src='wcx\Win64\Release\Glimpse.wcx64';  Dst=\"$staging\Glimpse.wcx64\"}, " ^
+        "@{Src='README.md';                            Dst=\"$staging\README.md\"}, " ^
+        "@{Src='LICENSE';                              Dst=\"$staging\LICENSE\"}" ^
+    "); " ^
+    "$missing = $filesToCopy | Where-Object { -not (Test-Path $_.Src) } | ForEach-Object { $_.Src }; " ^
+    "if ($missing) { Write-Host 'ERROR: Missing files:' $missing -ForegroundColor Red; exit 1 }; " ^
+    "$filesToCopy | ForEach-Object { Copy-Item $_.Src $_.Dst }; " ^
+    "$inf = @('[plugininstall]', " ^
+        "'description=Video frame extractor - extract evenly-spaced frames as image files (32bit+64bit)', " ^
+        "'type=wcx', " ^
+        "'file=Glimpse.wcx', " ^
+        "'file64=Glimpse.wcx64', " ^
+        "'defaultdir=Glimpse', " ^
+        "\"version=$version\", " ^
+        "'defaultextension=mp4'" ^
+    "); " ^
+    "$inf | Out-File -FilePath \"$staging\pluginst.inf\" -Encoding ASCII; " ^
+    "if (Test-Path $archive) { Remove-Item $archive -Force }; " ^
+    "Compress-Archive -Path \"$staging\*\" -DestinationPath $archive; " ^
+    "Remove-Item $staging -Recurse -Force; " ^
+    "if ($?) { Write-Host 'WCX archive created.' } else { exit 1 }"
+
+if errorlevel 1 (
+    echo ERROR: Failed to create WCX archive
+    exit /b 1
+)
+
+:: ============================================
+:: Summary
 :: ============================================
 echo.
 echo ============================================
 echo Release build complete:
-echo   Archive: %BASE_NAME%.zip
+echo   WLX: %BASE_NAME%_wlx.zip
+echo   WCX: %BASE_NAME%_wcx.zip
 echo ============================================
 
 endlocal

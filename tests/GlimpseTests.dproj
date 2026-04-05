@@ -44,7 +44,7 @@
         <SanitizedProjectName>GlimpseTests</SanitizedProjectName>
         <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
-        <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>..\src;..\wlx;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>
@@ -80,9 +80,9 @@
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>
         <DCCReference Include="TestFFmpegExe.pas"/>
-        <DCCReference Include="..\src\uFrameView.pas"/>
+        <DCCReference Include="..\wlx\uFrameView.pas"/>
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
-        <DCCReference Include="..\src\uPluginForm.pas"/>
+        <DCCReference Include="..\wlx\uPluginForm.pas"/>
         <DCCReference Include="TestFrameView.pas"/>
         <DCCReference Include="..\src\uDebugLog.pas"/>
         <DCCReference Include="..\src\uCache.pas"/>
@@ -91,13 +91,13 @@
         <DCCReference Include="TestFrameFileNames.pas"/>
         <DCCReference Include="..\src\uBitmapSaver.pas"/>
         <DCCReference Include="TestBitmapSaver.pas"/>
-        <DCCReference Include="..\src\uZoomController.pas"/>
+        <DCCReference Include="..\wlx\uZoomController.pas"/>
         <DCCReference Include="TestZoomController.pas"/>
-        <DCCReference Include="..\src\uViewModeLogic.pas"/>
+        <DCCReference Include="..\wlx\uViewModeLogic.pas"/>
         <DCCReference Include="TestViewModeLogic.pas"/>
         <DCCReference Include="..\src\uExtractionPlanner.pas"/>
         <DCCReference Include="TestExtractionPlanner.pas"/>
-        <DCCReference Include="..\src\uToolbarLayout.pas"/>
+        <DCCReference Include="..\wlx\uToolbarLayout.pas"/>
         <DCCReference Include="TestToolbarLayout.pas"/>
         <DCCReference Include="..\src\uFileNavigator.pas"/>
         <DCCReference Include="TestFileNavigator.pas"/>
