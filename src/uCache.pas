@@ -81,6 +81,11 @@ implementation
 uses
   System.DateUtils, uDebugLog;
 
+const
+  MOVEFILE_REPLACE_EXISTING = 1;
+
+function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
+
 { Invariant format settings for deterministic key strings }
 var
   InvFmt: TFormatSettings;
@@ -232,10 +237,9 @@ begin
       Png.Free;
     end;
 
-    { Atomic rename; overwrite if exists (benign race from parallel TC) }
-    if TFile.Exists(FinalPath) then
-      TFile.Delete(FinalPath);
-    TFile.Move(TempPath, FinalPath);
+    { Atomic replace: MoveFileEx with MOVEFILE_REPLACE_EXISTING is atomic
+      on NTFS, eliminating the window where concurrent readers see no file }
+    MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING);
     DebugLog('Cache', Format('  moved to %s', [FinalPath]));
   except
     on E: Exception do
