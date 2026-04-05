@@ -5,15 +5,14 @@ unit uPluginForm;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Types, System.Math, System.IOUtils,
-  System.SyncObjs, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.Types, System.Math,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
+  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons,
   uTypes, uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
-  uFrameFileNames, uBitmapSaver, uZoomController, uViewModeLogic,
+  uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uExtractionWorker,
-  uFrameExtractor;
+  uFrameExtractor, uFrameExport, uExtractionController;
 
 type
   { Plugin form created as a child of TC's Lister window. }
@@ -50,13 +49,10 @@ type
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
     FLblError: TLabel;
-    { Worker }
-    FWorkerThreads: TArray<TExtractionThread>;
-    FActiveWorkerCount: Integer;
-    FFramesLoaded: Integer;
-    FPendingFrames: TList<TPendingFrame>;
-    FPendingLock: TCriticalSection;
-    FCache: IFrameCache;
+    { Export }
+    FExporter: TFrameExporter;
+    { Extraction }
+    FExtractCtrl: TExtractionController;
     { Animation }
     FAnimTimer: TTimer;
     { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
@@ -97,22 +93,12 @@ type
     procedure ZoomBy(AFactor: Double);
     procedure ResetZoom;
     procedure SwitchOrCycleMode(AKey: Word);
-    function RenderFrameView: TBitmap;
-    procedure CopyAllToClipboard;
-    function ResolveFrameIndex(out AIndex: Integer): Boolean;
-    function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
-    procedure SaveSingleFrame;
-    procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean);
-    procedure SaveSelectedFrames;
-    procedure SaveCombinedFrame;
-    procedure SaveAllFrames;
     procedure ShowSettings;
     procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
-    procedure StopExtraction;
-    procedure ProcessPendingFrames;
-    procedure DrainPendingFrameMessages;
+    procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
+    procedure OnExtractionProgress(Sender: TObject);
     procedure UpdateProgress;
     procedure ShowProgress(const AText: string);
     procedure HideProgress;
@@ -281,20 +267,23 @@ begin
     Rapid N/P may lose focus due to TC briefly focusing its file list. }
   Winapi.Windows.SetFocus(Handle);
 
-  FPendingFrames := TList<TPendingFrame>.Create;
-  FPendingLock := TCriticalSection.Create;
-
   {$IFDEF DEBUG}
   uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
   {$ENDIF}
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
 
+  { Create extraction controller with appropriate cache }
   if FSettings.CacheEnabled then
-  begin
-    FCache := TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB);
-  end
+    FExtractCtrl := TExtractionController.Create(Handle,
+      TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder),
+        FSettings.CacheMaxSizeMB))
   else
-    FCache := TNullFrameCache.Create;
+    FExtractCtrl := TExtractionController.Create(Handle,
+      TNullFrameCache.Create);
+  FExtractCtrl.OnFrameDelivered := OnFrameDelivered;
+  FExtractCtrl.OnProgress := OnExtractionProgress;
+
+  FExporter := TFrameExporter.Create(FFrameView, FSettings);
 
   FAnimTimer := TTimer.Create(Self);
   FAnimTimer.Interval := ANIM_INTERVAL_MS;
@@ -312,14 +301,10 @@ begin
     (VCL can destroy a windowed control before the constructor finishes) }
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
-  StopExtraction;
-  if Assigned(FPendingLock) then
-    DrainPendingFrameMessages;
+  FExtractCtrl.Free;
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
-  FPendingLock.Free;
-  FPendingFrames.Free;
-  { FCache is an interface reference, released automatically }
+  FExporter.Free;
   inherited;
 end;
 
@@ -507,7 +492,7 @@ begin
     State.CollapseState := tcsActionsCollapsed;
   State.ActiveMode := FFrameView.ViewMode;
   State.ShowTimecode := FFrameView.ShowTimecode;
-  State.HasFrames := FFramesLoaded > 0;
+  State.HasFrames := FExtractCtrl.FramesLoaded > 0;
   for VM := Low(TViewMode) to High(TViewMode) do
   begin
     State.ModeZooms[VM] := FSettings.ModeZoom[VM];
@@ -884,11 +869,8 @@ begin
 end;
 
 procedure TPluginForm.CopyFrameToClipboard;
-var
-  Idx: Integer;
 begin
-  if not ResolveFrameIndex(Idx) then Exit;
-  Clipboard.Assign(FFrameView.CellBitmap(Idx));
+  FExporter.CopyFrameToClipboard(FContextCellIndex);
 end;
 
 procedure TPluginForm.ApplyListerParams(AParams: Integer);
@@ -907,167 +889,6 @@ begin
   FSettings.Save;
 end;
 
-{ Renders the entire frame view into a new bitmap. Caller owns the result. }
-function TPluginForm.RenderFrameView: TBitmap;
-begin
-  Result := TBitmap.Create;
-  Result.SetSize(FFrameView.Width, FFrameView.Height);
-  Result.Canvas.Brush.Color := FFrameView.BackColor;
-  Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
-  FFrameView.PaintTo(Result.Canvas, 0, 0);
-end;
-
-procedure TPluginForm.CopyAllToClipboard;
-var
-  Bmp: TBitmap;
-begin
-  if FFrameView.CellCount = 0 then Exit;
-  Bmp := RenderFrameView;
-  try
-    Clipboard.Assign(Bmp);
-  finally
-    Bmp.Free;
-  end;
-end;
-
-function TPluginForm.ResolveFrameIndex(out AIndex: Integer): Boolean;
-begin
-  Result := False;
-  if FFrameView.CellCount = 0 then Exit;
-  { Prefer the right-clicked cell, fall back to current frame, then index 0 }
-  AIndex := FContextCellIndex;
-  if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
-    AIndex := FFrameView.CurrentFrameIndex;
-  if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
-    AIndex := 0;
-  Result := FFrameView.CellState(AIndex) = fcsLoaded;
-end;
-
-function TPluginForm.ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean;
-  out APath: string; out AFormat: TSaveFormat): Boolean;
-var
-  Dlg: TSaveDialog;
-begin
-  Result := False;
-  Dlg := TSaveDialog.Create(nil);
-  try
-    Dlg.Title := ATitle;
-    Dlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
-    case FSettings.SaveFormat of
-      sfJPEG: Dlg.FilterIndex := 2;
-    else
-      Dlg.FilterIndex := 1;
-    end;
-    Dlg.DefaultExt := 'png';
-    Dlg.FileName := ADefaultName;
-    if FSettings.SaveFolder <> '' then
-      Dlg.InitialDir := ExpandEnvVars(FSettings.SaveFolder);
-    if AOverwritePrompt then
-      Dlg.Options := Dlg.Options + [ofOverwritePrompt];
-
-    if Dlg.Execute then
-    begin
-      case Dlg.FilterIndex of
-        2: AFormat := sfJPEG;
-      else
-        AFormat := sfPNG;
-      end;
-      APath := Dlg.FileName;
-      FSettings.SaveFolder := ExtractFilePath(Dlg.FileName);
-      FSettings.Save;
-      Result := True;
-    end;
-  finally
-    Dlg.Free;
-  end;
-end;
-
-procedure TPluginForm.SaveSingleFrame;
-var
-  Idx: Integer;
-  Fmt: TSaveFormat;
-  Path: string;
-begin
-  if not ResolveFrameIndex(Idx) then Exit;
-
-  if ShowSaveDialog('Save frame',
-    GenerateFrameFileName(FFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat),
-    True, Path, Fmt) then
-    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(Idx), Path, Fmt,
-      FSettings.JpegQuality, FSettings.PngCompression);
-end;
-
-procedure TPluginForm.SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean);
-var
-  I: Integer;
-begin
-  for I := 0 to FFrameView.CellCount - 1 do
-  begin
-    if ASelectedOnly and not FFrameView.CellSelected(I) then Continue;
-    if FFrameView.CellState(I) <> fcsLoaded then Continue;
-    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I),
-      ADir + GenerateFrameFileName(FFileName, I, FFrameView.CellTimeOffset(I), AFormat), AFormat,
-      FSettings.JpegQuality, FSettings.PngCompression);
-  end;
-end;
-
-procedure TPluginForm.SaveSelectedFrames;
-var
-  I, FirstSel: Integer;
-  Path: string;
-  Fmt: TSaveFormat;
-begin
-  if FFrameView.SelectedCount < 2 then Exit;
-
-  { Find first selected frame for the sample filename }
-  FirstSel := 0;
-  for I := 0 to FFrameView.CellCount - 1 do
-    if FFrameView.CellSelected(I) then begin FirstSel := I; Break; end;
-
-  if not ShowSaveDialog('Save selected frames',
-    GenerateFrameFileName(FFileName, FirstSel, FFrameView.CellTimeOffset(FirstSel), FSettings.SaveFormat),
-    False, Path, Fmt) then
-    Exit;
-
-  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, True);
-end;
-
-procedure TPluginForm.SaveCombinedFrame;
-var
-  Bmp: TBitmap;
-  Fmt: TSaveFormat;
-  Path, BaseName: string;
-begin
-  if FFrameView.CellCount = 0 then Exit;
-
-  BaseName := ChangeFileExt(ExtractFileName(FFileName), '');
-  if not ShowSaveDialog('Save combined image', BaseName + '_combined.png', True, Path, Fmt) then
-    Exit;
-
-  Bmp := RenderFrameView;
-  try
-    uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt,
-      FSettings.JpegQuality, FSettings.PngCompression);
-  finally
-    Bmp.Free;
-  end;
-end;
-
-procedure TPluginForm.SaveAllFrames;
-var
-  Path: string;
-  Fmt: TSaveFormat;
-begin
-  if FFrameView.CellCount = 0 then Exit;
-
-  { Show a sample filename so user sees the pattern and picks the folder }
-  if not ShowSaveDialog('Save all frames',
-    GenerateFrameFileName(FFileName, 0, FFrameView.CellTimeOffset(0), FSettings.SaveFormat),
-    False, Path, Fmt) then
-    Exit;
-
-  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, False);
-end;
 
 procedure TPluginForm.LoadFile(const AFileName: string);
 var
@@ -1076,8 +897,8 @@ begin
   FormLog(Format('LoadFile: %s', [AFileName]));
   FFileName := AFileName;
   SetWindowText(FParentWnd, PChar(Format('Lister (glimpse) - [%s]', [AFileName])));
-  StopExtraction;
-  DrainPendingFrameMessages;
+  FExtractCtrl.Stop;
+  FExtractCtrl.DrainPendingFrameMessages;
   FFrameView.ClearCells;
   FVideoInfo := Default(TVideoInfo);
 
@@ -1133,122 +954,32 @@ end;
 
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
-  ThreadCache: IFrameCache;
   Extractor: IFrameExtractor;
-  Chunks: TArray<TWorkerChunk>;
-  W: Integer;
-  Chunk: TFrameOffsetArray;
 begin
-  StopExtraction;
-  FFramesLoaded := 0;
+  FExtractCtrl.Stop;
   UpdateToolbarButtons;
 
-  { Show progress bar in a dedicated status bar panel }
   FProgressBar.Style := pbstMarquee;
   ShowProgress('Extracting...');
-
   FAnimTimer.Enabled := True;
 
-  if ACacheOverride <> nil then
-    ThreadCache := ACacheOverride
-  else
-    ThreadCache := FCache;
-
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
-
-  Chunks := PlanWorkerChunks(Length(FOffsets), FSettings.MaxWorkers, FSettings.MaxThreads);
-  FActiveWorkerCount := Length(Chunks);
-  SetLength(FWorkerThreads, Length(Chunks));
-
-  for W := 0 to High(Chunks) do
-  begin
-    Chunk := Copy(FOffsets, Chunks[W].Start, Chunks[W].Len);
-    FWorkerThreads[W] := TExtractionThread.Create(Extractor, FFileName, Chunk,
-      Handle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount,
-      FSettings.UseBmpPipe);
-  end;
-
-  { Start all threads after creation to minimize scheduling skew }
-  for W := 0 to High(Chunks) do
-    FWorkerThreads[W].Start;
+  FExtractCtrl.Start(Extractor, FFileName, FOffsets,
+    FSettings.MaxWorkers, FSettings.MaxThreads, FSettings.UseBmpPipe,
+    ACacheOverride);
 end;
 
-procedure TPluginForm.StopExtraction;
-var
-  W: Integer;
+procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
 begin
-  { Signal all workers to stop }
-  for W := 0 to High(FWorkerThreads) do
-    if Assigned(FWorkerThreads[W]) then
-      FWorkerThreads[W].Terminate;
-  { Wait for all workers to finish, then free }
-  for W := 0 to High(FWorkerThreads) do
-    if Assigned(FWorkerThreads[W]) then
-    begin
-      FWorkerThreads[W].WaitFor;
-      FreeAndNil(FWorkerThreads[W]);
-    end;
-  FWorkerThreads := nil;
+  if ABitmap <> nil then
+    FFrameView.SetFrame(AIndex, ABitmap)
+  else
+    FFrameView.SetCellError(AIndex);
 end;
 
-procedure TPluginForm.ProcessPendingFrames;
-var
-  Snapshot: TArray<TPendingFrame>;
-  I: Integer;
+procedure TPluginForm.OnExtractionProgress(Sender: TObject);
 begin
-  { Drain the queue under lock, then process outside the lock }
-  FPendingLock.Enter;
-  try
-    if FPendingFrames.Count = 0 then
-      Exit;
-    Snapshot := FPendingFrames.ToArray;
-    FPendingFrames.Clear;
-  finally
-    FPendingLock.Leave;
-  end;
-
-  if Length(Snapshot) > 0 then
-    FormLog(Format('ProcessPending: count=%d', [Length(Snapshot)]));
-
-  for I := 0 to High(Snapshot) do
-  begin
-    if Snapshot[I].Bitmap <> nil then
-    begin
-      FormLog(Format('  SetFrame[%d] bmp=%dx%d empty=%s',
-        [Snapshot[I].Index, Snapshot[I].Bitmap.Width, Snapshot[I].Bitmap.Height,
-         BoolToStr(Snapshot[I].Bitmap.Empty, True)]));
-      FFrameView.SetFrame(Snapshot[I].Index, Snapshot[I].Bitmap);
-    end
-    else
-    begin
-      FormLog(Format('  SetCellError[%d]', [Snapshot[I].Index]));
-      FFrameView.SetCellError(Snapshot[I].Index);
-    end;
-    Inc(FFramesLoaded);
-  end;
-
-  if Length(Snapshot) > 0 then
-    UpdateProgress;
-end;
-
-procedure TPluginForm.DrainPendingFrameMessages;
-var
-  Msg: TMsg;
-  I: Integer;
-begin
-  { Free any bitmaps still in the queue }
-  FPendingLock.Enter;
-  try
-    for I := 0 to FPendingFrames.Count - 1 do
-      FPendingFrames[I].Bitmap.Free;
-    FPendingFrames.Clear;
-  finally
-    FPendingLock.Leave;
-  end;
-  { Discard stale notification messages from the Win32 queue }
-  while PeekMessage(Msg, Handle, WM_FRAME_READY, WM_FRAME_READY, PM_REMOVE) do
-    ; { notifications carry no payload }
-  PeekMessage(Msg, Handle, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE);
+  UpdateProgress;
 end;
 
 procedure TPluginForm.ShowProgress(const AText: string);
@@ -1281,29 +1012,30 @@ end;
 procedure TPluginForm.UpdateProgress;
 begin
   UpdateToolbarButtons;
-  if FFramesLoaded >= Length(FOffsets) then
+  if FExtractCtrl.FramesLoaded >= FExtractCtrl.TotalFrames then
   begin
     HideProgress;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   end
-  else if (FFramesLoaded > 0) and FProgressVisible then
+  else if (FExtractCtrl.FramesLoaded > 0) and FProgressVisible then
   begin
     FProgressBar.Style := pbstNormal;
-    FProgressBar.Max := Length(FOffsets);
-    FProgressBar.Position := FFramesLoaded;
+    FProgressBar.Max := FExtractCtrl.TotalFrames;
+    FProgressBar.Position := FExtractCtrl.FramesLoaded;
   end;
 end;
 
 procedure TPluginForm.WMFrameReady(var Message: TMessage);
 begin
-  ProcessPendingFrames;
+  FExtractCtrl.ProcessPendingFrames;
 end;
 
 procedure TPluginForm.WMExtractionDone(var Message: TMessage);
 begin
-  FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FFramesLoaded, Length(FOffsets)]));
+  FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d',
+    [FExtractCtrl.FramesLoaded, FExtractCtrl.TotalFrames]));
   { Safety net: process any frames that arrived after the last notification }
-  ProcessPendingFrames;
+  FExtractCtrl.ProcessPendingFrames;
   HideProgress;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
@@ -1352,7 +1084,7 @@ begin
       if ssCtrl in Shift then
       begin
         if ssShift in Shift then
-          CopyAllToClipboard
+          FExporter.CopyAllToClipboard
         else
           CopyFrameToClipboard;
         Key := 0;
@@ -1362,18 +1094,18 @@ begin
       begin
         if [ssShift, ssAlt] * Shift = [ssAlt] then
         begin
-          SaveAllFrames;
+          FExporter.SaveAllFrames(FFileName);
           Key := 0;
         end
         else if [ssShift, ssAlt] * Shift = [ssShift] then
         begin
-          SaveCombinedFrame;
+          FExporter.SaveCombinedFrame(FFileName);
           Key := 0;
         end
         else if [ssShift, ssAlt] * Shift = [] then
         begin
           FContextCellIndex := -1;
-          SaveSingleFrame;
+          FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
           Key := 0;
         end;
       end;
@@ -1666,12 +1398,12 @@ end;
 procedure TPluginForm.DispatchCommand(ATag: Integer);
 begin
   case ATag of
-    CM_SAVE_FRAME:    SaveSingleFrame;
-    CM_SAVE_SELECTED: SaveSelectedFrames;
-    CM_SAVE_COMBINED: SaveCombinedFrame;
-    CM_SAVE_ALL:      SaveAllFrames;
-    CM_COPY_FRAME:    CopyFrameToClipboard;
-    CM_COPY_ALL:      CopyAllToClipboard;
+    CM_SAVE_FRAME:    FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
+    CM_SAVE_SELECTED: FExporter.SaveSelectedFrames(FFileName);
+    CM_SAVE_COMBINED: FExporter.SaveCombinedFrame(FFileName);
+    CM_SAVE_ALL:      FExporter.SaveAllFrames(FFileName);
+    CM_COPY_FRAME:    FExporter.CopyFrameToClipboard(FContextCellIndex);
+    CM_COPY_ALL:      FExporter.CopyAllToClipboard;
     CM_SELECT_ALL:    FFrameView.SelectAll;
     CM_DESELECT_ALL:  FFrameView.DeselectAll;
     CM_REFRESH:       RefreshExtraction;
@@ -1689,7 +1421,7 @@ var
   I: Integer;
   HasFrames: Boolean;
 begin
-  HasFrames := FFramesLoaded > 0;
+  HasFrames := Assigned(FExtractCtrl) and (FExtractCtrl.FramesLoaded > 0);
   for I := 0 to High(FToolbarButtons) do
     case FToolbarButtons[I].Tag of
       CM_SETTINGS: FToolbarButtons[I].Enabled := True;
@@ -1833,7 +1565,8 @@ procedure TPluginForm.OnAnimTimer(Sender: TObject);
 begin
   { Drain any frames that arrived since the last notification.
     Covers the case where PostMessage notifications miss the HWND. }
-  ProcessPendingFrames;
+  if Assigned(FExtractCtrl) then
+    FExtractCtrl.ProcessPendingFrames;
   { Timer fires during construction; FFrameView may not be ready yet }
   if Assigned(FFrameView) and FFrameView.Visible then
     FFrameView.AdvanceAnimation;
@@ -1868,12 +1601,8 @@ begin
 
   { Recreate cache if cache settings changed }
   if scCacheChanged in Changes then
-  begin
-    if FSettings.CacheEnabled then
-      FCache := TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB)
-    else
-      FCache := TNullFrameCache.Create;
-  end;
+    FExtractCtrl.RecreateCache(FSettings.CacheEnabled,
+      FSettings.CacheFolder, FSettings.CacheMaxSizeMB);
 
   { FFmpeg path changed: update and reload from scratch (LoadFile re-probes
     the video, which is needed when ffmpeg was previously missing) }
@@ -1901,11 +1630,11 @@ end;
 procedure TPluginForm.RefreshExtraction;
 begin
   if not FVideoInfo.IsValid then Exit;
-  StopExtraction;
-  DrainPendingFrameMessages;
+  FExtractCtrl.Stop;
+  FExtractCtrl.DrainPendingFrameMessages;
   FFrameView.ClearCells;
   SetupPlaceholders;
-  StartExtraction(TBypassFrameCache.Create(FCache));
+  StartExtraction(TBypassFrameCache.Create(FExtractCtrl.Cache));
 end;
 
 end.

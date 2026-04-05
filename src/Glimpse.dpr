@@ -32,7 +32,9 @@ uses
   uColorConv in 'uColorConv.pas',
   uRunProcess in 'uRunProcess.pas',
   uFrameExtractor in 'uFrameExtractor.pas',
-  uViewModeLayout in 'uViewModeLayout.pas';
+  uViewModeLayout in 'uViewModeLayout.pas',
+  uFrameExport in 'uFrameExport.pas',
+  uExtractionController in 'uExtractionController.pas';
 
 exports
   ListLoad,

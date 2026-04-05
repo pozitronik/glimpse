@@ -47,7 +47,11 @@ uses
   TestRunProcess in 'TestRunProcess.pas',
   uFrameExtractor in '..\src\uFrameExtractor.pas',
   uViewModeLayout in '..\src\uViewModeLayout.pas',
-  TestViewModeLayout in 'TestViewModeLayout.pas';
+  TestViewModeLayout in 'TestViewModeLayout.pas',
+  uFrameExport in '..\src\uFrameExport.pas',
+  TestFrameExport in 'TestFrameExport.pas',
+  uExtractionController in '..\src\uExtractionController.pas',
+  TestExtractionController in 'TestExtractionController.pas';
 
 var
   Runner: ITestRunner;
