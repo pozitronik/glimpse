@@ -13,7 +13,7 @@ function FindFFmpegExe(const APluginDir, AConfiguredPath: string): string;
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, Winapi.Windows;
+  System.SysUtils, System.IOUtils, Winapi.Windows, uSettings;
 
 function FindOnSystemPath(const AFileName: string): string;
 var
@@ -37,11 +37,12 @@ begin
       Exit;
   end;
 
-  { 2. Configured path from INI }
-  if (AConfiguredPath <> '') and TFile.Exists(AConfiguredPath) then
+  { 2. Configured path from INI (expand %commander_path% etc.) }
+  if AConfiguredPath <> '' then
   begin
-    Result := AConfiguredPath;
-    Exit;
+    Result := ExpandEnvVars(AConfiguredPath);
+    if TFile.Exists(Result) then
+      Exit;
   end;
 
   { 3. System PATH }

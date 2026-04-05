@@ -960,7 +960,7 @@ begin
     Dlg.DefaultExt := 'png';
     Dlg.FileName := ADefaultName;
     if FSettings.SaveFolder <> '' then
-      Dlg.InitialDir := FSettings.SaveFolder;
+      Dlg.InitialDir := ExpandEnvVars(FSettings.SaveFolder);
     if AOverwritePrompt then
       Dlg.Options := Dlg.Options + [ofOverwritePrompt];
 
@@ -1875,7 +1875,7 @@ begin
     the video, which is needed when ffmpeg was previously missing) }
   if (scFFmpegPathChanged in Changes) and (FSettings.FFmpegExePath <> '') then
   begin
-    FFFmpegPath := FSettings.FFmpegExePath;
+    FFFmpegPath := ExpandEnvVars(FSettings.FFmpegExePath);
     LoadFile(FFileName);
     Exit;
   end;

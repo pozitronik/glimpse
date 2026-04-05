@@ -219,7 +219,7 @@ begin
   try
     Dlg.Options := [fdoPickFolders, fdoPathMustExist];
     if AEdit.Text <> '' then
-      Dlg.DefaultFolder := AEdit.Text;
+      Dlg.DefaultFolder := ExpandEnvVars(AEdit.Text);
     if Dlg.Execute then
       AEdit.Text := Dlg.FileName;
   finally
@@ -246,7 +246,7 @@ begin
     Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files (*.*)|*.*';
     Dlg.Title := 'Locate ffmpeg.exe';
     if EdtFFmpegPath.Text <> '' then
-      Dlg.InitialDir := ExtractFilePath(EdtFFmpegPath.Text);
+      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(EdtFFmpegPath.Text));
     if Dlg.Execute and FileExists(Dlg.FileName) then
     begin
       if ValidateFFmpeg(Dlg.FileName) = '' then
@@ -385,7 +385,7 @@ var
   Path, Ver: string;
 begin
   if EdtFFmpegPath.Text <> '' then
-    Path := EdtFFmpegPath.Text
+    Path := ExpandEnvVars(EdtFFmpegPath.Text)
   else
     Path := FResolvedFFmpegPath;
 

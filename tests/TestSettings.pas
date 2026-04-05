@@ -77,6 +77,20 @@ type
     procedure TestTryParseHexRGBValid;
     [Test]
     procedure TestTryParseHexRGBInvalid;
+
+    { ExpandEnvVars tests }
+    [Test]
+    procedure TestExpandEnvVarsEmpty;
+    [Test]
+    procedure TestExpandEnvVarsNoVars;
+    [Test]
+    procedure TestExpandEnvVarsSystemVar;
+    [Test]
+    procedure TestExpandEnvVarsUnknownVar;
+    [Test]
+    procedure TestExpandEnvVarsMultipleVars;
+    [Test]
+    procedure TestEffectiveCacheFolderExpandsEnvVars;
   end;
 
 implementation
@@ -907,6 +921,60 @@ begin
   Assert.IsFalse(TPluginSettings.TryParseHexRGB('#GGHHII', C), 'Non-hex chars');
   { Single character }
   Assert.IsFalse(TPluginSettings.TryParseHexRGB('#', C), 'Just hash');
+end;
+
+procedure TTestPluginSettings.TestExpandEnvVarsEmpty;
+begin
+  Assert.AreEqual('', ExpandEnvVars(''), 'Empty input must return empty');
+end;
+
+procedure TTestPluginSettings.TestExpandEnvVarsNoVars;
+begin
+  Assert.AreEqual('C:\Temp\test.txt', ExpandEnvVars('C:\Temp\test.txt'),
+    'Path without variables must pass through unchanged');
+end;
+
+procedure TTestPluginSettings.TestExpandEnvVarsSystemVar;
+var
+  Expanded: string;
+begin
+  { %TEMP% is always defined on Windows }
+  Expanded := ExpandEnvVars('%TEMP%\Glimpse');
+  Assert.IsFalse(Expanded.Contains('%TEMP%'),
+    'Variable must be expanded');
+  Assert.IsTrue(Expanded.EndsWith('\Glimpse'),
+    'Suffix after variable must be preserved');
+  Assert.IsTrue(Length(Expanded) > Length('\Glimpse'),
+    'Expanded path must be longer than just the suffix');
+end;
+
+procedure TTestPluginSettings.TestExpandEnvVarsUnknownVar;
+begin
+  { Unknown variables are left as-is by ExpandEnvironmentStrings }
+  Assert.AreEqual('%UNLIKELY_VAR_XYZ%\sub',
+    ExpandEnvVars('%UNLIKELY_VAR_XYZ%\sub'),
+    'Unknown variable must remain unexpanded');
+end;
+
+procedure TTestPluginSettings.TestExpandEnvVarsMultipleVars;
+var
+  Expanded: string;
+begin
+  Expanded := ExpandEnvVars('%TEMP%\%USERNAME%\test');
+  Assert.IsFalse(Expanded.Contains('%TEMP%'), 'TEMP must be expanded');
+  Assert.IsFalse(Expanded.Contains('%USERNAME%'), 'USERNAME must be expanded');
+  Assert.IsTrue(Expanded.EndsWith('\test'), 'Tail must be preserved');
+end;
+
+procedure TTestPluginSettings.TestEffectiveCacheFolderExpandsEnvVars;
+var
+  Result: string;
+begin
+  Result := EffectiveCacheFolder('%TEMP%\GlimpseTest');
+  Assert.IsFalse(Result.Contains('%TEMP%'),
+    'EffectiveCacheFolder must expand environment variables');
+  Assert.IsTrue(Result.EndsWith('\GlimpseTest'),
+    'Folder name must be preserved after expansion');
 end;
 
 initialization
