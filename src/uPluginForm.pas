@@ -106,6 +106,7 @@ type
     procedure SaveCombinedFrame;
     procedure SaveAllFrames;
     procedure ShowSettings;
+    procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
     procedure StopExtraction;
@@ -146,7 +147,7 @@ type
 implementation
 
 uses
-  uSettingsDlg;
+  uSettingsDlg, uFileNavigator;
 
 {$IFDEF DEBUG}
 procedure FormLog(const AMsg: string);
@@ -1387,6 +1388,24 @@ begin
         RefreshExtraction;
         Key := 0;
       end;
+    Ord('Z'):
+      if Shift = [] then
+      begin
+        NavigateToAdjacentFile(-1);
+        Key := 0;
+      end;
+    VK_SPACE:
+      if Shift = [] then
+      begin
+        NavigateToAdjacentFile(1);
+        Key := 0;
+      end;
+    VK_BACK:
+      if Shift = [] then
+      begin
+        NavigateToAdjacentFile(-1);
+        Key := 0;
+      end;
     VK_TAB:
       if Shift - [ssShift] = [] then
       begin
@@ -1841,6 +1860,15 @@ begin
   { Re-extract if skip edges changed }
   if scSkipEdgesChanged in Changes then
     RefreshExtraction;
+end;
+
+procedure TPluginForm.NavigateToAdjacentFile(ADelta: Integer);
+var
+  Next: string;
+begin
+  Next := FindAdjacentFile(FFileName, FSettings.ExtensionList, ADelta);
+  if (Next <> '') and not SameText(Next, FFileName) then
+    LoadFile(Next);
 end;
 
 procedure TPluginForm.RefreshExtraction;

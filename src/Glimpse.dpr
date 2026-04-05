@@ -24,7 +24,8 @@ uses
   uZoomController in 'uZoomController.pas',
   uViewModeLogic in 'uViewModeLogic.pas',
   uExtractionPlanner in 'uExtractionPlanner.pas',
-  uToolbarLayout in 'uToolbarLayout.pas';
+  uToolbarLayout in 'uToolbarLayout.pas',
+  uFileNavigator in 'uFileNavigator.pas';
 
 exports
   ListLoad,

@@ -32,7 +32,9 @@ uses
   uExtractionPlanner in '..\src\uExtractionPlanner.pas',
   TestExtractionPlanner in 'TestExtractionPlanner.pas',
   uToolbarLayout in '..\src\uToolbarLayout.pas',
-  TestToolbarLayout in 'TestToolbarLayout.pas';
+  TestToolbarLayout in 'TestToolbarLayout.pas',
+  uFileNavigator in '..\src\uFileNavigator.pas',
+  TestFileNavigator in 'TestFileNavigator.pas';
 
 var
   Runner: ITestRunner;
