@@ -39,12 +39,14 @@ type
     procedure TestInvalidPathDoesNotRaise;
     [Test]
     procedure TestMultipleCallsAppend;
+    [Test]
+    procedure TestConcurrentWritesNoLoss;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes,
+  System.SysUtils, System.IOUtils, System.Classes, System.SyncObjs,
   uDebugLog;
 
 procedure TTestDebugLog.Setup;
@@ -155,6 +157,72 @@ begin
   Assert.IsTrue(Lines[0].Contains('[A]'));
   Assert.IsTrue(Lines[1].Contains('[B]'));
   Assert.IsTrue(Lines[2].Contains('[C]'));
+end;
+
+type
+  { Helper thread that writes a batch of log lines }
+  TLogWriter = class(TThread)
+  private
+    FTag: string;
+    FCount: Integer;
+    FReady: TEvent;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const ATag: string; ACount: Integer; AReady: TEvent);
+  end;
+
+constructor TLogWriter.Create(const ATag: string; ACount: Integer; AReady: TEvent);
+begin
+  inherited Create(True);
+  FreeOnTerminate := False;
+  FTag := ATag;
+  FCount := ACount;
+  FReady := AReady;
+end;
+
+procedure TLogWriter.Execute;
+var
+  I: Integer;
+begin
+  { Wait for the go signal so all threads start writing at the same time }
+  FReady.WaitFor(5000);
+  for I := 0 to FCount - 1 do
+    DebugLog(FTag, Format('line_%d', [I]));
+end;
+
+procedure TTestDebugLog.TestConcurrentWritesNoLoss;
+const
+  THREAD_COUNT = 8;
+  LINES_PER_THREAD = 50;
+var
+  Threads: array[0..THREAD_COUNT - 1] of TLogWriter;
+  Ready: TEvent;
+  I: Integer;
+  Lines: TArray<string>;
+begin
+  Ready := TEvent.Create(nil, True, False, '');
+  try
+    for I := 0 to THREAD_COUNT - 1 do
+      Threads[I] := TLogWriter.Create(Format('T%d', [I]), LINES_PER_THREAD, Ready);
+
+    { Start all threads, then signal them to write simultaneously }
+    for I := 0 to THREAD_COUNT - 1 do
+      Threads[I].Start;
+    Ready.SetEvent;
+
+    for I := 0 to THREAD_COUNT - 1 do
+    begin
+      Threads[I].WaitFor;
+      Threads[I].Free;
+    end;
+  finally
+    Ready.Free;
+  end;
+
+  Lines := ReadLogLines;
+  Assert.AreEqual(THREAD_COUNT * LINES_PER_THREAD, Integer(Length(Lines)),
+    'Every log line from every thread must be present');
 end;
 
 initialization
