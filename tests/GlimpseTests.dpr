@@ -51,7 +51,10 @@ uses
   uFrameExport in '..\wlx\uFrameExport.pas',
   TestFrameExport in 'TestFrameExport.pas',
   uExtractionController in '..\wlx\uExtractionController.pas',
-  TestExtractionController in 'TestExtractionController.pas';
+  TestExtractionController in 'TestExtractionController.pas',
+  uWcxAPI in '..\wcx\uWcxAPI.pas',
+  uWcxSettings in '..\wcx\uWcxSettings.pas',
+  TestWcxSettings in 'TestWcxSettings.pas';
 
 var
   Runner: ITestRunner;
