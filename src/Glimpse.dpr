@@ -31,7 +31,8 @@ uses
   uPathExpand in 'uPathExpand.pas',
   uColorConv in 'uColorConv.pas',
   uRunProcess in 'uRunProcess.pas',
-  uFrameExtractor in 'uFrameExtractor.pas';
+  uFrameExtractor in 'uFrameExtractor.pas',
+  uViewModeLayout in 'uViewModeLayout.pas';
 
 exports
   ListLoad,

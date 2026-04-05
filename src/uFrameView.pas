@@ -8,7 +8,7 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  uTypes, uSettings, uFrameOffsets;
+  uTypes, uSettings, uFrameOffsets, uViewModeLayout;
 
 const
   DEF_ASPECT_RATIO = 9.0 / 16.0; { fallback for 16:9 video }
@@ -22,10 +22,6 @@ type
     Timecode: string;
     TimeOffset: Double;
     Selected: Boolean;
-  end;
-
-  TSmartRow = record
-    Count: Integer;
   end;
 
   TCtrlWheelEvent = procedure(Sender: TObject; AWheelDelta: Integer) of object;
@@ -53,21 +49,15 @@ type
     FShowTimecode: Boolean;
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
-    FSmartRows: TArray<TSmartRow>;
     FBlendBmp: TBitmap;          { reusable 1x1 bitmap for alpha-blended timecode background }
     FBlendBmpColor: TColor;      { cached color to avoid redundant Pixels[] writes }
     FOnCtrlWheel: TCtrlWheelEvent;
+    FLayout: TViewModeLayout;
     function GetBaseW: Integer;
     function GetBaseH: Integer;
-    function GetColumnCount: Integer;
-    function GetCellImageSize: TSize;
-    function GetCellRectGrid(AIndex: Integer): TRect;
-    function GetCellRectScroll(AIndex: Integer): TRect;
-    function GetCellRectFilmstrip(AIndex: Integer): TRect;
-    function GetCellRectSingle(AIndex: Integer): TRect;
-    function GetCellRectSmartGrid(AIndex: Integer): TRect;
+    function BuildLayoutContext: TViewLayoutContext;
     function TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
-    procedure CalcSmartGridLayout;
+    procedure SetViewMode(AValue: TViewMode);
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
@@ -109,7 +99,7 @@ type
     function CellTimecode(AIndex: Integer): string;
     function CellSelected(AIndex: Integer): Boolean;
     property ColumnCount: Integer read FColumnCount write FColumnCount;
-    property ViewMode: TViewMode read FViewMode write FViewMode;
+    property ViewMode: TViewMode read FViewMode write SetViewMode;
     property ZoomMode: TZoomMode read FZoomMode write FZoomMode;
     property AspectRatio: Double read FAspectRatio write FAspectRatio;
     property NativeW: Integer read FNativeW write FNativeW;
@@ -181,11 +171,13 @@ begin
   FBlendBmp := TBitmap.Create;
   FBlendBmp.SetSize(1, 1);
   FBlendBmpColor := TColor(-1); { force first-use update }
+  FLayout := CreateViewModeLayout(vmGrid);
 end;
 
 destructor TFrameView.Destroy;
 begin
   ClearCells;
+  FLayout.Free;
   FBlendBmp.Free;
   inherited;
 end;
@@ -206,8 +198,8 @@ begin
     Exit;
   end;
 
-  case FViewMode of
-    vmSingle:
+  case FLayout.WheelScrollKind of
+    lwaNavigateFrame:
       begin
         if Message.WheelDelta > 0 then
           NavigateFrame(-1)
@@ -215,7 +207,7 @@ begin
           NavigateFrame(1);
         Message.Result := 1;
       end;
-    vmFilmstrip:
+    lwaHorizontalScroll:
       begin
         if Parent is TScrollBox then
         begin
@@ -226,15 +218,17 @@ begin
         else
           inherited;
       end;
-  else
-    if Parent is TScrollBox then
-    begin
-      TScrollBox(Parent).VertScrollBar.Position :=
-        TScrollBox(Parent).VertScrollBar.Position - Message.WheelDelta;
-      Message.Result := 1;
-    end
-    else
-      inherited;
+    lwaVerticalScroll:
+      begin
+        if Parent is TScrollBox then
+        begin
+          TScrollBox(Parent).VertScrollBar.Position :=
+            TScrollBox(Parent).VertScrollBar.Position - Message.WheelDelta;
+          Message.Result := 1;
+        end
+        else
+          inherited;
+      end;
   end;
 end;
 
@@ -267,27 +261,31 @@ begin
     Result := FViewportH;
 end;
 
-function TFrameView.GetColumnCount: Integer;
+function TFrameView.BuildLayoutContext: TViewLayoutContext;
 begin
-  case FViewMode of
-    vmScroll, vmSingle:
-      Result := 1;
-    vmFilmstrip:
-      Result := Max(1, Length(FCells));
-    vmSmartGrid:
-      Result := 1; { not used for smart grid layout }
-  else { vmGrid }
-    begin
-      if Length(FCells) <= 1 then
-        Exit(1);
-      { Original size: columns based on native frame width }
-      if (FZoomMode = zmActual) and (FNativeW > 0) then
-        Exit(Max(1, (BaseW - FCellGap) div (FNativeW + FCellGap)));
-      if FColumnCount > 0 then
-        Exit(FColumnCount);
-      Result := Max(1, Floor(Sqrt(Length(FCells))));
-    end;
-  end;
+  Result.BaseW := BaseW;
+  Result.BaseH := BaseH;
+  Result.CellCount := Length(FCells);
+  Result.CellGap := FCellGap;
+  Result.AspectRatio := FAspectRatio;
+  Result.NativeW := FNativeW;
+  Result.NativeH := FNativeH;
+  Result.ZoomMode := FZoomMode;
+  Result.ZoomFactor := FZoomFactor;
+  Result.ClientWidth := ClientWidth;
+  Result.ClientHeight := ClientHeight;
+  Result.CurrentFrameIndex := FCurrentFrameIndex;
+  Result.ViewportW := FViewportW;
+  Result.ViewportH := FViewportH;
+  Result.ColumnCount := FColumnCount;
+end;
+
+procedure TFrameView.SetViewMode(AValue: TViewMode);
+begin
+  if FViewMode = AValue then Exit;
+  FViewMode := AValue;
+  FreeAndNil(FLayout);
+  FLayout := CreateViewModeLayout(AValue);
 end;
 
 function TFrameView.DefaultColumnCount: Integer;
@@ -317,308 +315,9 @@ begin
   Result := Length(FCells);
 end;
 
-function TFrameView.GetCellImageSize: TSize;
-var
-  Cols, AvailW: Integer;
-begin
-  Cols := GetColumnCount;
-  AvailW := BaseW - (Cols + 1) * FCellGap;
-  Result.cx := Max(1, Round(AvailW / Cols * FZoomFactor));
-  Result.cy := Max(1, Round(Result.cx * FAspectRatio));
-end;
-
 function TFrameView.GetCellRect(AIndex: Integer): TRect;
 begin
-  case FViewMode of
-    vmScroll:    Result := GetCellRectScroll(AIndex);
-    vmGrid:      Result := GetCellRectGrid(AIndex);
-    vmSmartGrid: Result := GetCellRectSmartGrid(AIndex);
-    vmFilmstrip: Result := GetCellRectFilmstrip(AIndex);
-    vmSingle:    Result := GetCellRectSingle(AIndex);
-  else
-    Result := GetCellRectGrid(AIndex);
-  end;
-end;
-
-function TFrameView.GetCellRectGrid(AIndex: Integer): TRect;
-var
-  Cols, Col, Row, Rows: Integer;
-  Sz: TSize;
-  RowH, GridW, GridH, OffsetX, OffsetY: Integer;
-begin
-  Cols := GetColumnCount;
-  Sz := GetCellImageSize;
-  Col := AIndex mod Cols;
-  Row := AIndex div Cols;
-  Rows := Ceil(Length(FCells) / Max(1, Cols));
-  RowH := Sz.cy + FCellGap;
-
-  GridW := Cols * (Sz.cx + FCellGap) + FCellGap;
-  GridH := FCellGap + Rows * RowH;
-
-  { Center grid horizontally }
-  if GridW < ClientWidth then
-    OffsetX := (ClientWidth - GridW) div 2
-  else
-    OffsetX := 0;
-
-  { Center grid vertically }
-  if GridH < ClientHeight then
-    OffsetY := (ClientHeight - GridH) div 2
-  else
-    OffsetY := 0;
-
-  Result.Left   := OffsetX + FCellGap + Col * (Sz.cx + FCellGap);
-  Result.Top    := OffsetY + FCellGap + Row * RowH;
-  Result.Right  := Result.Left + Sz.cx;
-  Result.Bottom := Result.Top + Sz.cy;
-end;
-
-function TFrameView.GetCellRectScroll(AIndex: Integer): TRect;
-var
-  CellW, CellH, RowH, LeftX: Integer;
-begin
-  case FZoomMode of
-    zmActual:
-      begin
-        CellW := Max(1, FNativeW);
-        CellH := Max(1, FNativeH);
-      end;
-    zmFitIfLarger:
-      begin
-        CellW := Max(1, BaseW - 2 * FCellGap);
-        if (FNativeW > 0) and (FNativeW < CellW) then
-          CellW := FNativeW;
-        CellH := Max(1, Round(CellW * FAspectRatio));
-      end;
-  else { zmFitWindow }
-    begin
-      CellW := Max(1, BaseW - 2 * FCellGap);
-      CellH := Max(1, Round(CellW * FAspectRatio));
-    end;
-  end;
-
-  { Apply continuous zoom }
-  CellW := Max(1, Round(CellW * FZoomFactor));
-  CellH := Max(1, Round(CellH * FZoomFactor));
-
-  { Center horizontally when cell is narrower than control }
-  if CellW + 2 * FCellGap < ClientWidth then
-    LeftX := (ClientWidth - CellW) div 2
-  else
-    LeftX := FCellGap;
-
-  RowH := CellH + FCellGap;
-  Result.Left   := LeftX;
-  Result.Top    := FCellGap + AIndex * RowH;
-  Result.Right  := Result.Left + CellW;
-  Result.Bottom := Result.Top + CellH;
-end;
-
-function TFrameView.GetCellRectFilmstrip(AIndex: Integer): TRect;
-var
-  CellH, CellW, AvailH, TopY: Integer;
-begin
-  AvailH := Max(1, BaseH - 2 * FCellGap);
-
-  case FZoomMode of
-    zmActual:
-      CellH := Max(1, FNativeH);
-    zmFitIfLarger:
-      begin
-        CellH := AvailH;
-        if (FNativeH > 0) and (FNativeH < CellH) then
-          CellH := FNativeH;
-      end;
-  else { zmFitWindow }
-    CellH := AvailH;
-  end;
-
-  { Apply continuous zoom }
-  CellH := Max(1, Round(CellH * FZoomFactor));
-  CellW := Max(1, Round(CellH / Max(FAspectRatio, DEF_ASPECT_RATIO)));
-
-  { Center vertically within control (ClientHeight reflects post-RecalcSize size) }
-  if CellH < AvailH then
-    TopY := (ClientHeight - CellH) div 2
-  else
-    TopY := FCellGap;
-
-  Result.Left   := FCellGap + AIndex * (CellW + FCellGap);
-  Result.Top    := TopY;
-  Result.Right  := Result.Left + CellW;
-  Result.Bottom := Result.Top + CellH;
-end;
-
-function TFrameView.GetCellRectSingle(AIndex: Integer): TRect;
-var
-  CellW, CellH: Integer;
-  AvailW, AvailH: Integer;
-begin
-  { Base available space from frozen viewport, not control size }
-  AvailW := Max(1, BaseW - 2 * FCellGap);
-  AvailH := Max(1, BaseH - 2 * FCellGap);
-
-  case FZoomMode of
-    zmActual:
-      begin
-        CellW := Max(1, FNativeW);
-        CellH := Max(1, FNativeH);
-      end;
-    zmFitIfLarger:
-      begin
-        if (FNativeW > 0) and (FNativeH > 0) and
-           (FNativeW <= AvailW) and (FNativeH <= AvailH) then
-        begin
-          CellW := FNativeW;
-          CellH := FNativeH;
-        end
-        else
-        begin
-          CellW := AvailW;
-          CellH := Round(CellW * FAspectRatio);
-          if CellH > AvailH then
-          begin
-            CellH := AvailH;
-            CellW := Round(CellH / Max(FAspectRatio, DEF_ASPECT_RATIO));
-          end;
-        end;
-      end;
-  else { zmFitWindow }
-    begin
-      CellW := AvailW;
-      CellH := Round(CellW * FAspectRatio);
-      if CellH > AvailH then
-      begin
-        CellH := AvailH;
-        CellW := Round(CellH / Max(FAspectRatio, DEF_ASPECT_RATIO));
-      end;
-    end;
-  end;
-
-  { Apply continuous zoom }
-  CellW := Max(1, Round(CellW * FZoomFactor));
-  CellH := Max(1, Round(CellH * FZoomFactor));
-
-  { Center in control (ClientWidth may exceed viewport when zoomed) }
-  Result.Left   := (ClientWidth - CellW) div 2;
-  Result.Top    := FCellGap + (Max(1, ClientHeight - 2 * FCellGap) - CellH) div 2;
-  Result.Right  := Result.Left + CellW;
-  Result.Bottom := Result.Top + CellH;
-end;
-
-function TFrameView.GetCellRectSmartGrid(AIndex: Integer): TRect;
-var
-  RowIdx, CellInRow, RowTop, RowH, CellW, PrevCount: Integer;
-  OffX, OffY: Integer;
-begin
-  if Length(FSmartRows) = 0 then
-    Exit(Rect(0, 0, 1, 1));
-
-  RowH := BaseH div Length(FSmartRows);
-
-  { Find which row this index belongs to }
-  PrevCount := 0;
-  for RowIdx := 0 to High(FSmartRows) do
-  begin
-    if AIndex < PrevCount + FSmartRows[RowIdx].Count then
-    begin
-      CellInRow := AIndex - PrevCount;
-      CellW := BaseW div Max(1, FSmartRows[RowIdx].Count);
-      RowTop := RowIdx * RowH;
-
-      { Last row/cell fills remaining space to avoid rounding gaps }
-      Result.Left := CellInRow * CellW;
-      if CellInRow = FSmartRows[RowIdx].Count - 1 then
-        Result.Right := BaseW
-      else
-        Result.Right := Result.Left + CellW;
-
-      Result.Top := RowTop;
-      if RowIdx = High(FSmartRows) then
-        Result.Bottom := BaseH
-      else
-        Result.Bottom := RowTop + RowH;
-
-      { Apply continuous zoom }
-      if not SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
-      begin
-        Result.Left   := Round(Result.Left * FZoomFactor);
-        Result.Top    := Round(Result.Top * FZoomFactor);
-        Result.Right  := Round(Result.Right * FZoomFactor);
-        Result.Bottom := Round(Result.Bottom * FZoomFactor);
-      end;
-
-      { Center when zoomed content is smaller than control }
-      OffX := Max(0, (ClientWidth - Round(BaseW * FZoomFactor)) div 2);
-      OffY := Max(0, (ClientHeight - Round(BaseH * FZoomFactor)) div 2);
-      if (OffX > 0) or (OffY > 0) then
-        Result.Offset(OffX, OffY);
-
-      Exit;
-    end;
-    Inc(PrevCount, FSmartRows[RowIdx].Count);
-  end;
-
-  Result := Rect(0, 0, 1, 1);
-end;
-
-procedure TFrameView.CalcSmartGridLayout;
-var
-  N, R, BestR, Base, Extra, I: Integer;
-  BestScore, Score, DisplayedAR, OrigAR: Double;
-  Rows: TArray<TSmartRow>;
-begin
-  N := Length(FCells);
-  if (N = 0) or (BaseW <= 0) or (BaseH <= 0) then
-  begin
-    SetLength(FSmartRows, 0);
-    Exit;
-  end;
-
-  if FAspectRatio <= 0 then
-    FAspectRatio := DEF_ASPECT_RATIO;
-  OrigAR := FAspectRatio; { height/width ratio }
-
-  BestR := 1;
-  BestScore := MaxDouble;
-
-  { Try each possible row count and find the one with least cropping }
-  for R := 1 to N do
-  begin
-    { Score: sum of per-row aspect ratio deviation }
-    Score := 0;
-    Base := N div R;
-    Extra := N mod R;
-    for I := 0 to R - 1 do
-    begin
-      if I < Extra then
-        DisplayedAR := (BaseH / R) / (BaseW / (Base + 1))
-      else
-        DisplayedAR := (BaseH / R) / (BaseW / Max(1, Base));
-      Score := Score + Abs(DisplayedAR - OrigAR);
-    end;
-
-    if Score < BestScore then
-    begin
-      BestScore := Score;
-      BestR := R;
-    end;
-  end;
-
-  { Build row array with BestR rows }
-  SetLength(Rows, BestR);
-  Base := N div BestR;
-  Extra := N mod BestR;
-  for I := 0 to BestR - 1 do
-  begin
-    if I < Extra then
-      Rows[I].Count := Base + 1
-    else
-      Rows[I].Count := Base;
-  end;
-
-  FSmartRows := Rows;
+  Result := FLayout.GetCellRect(AIndex, BuildLayoutContext);
 end;
 
 function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
@@ -934,54 +633,17 @@ end;
 
 procedure TFrameView.RecalcSize;
 var
-  Cols, Rows, GridW: Integer;
   Sz: TSize;
-  N: Integer;
-  R0: TRect;
 begin
-  N := Length(FCells);
-  if N = 0 then
+  if Length(FCells) = 0 then
   begin
     Width := FViewportW;
     Height := FViewportH;
     Exit;
   end;
-
-  case FViewMode of
-    vmSmartGrid:
-      begin
-        CalcSmartGridLayout;
-        Width := Max(FViewportW, Round(BaseW * FZoomFactor));
-        Height := Max(FViewportH, Round(BaseH * FZoomFactor));
-      end;
-    vmSingle:
-      begin
-        R0 := GetCellRectSingle(FCurrentFrameIndex);
-        Width := Max(FViewportW, R0.Width + 2 * FCellGap);
-        Height := Max(FViewportH, R0.Height + 2 * FCellGap);
-      end;
-    vmFilmstrip:
-      begin
-        R0 := GetCellRectFilmstrip(0);
-        Width := Max(FViewportW, FCellGap + N * (R0.Width + FCellGap));
-        Height := Max(FViewportH, R0.Height + 2 * FCellGap);
-      end;
-    vmScroll:
-      begin
-        R0 := GetCellRectScroll(0);
-        Width := Max(FViewportW, R0.Width + 2 * FCellGap);
-        Height := Max(FViewportH, FCellGap + N * (R0.Height + FCellGap));
-      end;
-  else { vmGrid }
-    begin
-      Cols := GetColumnCount;
-      Sz := GetCellImageSize;
-      Rows := Ceil(N / Cols);
-      GridW := Cols * (Sz.cx + FCellGap) + FCellGap;
-      Width := Max(FViewportW, GridW);
-      Height := Max(FViewportH, FCellGap + Rows * (Sz.cy + FCellGap));
-    end;
-  end;
+  Sz := FLayout.RecalcSize(BuildLayoutContext);
+  Width := Sz.cx;
+  Height := Sz.cy;
 end;
 
 procedure TFrameView.NavigateFrame(ADelta: Integer);
@@ -1032,20 +694,8 @@ begin
 end;
 
 function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
-var
-  I: Integer;
 begin
-  if FViewMode = vmSingle then
-  begin
-    if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < Length(FCells))
-      and GetCellRect(FCurrentFrameIndex).Contains(APoint) then
-      Exit(FCurrentFrameIndex);
-    Exit(-1);
-  end;
-  for I := 0 to High(FCells) do
-    if GetCellRect(I).Contains(APoint) then
-      Exit(I);
-  Result := -1;
+  Result := FLayout.CellIndexAt(APoint, BuildLayoutContext);
 end;
 
 procedure TFrameView.ToggleSelection(AIndex: Integer);
