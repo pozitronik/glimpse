@@ -35,6 +35,8 @@ type
     FCellGap: Integer;
     { [extensions] }
     FExtensionList: string;
+    { [output] }
+    FShowFileSizes: Boolean;
   public
     constructor Create(const AIniPath: string);
     procedure Load;
@@ -57,6 +59,7 @@ type
     property Background: TColor read FBackground write FBackground;
     property CellGap: Integer read FCellGap write FCellGap;
     property ExtensionList: string read FExtensionList write FExtensionList;
+    property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
   end;
 
 const
@@ -74,6 +77,7 @@ const
   WCX_DEF_BACKGROUND      = TColor($001E1E1E);
   WCX_DEF_CELL_GAP        = 2;
   WCX_DEF_EXTENSION_LIST  = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
+  WCX_DEF_SHOW_FILE_SIZES = False;
 
 implementation
 
@@ -102,6 +106,7 @@ begin
   FBackground := WCX_DEF_BACKGROUND;
   FCellGap := WCX_DEF_CELL_GAP;
   FExtensionList := WCX_DEF_EXTENSION_LIST;
+  FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
 end;
 
 procedure TWcxSettings.Load;
@@ -146,6 +151,8 @@ begin
     FExtensionList := Ini.ReadString('extensions', 'List', WCX_DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
       FExtensionList := WCX_DEF_EXTENSION_LIST;
+
+    FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
   finally
     Ini.Free;
   end;
@@ -182,6 +189,8 @@ begin
     Ini.WriteInteger('combined', 'CellGap', FCellGap);
 
     Ini.WriteString('extensions', 'List', FExtensionList);
+
+    Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
   finally
     Ini.Free;
   end;

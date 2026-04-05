@@ -35,6 +35,8 @@ type
     [Test] procedure TestBackgroundRoundTrip;
     [Test] procedure TestCellGapDefault;
     [Test] procedure TestCellGapClamped;
+    [Test] procedure TestShowFileSizesDefault;
+    [Test] procedure TestShowFileSizesRoundTrip;
   end;
 
 implementation
@@ -512,6 +514,41 @@ begin
     Assert.AreEqual(20, S.CellGap);
   finally
     S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestShowFileSizesDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.AreEqual(False, S.ShowFileSizes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestShowFileSizesRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sizes.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.ShowFileSizes := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(True, S2.ShowFileSizes);
+  finally
+    S2.Free;
   end;
 end;
 

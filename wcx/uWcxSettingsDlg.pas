@@ -47,6 +47,7 @@ type
     LblPngCompression: TLabel;
     EdtPngCompression: TEdit;
     UdPngCompression: TUpDown;
+    ChkShowFileSizes: TCheckBox;
     GbxCombined: TGroupBox;
     LblColumns: TLabel;
     EdtColumns: TEdit;
@@ -114,6 +115,7 @@ begin
   CbxFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
   UdPngCompression.Position := ASettings.PngCompression;
+  ChkShowFileSizes.Checked := ASettings.ShowFileSizes;
 
   UdColumns.Position := ASettings.CombinedColumns;
   UdCellGap.Position := ASettings.CellGap;
@@ -147,6 +149,7 @@ begin
   ASettings.SaveFormat := TSaveFormat(CbxFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
   ASettings.PngCompression := UdPngCompression.Position;
+  ASettings.ShowFileSizes := ChkShowFileSizes.Checked;
 
   ASettings.CombinedColumns := UdColumns.Position;
   ASettings.CellGap := UdCellGap.Position;

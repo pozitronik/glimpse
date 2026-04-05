@@ -45,7 +45,7 @@ implementation
 
 uses
   System.SysUtils, System.Math, System.Types, System.AnsiStrings,
-  System.UITypes,
+  System.UITypes, System.IOUtils,
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor, uExtractionPlanner,
@@ -63,6 +63,10 @@ type
     OpenMode: Integer;
     ProcessDataProc: TProcessDataProc;
     ProcessDataProcW: TProcessDataProcW;
+    { Pre-extracted frames for ShowFileSizes mode }
+    TempDir: string;
+    TempPaths: TArray<string>;
+    EntrySizes: TArray<Int64>;
   end;
 
 var
@@ -147,6 +151,74 @@ begin
   end;
 end;
 
+{ Pre-extracts all frames to temp directory, storing paths and file sizes }
+procedure PreExtractFrames(H: TArchiveHandle);
+var
+  Extractor: IFrameExtractor;
+  Bmp: TBitmap;
+  Frames: TArray<TBitmap>;
+  Combined: TBitmap;
+  TempPath: string;
+  EntryCount, I: Integer;
+begin
+  H.TempDir := TPath.Combine(TPath.GetTempPath,
+    'glimpse_wcx_' + TPath.GetGUIDFileName(False));
+  TDirectory.CreateDirectory(H.TempDir);
+
+  Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
+  EntryCount := GetEntryCount(H);
+  SetLength(H.TempPaths, EntryCount);
+  SetLength(H.EntrySizes, EntryCount);
+
+  if H.Settings.OutputMode = womCombined then
+  begin
+    SetLength(Frames, Length(H.Offsets));
+    try
+      for I := 0 to Length(H.Offsets) - 1 do
+        Frames[I] := Extractor.ExtractFrame(H.FileName,
+          H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
+
+      Combined := RenderCombinedImage(Frames, H.Offsets, H.Settings);
+      if Combined <> nil then
+      try
+        TempPath := TPath.Combine(H.TempDir,
+          GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
+        SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
+          H.Settings.JpegQuality, H.Settings.PngCompression);
+        H.TempPaths[0] := TempPath;
+        H.EntrySizes[0] := TFile.GetSize(TempPath);
+      finally
+        Combined.Free;
+      end;
+    finally
+      for I := 0 to Length(Frames) - 1 do
+        Frames[I].Free;
+    end;
+  end
+  else
+  begin
+    for I := 0 to Length(H.Offsets) - 1 do
+    begin
+      Bmp := Extractor.ExtractFrame(H.FileName,
+        H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
+      if Bmp = nil then Continue;
+      try
+        TempPath := TPath.Combine(H.TempDir,
+          GenerateFrameFileName(H.FileName, I,
+            H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
+        SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat,
+          H.Settings.JpegQuality, H.Settings.PngCompression);
+        H.TempPaths[I] := TempPath;
+        H.EntrySizes[I] := TFile.GetSize(TempPath);
+      finally
+        Bmp.Free;
+      end;
+    end;
+  end;
+
+  WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, H.TempDir]));
+end;
+
 function DoOpenArchive(const AFileName: string; AOpenMode: Integer;
   out AOpenResult: Integer): THandle;
 var
@@ -191,6 +263,9 @@ begin
 
     H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration,
       H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
+
+    if H.Settings.ShowFileSizes then
+      PreExtractFrames(H);
 
     WcxLog(Format('OpenArchive: %s frames=%d', [AFileName, Length(H.Offsets)]));
     Result := THandle(H);
@@ -242,7 +317,8 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
-  HeaderData.UnpSize := 0;
+  if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
+    HeaderData.UnpSize := H.EntrySizes[H.CurrentIndex];
   HeaderData.FileAttr := $20; { FILE_ATTRIBUTE_ARCHIVE }
 
   Result := E_SUCCESS;
@@ -261,7 +337,8 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   StrLCopy(HeaderData.FileName, PChar(Name), Length(HeaderData.FileName) - 1);
-  HeaderData.UnpSizeLow := 0;
+  if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
+    HeaderData.UnpSizeLow := DWORD(H.EntrySizes[H.CurrentIndex]);
   HeaderData.FileAttr := $20;
 
   Result := E_SUCCESS;
@@ -287,6 +364,15 @@ begin
     Exit(E_ECREATE);
 
   WcxLog(Format('Extract frame %d -> %s', [H.CurrentIndex, FullPath]));
+
+  { Use pre-extracted file when available }
+  if (H.TempPaths <> nil) and (H.CurrentIndex < Length(H.TempPaths))
+    and (H.TempPaths[H.CurrentIndex] <> '')
+    and TFile.Exists(H.TempPaths[H.CurrentIndex]) then
+  begin
+    TFile.Copy(H.TempPaths[H.CurrentIndex], FullPath, True);
+    Exit(E_SUCCESS);
+  end;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
@@ -325,6 +411,14 @@ begin
 
   WcxLog(Format('Extract combined (%d frames) -> %s',
     [Length(H.Offsets), FullPath]));
+
+  { Use pre-extracted file when available }
+  if (H.TempPaths <> nil) and (Length(H.TempPaths) > 0)
+    and (H.TempPaths[0] <> '') and TFile.Exists(H.TempPaths[0]) then
+  begin
+    TFile.Copy(H.TempPaths[0], FullPath, True);
+    Exit(E_SUCCESS);
+  end;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   SetLength(Frames, Length(H.Offsets));
@@ -419,6 +513,8 @@ var
 begin
   H := TArchiveHandle(hArcData);
   WcxLog(Format('CloseArchive: %s', [H.FileName]));
+  if (H.TempDir <> '') and TDirectory.Exists(H.TempDir) then
+    TDirectory.Delete(H.TempDir, True);
   H.Settings.Free;
   H.Free;
   Result := E_SUCCESS;
