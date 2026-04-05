@@ -280,7 +280,7 @@ end;
 procedure TSettingsForm.BtnClearCacheClick(Sender: TObject);
 var
   Dir: string;
-  Cache: TFrameCache;
+  Mgr: ICacheManager;
 begin
   Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
 
@@ -294,12 +294,8 @@ begin
     'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
 
-  Cache := TFrameCache.Create(Dir, 0);
-  try
-    Cache.Clear;
-  finally
-    Cache.Free;
-  end;
+  Mgr := CreateCacheManager(Dir, 0);
+  Mgr.Clear;
   UpdateCacheSizeInfo;
 end;
 
@@ -424,7 +420,7 @@ end;
 procedure TSettingsForm.UpdateCacheSizeInfo;
 var
   Dir: string;
-  Cache: TFrameCache;
+  Mgr: ICacheManager;
   Total: Int64;
 begin
   Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
@@ -435,12 +431,8 @@ begin
     Exit;
   end;
 
-  Cache := TFrameCache.Create(Dir, 0);
-  try
-    Total := Cache.GetTotalSize;
-  finally
-    Cache.Free;
-  end;
+  Mgr := CreateCacheManager(Dir, 0);
+  Total := Mgr.GetTotalSize;
 
   if Total > 0 then
     LblCacheSizeInfo.Caption := Format('(current: %.1f MB)', [Total / (1024 * 1024)])

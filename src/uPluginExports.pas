@@ -220,12 +220,7 @@ begin
   begin
     var CacheDir := EffectiveCacheFolder(GSettings.CacheFolder);
     try
-      with TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB) do
-      try
-        Evict;
-      finally
-        Free;
-      end;
+      CreateCacheManager(CacheDir, GSettings.CacheMaxSizeMB).Evict;
       Log(Format('  CacheDir=%s', [CacheDir]));
     except
       on E: Exception do

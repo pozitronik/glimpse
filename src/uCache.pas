@@ -22,6 +22,15 @@ type
     procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap);
   end;
 
+  { Cache management operations: size queries, eviction, clearing.
+    Separated from IFrameCache so read/write callers don't see admin ops. }
+  ICacheManager = interface
+    ['{B8F4C3D2-5E6A-7F8B-9C0D-1E2F3A4B5C6D}']
+    procedure Clear;
+    procedure Evict;
+    function GetTotalSize: Int64;
+  end;
+
   { Abstract base providing the IFrameCache contract for concrete implementations. }
   TFrameCacheBase = class(TInterfacedObject, IFrameCache)
   public
@@ -50,7 +59,7 @@ type
   end;
 
   { Real disk cache with sharded PNG storage and LRU eviction. }
-  TFrameCache = class(TFrameCacheBase)
+  TFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FCacheDir: string;
     FMaxSizeBytes: Int64;
@@ -75,6 +84,10 @@ type
 
     property CacheDir: string read FCacheDir;
   end;
+
+{ Creates an ICacheManager backed by disk cache.
+  Callers use the interface for admin ops without depending on TFrameCache. }
+function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICacheManager;
 
 implementation
 
@@ -367,6 +380,11 @@ begin
   except
     { Directory enumeration failed; return partial result }
   end;
+end;
+
+function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICacheManager;
+begin
+  Result := TFrameCache.Create(ACacheDir, AMaxSizeMB);
 end;
 
 initialization

@@ -80,6 +80,14 @@ type
     { Overwrite test }
     [Test]
     procedure TestPutOverwritesExistingEntry;
+
+    { ICacheManager via factory tests }
+    [Test]
+    procedure TestCacheManagerClear;
+    [Test]
+    procedure TestCacheManagerEvict;
+    [Test]
+    procedure TestCacheManagerGetTotalSize;
   end;
 
 implementation
@@ -697,6 +705,76 @@ begin
   finally
     Cache.Free;
   end;
+end;
+
+{ ICacheManager via factory tests }
+
+procedure TTestFrameCache.TestCacheManagerClear;
+var
+  Cache: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  FilePath := CreateDummyFile('mgr_clear.mp4', 128);
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(32, 32);
+  try
+    Cache.Put(FilePath, 1.0, Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  Mgr := CreateCacheManager(FCacheDir, 100);
+  Assert.IsTrue(Mgr.GetTotalSize > 0, 'Cache must have files before clear');
+  Mgr.Clear;
+  Assert.AreEqual(Int64(0), Mgr.GetTotalSize, 'Cache must be empty after clear via manager');
+end;
+
+procedure TTestFrameCache.TestCacheManagerEvict;
+var
+  Cache: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  FilePath := CreateDummyFile('mgr_evict.mp4', 128);
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(64, 64);
+  try
+    Cache.Put(FilePath, 1.0, Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  { Create manager with 0 budget to force full eviction }
+  Mgr := CreateCacheManager(FCacheDir, 0);
+  Mgr.Evict;
+  Assert.AreEqual(Int64(0), Mgr.GetTotalSize, 'All files must be evicted at 0 budget');
+end;
+
+procedure TTestFrameCache.TestCacheManagerGetTotalSize;
+var
+  Cache: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  Mgr := CreateCacheManager(FCacheDir, 100);
+  Assert.AreEqual(Int64(0), Mgr.GetTotalSize, 'Empty cache must report 0');
+
+  FilePath := CreateDummyFile('mgr_size.mp4', 128);
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(32, 32);
+  try
+    Cache.Put(FilePath, 1.0, Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  { Fresh manager instance must see the files written by TFrameCache }
+  Mgr := CreateCacheManager(FCacheDir, 100);
+  Assert.IsTrue(Mgr.GetTotalSize > 0, 'Manager must report positive size after put');
 end;
 
 initialization
