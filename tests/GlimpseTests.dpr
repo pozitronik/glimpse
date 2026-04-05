@@ -35,7 +35,8 @@ uses
   uToolbarLayout in '..\src\uToolbarLayout.pas',
   TestToolbarLayout in 'TestToolbarLayout.pas',
   uFileNavigator in '..\src\uFileNavigator.pas',
-  TestFileNavigator in 'TestFileNavigator.pas';
+  TestFileNavigator in 'TestFileNavigator.pas',
+  TestDebugLog in 'TestDebugLog.pas';
 
 var
   Runner: ITestRunner;

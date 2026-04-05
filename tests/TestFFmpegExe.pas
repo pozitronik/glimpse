@@ -108,12 +108,14 @@ type
     [Test] procedure TestNotFoundReturnsEmpty;
     [Test] procedure TestEmptyPluginDir;
     [Test] procedure TestConfiguredPathNotExists;
+    [Test] procedure TestConfiguredPathExpandsEnvVars;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils,
+  Winapi.Windows,
   uFFmpegExe, uFFmpegLocator;
 
 const
@@ -674,6 +676,30 @@ begin
     TPath.Combine(FTempDir, 'no_such_file.exe'));
   { Should fall through to system PATH search }
   Assert.Pass;
+end;
+
+procedure TTestFFmpegLocator.TestConfiguredPathExpandsEnvVars;
+var
+  SubDir, ExePath, Found: string;
+begin
+  { Place ffmpeg.exe inside a subdirectory of TEMP and reference it via
+    the %TEMP% environment variable. FindFFmpegExe must expand the variable
+    before checking TFile.Exists. }
+  SubDir := TPath.Combine(FTempDir, 'tools');
+  TDirectory.CreateDirectory(SubDir);
+  ExePath := TPath.Combine(SubDir, 'ffmpeg.exe');
+  TFile.WriteAllText(ExePath, 'dummy');
+
+  { Set a custom env var pointing to our temp dir }
+  SetEnvironmentVariable('VT_TEST_PLUGIN_DIR', PChar(FTempDir));
+  try
+    Found := FindFFmpegExe('',
+      '%VT_TEST_PLUGIN_DIR%' + PathDelim + 'tools' + PathDelim + 'ffmpeg.exe');
+    Assert.AreEqual(ExePath, Found,
+      'FindFFmpegExe must expand environment variables in configured path');
+  finally
+    SetEnvironmentVariable('VT_TEST_PLUGIN_DIR', nil);
+  end;
 end;
 
 initialization

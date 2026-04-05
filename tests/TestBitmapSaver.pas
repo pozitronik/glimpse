@@ -22,6 +22,10 @@ type
     [Test] procedure TestPngBytesToBitmapValid;
     [Test] procedure TestPngBytesToBitmapDimensions;
     [Test] procedure TestPngBytesToBitmapEmptyRaises;
+    [Test] procedure TestPngBytesToBitmapGarbageRaises;
+    [Test] procedure TestSavePNGPixelFidelity;
+    [Test] procedure TestSaveFormatExtensionPNG;
+    [Test] procedure TestSaveFormatExtensionJPEG;
   end;
 
 implementation
@@ -245,6 +249,71 @@ begin
     procedure begin PngBytesToBitmap(Data); end,
     nil,
     'Empty bytes should raise');
+end;
+
+procedure TTestBitmapSaver.TestPngBytesToBitmapGarbageRaises;
+var
+  Data: TBytes;
+begin
+  { Random bytes that are not valid PNG. Must raise, not silently return
+    a corrupt bitmap. }
+  Data := TBytes.Create($DE, $AD, $BE, $EF, $CA, $FE, $00, $FF);
+  Assert.WillRaise(
+    procedure begin PngBytesToBitmap(Data); end,
+    nil,
+    'Garbage bytes must raise, not produce a corrupt bitmap');
+end;
+
+procedure TTestBitmapSaver.TestSavePNGPixelFidelity;
+var
+  Src, Dst: TBitmap;
+  Data: TBytes;
+  Path: string;
+  Png: TPngImage;
+begin
+  { PNG is lossless: pixel values must survive a save/load round-trip. }
+  Src := TBitmap.Create;
+  try
+    Src.SetSize(3, 1);
+    Src.PixelFormat := pf24bit;
+    Src.Canvas.Pixels[0, 0] := RGB(255, 0, 0);
+    Src.Canvas.Pixels[1, 0] := RGB(0, 255, 0);
+    Src.Canvas.Pixels[2, 0] := RGB(0, 0, 255);
+
+    Path := TPath.Combine(FTempDir, 'fidelity.png');
+    SaveBitmapToFile(Src, Path, sfPNG, 90, 6);
+  finally
+    Src.Free;
+  end;
+
+  Png := TPngImage.Create;
+  try
+    Png.LoadFromFile(Path);
+    Dst := TBitmap.Create;
+    try
+      Dst.Assign(Png);
+      Assert.AreEqual(Integer(RGB(255, 0, 0)), Integer(Dst.Canvas.Pixels[0, 0]),
+        'Red pixel must survive round-trip');
+      Assert.AreEqual(Integer(RGB(0, 255, 0)), Integer(Dst.Canvas.Pixels[1, 0]),
+        'Green pixel must survive round-trip');
+      Assert.AreEqual(Integer(RGB(0, 0, 255)), Integer(Dst.Canvas.Pixels[2, 0]),
+        'Blue pixel must survive round-trip');
+    finally
+      Dst.Free;
+    end;
+  finally
+    Png.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestSaveFormatExtensionPNG;
+begin
+  Assert.AreEqual('.png', SaveFormatExtension(sfPNG));
+end;
+
+procedure TTestBitmapSaver.TestSaveFormatExtensionJPEG;
+begin
+  Assert.AreEqual('.jpg', SaveFormatExtension(sfJPEG));
 end;
 
 initialization
