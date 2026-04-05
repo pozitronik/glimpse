@@ -19,6 +19,7 @@ uses
   uExtractionWorker in '..\src\uExtractionWorker.pas',
   uPluginForm in '..\src\uPluginForm.pas',
   TestFrameView in 'TestFrameView.pas',
+  uDebugLog in '..\src\uDebugLog.pas',
   uCache in '..\src\uCache.pas',
   TestCache in 'TestCache.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',

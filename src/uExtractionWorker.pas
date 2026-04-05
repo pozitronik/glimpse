@@ -48,7 +48,8 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils
+  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
 
 {$IFDEF DEBUG}
 procedure ThreadLog(const AMsg: string);

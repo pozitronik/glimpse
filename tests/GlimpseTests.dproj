@@ -84,6 +84,7 @@
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
         <DCCReference Include="..\src\uPluginForm.pas"/>
         <DCCReference Include="TestFrameView.pas"/>
+        <DCCReference Include="..\src\uDebugLog.pas"/>
         <DCCReference Include="..\src\uCache.pas"/>
         <DCCReference Include="TestCache.pas"/>
         <DCCReference Include="..\src\uFrameFileNames.pas"/>

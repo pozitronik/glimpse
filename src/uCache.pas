@@ -76,48 +76,15 @@ type
     property CacheDir: string read FCacheDir;
   end;
 
-{$IFDEF DEBUG}
-var
-  GDebugLogPath: string;
-
-{ Thread-safe debug logging to file. Tag identifies the subsystem. }
-procedure DebugLog(const ATag, AMsg: string);
-{$ENDIF}
-
 implementation
 
 uses
-  System.DateUtils;
-
-function GetCurrentThreadId: Cardinal; stdcall; external 'kernel32.dll';
+  System.DateUtils
+  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
 
 { Invariant format settings for deterministic key strings }
 var
   InvFmt: TFormatSettings;
-
-{$IFDEF DEBUG}
-procedure DebugLog(const ATag, AMsg: string);
-var
-  F: TextFile;
-begin
-  if GDebugLogPath = '' then Exit;
-  try
-    AssignFile(F, GDebugLogPath);
-    if FileExists(GDebugLogPath) then
-      Append(F)
-    else
-      Rewrite(F);
-    try
-      WriteLn(F, Format('%s  [tid=%d] [%s] %s',
-        [FormatDateTime('hh:nn:ss.zzz', Now), GetCurrentThreadId, ATag, AMsg]));
-    finally
-      CloseFile(F);
-    end;
-  except
-    { Logging must never crash the plugin }
-  end;
-end;
-{$ENDIF}
 
 { TNullFrameCache }
 

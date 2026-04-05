@@ -56,6 +56,7 @@
         <DCCReference Include="uFrameView.pas"/>
         <DCCReference Include="uExtractionWorker.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
+        <DCCReference Include="uDebugLog.pas"/>
         <DCCReference Include="uCache.pas"/>
         <DCCReference Include="uFrameFileNames.pas"/>
         <DCCReference Include="uBitmapSaver.pas"/>

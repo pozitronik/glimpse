@@ -17,6 +17,7 @@ uses
   uFrameView in 'uFrameView.pas',
   uExtractionWorker in 'uExtractionWorker.pas',
   uPluginForm in 'uPluginForm.pas',
+  uDebugLog in 'uDebugLog.pas',
   uCache in 'uCache.pas',
   uSettingsDlg in 'uSettingsDlg.pas',
   uFrameFileNames in 'uFrameFileNames.pas',

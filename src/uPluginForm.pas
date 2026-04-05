@@ -147,7 +147,8 @@ type
 implementation
 
 uses
-  uSettingsDlg, uFileNavigator;
+  uSettingsDlg, uFileNavigator
+  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
 
 {$IFDEF DEBUG}
 procedure FormLog(const AMsg: string);
@@ -286,7 +287,7 @@ begin
   FPendingLock := TCriticalSection.Create;
 
   {$IFDEF DEBUG}
-  uCache.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
+  uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
   {$ENDIF}
 

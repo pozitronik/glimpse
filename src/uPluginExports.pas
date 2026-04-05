@@ -23,7 +23,8 @@ implementation
 
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
-  uSettings, uFFmpegLocator, uPluginForm, uCache;
+  uSettings, uFFmpegLocator, uPluginForm, uCache
+  {$IFDEF DEBUG}, uDebugLog{$ENDIF};
 
 var
   GSettings: TPluginSettings;
@@ -196,10 +197,10 @@ begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
   {$IFDEF DEBUG}
-  uCache.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
+  uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
   { Start fresh log each session }
-  if FileExists(uCache.GDebugLogPath) then
-    DeleteFile(uCache.GDebugLogPath);
+  if FileExists(uDebugLog.GDebugLogPath) then
+    DeleteFile(uDebugLog.GDebugLogPath);
   {$ENDIF}
 
   Log('ListSetDefaultParams');
