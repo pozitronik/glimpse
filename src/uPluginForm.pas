@@ -2520,8 +2520,8 @@ begin
     Exit;
   end;
 
-  { Single mode: arrow keys navigate between frames }
-  if FFrameView.ViewMode = vmSingle then
+  { Single mode: bare arrow keys navigate between frames }
+  if (Shift = []) and (FFrameView.ViewMode = vmSingle) then
   begin
     case Key of
       VK_LEFT, VK_UP:
@@ -2555,15 +2555,21 @@ begin
       if ssCtrl in Shift then
       begin
         if [ssShift, ssAlt] * Shift = [ssAlt] then
-          SaveAllFrames
+        begin
+          SaveAllFrames;
+          Key := 0;
+        end
         else if [ssShift, ssAlt] * Shift = [ssShift] then
-          SaveCombinedFrame
+        begin
+          SaveCombinedFrame;
+          Key := 0;
+        end
         else if [ssShift, ssAlt] * Shift = [] then
         begin
           FContextCellIndex := -1;
           SaveSingleFrame;
+          Key := 0;
         end;
-        Key := 0;
       end;
     Ord('A'):
       if (ssCtrl in Shift) and not (ssShift in Shift) and not (ssAlt in Shift) then
@@ -2578,27 +2584,32 @@ begin
         Key := 0;
       end;
     VK_TAB:
+      if Shift - [ssShift] = [] then
       begin
         SelectNext(ActiveControl, not (ssShift in Shift), True);
         Key := 0;
       end;
     VK_ESCAPE:
+      if Shift = [] then
       begin
         PostMessage(GetParent(Handle), WM_KEYDOWN, VK_ESCAPE, 0);
         PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
         Key := 0;
       end;
     VK_OEM_PLUS, VK_ADD:
+      if Shift = [] then
       begin
         ZoomBy(ZOOM_IN_FACTOR);
         Key := 0;
       end;
     VK_OEM_MINUS, VK_SUBTRACT:
+      if Shift = [] then
       begin
         ZoomBy(ZOOM_OUT_FACTOR);
         Key := 0;
       end;
     Ord('0'), VK_NUMPAD0:
+      if Shift = [] then
       begin
         ResetZoom;
         Key := 0;
@@ -2632,7 +2643,7 @@ begin
         Key := 0;
       end;
     VK_OEM_3: { ~ / ` key }
-      if FBtnHamburger.Visible then
+      if (Shift = []) and FBtnHamburger.Visible then
       begin
         OnHamburgerClick(FBtnHamburger);
         Key := 0;
