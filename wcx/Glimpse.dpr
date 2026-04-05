@@ -25,6 +25,7 @@ uses
   uColorConv in '..\src\uColorConv.pas',
   uRunProcess in '..\src\uRunProcess.pas',
   uFrameExtractor in '..\src\uFrameExtractor.pas',
+  uCombinedImage in '..\src\uCombinedImage.pas',
   uSettings in '..\src\uSettings.pas';
 
 exports

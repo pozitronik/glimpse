@@ -22,6 +22,13 @@ type
     [Test] procedure TestGenerateFrameFileNameNegativeOffset;
     [Test] procedure TestGenerateFrameFileNameLargeOffset;
     [Test] procedure TestGenerateFrameFileNameSpacesInName;
+    { GenerateCombinedFileName }
+    [Test] procedure TestCombinedFileNamePNG;
+    [Test] procedure TestCombinedFileNameJPEG;
+    [Test] procedure TestCombinedFileNameStripsPath;
+    [Test] procedure TestCombinedFileNameDoubleExtension;
+    [Test] procedure TestCombinedFileNameEmpty;
+    [Test] procedure TestCombinedFileNameSpaces;
   end;
 
 implementation
@@ -113,6 +120,45 @@ begin
   { Spaces in filename are preserved as-is }
   Assert.AreEqual('my video_frame_01_00-00-01.000.png',
     GenerateFrameFileName('my video.mp4', 0, 1.0, sfPNG));
+end;
+
+{ GenerateCombinedFileName }
+
+procedure TTestFrameFileNames.TestCombinedFileNamePNG;
+begin
+  Assert.AreEqual('video_combined.png',
+    GenerateCombinedFileName('video.mp4', sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestCombinedFileNameJPEG;
+begin
+  Assert.AreEqual('movie_combined.jpg',
+    GenerateCombinedFileName('movie.avi', sfJPEG));
+end;
+
+procedure TTestFrameFileNames.TestCombinedFileNameStripsPath;
+begin
+  Assert.AreEqual('video_combined.png',
+    GenerateCombinedFileName('C:\Users\test\video.mp4', sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestCombinedFileNameDoubleExtension;
+begin
+  { Only last extension stripped }
+  Assert.AreEqual('video.part_combined.png',
+    GenerateCombinedFileName('video.part.mp4', sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestCombinedFileNameEmpty;
+begin
+  Assert.AreEqual('_combined.png',
+    GenerateCombinedFileName('', sfPNG));
+end;
+
+procedure TTestFrameFileNames.TestCombinedFileNameSpaces;
+begin
+  Assert.AreEqual('my video_combined.jpg',
+    GenerateCombinedFileName('my video.mkv', sfJPEG));
 end;
 
 initialization

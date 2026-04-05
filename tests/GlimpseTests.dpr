@@ -55,7 +55,9 @@ uses
   uWcxAPI in '..\wcx\uWcxAPI.pas',
   uWcxSettings in '..\wcx\uWcxSettings.pas',
   TestWcxSettings in 'TestWcxSettings.pas',
-  TestWcxAPI in 'TestWcxAPI.pas';
+  TestWcxAPI in 'TestWcxAPI.pas',
+  uCombinedImage in '..\src\uCombinedImage.pas',
+  TestCombinedImage in 'TestCombinedImage.pas';
 
 var
   Runner: ITestRunner;
