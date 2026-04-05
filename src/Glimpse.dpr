@@ -14,6 +14,7 @@ uses
   uFrameOffsets in 'uFrameOffsets.pas',
   uFFmpegLocator in 'uFFmpegLocator.pas',
   uFFmpegExe in 'uFFmpegExe.pas',
+  uFrameView in 'uFrameView.pas',
   uPluginForm in 'uPluginForm.pas',
   uCache in 'uCache.pas',
   uSettingsDlg in 'uSettingsDlg.pas',

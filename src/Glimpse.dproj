@@ -53,6 +53,7 @@
         <DCCReference Include="uFrameOffsets.pas"/>
         <DCCReference Include="uFFmpegLocator.pas"/>
         <DCCReference Include="uFFmpegExe.pas"/>
+        <DCCReference Include="uFrameView.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="uCache.pas"/>
         <DCCReference Include="uFrameFileNames.pas"/>

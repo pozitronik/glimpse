@@ -159,7 +159,7 @@ uses
   System.SysUtils, System.Types, System.Math,
   Winapi.Windows, Winapi.Messages,
   Vcl.Forms, Vcl.Graphics, Vcl.Controls,
-  uPluginForm, uFrameOffsets, uSettings;
+  uFrameView, uFrameOffsets, uSettings;
 
 { Helper: create a TFrameView with a temporary parent so it has a valid ClientWidth }
 function CreateTestFrameView(AWidth: Integer; AMode: TViewMode): TFrameView;
