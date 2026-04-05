@@ -8,7 +8,7 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  uSettings, uFrameOffsets;
+  uTypes, uSettings, uFrameOffsets;
 
 const
   DEF_ASPECT_RATIO = 9.0 / 16.0; { fallback for 16:9 video }

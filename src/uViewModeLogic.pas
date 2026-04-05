@@ -5,7 +5,7 @@ unit uViewModeLogic;
 interface
 
 uses
-  uSettings;
+  uTypes;
 
 { Maps a virtual key code to a view mode.
   Supports Ord('1')..Ord('5') and VK_NUMPAD1..VK_NUMPAD5.

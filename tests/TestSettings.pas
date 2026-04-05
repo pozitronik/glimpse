@@ -87,7 +87,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uSettings, uBitmapSaver, uPathExpand;
+  uTypes, uSettings, uBitmapSaver, uPathExpand;
 
 procedure TTestPluginSettings.Setup;
 begin

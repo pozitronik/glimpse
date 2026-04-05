@@ -37,7 +37,7 @@ type
 implementation
 
 uses
-  Winapi.Windows, uSettings, uWlxAPI, uViewModeLogic;
+  Winapi.Windows, uTypes, uWlxAPI, uViewModeLogic;
 
 procedure TTestViewModeLogic.TestKeyToViewModeDigit1;
 var M: TViewMode;

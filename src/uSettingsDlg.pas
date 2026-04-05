@@ -9,7 +9,7 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Dialogs,
   Winapi.Windows,
-  uSettings;
+  uTypes, uSettings;
 
 type
   TSettingsForm = class(TForm)

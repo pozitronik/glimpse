@@ -37,7 +37,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Vcl.Menus, uSettings, uToolbarLayout;
+  System.SysUtils, Vcl.Menus, uTypes, uToolbarLayout;
 
 const
   { Simulated group boundaries }

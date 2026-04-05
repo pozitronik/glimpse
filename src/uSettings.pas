@@ -6,13 +6,9 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver;
+  uBitmapSaver, uTypes;
 
 type
-  TFFmpegMode = (fmAuto, fmExe);
-  TViewMode = (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
-  TZoomMode = (zmFitWindow, zmFitIfLarger, zmActual);
-
   TPluginSettings = class
   strict private
     FIniPath: string;

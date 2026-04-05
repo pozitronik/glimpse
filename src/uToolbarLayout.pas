@@ -5,7 +5,7 @@ unit uToolbarLayout;
 interface
 
 uses
-  System.Classes, Vcl.Menus, uSettings;
+  System.Classes, Vcl.Menus, uTypes;
 
 type
   TToolbarCollapseState = (tcsExpanded, tcsActionsCollapsed, tcsAllCollapsed);

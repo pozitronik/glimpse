@@ -8,6 +8,7 @@ library Glimpse;
 
 uses
   Winapi.Windows,
+  uTypes in 'uTypes.pas',
   uWlxAPI in 'uWlxAPI.pas',
   uPluginExports in 'uPluginExports.pas',
   uSettings in 'uSettings.pas',

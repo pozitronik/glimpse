@@ -8,6 +8,7 @@ uses
   DUnitX.TestFramework,
   DUnitX.Loggers.Console,
   DUnitX.Loggers.XML.NUnit,
+  uTypes in '..\src\uTypes.pas',
   uSettings in '..\src\uSettings.pas',
   uFrameOffsets in '..\src\uFrameOffsets.pas',
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',
@@ -38,7 +39,8 @@ uses
   TestFileNavigator in 'TestFileNavigator.pas',
   TestDebugLog in 'TestDebugLog.pas',
   uPathExpand in '..\src\uPathExpand.pas',
-  TestPathExpand in 'TestPathExpand.pas';
+  TestPathExpand in 'TestPathExpand.pas',
+  TestTypes in 'TestTypes.pas';
 
 var
   Runner: ITestRunner;

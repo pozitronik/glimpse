@@ -10,7 +10,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
-  uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
+  uTypes, uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uFrameFileNames, uBitmapSaver, uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uExtractionWorker;
 
