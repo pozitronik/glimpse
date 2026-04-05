@@ -34,6 +34,10 @@ function GetPackerCaps: Integer; stdcall;
 { Receives default INI path from TC }
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
 
+{ Stub: packing not supported, exists only to make Configure button accessible }
+function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar;
+  Flags: Integer): Integer; stdcall;
+
 { Shows configuration dialog }
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 
@@ -433,9 +437,10 @@ end;
 
 function GetPackerCaps: Integer; stdcall;
 begin
-  { Read-only with configuration dialog }
-  Result := PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT or PK_CAPS_HIDE
-    or PK_CAPS_OPTIONS;
+  { PK_CAPS_NEW is a stub to make the Pack dialog (and its Configure button)
+    accessible; PackFiles always returns E_NOT_SUPPORTED }
+  Result := PK_CAPS_NEW or PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT
+    or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
 end;
 
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
@@ -445,6 +450,12 @@ begin
     GIniPath := ChangeFileExt(string(AnsiString(dps^.DefaultIniName)), '.ini');
     WcxLog(Format('SetDefaultParams: ini=%s', [GIniPath]));
   end;
+end;
+
+function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar;
+  Flags: Integer): Integer; stdcall;
+begin
+  Result := E_NOT_SUPPORTED;
 end;
 
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;

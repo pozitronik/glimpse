@@ -39,6 +39,7 @@ exports
   SetProcessDataProc,
   GetPackerCaps,
   SetDefaultParams,
+  PackFiles,
   ConfigurePacker;
 
 begin
