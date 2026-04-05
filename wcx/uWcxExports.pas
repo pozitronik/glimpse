@@ -63,18 +63,32 @@ type
     OpenMode: Integer;
     ProcessDataProc: TProcessDataProc;
     ProcessDataProcW: TProcessDataProcW;
-    { Pre-extracted frames for ShowFileSizes mode }
-    TempDir: string;
+    { Populated from module-level cache when ShowFileSizes is enabled }
     TempPaths: TArray<string>;
     EntrySizes: TArray<Int64>;
   end;
 
 var
   GIniPath: string;
+  { Module-level cache for pre-extracted frames (survives across OpenArchive calls) }
+  GCachedVideoFile: string;
+  GCachedTempDir: string;
+  GCachedTempPaths: TArray<string>;
+  GCachedEntrySizes: TArray<Int64>;
 
 procedure WcxLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
+end;
+
+procedure InvalidateFrameCache;
+begin
+  if (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
+    TDirectory.Delete(GCachedTempDir, True);
+  GCachedVideoFile := '';
+  GCachedTempDir := '';
+  GCachedTempPaths := nil;
+  GCachedEntrySizes := nil;
 end;
 
 { Generates combined image filename: <basename>_combined.<ext> }
@@ -151,7 +165,25 @@ begin
   end;
 end;
 
-{ Pre-extracts all frames to temp directory, storing paths and file sizes }
+function GetEntryCount(H: TArchiveHandle): Integer;
+begin
+  if H.Settings.OutputMode = womCombined then
+    Result := 1
+  else
+    Result := Length(H.Offsets);
+end;
+
+function GetEntryName(H: TArchiveHandle): string;
+begin
+  if H.Settings.OutputMode = womCombined then
+    Result := GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
+  else
+    Result := GenerateFrameFileName(H.FileName, H.CurrentIndex,
+      H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
+end;
+
+{ Pre-extracts all frames to a module-level temp cache, or reuses
+  an existing cache if the same video was already extracted. }
 procedure PreExtractFrames(H: TArchiveHandle);
 var
   Extractor: IFrameExtractor;
@@ -161,14 +193,28 @@ var
   TempPath: string;
   EntryCount, I: Integer;
 begin
-  H.TempDir := TPath.Combine(TPath.GetTempPath,
+  { Reuse cached extraction if available for the same video }
+  if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '')
+    and TDirectory.Exists(GCachedTempDir) then
+  begin
+    H.TempPaths := GCachedTempPaths;
+    H.EntrySizes := GCachedEntrySizes;
+    WcxLog(Format('PreExtract: cache hit for %s', [H.FileName]));
+    Exit;
+  end;
+
+  { Different video or no cache: invalidate old cache and extract fresh }
+  InvalidateFrameCache;
+
+  GCachedTempDir := TPath.Combine(TPath.GetTempPath,
     'glimpse_wcx_' + TPath.GetGUIDFileName(False));
-  TDirectory.CreateDirectory(H.TempDir);
+  TDirectory.CreateDirectory(GCachedTempDir);
+  GCachedVideoFile := H.FileName;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   EntryCount := GetEntryCount(H);
-  SetLength(H.TempPaths, EntryCount);
-  SetLength(H.EntrySizes, EntryCount);
+  SetLength(GCachedTempPaths, EntryCount);
+  SetLength(GCachedEntrySizes, EntryCount);
 
   if H.Settings.OutputMode = womCombined then
   begin
@@ -181,12 +227,12 @@ begin
       Combined := RenderCombinedImage(Frames, H.Offsets, H.Settings);
       if Combined <> nil then
       try
-        TempPath := TPath.Combine(H.TempDir,
+        TempPath := TPath.Combine(GCachedTempDir,
           GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
         SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
           H.Settings.JpegQuality, H.Settings.PngCompression);
-        H.TempPaths[0] := TempPath;
-        H.EntrySizes[0] := TFile.GetSize(TempPath);
+        GCachedTempPaths[0] := TempPath;
+        GCachedEntrySizes[0] := TFile.GetSize(TempPath);
       finally
         Combined.Free;
       end;
@@ -203,20 +249,24 @@ begin
         H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
       if Bmp = nil then Continue;
       try
-        TempPath := TPath.Combine(H.TempDir,
+        TempPath := TPath.Combine(GCachedTempDir,
           GenerateFrameFileName(H.FileName, I,
             H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
         SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat,
           H.Settings.JpegQuality, H.Settings.PngCompression);
-        H.TempPaths[I] := TempPath;
-        H.EntrySizes[I] := TFile.GetSize(TempPath);
+        GCachedTempPaths[I] := TempPath;
+        GCachedEntrySizes[I] := TFile.GetSize(TempPath);
       finally
         Bmp.Free;
       end;
     end;
   end;
 
-  WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, H.TempDir]));
+  { Copy to handle }
+  H.TempPaths := GCachedTempPaths;
+  H.EntrySizes := GCachedEntrySizes;
+
+  WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, GCachedTempDir]));
 end;
 
 function DoOpenArchive(const AFileName: string; AOpenMode: Integer;
@@ -285,23 +335,6 @@ function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): THandle; stdcall;
 begin
   Result := DoOpenArchive(ArchiveData.ArcName,
     ArchiveData.OpenMode, ArchiveData.OpenResult);
-end;
-
-function GetEntryCount(H: TArchiveHandle): Integer;
-begin
-  if H.Settings.OutputMode = womCombined then
-    Result := 1
-  else
-    Result := Length(H.Offsets);
-end;
-
-function GetEntryName(H: TArchiveHandle): string;
-begin
-  if H.Settings.OutputMode = womCombined then
-    Result := GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
-  else
-    Result := GenerateFrameFileName(H.FileName, H.CurrentIndex,
-      H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
 end;
 
 function ReadHeader(hArcData: THandle; var HeaderData: THeaderData): Integer; stdcall;
@@ -513,8 +546,6 @@ var
 begin
   H := TArchiveHandle(hArcData);
   WcxLog(Format('CloseArchive: %s', [H.FileName]));
-  if (H.TempDir <> '') and TDirectory.Exists(H.TempDir) then
-    TDirectory.Delete(H.TempDir, True);
   H.Settings.Free;
   H.Free;
   Result := E_SUCCESS;
@@ -562,7 +593,10 @@ begin
   try
     Settings.Load;
     if ShowWcxSettingsDialog(Parent, Settings) then
+    begin
       Settings.Save;
+      InvalidateFrameCache;
+    end;
   finally
     Settings.Free;
   end;
@@ -572,5 +606,8 @@ initialization
   { Fallback: INI next to the DLL, in case SetDefaultParams is not called
     before ConfigurePacker or OpenArchive }
   GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
+
+finalization
+  InvalidateFrameCache;
 
 end.
