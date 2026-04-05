@@ -2,9 +2,13 @@
 
 ![Plugin screenshot](/img/glimpse.jpg)
 
-A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced video frames when previewing a video file. Provides an instant visual summary of a video's content without opening a media player.
+A pair of Total Commander plugins for working with video frames. The **WLX** (Lister) plugin displays evenly-spaced video frames when previewing a file. The **WCX** (Packer) plugin presents a video as a virtual archive of frame images, allowing batch extraction via TC's standard file operations.
 
-## Features
+## WLX Plugin (Lister)
+
+Provides an instant visual summary of a video's content without opening a media player.
+
+### Features
 
 - Fast, non-blocking preview: placeholders appear immediately, frames load in background
 - Five view modes: smart grid, grid, scroll, filmstrip, single frame
@@ -19,30 +23,7 @@ A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced 
 - Collapsible toolbar with hamburger overflow menu for narrow windows
 - Environment variable expansion in all configured paths (e.g. `%USERPROFILE%`)
 
-## Installation
-
-### Automatic (recommended)
-
-Open the Glimpse `.zip` archive in Total Commander. TC will detect `pluginst.inf` and offer to install the plugin automatically.
-
-### Manual
-
-1. Extract `Glimpse.wlx` and `Glimpse.wlx64` to a directory of your choice
-2. In Total Commander: Configuration → Options → Plugins → Lister (WLX) → Add
-3. Browse to `Glimpse.wlx64` (64-bit TC) or `Glimpse.wlx` (32-bit TC)
-
-## Requirements
-
-- Total Commander 10.x or later
-- `ffmpeg.exe` in plugin directory, configured path, or system PATH
-
-## Supported Formats
-
-MP4, MKV, AVI, MOV, WMV, WEBM, FLV, TS, M2TS, M4V, 3GP, OGV, MPG, MPEG, VOB, ASF, RM, RMVB, F4V - mostly anything that `ffmpeg` supports.
-
-Additional extensions can be configured in Settings (F2).
-
-## Keyboard Shortcuts
+### Keyboard Shortcuts
 
 | Key          | Action                                                                                            |
 |--------------|---------------------------------------------------------------------------------------------------|
@@ -68,9 +49,53 @@ Additional extensions can be configured in Settings (F2).
 | F3           | Toggle status bar                                                                                 |
 | F4           | Toggle toolbar                                                                                    |
 
-## Configuration
+### Configuration
 
 All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu.
+
+## WCX Plugin (Packer)
+
+Presents a video file as a virtual archive containing frame images. Opening a video in TC shows files like `video_frame_001_00m05s.png` that can be copied, viewed, or batch-extracted using standard TC operations.
+
+### Use Cases
+
+- Batch-extract thumbnails from many videos at once using TC's multi-file copy
+- Preview frame filenames before extracting
+- Use TC's built-in viewer to browse individual frames
+
+### Configuration
+
+The WCX plugin uses its own `Glimpse.ini` (stored in TC's plugin settings directory). Settings include frame count, output format (PNG/JPEG), quality, and ffmpeg path.
+
+## Installation
+
+### Automatic (recommended)
+
+Open the Glimpse `.zip` archive in Total Commander. TC will detect `pluginst.inf` and offer to install the plugin automatically. Install the WLX and WCX archives separately.
+
+### Manual
+
+**WLX (Lister):**
+1. Extract `Glimpse.wlx` and `Glimpse.wlx64` to a directory of your choice
+2. In Total Commander: Configuration > Options > Plugins > Lister (WLX) > Add
+3. Browse to `Glimpse.wlx64` (64-bit TC) or `Glimpse.wlx` (32-bit TC)
+
+**WCX (Packer):**
+1. Extract `Glimpse.wcx` and `Glimpse.wcx64` to a directory of your choice
+2. In Total Commander: Configuration > Options > Plugins > Packer (WCX) > Add
+3. Browse to `Glimpse.wcx64` (64-bit TC) or `Glimpse.wcx` (32-bit TC)
+4. Associate desired video extensions (e.g. `mp4`, `mkv`)
+
+## Requirements
+
+- Total Commander 10.x or later
+- `ffmpeg.exe` in plugin directory, configured path, or system PATH
+
+## Supported Formats
+
+MP4, MKV, AVI, MOV, WMV, WEBM, FLV, TS, M2TS, M4V, 3GP, OGV, MPG, MPEG, VOB, ASF, RM, RMVB, F4V - mostly anything that `ffmpeg` supports.
+
+Additional extensions can be configured in Settings (F2 for WLX, or via the INI file for WCX).
 
 ## License
 
