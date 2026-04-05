@@ -1175,13 +1175,15 @@ var
 begin
   { Signal all workers to stop }
   for W := 0 to High(FWorkerThreads) do
-    FWorkerThreads[W].Terminate;
+    if Assigned(FWorkerThreads[W]) then
+      FWorkerThreads[W].Terminate;
   { Wait for all workers to finish, then free }
   for W := 0 to High(FWorkerThreads) do
-  begin
-    FWorkerThreads[W].WaitFor;
-    FWorkerThreads[W].Free;
-  end;
+    if Assigned(FWorkerThreads[W]) then
+    begin
+      FWorkerThreads[W].WaitFor;
+      FreeAndNil(FWorkerThreads[W]);
+    end;
   FWorkerThreads := nil;
 end;
 
