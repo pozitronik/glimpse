@@ -25,12 +25,22 @@ type
     [Test] procedure TestSaveFormatPNG;
     [Test] procedure TestMaxWorkersClamped;
     [Test] procedure TestMaxThreadsClamped;
+    [Test] procedure TestDefaultOutputMode;
+    [Test] procedure TestOutputModeCombinedRoundTrip;
+    [Test] procedure TestCombinedColumnsDefault;
+    [Test] procedure TestCombinedColumnsClamped;
+    [Test] procedure TestShowTimestampDefault;
+    [Test] procedure TestShowTimestampRoundTrip;
+    [Test] procedure TestBackgroundDefault;
+    [Test] procedure TestBackgroundRoundTrip;
+    [Test] procedure TestCellGapDefault;
+    [Test] procedure TestCellGapClamped;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.IniFiles,
+  System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
   uWcxSettings, uBitmapSaver;
 
 { TTestWcxSettings }
@@ -325,6 +335,181 @@ begin
   try
     S.Load;
     Assert.AreEqual(64, S.MaxThreads);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestDefaultOutputMode;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.IsTrue(S.OutputMode = womSeparate);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestOutputModeCombinedRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'mode.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.OutputMode := womCombined;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsTrue(S2.OutputMode = womCombined);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedColumnsDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.AreEqual(WCX_DEF_COMBINED_COLS, S.CombinedColumns);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedColumnsClamped;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cols.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'Columns', 50);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(20, S.CombinedColumns);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestShowTimestampDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.AreEqual(WCX_DEF_SHOW_TIMESTAMP, S.ShowTimestamp);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestShowTimestampRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'ts.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.ShowTimestamp := False;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(False, S2.ShowTimestamp);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBackgroundDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.AreEqual(Integer(WCX_DEF_BACKGROUND), Integer(S.Background));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBackgroundRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'bg.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.Background := TColor($00FF8040);
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(TColor($00FF8040)), Integer(S2.Background));
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCellGapDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.AreEqual(WCX_DEF_CELL_GAP, S.CellGap);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCellGapClamped;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'gap.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'CellGap', 99);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(20, S.CellGap);
   finally
     S.Free;
   end;

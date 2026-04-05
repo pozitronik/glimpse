@@ -12,6 +12,7 @@ uses
   uWcxAPI in 'uWcxAPI.pas',
   uWcxExports in 'uWcxExports.pas',
   uWcxSettings in 'uWcxSettings.pas',
+  uWcxSettingsDlg in 'uWcxSettingsDlg.pas',
   uFrameOffsets in '..\src\uFrameOffsets.pas',
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',
   uFFmpegExe in '..\src\uFFmpegExe.pas',
@@ -37,7 +38,8 @@ exports
   SetChangeVolProc,
   SetProcessDataProc,
   GetPackerCaps,
-  SetDefaultParams;
+  SetDefaultParams,
+  ConfigurePacker;
 
 begin
 end.
