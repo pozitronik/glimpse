@@ -145,6 +145,7 @@ const
   ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
   MIN_ARC_RADIUS    = 5;  { skip spinner if cell too small }
   ARC_ANGLE_STEP    = 45.0; { spinner rotation angle per animation tick }
+  ANIM_STEP_COUNT   = Round(360.0 / ARC_ANGLE_STEP);
 
 constructor TFrameView.Create(AOwner: TComponent);
 begin
@@ -627,7 +628,7 @@ end;
 
 procedure TFrameView.AdvanceAnimation;
 begin
-  FAnimStep := (FAnimStep + 1) mod 8;
+  FAnimStep := (FAnimStep + 1) mod ANIM_STEP_COUNT;
   Invalidate;
 end;
 

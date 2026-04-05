@@ -96,6 +96,7 @@ uses
 
 const
   MOVEFILE_REPLACE_EXISTING = 1;
+  SHARD_PREFIX_LEN = 2; { directory sharding depth: first N chars of the hash key }
 
 function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
 
@@ -161,7 +162,7 @@ end;
 
 function TFrameCache.KeyToPath(const AKey: string): string;
 begin
-  Result := TPath.Combine(TPath.Combine(FCacheDir, Copy(AKey, 1, 2)), AKey + '.png');
+  Result := TPath.Combine(TPath.Combine(FCacheDir, Copy(AKey, 1, SHARD_PREFIX_LEN)), AKey + '.png');
 end;
 
 class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double): string;

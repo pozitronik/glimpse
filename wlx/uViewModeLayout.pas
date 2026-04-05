@@ -98,10 +98,7 @@ function CreateViewModeLayout(AMode: TViewMode): TViewModeLayout;
 implementation
 
 uses
-  System.Math;
-
-const
-  ZOOM_EPS = 0.0001; { matches uZoomController.ZOOM_EPSILON }
+  System.Math, uZoomController;
 
 { TViewModeLayout }
 
@@ -505,7 +502,7 @@ begin
         Result.Bottom := RowTop + RowH;
 
       { Apply continuous zoom }
-      if not SameValue(ACtx.ZoomFactor, 1.0, ZOOM_EPS) then
+      if not SameValue(ACtx.ZoomFactor, 1.0, ZOOM_EPSILON) then
       begin
         Result.Left   := Round(Result.Left * ACtx.ZoomFactor);
         Result.Top    := Round(Result.Top * ACtx.ZoomFactor);
