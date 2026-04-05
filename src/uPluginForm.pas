@@ -261,7 +261,9 @@ type
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
     procedure CMDialogKey(var Message: TWMKey); message CM_DIALOGKEY;
+    procedure WMSetFocus(var Message: TWMSetFocus); message WM_SETFOCUS;
   protected
+    procedure WndProc(var Message: TMessage); override;
     procedure Resize; override;
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
       MousePos: TPoint): Boolean; override;
@@ -539,11 +541,6 @@ begin
   begin
     if GetParentForm(Self) is TPluginForm then
     begin
-      { Claim keyboard focus BEFORE zoom: when SetFocus fires after ZoomBy,
-        the scrollbox handles CMFocusChanged by calling ScrollInView, which
-        resets scroll positions to show the top-left corner of this control,
-        overwriting the centered position that ZoomBy just computed. }
-      Winapi.Windows.SetFocus(Self.Handle);
       if Message.WheelDelta > 0 then
         TPluginForm(GetParentForm(Self)).ZoomBy(ZOOM_IN_FACTOR)
       else
@@ -1477,9 +1474,9 @@ begin
   FParentWnd := AParentWin;
   SetWindowSubclass(AParentWin, @ParentSubclassProc, 1, DWORD_PTR(Self));
   Visible := True;
-  { A child control must own Win32 focus for KeyPreview to fire in a WLX plugin }
-  if FFrameView.HandleAllocated then
-    Winapi.Windows.SetFocus(FFrameView.Handle);
+  { Focus the form handle so TC recognises N/P as Lister shortcuts.
+    Rapid N/P may lose focus due to TC briefly focusing its file list. }
+  Winapi.Windows.SetFocus(Handle);
 
   FPendingFrames := TList<TPendingFrame>.Create;
   FPendingLock := TCriticalSection.Create;
@@ -2613,11 +2610,13 @@ begin
         Key := 0;
       end;
     VK_F2:
+      if Shift = [] then
       begin
         ShowSettings;
         Key := 0;
       end;
     VK_F3:
+      if Shift = [] then
       begin
         FStatusBar.Visible := not FStatusBar.Visible;
         FSettings.ShowStatusBar := FStatusBar.Visible;
@@ -2625,6 +2624,7 @@ begin
         Key := 0;
       end;
     VK_F4:
+      if Shift = [] then
       begin
         FToolbar.Visible := not FToolbar.Visible;
         FSettings.ShowToolbar := FToolbar.Visible;
@@ -2672,6 +2672,15 @@ begin
   else
     inherited;
   end;
+end;
+
+procedure TPluginForm.WMSetFocus(var Message: TWMSetFocus);
+begin
+  { Do NOT call inherited. VCL's default WMSetFocus redirects focus to
+    ActiveControl (a child). TC subclasses this window to catch N/P and
+    other Lister hotkeys; that subclass only sees WM_KEYDOWN when THIS
+    window has Win32 focus, not a child. Skipping inherited keeps focus
+    on the form handle so TC's hotkey interception works. }
 end;
 
 procedure TPluginForm.ShowError(const AMessage: string);
@@ -2849,6 +2858,21 @@ begin
   { Persist user preference }
   FSettings.ZoomMode := FFrameView.ZoomMode;
   FSettings.Save;
+end;
+
+procedure TPluginForm.WndProc(var Message: TMessage);
+begin
+  inherited;
+  if csDestroying in ComponentState then
+    Exit;
+  { When any child control is clicked, reclaim focus for the form handle.
+    TC subclasses this window to catch Lister hotkeys (N/P etc.); that
+    subclass only sees WM_KEYDOWN when this window has Win32 focus. }
+  if Message.Msg = WM_PARENTNOTIFY then
+    case LOWORD(Message.WParam) of
+      WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN:
+        Winapi.Windows.SetFocus(Handle);
+    end;
 end;
 
 procedure TPluginForm.Resize;
