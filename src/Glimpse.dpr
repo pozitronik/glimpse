@@ -29,7 +29,8 @@ uses
   uToolbarLayout in 'uToolbarLayout.pas',
   uFileNavigator in 'uFileNavigator.pas',
   uPathExpand in 'uPathExpand.pas',
-  uColorConv in 'uColorConv.pas';
+  uColorConv in 'uColorConv.pas',
+  uRunProcess in 'uRunProcess.pas';
 
 exports
   ListLoad,

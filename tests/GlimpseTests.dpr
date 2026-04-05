@@ -42,7 +42,9 @@ uses
   TestPathExpand in 'TestPathExpand.pas',
   TestTypes in 'TestTypes.pas',
   uColorConv in '..\src\uColorConv.pas',
-  TestColorConv in 'TestColorConv.pas';
+  TestColorConv in 'TestColorConv.pas',
+  uRunProcess in '..\src\uRunProcess.pas',
+  TestRunProcess in 'TestRunProcess.pas';
 
 var
   Runner: ITestRunner;
