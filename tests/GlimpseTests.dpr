@@ -54,7 +54,8 @@ uses
   TestExtractionController in 'TestExtractionController.pas',
   uWcxAPI in '..\wcx\uWcxAPI.pas',
   uWcxSettings in '..\wcx\uWcxSettings.pas',
-  TestWcxSettings in 'TestWcxSettings.pas';
+  TestWcxSettings in 'TestWcxSettings.pas',
+  TestWcxAPI in 'TestWcxAPI.pas';
 
 var
   Runner: ITestRunner;

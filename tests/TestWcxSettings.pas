@@ -37,6 +37,28 @@ type
     [Test] procedure TestCellGapClamped;
     [Test] procedure TestShowFileSizesDefault;
     [Test] procedure TestShowFileSizesRoundTrip;
+    { Lower bound clamping }
+    [Test] procedure TestFramesCountClampedLower;
+    [Test] procedure TestSkipEdgesClampedLower;
+    [Test] procedure TestPngCompressionClampedLower;
+    [Test] procedure TestCombinedColumnsClampedLower;
+    [Test] procedure TestCellGapClampedLower;
+    { Special valid values for workers/threads }
+    [Test] procedure TestMaxWorkersZeroRoundTrip;
+    [Test] procedure TestMaxThreadsMinusOneRoundTrip;
+    [Test] procedure TestMaxThreadsZeroRoundTrip;
+    { FFmpeg path }
+    [Test] procedure TestFFmpegExePathDefault;
+    [Test] procedure TestFFmpegExePathRoundTrip;
+    { Save edge cases }
+    [Test] procedure TestSaveEmptyPathNoError;
+    { Unknown INI values fall back to safe defaults }
+    [Test] procedure TestUnknownOutputModeDefaultsToSeparate;
+    [Test] procedure TestUnknownFormatDefaultsToPNG;
+    { Partial INI with missing sections }
+    [Test] procedure TestPartialIniUsesDefaults;
+    { UseBmpPipe round-trip }
+    [Test] procedure TestUseBmpPipeRoundTrip;
   end;
 
 implementation
@@ -552,4 +574,362 @@ begin
   end;
 end;
 
+{ Lower bound clamping: values below minimum are clamped up }
+
+procedure TTestWcxSettings.TestFramesCountClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fc_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 0);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(1, S.FramesCount, 'FramesCount=0 must clamp to 1');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestSkipEdgesClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'se_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'SkipEdges', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(0, S.SkipEdgesPercent, 'Negative SkipEdges must clamp to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestPngCompressionClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'png_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('output', 'PngCompression', -1);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(0, S.PngCompression, 'Negative PngCompression must clamp to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedColumnsClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cols_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'Columns', -3);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(0, S.CombinedColumns, 'Negative Columns must clamp to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCellGapClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'gap_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'CellGap', -1);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(0, S.CellGap, 'Negative CellGap must clamp to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+{ Special valid boundary values for workers/threads }
+
+procedure TTestWcxSettings.TestMaxWorkersZeroRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  { MaxWorkers=0 means "one per frame" (auto), must survive save/load }
+  IniPath := TPath.Combine(FTempDir, 'w0.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.MaxWorkers := 0;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(0, S2.MaxWorkers);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestMaxThreadsMinusOneRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  { MaxThreads=-1 means "no limit", must survive save/load }
+  IniPath := TPath.Combine(FTempDir, 'tm1.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.MaxThreads := -1;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(-1, S2.MaxThreads);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestMaxThreadsZeroRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  { MaxThreads=0 means "auto (CPU count)", must survive save/load }
+  IniPath := TPath.Combine(FTempDir, 't0.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.MaxThreads := 0;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(0, S2.MaxThreads);
+  finally
+    S2.Free;
+  end;
+end;
+
+{ FFmpeg path }
+
+procedure TTestWcxSettings.TestFFmpegExePathDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  try
+    Assert.AreEqual('', S.FFmpegExePath);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestFFmpegExePathRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'ffpath.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.FFmpegExePath := '%ProgramFiles%\ffmpeg\bin\ffmpeg.exe';
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual('%ProgramFiles%\ffmpeg\bin\ffmpeg.exe', S2.FFmpegExePath);
+  finally
+    S2.Free;
+  end;
+end;
+
+{ Save edge cases }
+
+procedure TTestWcxSettings.TestSaveEmptyPathNoError;
+var
+  S: TWcxSettings;
+begin
+  { TWcxSettings.Save exits silently when IniPath is empty }
+  S := TWcxSettings.Create('');
+  try
+    S.FramesCount := 10;
+    S.Save; { Must not raise }
+  finally
+    S.Free;
+  end;
+end;
+
+{ Unknown INI values }
+
+procedure TTestWcxSettings.TestUnknownOutputModeDefaultsToSeparate;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'mode_unk.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('output', 'Mode', 'nonsense_value');
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.OutputMode = womSeparate,
+      'Unrecognized mode string must default to womSeparate');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestUnknownFormatDefaultsToPNG;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fmt_unk.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('output', 'Format', 'BMP');
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.SaveFormat = sfPNG,
+      'Unrecognized format string must default to sfPNG');
+  finally
+    S.Free;
+  end;
+end;
+
+{ Partial INI: only one section present, all others use defaults }
+
+procedure TTestWcxSettings.TestPartialIniUsesDefaults;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'partial.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    { Write only one section }
+    Ini.WriteInteger('extraction', 'FramesCount', 8);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    { Explicit value loaded }
+    Assert.AreEqual(8, S.FramesCount);
+    { All other settings fall back to defaults }
+    Assert.AreEqual(WCX_DEF_SKIP_EDGES, S.SkipEdgesPercent);
+    Assert.AreEqual(WCX_DEF_JPEG_QUALITY, S.JpegQuality);
+    Assert.AreEqual(WCX_DEF_PNG_COMPRESSION, S.PngCompression);
+    Assert.AreEqual(WCX_DEF_COMBINED_COLS, S.CombinedColumns);
+    Assert.AreEqual(WCX_DEF_SHOW_TIMESTAMP, S.ShowTimestamp);
+    Assert.AreEqual(WCX_DEF_CELL_GAP, S.CellGap);
+    Assert.AreEqual(WCX_DEF_EXTENSION_LIST, S.ExtensionList);
+    Assert.AreEqual(WCX_DEF_SHOW_FILE_SIZES, S.ShowFileSizes);
+    Assert.IsTrue(S.SaveFormat = WCX_DEF_SAVE_FORMAT);
+    Assert.IsTrue(S.OutputMode = WCX_DEF_OUTPUT_MODE);
+  finally
+    S.Free;
+  end;
+end;
+
+{ UseBmpPipe }
+
+procedure TTestWcxSettings.TestUseBmpPipeRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'bmp.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.UseBmpPipe := False;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(False, S2.UseBmpPipe);
+  finally
+    S2.Free;
+  end;
+end;
+
 end.
+

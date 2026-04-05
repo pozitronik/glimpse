@@ -1,0 +1,179 @@
+{ Tests for WCX API type declarations.
+  Verifies struct layouts match the Total Commander WCX SDK specification.
+  Field order and sizes are critical because mismatches cause silent
+  data corruption (e.g. sizes shifted by 32 bits). }
+unit TestWcxAPI;
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TTestWcxAPI = class
+  public
+    { THeaderDataExW layout must match C SDK exactly }
+    [Test] procedure ExW_SizeMatchesSDK;
+    [Test] procedure ExW_PackSizeBeforePackSizeHigh;
+    [Test] procedure ExW_UnpSizeBeforeUnpSizeHigh;
+    [Test] procedure ExW_ReservedIs1024Bytes;
+    [Test] procedure ExW_FileNameCapacity;
+    [Test] procedure ExW_FillCharZeroesAllFields;
+    { THeaderData }
+    [Test] procedure Header_FieldOrder_UnpSizeAfterPackSize;
+    [Test] procedure Header_FileNameCapacity;
+    { TWcxDefaultParams }
+    [Test] procedure DefaultParams_IniNameCapacityIsMaxPath;
+    { Constants }
+    [Test] procedure Caps_FlagsArePowersOfTwo;
+    [Test] procedure ErrorCodes_UniqueValues;
+  end;
+
+implementation
+
+uses
+  Winapi.Windows, System.SysUtils, uWcxAPI;
+
+{ THeaderDataExW }
+
+procedure TTestWcxAPI.ExW_SizeMatchesSDK;
+const
+  { SDK: WCHAR[1024]*2 + 11 ints + char[1024] }
+  ExpectedSize = 2 * 1024 * SizeOf(WideChar)
+    + 11 * SizeOf(DWORD)
+    + 1024 * SizeOf(AnsiChar);
+begin
+  Assert.AreEqual(ExpectedSize, SizeOf(THeaderDataExW));
+end;
+
+procedure TTestWcxAPI.ExW_PackSizeBeforePackSizeHigh;
+var
+  H: THeaderDataExW;
+begin
+  { PackSize (low) must precede PackSizeHigh in memory, matching the C struct }
+  Assert.IsTrue(NativeUInt(@H.PackSize) < NativeUInt(@H.PackSizeHigh),
+    'PackSize must precede PackSizeHigh');
+  { They must be adjacent (no padding between them) }
+  Assert.AreEqual(NativeUInt(SizeOf(DWORD)),
+    NativeUInt(@H.PackSizeHigh) - NativeUInt(@H.PackSize),
+    'PackSize and PackSizeHigh must be adjacent');
+end;
+
+procedure TTestWcxAPI.ExW_UnpSizeBeforeUnpSizeHigh;
+var
+  H: THeaderDataExW;
+begin
+  { UnpSize (low) must precede UnpSizeHigh in memory }
+  Assert.IsTrue(NativeUInt(@H.UnpSize) < NativeUInt(@H.UnpSizeHigh),
+    'UnpSize must precede UnpSizeHigh');
+  Assert.AreEqual(NativeUInt(SizeOf(DWORD)),
+    NativeUInt(@H.UnpSizeHigh) - NativeUInt(@H.UnpSize),
+    'UnpSize and UnpSizeHigh must be adjacent');
+end;
+
+procedure TTestWcxAPI.ExW_ReservedIs1024Bytes;
+var
+  H: THeaderDataExW;
+begin
+  FillChar(H, SizeOf(H), 0);
+  Assert.AreEqual(1024, SizeOf(H.Reserved));
+end;
+
+procedure TTestWcxAPI.ExW_FileNameCapacity;
+var
+  H: THeaderDataExW;
+begin
+  FillChar(H, SizeOf(H), 0);
+  { SDK: WCHAR FileName[1024] }
+  Assert.AreEqual(1024, Length(H.FileName));
+end;
+
+procedure TTestWcxAPI.ExW_FillCharZeroesAllFields;
+var
+  H: THeaderDataExW;
+begin
+  { FillChar(H, SizeOf(H), 0) must leave all numeric fields at zero.
+    This guards against padding or alignment surprises. }
+  FillChar(H, SizeOf(H), $FF);
+  FillChar(H, SizeOf(H), 0);
+  Assert.AreEqual(Integer(0), H.Flags);
+  Assert.AreEqual(DWORD(0), H.PackSize);
+  Assert.AreEqual(DWORD(0), H.PackSizeHigh);
+  Assert.AreEqual(DWORD(0), H.UnpSize);
+  Assert.AreEqual(DWORD(0), H.UnpSizeHigh);
+  Assert.AreEqual(0, H.FileTime);
+  Assert.AreEqual(0, H.FileAttr);
+end;
+
+{ THeaderData }
+
+procedure TTestWcxAPI.Header_FieldOrder_UnpSizeAfterPackSize;
+var
+  H: THeaderData;
+begin
+  Assert.IsTrue(NativeUInt(@H.UnpSize) > NativeUInt(@H.PackSize),
+    'UnpSize must follow PackSize');
+  Assert.AreEqual(NativeUInt(SizeOf(Integer)),
+    NativeUInt(@H.UnpSize) - NativeUInt(@H.PackSize),
+    'PackSize and UnpSize must be adjacent');
+end;
+
+procedure TTestWcxAPI.Header_FileNameCapacity;
+var
+  H: THeaderData;
+begin
+  FillChar(H, SizeOf(H), 0);
+  { SDK: char FileName[260] }
+  Assert.AreEqual(260, Length(H.FileName));
+end;
+
+{ TWcxDefaultParams }
+
+procedure TTestWcxAPI.DefaultParams_IniNameCapacityIsMaxPath;
+var
+  P: TWcxDefaultParams;
+begin
+  FillChar(P, SizeOf(P), 0);
+  Assert.AreEqual(MAX_PATH, Length(P.DefaultIniName));
+end;
+
+{ Constants }
+
+procedure TTestWcxAPI.Caps_FlagsArePowersOfTwo;
+
+  function IsPowerOfTwo(V: Integer): Boolean;
+  begin
+    Result := (V > 0) and (V and (V - 1) = 0);
+  end;
+
+begin
+  { Each capability flag must be a single bit }
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_NEW));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_MODIFY));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_MULTIPLE));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_DELETE));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_OPTIONS));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_MEMPACK));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_BY_CONTENT));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_SEARCHTEXT));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_HIDE));
+  Assert.IsTrue(IsPowerOfTwo(PK_CAPS_ENCRYPT));
+end;
+
+procedure TTestWcxAPI.ErrorCodes_UniqueValues;
+var
+  Codes: array of Integer;
+  I, J: Integer;
+begin
+  { All error codes must be distinct }
+  Codes := [E_SUCCESS, E_END_ARCHIVE, E_NO_MEMORY, E_BAD_DATA, E_BAD_ARCHIVE,
+    E_UNKNOWN_FORMAT, E_EOPEN, E_ECREATE, E_ECLOSE, E_EREAD, E_EWRITE,
+    E_NOT_SUPPORTED];
+  for I := 0 to Length(Codes) - 2 do
+    for J := I + 1 to Length(Codes) - 1 do
+      Assert.AreNotEqual(Codes[I], Codes[J],
+        Format('Error codes at [%d] and [%d] must differ', [I, J]));
+end;
+
+end.
