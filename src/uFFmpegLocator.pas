@@ -13,7 +13,7 @@ function FindFFmpegExe(const APluginDir, AConfiguredPath: string): string;
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, Winapi.Windows, uSettings;
+  System.SysUtils, System.IOUtils, Winapi.Windows, uPathExpand;
 
 function FindOnSystemPath(const AFileName: string): string;
 var

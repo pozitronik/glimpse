@@ -144,10 +144,6 @@ const
   DEF_CACHE_FOLDER       = '';
   DEF_CACHE_MAX_SIZE_MB  = 500;
 
-{ Expands environment variables (%TEMP%, %commander_path%, etc.) in a path.
-  Returns the input unchanged if it contains no variables or is empty. }
-function ExpandEnvVars(const APath: string): string;
-
 { Returns the default cache folder path used when CacheFolder setting is empty. }
 function DefaultCacheFolder: string;
 
@@ -158,20 +154,7 @@ function EffectiveCacheFolder(const ACacheFolder: string): string;
 implementation
 
 uses
-  Winapi.Windows;
-
-function ExpandEnvVars(const APath: string): string;
-var
-  BufLen: DWORD;
-begin
-  if APath = '' then
-    Exit('');
-  BufLen := ExpandEnvironmentStrings(PChar(APath), nil, 0);
-  if BufLen = 0 then
-    Exit(APath);
-  SetLength(Result, BufLen - 1);
-  ExpandEnvironmentStrings(PChar(APath), PChar(Result), BufLen);
-end;
+  uPathExpand;
 
 function DefaultCacheFolder: string;
 begin

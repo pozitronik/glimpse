@@ -26,7 +26,8 @@ uses
   uViewModeLogic in 'uViewModeLogic.pas',
   uExtractionPlanner in 'uExtractionPlanner.pas',
   uToolbarLayout in 'uToolbarLayout.pas',
-  uFileNavigator in 'uFileNavigator.pas';
+  uFileNavigator in 'uFileNavigator.pas',
+  uPathExpand in 'uPathExpand.pas';
 
 exports
   ListLoad,

@@ -147,7 +147,7 @@ type
 implementation
 
 uses
-  uSettingsDlg, uFileNavigator, uDebugLog;
+  uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand;
 
 procedure FormLog(const AMsg: string);
 begin

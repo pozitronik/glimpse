@@ -97,7 +97,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uSettings, uBitmapSaver;
+  uSettings, uBitmapSaver, uPathExpand;
 
 procedure TTestPluginSettings.Setup;
 begin

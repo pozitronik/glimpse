@@ -114,7 +114,7 @@ implementation
 
 uses
   System.IOUtils,
-  uFFmpegExe, uCache, uBitmapSaver;
+  uFFmpegExe, uCache, uBitmapSaver, uPathExpand;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
