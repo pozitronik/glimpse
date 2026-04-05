@@ -73,8 +73,9 @@ begin
         end;
       if CurIdx < 0 then Exit;
 
-      { Navigate with wrap-around }
-      I := (CurIdx + ADelta + Sorted.Count) mod Sorted.Count;
+      { Navigate with wrap-around. Double-mod ensures non-negative result
+        even when ADelta is a large negative (Delphi mod preserves sign). }
+      I := ((CurIdx + ADelta) mod Sorted.Count + Sorted.Count) mod Sorted.Count;
       Result := Dir + Sorted[I];
     finally
       Sorted.Free;

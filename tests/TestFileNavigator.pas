@@ -26,6 +26,8 @@ type
     [Test] procedure TestEmptyExtensionList;
     [Test] procedure TestNonexistentDirectory;
     [Test] procedure TestCurrentFileNotInList;
+    [Test] procedure TestLargeNegativeDelta;
+    [Test] procedure TestLargePositiveDelta;
   end;
 
 implementation
@@ -155,6 +157,31 @@ begin
   { Current file has unsupported extension }
   Assert.AreEqual('',
     FindAdjacentFile(FTempDir + 'notes.txt', 'mp4', 1));
+end;
+
+procedure TTestFileNavigator.TestLargeNegativeDelta;
+begin
+  { ADelta whose absolute value exceeds the file count must wrap correctly
+    instead of producing a negative index (Delphi mod preserves sign). }
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  { 3 files, current=a (idx 0), delta=-7: (0-7) mod 3 -> wraps to idx 2 -> c }
+  Assert.AreEqual(FTempDir + 'c.mp4',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', -7));
+  { delta=-100 from b (idx 1): (1-100) mod 3 = -99 mod 3 = 0 -> a }
+  Assert.AreEqual(FTempDir + 'b.mp4',
+    FindAdjacentFile(FTempDir + 'b.mp4', 'mp4', -99));
+end;
+
+procedure TTestFileNavigator.TestLargePositiveDelta;
+begin
+  { Large positive delta must also wrap correctly. }
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  { 3 files, current=a (idx 0), delta=7 -> 7 mod 3 = 1 -> b }
+  Assert.AreEqual(FTempDir + 'b.mp4',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', 7));
+  { delta=100 from a (idx 0): 100 mod 3 = 1 -> b }
+  Assert.AreEqual(FTempDir + 'b.mp4',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', 100));
 end;
 
 end.
