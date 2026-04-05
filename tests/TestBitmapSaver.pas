@@ -267,7 +267,6 @@ end;
 procedure TTestBitmapSaver.TestSavePNGPixelFidelity;
 var
   Src, Dst: TBitmap;
-  Data: TBytes;
   Path: string;
   Png: TPngImage;
 begin
