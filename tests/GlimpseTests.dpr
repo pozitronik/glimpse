@@ -44,7 +44,8 @@ uses
   uColorConv in '..\src\uColorConv.pas',
   TestColorConv in 'TestColorConv.pas',
   uRunProcess in '..\src\uRunProcess.pas',
-  TestRunProcess in 'TestRunProcess.pas';
+  TestRunProcess in 'TestRunProcess.pas',
+  uFrameExtractor in '..\src\uFrameExtractor.pas';
 
 var
   Runner: ITestRunner;

@@ -9,7 +9,7 @@ uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Graphics,
-  uFrameOffsets, uFFmpegExe, uCache;
+  uFrameOffsets, uFrameExtractor, uCache;
 
 const
   WM_FRAME_READY     = WM_USER + 100; { Notification: pending frames available in queue }
@@ -26,7 +26,7 @@ type
     Stores results in a thread-safe queue and posts notifications. }
   TExtractionThread = class(TThread)
   private
-    FFFmpegPath: string;
+    FExtractor: IFrameExtractor;
     FFileName: string;
     FOffsets: TFrameOffsetArray;
     FNotifyWnd: HWND;
@@ -38,7 +38,7 @@ type
   protected
     procedure Execute; override;
   public
-    constructor Create(const AFFmpegPath, AFileName: string;
+    constructor Create(const AExtractor: IFrameExtractor; const AFileName: string;
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
       const ACache: IFrameCache; AActiveWorkerCount: PInteger;
@@ -55,7 +55,8 @@ begin
   DebugLog('Thread', AMsg);
 end;
 
-constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
+constructor TExtractionThread.Create(const AExtractor: IFrameExtractor;
+  const AFileName: string;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
   AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
   const ACache: IFrameCache; AActiveWorkerCount: PInteger;
@@ -63,7 +64,7 @@ constructor TExtractionThread.Create(const AFFmpegPath, AFileName: string;
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
-  FFFmpegPath := AFFmpegPath;
+  FExtractor := AExtractor;
   FFileName := AFileName;
   FOffsets := Copy(AOffsets);
   FNotifyWnd := ANotifyWnd;
@@ -76,7 +77,6 @@ end;
 
 procedure TExtractionThread.Execute;
 var
-  FFmpeg: TFFmpegExe;
   Bmp: TBitmap;
   Frame: TPendingFrame;
   I, CellIdx: Integer;
@@ -84,70 +84,65 @@ var
 begin
   ThreadLog(Format('Execute START frames=%d', [Length(FOffsets)]));
   try
-    FFmpeg := TFFmpegExe.Create(FFFmpegPath);
-    try
-      for I := 0 to High(FOffsets) do
+    for I := 0 to High(FOffsets) do
+    begin
+      if Terminated then
       begin
-        if Terminated then
-        begin
-          ThreadLog(Format('Execute TERMINATED at i=%d', [I]));
-          Exit;
-        end;
-
-        CellIdx := FOffsets[I].Index - 1; { 1-based offset index to 0-based cell index }
-        Bmp := nil;
-
-        try
-          Source := 'none';
-
-          Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
-          if Bmp <> nil then
-            Source := 'cache';
-
-          { Cache miss: extract via ffmpeg }
-          if Bmp = nil then
-          begin
-            Bmp := FFmpeg.ExtractFrame(FFileName, FOffsets[I].TimeOffset, FUseBmpPipe);
-            if Bmp <> nil then
-            begin
-              Source := 'ffmpeg';
-              FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
-            end;
-          end;
-
-          if Bmp <> nil then
-            ThreadLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
-              [CellIdx, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
-          else
-            ThreadLog(Format('Frame[%d] source=%s Bmp=NIL', [CellIdx, Source]));
-        except
-          on E: Exception do
-          begin
-            ThreadLog(Format('Frame[%d] EXCEPTION: %s: %s', [CellIdx, E.ClassName, E.Message]));
-            FreeAndNil(Bmp);
-          end;
-        end;
-
-        if Terminated then
-        begin
-          Bmp.Free;
-          Exit;
-        end;
-
-        { Enqueue frame for the UI thread; PostMessage is just a notification.
-          Bitmap = nil signals an error placeholder to the UI. }
-        Frame.Index := CellIdx;
-        Frame.Bitmap := Bmp;
-        FQueueLock.Enter;
-        try
-          FQueue.Add(Frame);
-        finally
-          FQueueLock.Leave;
-        end;
-        PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
+        ThreadLog(Format('Execute TERMINATED at i=%d', [I]));
+        Exit;
       end;
-    finally
-      FFmpeg.Free;
+
+      CellIdx := FOffsets[I].Index - 1; { 1-based offset index to 0-based cell index }
+      Bmp := nil;
+
+      try
+        Source := 'none';
+
+        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
+        if Bmp <> nil then
+          Source := 'cache';
+
+        { Cache miss: extract via extractor }
+        if Bmp = nil then
+        begin
+          Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset, FUseBmpPipe);
+          if Bmp <> nil then
+          begin
+            Source := 'extract';
+            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
+          end;
+        end;
+
+        if Bmp <> nil then
+          ThreadLog(Format('Frame[%d] source=%s size=%dx%d empty=%s',
+            [CellIdx, Source, Bmp.Width, Bmp.Height, BoolToStr(Bmp.Empty, True)]))
+        else
+          ThreadLog(Format('Frame[%d] source=%s Bmp=NIL', [CellIdx, Source]));
+      except
+        on E: Exception do
+        begin
+          ThreadLog(Format('Frame[%d] EXCEPTION: %s: %s', [CellIdx, E.ClassName, E.Message]));
+          FreeAndNil(Bmp);
+        end;
+      end;
+
+      if Terminated then
+      begin
+        Bmp.Free;
+        Exit;
+      end;
+
+      { Enqueue frame for the UI thread; PostMessage is just a notification.
+        Bitmap = nil signals an error placeholder to the UI. }
+      Frame.Index := CellIdx;
+      Frame.Bitmap := Bmp;
+      FQueueLock.Enter;
+      try
+        FQueue.Add(Frame);
+      finally
+        FQueueLock.Leave;
+      end;
+      PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
     end;
   finally
     { Always decrement; last worker to finish notifies the UI }

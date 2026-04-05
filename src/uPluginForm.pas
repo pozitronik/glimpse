@@ -12,7 +12,8 @@ uses
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Dialogs, Vcl.Buttons,
   uTypes, uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uFrameFileNames, uBitmapSaver, uZoomController, uViewModeLogic,
-  uExtractionPlanner, uToolbarLayout, uFrameView, uExtractionWorker;
+  uExtractionPlanner, uToolbarLayout, uFrameView, uExtractionWorker,
+  uFrameExtractor;
 
 type
   { Plugin form created as a child of TC's Lister window. }
@@ -1133,6 +1134,7 @@ end;
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
   ThreadCache: IFrameCache;
+  Extractor: IFrameExtractor;
   Chunks: TArray<TWorkerChunk>;
   W: Integer;
   Chunk: TFrameOffsetArray;
@@ -1152,6 +1154,8 @@ begin
   else
     ThreadCache := FCache;
 
+  Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
+
   Chunks := PlanWorkerChunks(Length(FOffsets), FSettings.MaxWorkers, FSettings.MaxThreads);
   FActiveWorkerCount := Length(Chunks);
   SetLength(FWorkerThreads, Length(Chunks));
@@ -1159,7 +1163,7 @@ begin
   for W := 0 to High(Chunks) do
   begin
     Chunk := Copy(FOffsets, Chunks[W].Start, Chunks[W].Len);
-    FWorkerThreads[W] := TExtractionThread.Create(FFFmpegPath, FFileName, Chunk,
+    FWorkerThreads[W] := TExtractionThread.Create(Extractor, FFileName, Chunk,
       Handle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount,
       FSettings.UseBmpPipe);
   end;

@@ -30,7 +30,8 @@ uses
   uFileNavigator in 'uFileNavigator.pas',
   uPathExpand in 'uPathExpand.pas',
   uColorConv in 'uColorConv.pas',
-  uRunProcess in 'uRunProcess.pas';
+  uRunProcess in 'uRunProcess.pas',
+  uFrameExtractor in 'uFrameExtractor.pas';
 
 exports
   ListLoad,
