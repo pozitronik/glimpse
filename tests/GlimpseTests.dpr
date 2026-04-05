@@ -16,6 +16,7 @@ uses
   TestFrameOffsets in 'TestFrameOffsets.pas',
   TestFFmpegExe in 'TestFFmpegExe.pas',
   uFrameView in '..\src\uFrameView.pas',
+  uExtractionWorker in '..\src\uExtractionWorker.pas',
   uPluginForm in '..\src\uPluginForm.pas',
   TestFrameView in 'TestFrameView.pas',
   uCache in '..\src\uCache.pas',

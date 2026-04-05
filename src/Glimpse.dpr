@@ -15,6 +15,7 @@ uses
   uFFmpegLocator in 'uFFmpegLocator.pas',
   uFFmpegExe in 'uFFmpegExe.pas',
   uFrameView in 'uFrameView.pas',
+  uExtractionWorker in 'uExtractionWorker.pas',
   uPluginForm in 'uPluginForm.pas',
   uCache in 'uCache.pas',
   uSettingsDlg in 'uSettingsDlg.pas',
