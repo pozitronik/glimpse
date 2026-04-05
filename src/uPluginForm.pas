@@ -1458,6 +1458,9 @@ begin
       if Shift = [] then
       begin
         FToolbar.Visible := not FToolbar.Visible;
+        { Reclaim focus so TC's subclass sees keystrokes again }
+        if not FToolbar.Visible then
+          Winapi.Windows.SetFocus(Handle);
         FSettings.ShowToolbar := FToolbar.Visible;
         FSettings.Save;
         Key := 0;
@@ -1470,20 +1473,43 @@ begin
       end;
   end;
 
+  { When the frame count edit has Win32 focus and the key was not consumed by
+    a hotkey above, only allow digit-editing and modifier keys through.
+    Non-digit keys reclaim form focus so TC's subclass sees subsequent
+    keystrokes. The current keystroke is consumed (not re-posted) to avoid
+    corrupting keyboard state with unmatched WM_KEYDOWN messages. }
+  if (Key <> 0) and (GetFocus = FEditFrameCount.Handle) then
+    case Key of
+      Ord('0')..Ord('9'), VK_NUMPAD0..VK_NUMPAD9,
+      VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END,
+      VK_UP, VK_DOWN,
+      VK_SHIFT, VK_CONTROL, VK_MENU:
+        ; { Allow through to the edit / UpDown / modifier state }
+      VK_RETURN:
+        begin
+          Winapi.Windows.SetFocus(Handle);
+          Key := 0;
+        end;
+    else
+      Winapi.Windows.SetFocus(Handle);
+      Key := 0;
+    end;
+
   if Key = 0 then
     FKeyConsumed := True;
 end;
 
 procedure TPluginForm.OnFormKeyPress(Sender: TObject; var Key: Char);
 begin
-  { WM_CHAR is posted by TranslateMessage before WM_KEYDOWN is dispatched,
-    so setting Key:=0 in OnKeyDown alone cannot suppress it. Eat the char
-    here to prevent e.g. the NumbersOnly balloon on the frame count editor. }
   if FKeyConsumed then
   begin
     Key := #0;
     FKeyConsumed := False;
-  end;
+  end
+  { Suppress non-digit chars that slip through OnKeyDown (e.g. Shift+digit
+    produces '!' etc.). Prevents the NumbersOnly balloon on the edit. }
+  else if (GetFocus = FEditFrameCount.Handle) and not CharInSet(Key, ['0'..'9', #8]) then
+    Key := #0;
 end;
 
 procedure TPluginForm.CMDialogKey(var Message: TWMKey);
