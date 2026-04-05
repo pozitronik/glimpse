@@ -1,0 +1,160 @@
+unit TestFileNavigator;
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TTestFileNavigator = class
+  private
+    FTempDir: string;
+    procedure CreateFiles(const ANames: array of string);
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure TestNextFileAlphabetical;
+    [Test] procedure TestPrevFileAlphabetical;
+    [Test] procedure TestWrapAroundForward;
+    [Test] procedure TestWrapAroundBackward;
+    [Test] procedure TestSingleFileSameDir;
+    [Test] procedure TestNoSupportedFiles;
+    [Test] procedure TestMixedExtensions;
+    [Test] procedure TestCaseInsensitiveExtensions;
+    [Test] procedure TestCaseInsensitiveSorting;
+    [Test] procedure TestEmptyExtensionList;
+    [Test] procedure TestNonexistentDirectory;
+    [Test] procedure TestCurrentFileNotInList;
+  end;
+
+implementation
+
+uses
+  System.SysUtils, System.IOUtils,
+  Winapi.Windows,
+  uFileNavigator;
+
+procedure TTestFileNavigator.Setup;
+begin
+  FTempDir := IncludeTrailingPathDelimiter(TPath.GetTempPath) + 'GlimpseNavTest_' +
+    IntToStr(GetCurrentThreadId) + PathDelim;
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestFileNavigator.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+procedure TTestFileNavigator.CreateFiles(const ANames: array of string);
+var
+  I: Integer;
+begin
+  for I := 0 to High(ANames) do
+    TFile.WriteAllText(FTempDir + ANames[I], '');
+end;
+
+procedure TTestFileNavigator.TestNextFileAlphabetical;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.AreEqual(FTempDir + 'b.mp4',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', 1));
+  Assert.AreEqual(FTempDir + 'c.mp4',
+    FindAdjacentFile(FTempDir + 'b.mp4', 'mp4', 1));
+end;
+
+procedure TTestFileNavigator.TestPrevFileAlphabetical;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.AreEqual(FTempDir + 'a.mp4',
+    FindAdjacentFile(FTempDir + 'b.mp4', 'mp4', -1));
+  Assert.AreEqual(FTempDir + 'b.mp4',
+    FindAdjacentFile(FTempDir + 'c.mp4', 'mp4', -1));
+end;
+
+procedure TTestFileNavigator.TestWrapAroundForward;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.AreEqual(FTempDir + 'a.mp4',
+    FindAdjacentFile(FTempDir + 'c.mp4', 'mp4', 1));
+end;
+
+procedure TTestFileNavigator.TestWrapAroundBackward;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.AreEqual(FTempDir + 'c.mp4',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', -1));
+end;
+
+procedure TTestFileNavigator.TestSingleFileSameDir;
+begin
+  CreateFiles(['only.mp4']);
+  Assert.AreEqual('',
+    FindAdjacentFile(FTempDir + 'only.mp4', 'mp4', 1));
+  Assert.AreEqual('',
+    FindAdjacentFile(FTempDir + 'only.mp4', 'mp4', -1));
+end;
+
+procedure TTestFileNavigator.TestNoSupportedFiles;
+begin
+  CreateFiles(['readme.txt', 'notes.doc']);
+  Assert.AreEqual('',
+    FindAdjacentFile(FTempDir + 'readme.txt', 'mp4,mkv', 1));
+end;
+
+procedure TTestFileNavigator.TestMixedExtensions;
+begin
+  CreateFiles(['a.mp4', 'b.mkv', 'c.avi', 'readme.txt']);
+  { Alphabetical order: a.mp4, b.mkv, c.avi; readme.txt excluded }
+  Assert.AreEqual(FTempDir + 'b.mkv',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4,mkv,avi', 1));
+  Assert.AreEqual(FTempDir + 'c.avi',
+    FindAdjacentFile(FTempDir + 'b.mkv', 'mp4,mkv,avi', 1));
+  Assert.AreEqual(FTempDir + 'a.mp4',
+    FindAdjacentFile(FTempDir + 'c.avi', 'mp4,mkv,avi', 1));
+end;
+
+procedure TTestFileNavigator.TestCaseInsensitiveExtensions;
+begin
+  CreateFiles(['video.MP4', 'clip.mp4']);
+  { Both should be found regardless of extension case }
+  Assert.AreEqual(FTempDir + 'video.MP4',
+    FindAdjacentFile(FTempDir + 'clip.mp4', 'mp4', 1));
+end;
+
+procedure TTestFileNavigator.TestCaseInsensitiveSorting;
+begin
+  CreateFiles(['Alpha.mp4', 'beta.mp4', 'Gamma.mp4']);
+  { Case-insensitive sort: Alpha, beta, Gamma }
+  Assert.AreEqual(FTempDir + 'beta.mp4',
+    FindAdjacentFile(FTempDir + 'Alpha.mp4', 'mp4', 1));
+  Assert.AreEqual(FTempDir + 'Gamma.mp4',
+    FindAdjacentFile(FTempDir + 'beta.mp4', 'mp4', 1));
+end;
+
+procedure TTestFileNavigator.TestEmptyExtensionList;
+begin
+  CreateFiles(['a.mp4']);
+  Assert.AreEqual('',
+    FindAdjacentFile(FTempDir + 'a.mp4', '', 1));
+end;
+
+procedure TTestFileNavigator.TestNonexistentDirectory;
+begin
+  Assert.AreEqual('',
+    FindAdjacentFile('X:\no\such\path\file.mp4', 'mp4', 1));
+end;
+
+procedure TTestFileNavigator.TestCurrentFileNotInList;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'notes.txt']);
+  { Current file has unsupported extension }
+  Assert.AreEqual('',
+    FindAdjacentFile(FTempDir + 'notes.txt', 'mp4', 1));
+end;
+
+end.

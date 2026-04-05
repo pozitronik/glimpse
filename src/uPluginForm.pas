@@ -1076,6 +1076,7 @@ var
 begin
   {$IFDEF DEBUG}FormLog(Format('LoadFile: %s', [AFileName]));{$ENDIF}
   FFileName := AFileName;
+  SetWindowText(FParentWnd, PChar(Format('Lister (glimpse) - [%s]', [AFileName])));
   StopExtraction;
   DrainPendingFrameMessages;
   FFrameView.ClearCells;
