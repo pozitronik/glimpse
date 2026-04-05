@@ -61,6 +61,7 @@ type
     Offsets: TFrameOffsetArray;
     CurrentIndex: Integer;
     OpenMode: Integer;
+    FileTime: Integer;
     ProcessDataProc: TProcessDataProc;
     ProcessDataProcW: TProcessDataProcW;
     { Populated from module-level cache when ShowFileSizes is enabled }
@@ -313,6 +314,7 @@ begin
 
     H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration,
       H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
+    H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
 
     if H.Settings.ShowFileSizes then
       PreExtractFrames(H);
@@ -349,9 +351,11 @@ begin
   Name := AnsiString(GetEntryName(H));
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
-  System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
+  System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name),
+    SizeOf(HeaderData.FileName) - 1);
   if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
     HeaderData.UnpSize := H.EntrySizes[H.CurrentIndex];
+  HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := $20; { FILE_ATTRIBUTE_ARCHIVE }
 
   Result := E_SUCCESS;
@@ -361,6 +365,7 @@ function ReadHeaderExW(hArcData: THandle; var HeaderData: THeaderDataExW): Integ
 var
   H: TArchiveHandle;
   Name: string;
+  Size: Int64;
 begin
   H := TArchiveHandle(hArcData);
   if H.CurrentIndex >= GetEntryCount(H) then
@@ -371,7 +376,12 @@ begin
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   StrLCopy(HeaderData.FileName, PChar(Name), Length(HeaderData.FileName) - 1);
   if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
-    HeaderData.UnpSizeLow := DWORD(H.EntrySizes[H.CurrentIndex]);
+  begin
+    Size := H.EntrySizes[H.CurrentIndex];
+    HeaderData.UnpSize := DWORD(Size);
+    HeaderData.UnpSizeHigh := DWORD(Size shr 32);
+  end;
+  HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := $20;
 
   Result := E_SUCCESS;

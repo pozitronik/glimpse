@@ -94,17 +94,17 @@ type
     ArcName: array[0..1023] of WideChar;
     FileName: array[0..1023] of WideChar;
     Flags: Integer;
+    PackSize: DWORD;
     PackSizeHigh: DWORD;
-    PackSizeLow: DWORD;
+    UnpSize: DWORD;
     UnpSizeHigh: DWORD;
-    UnpSizeLow: DWORD;
     HostOS: Integer;
     FileCRC: Integer;
     FileTime: Integer;
     UnpVer: Integer;
     Method: Integer;
     FileAttr: Integer;
-    Reserved: Int64;
+    Reserved: array[0..1023] of AnsiChar;
   end;
   PHeaderDataExW = ^THeaderDataExW;
 
