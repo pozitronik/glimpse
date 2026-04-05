@@ -5,7 +5,50 @@ unit uWcxSettingsDlg;
 interface
 
 uses
-  Winapi.Windows, uWcxSettings;
+  System.SysUtils, System.Classes,
+  Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Controls, Vcl.ComCtrls,
+  Vcl.Dialogs,
+  Winapi.Windows,
+  uWcxSettings;
+
+type
+  TWcxSettingsForm = class(TForm)
+    GbxExtraction: TGroupBox;
+    LblFrameCount: TLabel;
+    EdtFrameCount: TEdit;
+    UdFrameCount: TUpDown;
+    LblSkipEdges: TLabel;
+    EdtSkipEdges: TEdit;
+    UdSkipEdges: TUpDown;
+    LblSkipEdgesUnit: TLabel;
+    GbxOutput: TGroupBox;
+    LblOutputMode: TLabel;
+    CbxOutputMode: TComboBox;
+    LblFormat: TLabel;
+    CbxFormat: TComboBox;
+    LblJpegQuality: TLabel;
+    EdtJpegQuality: TEdit;
+    UdJpegQuality: TUpDown;
+    GbxCombined: TGroupBox;
+    LblColumns: TLabel;
+    EdtColumns: TEdit;
+    UdColumns: TUpDown;
+    LblCellGap: TLabel;
+    EdtCellGap: TEdit;
+    UdCellGap: TUpDown;
+    ChkTimestamp: TCheckBox;
+    LblFFmpegPath: TLabel;
+    EdtFFmpegPath: TEdit;
+    BtnBrowse: TButton;
+    BtnOK: TButton;
+    BtnCancel: TButton;
+    procedure CbxOutputModeChange(Sender: TObject);
+    procedure BtnBrowseClick(Sender: TObject);
+  private
+    procedure SettingsToControls(ASettings: TWcxSettings);
+    procedure ControlsToSettings(ASettings: TWcxSettings);
+    procedure UpdateCombinedState;
+  end;
 
 { Shows the WCX settings dialog. Returns True if the user clicked OK. }
 function ShowWcxSettingsDialog(AParentWnd: HWND;
@@ -13,297 +56,78 @@ function ShowWcxSettingsDialog(AParentWnd: HWND;
 
 implementation
 
+{$R *.dfm}
+
 uses
-  System.SysUtils, System.Math, System.UITypes,
-  Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Controls, Vcl.ComCtrls,
-  Vcl.Graphics, Vcl.Dialogs,
   uBitmapSaver, uPathExpand;
 
-const
-  DLG_W = 420;
-  DLG_H = 460;
-  MARGIN = 12;
-  ROW_H = 26;
-  LBL_W = 130;
-
-type
-  TWcxSettingsForm = class(TForm)
-  private
-    FSettings: TWcxSettings;
-    { Extraction }
-    FEdtFrames: TEdit;
-    FUdFrames: TUpDown;
-    FEdtSkipEdges: TEdit;
-    FUdSkipEdges: TUpDown;
-    { Output }
-    FCmbOutputMode: TComboBox;
-    FCmbFormat: TComboBox;
-    FEdtJpegQuality: TEdit;
-    FUdJpegQuality: TUpDown;
-    { Combined }
-    FGrpCombined: TGroupBox;
-    FEdtColumns: TEdit;
-    FUdColumns: TUpDown;
-    FChkTimestamp: TCheckBox;
-    FEdtCellGap: TEdit;
-    FUdCellGap: TUpDown;
-    { FFmpeg }
-    FEdtFFmpegPath: TEdit;
-    FBtnBrowse: TButton;
-    { Buttons }
-    FBtnOK: TButton;
-    FBtnCancel: TButton;
-
-    procedure BuildUI;
-    procedure LoadFromSettings;
-    procedure SaveToSettings;
-    procedure UpdateCombinedState;
-    procedure OnOutputModeChange(Sender: TObject);
-    procedure OnBrowseClick(Sender: TObject);
-    procedure OnOKClick(Sender: TObject);
-  public
-    constructor CreateForSettings(AOwnerWnd: HWND; ASettings: TWcxSettings);
-  end;
-
-{ TWcxSettingsForm }
-
-constructor TWcxSettingsForm.CreateForSettings(AOwnerWnd: HWND;
-  ASettings: TWcxSettings);
+procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 begin
-  CreateNew(nil);
-  FSettings := ASettings;
+  UdFrameCount.Position := ASettings.FramesCount;
+  UdSkipEdges.Position := ASettings.SkipEdgesPercent;
 
-  BorderStyle := bsDialog;
-  Caption := 'Glimpse WCX Settings';
-  ClientWidth := DLG_W;
-  ClientHeight := DLG_H;
-  Position := poScreenCenter;
+  if ASettings.OutputMode = womCombined then
+    CbxOutputMode.ItemIndex := 1
+  else
+    CbxOutputMode.ItemIndex := 0;
 
-  BuildUI;
-  LoadFromSettings;
+  if ASettings.SaveFormat = sfJPEG then
+    CbxFormat.ItemIndex := 1
+  else
+    CbxFormat.ItemIndex := 0;
+  UdJpegQuality.Position := ASettings.JpegQuality;
+
+  UdColumns.Position := ASettings.CombinedColumns;
+  UdCellGap.Position := ASettings.CellGap;
+  ChkTimestamp.Checked := ASettings.ShowTimestamp;
+
+  EdtFFmpegPath.Text := ASettings.FFmpegExePath;
+
   UpdateCombinedState;
 end;
 
-procedure TWcxSettingsForm.BuildUI;
-var
-  Y: Integer;
-
-  function AddLabel(AParent: TWinControl; ATop: Integer;
-    const ACaption: string): TLabel;
-  begin
-    Result := TLabel.Create(Self);
-    Result.Parent := AParent;
-    Result.Left := MARGIN;
-    Result.Top := ATop + 3;
-    Result.Caption := ACaption;
-  end;
-
-  function AddSpinEdit(AParent: TWinControl; ATop, AMin, AMax,
-    ALeft, AWidth: Integer): TUpDown;
-  var
-    Edt: TEdit;
-  begin
-    Edt := TEdit.Create(Self);
-    Edt.Parent := AParent;
-    Edt.SetBounds(ALeft, ATop, AWidth, 23);
-    Edt.NumbersOnly := True;
-    Result := TUpDown.Create(Self);
-    Result.Parent := AParent;
-    Result.Associate := Edt;
-    Result.Min := AMin;
-    Result.Max := AMax;
-  end;
-
+procedure TWcxSettingsForm.ControlsToSettings(ASettings: TWcxSettings);
 begin
-  Y := MARGIN;
+  ASettings.FramesCount := UdFrameCount.Position;
+  ASettings.SkipEdgesPercent := UdSkipEdges.Position;
 
-  { Extraction group }
-  AddLabel(Self, Y, 'Frame count:');
-  FEdtFrames := TEdit.Create(Self);
-  FEdtFrames.Parent := Self;
-  FEdtFrames.SetBounds(LBL_W, Y, 50, 23);
-  FEdtFrames.NumbersOnly := True;
-  FUdFrames := TUpDown.Create(Self);
-  FUdFrames.Parent := Self;
-  FUdFrames.Associate := FEdtFrames;
-  FUdFrames.Min := 1;
-  FUdFrames.Max := 99;
-  Inc(Y, ROW_H + 4);
-
-  AddLabel(Self, Y, 'Skip edges (%):');
-  FEdtSkipEdges := TEdit.Create(Self);
-  FEdtSkipEdges.Parent := Self;
-  FEdtSkipEdges.SetBounds(LBL_W, Y, 50, 23);
-  FEdtSkipEdges.NumbersOnly := True;
-  FUdSkipEdges := TUpDown.Create(Self);
-  FUdSkipEdges.Parent := Self;
-  FUdSkipEdges.Associate := FEdtSkipEdges;
-  FUdSkipEdges.Min := 0;
-  FUdSkipEdges.Max := 49;
-  Inc(Y, ROW_H + 8);
-
-  { Output group }
-  AddLabel(Self, Y, 'Output mode:');
-  FCmbOutputMode := TComboBox.Create(Self);
-  FCmbOutputMode.Parent := Self;
-  FCmbOutputMode.Style := csDropDownList;
-  FCmbOutputMode.SetBounds(LBL_W, Y, 150, 23);
-  FCmbOutputMode.Items.Add('Separate frames');
-  FCmbOutputMode.Items.Add('Combined image');
-  FCmbOutputMode.OnChange := OnOutputModeChange;
-  Inc(Y, ROW_H + 4);
-
-  AddLabel(Self, Y, 'Image format:');
-  FCmbFormat := TComboBox.Create(Self);
-  FCmbFormat.Parent := Self;
-  FCmbFormat.Style := csDropDownList;
-  FCmbFormat.SetBounds(LBL_W, Y, 150, 23);
-  FCmbFormat.Items.Add('PNG');
-  FCmbFormat.Items.Add('JPEG');
-  Inc(Y, ROW_H + 4);
-
-  AddLabel(Self, Y, 'JPEG quality:');
-  FEdtJpegQuality := TEdit.Create(Self);
-  FEdtJpegQuality.Parent := Self;
-  FEdtJpegQuality.SetBounds(LBL_W, Y, 50, 23);
-  FEdtJpegQuality.NumbersOnly := True;
-  FUdJpegQuality := TUpDown.Create(Self);
-  FUdJpegQuality.Parent := Self;
-  FUdJpegQuality.Associate := FEdtJpegQuality;
-  FUdJpegQuality.Min := 1;
-  FUdJpegQuality.Max := 100;
-  Inc(Y, ROW_H + 8);
-
-  { Combined image options }
-  FGrpCombined := TGroupBox.Create(Self);
-  FGrpCombined.Parent := Self;
-  FGrpCombined.Caption := ' Combined image ';
-  FGrpCombined.SetBounds(MARGIN, Y, DLG_W - 2 * MARGIN, 120);
-
-  AddLabel(FGrpCombined, 20, 'Columns (0=auto):');
-  FEdtColumns := TEdit.Create(Self);
-  FEdtColumns.Parent := FGrpCombined;
-  FEdtColumns.SetBounds(LBL_W, 18, 50, 23);
-  FEdtColumns.NumbersOnly := True;
-  FUdColumns := TUpDown.Create(Self);
-  FUdColumns.Parent := FGrpCombined;
-  FUdColumns.Associate := FEdtColumns;
-  FUdColumns.Min := 0;
-  FUdColumns.Max := 20;
-
-  AddLabel(FGrpCombined, 50, 'Cell gap (px):');
-  FEdtCellGap := TEdit.Create(Self);
-  FEdtCellGap.Parent := FGrpCombined;
-  FEdtCellGap.SetBounds(LBL_W, 48, 50, 23);
-  FEdtCellGap.NumbersOnly := True;
-  FUdCellGap := TUpDown.Create(Self);
-  FUdCellGap.Parent := FGrpCombined;
-  FUdCellGap.Associate := FEdtCellGap;
-  FUdCellGap.Min := 0;
-  FUdCellGap.Max := 20;
-
-  FChkTimestamp := TCheckBox.Create(Self);
-  FChkTimestamp.Parent := FGrpCombined;
-  FChkTimestamp.SetBounds(MARGIN, 80, 200, 20);
-  FChkTimestamp.Caption := 'Show timestamps on frames';
-
-  Inc(Y, 128);
-
-  { FFmpeg path }
-  AddLabel(Self, Y, 'FFmpeg path:');
-  FEdtFFmpegPath := TEdit.Create(Self);
-  FEdtFFmpegPath.Parent := Self;
-  FEdtFFmpegPath.SetBounds(LBL_W, Y, DLG_W - LBL_W - MARGIN - 34, 23);
-  FBtnBrowse := TButton.Create(Self);
-  FBtnBrowse.Parent := Self;
-  FBtnBrowse.SetBounds(DLG_W - MARGIN - 30, Y, 30, 23);
-  FBtnBrowse.Caption := '...';
-  FBtnBrowse.OnClick := OnBrowseClick;
-  Inc(Y, ROW_H + 16);
-
-  { OK / Cancel }
-  FBtnCancel := TButton.Create(Self);
-  FBtnCancel.Parent := Self;
-  FBtnCancel.Caption := 'Cancel';
-  FBtnCancel.SetBounds(DLG_W - MARGIN - 80, Y, 80, 28);
-  FBtnCancel.Cancel := True;
-  FBtnCancel.ModalResult := mrCancel;
-
-  FBtnOK := TButton.Create(Self);
-  FBtnOK.Parent := Self;
-  FBtnOK.Caption := 'OK';
-  FBtnOK.SetBounds(DLG_W - MARGIN - 80 - 8 - 80, Y, 80, 28);
-  FBtnOK.Default := True;
-  FBtnOK.OnClick := OnOKClick;
-
-  ClientHeight := Y + 28 + MARGIN;
-end;
-
-procedure TWcxSettingsForm.LoadFromSettings;
-begin
-  FUdFrames.Position := FSettings.FramesCount;
-  FUdSkipEdges.Position := FSettings.SkipEdgesPercent;
-
-  if FSettings.OutputMode = womCombined then
-    FCmbOutputMode.ItemIndex := 1
+  if CbxOutputMode.ItemIndex = 1 then
+    ASettings.OutputMode := womCombined
   else
-    FCmbOutputMode.ItemIndex := 0;
+    ASettings.OutputMode := womSeparate;
 
-  if FSettings.SaveFormat = sfJPEG then
-    FCmbFormat.ItemIndex := 1
+  if CbxFormat.ItemIndex = 1 then
+    ASettings.SaveFormat := sfJPEG
   else
-    FCmbFormat.ItemIndex := 0;
-  FUdJpegQuality.Position := FSettings.JpegQuality;
+    ASettings.SaveFormat := sfPNG;
+  ASettings.JpegQuality := UdJpegQuality.Position;
 
-  FUdColumns.Position := FSettings.CombinedColumns;
-  FUdCellGap.Position := FSettings.CellGap;
-  FChkTimestamp.Checked := FSettings.ShowTimestamp;
+  ASettings.CombinedColumns := UdColumns.Position;
+  ASettings.CellGap := UdCellGap.Position;
+  ASettings.ShowTimestamp := ChkTimestamp.Checked;
 
-  FEdtFFmpegPath.Text := FSettings.FFmpegExePath;
-end;
-
-procedure TWcxSettingsForm.SaveToSettings;
-begin
-  FSettings.FramesCount := FUdFrames.Position;
-  FSettings.SkipEdgesPercent := FUdSkipEdges.Position;
-
-  if FCmbOutputMode.ItemIndex = 1 then
-    FSettings.OutputMode := womCombined
-  else
-    FSettings.OutputMode := womSeparate;
-
-  if FCmbFormat.ItemIndex = 1 then
-    FSettings.SaveFormat := sfJPEG
-  else
-    FSettings.SaveFormat := sfPNG;
-  FSettings.JpegQuality := FUdJpegQuality.Position;
-
-  FSettings.CombinedColumns := FUdColumns.Position;
-  FSettings.CellGap := FUdCellGap.Position;
-  FSettings.ShowTimestamp := FChkTimestamp.Checked;
-
-  FSettings.FFmpegExePath := FEdtFFmpegPath.Text;
+  ASettings.FFmpegExePath := EdtFFmpegPath.Text;
 end;
 
 procedure TWcxSettingsForm.UpdateCombinedState;
 var
   IsCombined: Boolean;
 begin
-  IsCombined := FCmbOutputMode.ItemIndex = 1;
-  FGrpCombined.Enabled := IsCombined;
-  FEdtColumns.Enabled := IsCombined;
-  FUdColumns.Enabled := IsCombined;
-  FEdtCellGap.Enabled := IsCombined;
-  FUdCellGap.Enabled := IsCombined;
-  FChkTimestamp.Enabled := IsCombined;
+  IsCombined := CbxOutputMode.ItemIndex = 1;
+  GbxCombined.Enabled := IsCombined;
+  EdtColumns.Enabled := IsCombined;
+  UdColumns.Enabled := IsCombined;
+  EdtCellGap.Enabled := IsCombined;
+  UdCellGap.Enabled := IsCombined;
+  ChkTimestamp.Enabled := IsCombined;
 end;
 
-procedure TWcxSettingsForm.OnOutputModeChange(Sender: TObject);
+procedure TWcxSettingsForm.CbxOutputModeChange(Sender: TObject);
 begin
   UpdateCombinedState;
 end;
 
-procedure TWcxSettingsForm.OnBrowseClick(Sender: TObject);
+procedure TWcxSettingsForm.BtnBrowseClick(Sender: TObject);
 var
   Dlg: TOpenDialog;
 begin
@@ -311,19 +135,13 @@ begin
   try
     Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files|*.*';
     Dlg.Title := 'Select ffmpeg.exe';
-    if FEdtFFmpegPath.Text <> '' then
-      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(FEdtFFmpegPath.Text));
+    if EdtFFmpegPath.Text <> '' then
+      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(EdtFFmpegPath.Text));
     if Dlg.Execute then
-      FEdtFFmpegPath.Text := Dlg.FileName;
+      EdtFFmpegPath.Text := Dlg.FileName;
   finally
     Dlg.Free;
   end;
-end;
-
-procedure TWcxSettingsForm.OnOKClick(Sender: TObject);
-begin
-  SaveToSettings;
-  ModalResult := mrOk;
 end;
 
 { Public API }
@@ -333,9 +151,15 @@ function ShowWcxSettingsDialog(AParentWnd: HWND;
 var
   Dlg: TWcxSettingsForm;
 begin
-  Dlg := TWcxSettingsForm.CreateForSettings(AParentWnd, ASettings);
+  Result := False;
+  Dlg := TWcxSettingsForm.Create(nil);
   try
-    Result := Dlg.ShowModal = mrOk;
+    Dlg.SettingsToControls(ASettings);
+    if Dlg.ShowModal = mrOk then
+    begin
+      Dlg.ControlsToSettings(ASettings);
+      Result := True;
+    end;
   finally
     Dlg.Free;
   end;
