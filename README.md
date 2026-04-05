@@ -13,7 +13,11 @@ A Total Commander Lister plugin (`.wlx` / `.wlx64`) that displays evenly-spaced 
 - Save frames as PNG or JPEG with configurable quality
 - Zoom controls: fit window, fit if larger, actual size, manual zoom
 - Optional disk cache for instant re-preview
-- Parallel frame extraction with configurable worker count
+- Parallel frame extraction with configurable worker count and thread limit
+- BMP pipe mode for faster frame extraction (configurable in settings)
+- Navigate between video files in the current directory without leaving the preview
+- Collapsible toolbar with hamburger overflow menu for narrow windows
+- Environment variable expansion in all configured paths (e.g. `%USERPROFILE%`)
 
 ## Installation
 
@@ -54,7 +58,12 @@ Additional extensions can be configured in Settings (F2).
 | Ctrl+Shift+S | Save combined image                                                                               |
 | Ctrl+C       | Copy focused frame to clipboard                                                                   |
 | Ctrl+Shift+C | Copy combined image to clipboard                                                                  |
+| T            | Toggle timecodes                                                                                  |
 | R            | Refresh (re-extract all frames)                                                                   |
+| Space        | Next video file in directory                                                                      |
+| Backspace    | Previous video file in directory                                                                  |
+| Z            | Previous video file in directory                                                                  |
+| ~            | Open hamburger menu (when toolbar is collapsed)                                                   |
 | F2           | Settings                                                                                          |
 | F3           | Toggle status bar                                                                                 |
 | F4           | Toggle toolbar                                                                                    |
