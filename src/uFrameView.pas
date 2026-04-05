@@ -635,6 +635,7 @@ end;
 procedure TFrameView.Paint;
 var
   I: Integer;
+  Clip, Dummy: TRect;
 begin
   Canvas.Brush.Color := FBackColor;
   Canvas.FillRect(ClientRect);
@@ -642,14 +643,17 @@ begin
   if FViewMode = vmSingle then
   begin
     if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < Length(FCells)) then
-    begin
       PaintCell(FCurrentFrameIndex);
-    end;
   end
   else
   begin
+    { Skip cells that are entirely outside the clip region. In scroll/filmstrip
+      modes only a few cells are visible at a time, so this avoids GDI overhead
+      for up to 99 off-screen cells. }
+    Clip := Canvas.ClipRect;
     for I := 0 to High(FCells) do
-      PaintCell(I);
+      if IntersectRect(Dummy, GetCellRect(I), Clip) then
+        PaintCell(I);
   end;
 end;
 
