@@ -5,10 +5,7 @@ unit uFrameFileNames;
 interface
 
 uses
-  uSettings;
-
-{ Returns the file extension for a save format, including the dot. }
-function SaveFormatExtension(AFormat: TSaveFormat): string;
+  uBitmapSaver;
 
 { Generates a frame filename from video path, frame index, time offset, and format.
   Pattern: <basename>_frame_<index+1:02d>_<HH-MM-SS.mmm>.<ext> }
@@ -19,15 +16,6 @@ implementation
 
 uses
   System.SysUtils, uFrameOffsets;
-
-function SaveFormatExtension(AFormat: TSaveFormat): string;
-begin
-  case AFormat of
-    sfJPEG: Result := '.jpg';
-  else
-    Result := '.png';
-  end;
-end;
 
 function GenerateFrameFileName(const AVideoFileName: string;
   AFrameIndex: Integer; ATimeOffset: Double; AFormat: TSaveFormat): string;

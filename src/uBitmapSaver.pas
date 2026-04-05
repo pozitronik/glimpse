@@ -5,7 +5,13 @@ unit uBitmapSaver;
 interface
 
 uses
-  System.SysUtils, Vcl.Graphics, uSettings;
+  System.SysUtils, Vcl.Graphics;
+
+type
+  TSaveFormat = (sfPNG, sfJPEG);
+
+{ Returns the file extension for a save format, including the dot. }
+function SaveFormatExtension(AFormat: TSaveFormat): string;
 
 { Saves a bitmap to a file in the specified format.
   AJpegQuality: 1..100, APngCompression: 0..9. }
@@ -20,6 +26,15 @@ implementation
 
 uses
   System.Classes, Vcl.Imaging.pngimage, Vcl.Imaging.jpeg;
+
+function SaveFormatExtension(AFormat: TSaveFormat): string;
+begin
+  case AFormat of
+    sfJPEG: Result := '.jpg';
+  else
+    Result := '.png';
+  end;
+end;
 
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
   AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);

@@ -27,7 +27,7 @@ type
 implementation
 
 uses
-  uSettings, uFrameFileNames;
+  uBitmapSaver, uFrameFileNames;
 
 procedure TTestFrameFileNames.TestSaveFormatExtensionPNG;
 begin

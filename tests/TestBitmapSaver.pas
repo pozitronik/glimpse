@@ -29,7 +29,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Classes, Winapi.Windows, Vcl.Graphics,
   Vcl.Imaging.pngimage, Vcl.Imaging.jpeg,
-  uSettings, uBitmapSaver;
+  uBitmapSaver;
 
 function CreateTestBitmap(AWidth, AHeight: Integer): TBitmap;
 var

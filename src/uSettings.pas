@@ -5,13 +5,13 @@ unit uSettings;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math;
+  System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math,
+  uBitmapSaver;
 
 type
   TFFmpegMode = (fmAuto, fmExe);
   TViewMode = (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
   TZoomMode = (zmFitWindow, zmFitIfLarger, zmActual);
-  TSaveFormat = (sfPNG, sfJPEG);
 
   TPluginSettings = class
   strict private

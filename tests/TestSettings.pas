@@ -83,7 +83,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uSettings;
+  uSettings, uBitmapSaver;
 
 procedure TTestPluginSettings.Setup;
 begin
