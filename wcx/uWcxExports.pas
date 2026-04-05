@@ -61,8 +61,6 @@ type
     CurrentIndex: Integer;
     OpenMode: Integer;
     FileTime: Integer;
-    ProcessDataProc: TProcessDataProc;
-    ProcessDataProcW: TProcessDataProcW;
     { Populated from module-level cache when ShowFileSizes is enabled }
     TempPaths: TArray<string>;
     EntrySizes: TArray<Int64>;
@@ -108,16 +106,74 @@ begin
       H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
 end;
 
+{ Extracts all frames, renders a combined image, and saves to cache }
+procedure ExtractCombinedToCache(H: TArchiveHandle;
+  const AExtractor: IFrameExtractor);
+var
+  Frames: TArray<TBitmap>;
+  Combined: TBitmap;
+  TempPath: string;
+  I: Integer;
+begin
+  SetLength(Frames, Length(H.Offsets));
+  try
+    for I := 0 to Length(H.Offsets) - 1 do
+      Frames[I] := AExtractor.ExtractFrame(H.FileName,
+        H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
+
+    Combined := RenderCombinedImage(Frames, H.Offsets,
+      H.Settings.CombinedColumns, H.Settings.CellGap,
+      H.Settings.Background, H.Settings.ShowTimestamp);
+    if Combined <> nil then
+    try
+      TempPath := TPath.Combine(GCachedTempDir,
+        GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
+      SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
+        H.Settings.JpegQuality, H.Settings.PngCompression);
+      GCachedTempPaths[0] := TempPath;
+      GCachedEntrySizes[0] := TFile.GetSize(TempPath);
+    finally
+      Combined.Free;
+    end;
+  finally
+    for I := 0 to Length(Frames) - 1 do
+      Frames[I].Free;
+  end;
+end;
+
+{ Extracts individual frames and saves each to cache }
+procedure ExtractSeparateToCache(H: TArchiveHandle;
+  const AExtractor: IFrameExtractor);
+var
+  Bmp: TBitmap;
+  TempPath: string;
+  I: Integer;
+begin
+  for I := 0 to Length(H.Offsets) - 1 do
+  begin
+    Bmp := AExtractor.ExtractFrame(H.FileName,
+      H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
+    if Bmp = nil then Continue;
+    try
+      TempPath := TPath.Combine(GCachedTempDir,
+        GenerateFrameFileName(H.FileName, I,
+          H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
+      SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat,
+        H.Settings.JpegQuality, H.Settings.PngCompression);
+      GCachedTempPaths[I] := TempPath;
+      GCachedEntrySizes[I] := TFile.GetSize(TempPath);
+    finally
+      Bmp.Free;
+    end;
+  end;
+end;
+
 { Pre-extracts all frames to a module-level temp cache, or reuses
   an existing cache if the same video was already extracted. }
 procedure PreExtractFrames(H: TArchiveHandle);
 var
   Extractor: IFrameExtractor;
-  Bmp: TBitmap;
-  Frames: TArray<TBitmap>;
-  Combined: TBitmap;
-  TempPath: string;
-  EntryCount, I: Integer;
+  EntryCount: Integer;
 begin
   { Reuse cached extraction if available for the same video }
   if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '')
@@ -131,7 +187,6 @@ begin
 
   { Different video or no cache: invalidate old cache and extract fresh }
   InvalidateFrameCache;
-
   GCachedTempDir := TPath.Combine(TPath.GetTempPath,
     'glimpse_wcx_' + TPath.GetGUIDFileName(False));
   TDirectory.CreateDirectory(GCachedTempDir);
@@ -143,57 +198,12 @@ begin
   SetLength(GCachedEntrySizes, EntryCount);
 
   if H.Settings.OutputMode = womCombined then
-  begin
-    SetLength(Frames, Length(H.Offsets));
-    try
-      for I := 0 to Length(H.Offsets) - 1 do
-        Frames[I] := Extractor.ExtractFrame(H.FileName,
-          H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
-
-      Combined := RenderCombinedImage(Frames, H.Offsets,
-        H.Settings.CombinedColumns, H.Settings.CellGap,
-        H.Settings.Background, H.Settings.ShowTimestamp);
-      if Combined <> nil then
-      try
-        TempPath := TPath.Combine(GCachedTempDir,
-          GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
-        SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
-          H.Settings.JpegQuality, H.Settings.PngCompression);
-        GCachedTempPaths[0] := TempPath;
-        GCachedEntrySizes[0] := TFile.GetSize(TempPath);
-      finally
-        Combined.Free;
-      end;
-    finally
-      for I := 0 to Length(Frames) - 1 do
-        Frames[I].Free;
-    end;
-  end
+    ExtractCombinedToCache(H, Extractor)
   else
-  begin
-    for I := 0 to Length(H.Offsets) - 1 do
-    begin
-      Bmp := Extractor.ExtractFrame(H.FileName,
-        H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
-      if Bmp = nil then Continue;
-      try
-        TempPath := TPath.Combine(GCachedTempDir,
-          GenerateFrameFileName(H.FileName, I,
-            H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
-        SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat,
-          H.Settings.JpegQuality, H.Settings.PngCompression);
-        GCachedTempPaths[I] := TempPath;
-        GCachedEntrySizes[I] := TFile.GetSize(TempPath);
-      finally
-        Bmp.Free;
-      end;
-    end;
-  end;
+    ExtractSeparateToCache(H, Extractor);
 
-  { Copy to handle }
   H.TempPaths := GCachedTempPaths;
   H.EntrySizes := GCachedEntrySizes;
-
   WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, GCachedTempDir]));
 end;
 
@@ -497,8 +507,7 @@ end;
 
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 begin
-  if hArcData <> 0 then
-    TArchiveHandle(hArcData).ProcessDataProc := pProcessDataProc;
+  { Callback stored but not invoked: extraction is synchronous per-frame }
 end;
 
 function GetPackerCaps: Integer; stdcall;

@@ -65,7 +65,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uWcxSettings, uBitmapSaver;
+  uWcxSettings, uBitmapSaver, uDefaults;
 
 { TTestWcxSettings }
 
@@ -88,15 +88,15 @@ var
 begin
   S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
   try
-    Assert.AreEqual(WCX_DEF_FRAMES_COUNT, S.FramesCount);
-    Assert.AreEqual(WCX_DEF_SKIP_EDGES, S.SkipEdgesPercent);
-    Assert.AreEqual(WCX_DEF_MAX_WORKERS, S.MaxWorkers);
-    Assert.AreEqual(WCX_DEF_MAX_THREADS, S.MaxThreads);
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
+    Assert.AreEqual(DEF_SKIP_EDGES, S.SkipEdgesPercent);
+    Assert.AreEqual(DEF_MAX_WORKERS, S.MaxWorkers);
+    Assert.AreEqual(DEF_MAX_THREADS, S.MaxThreads);
     Assert.AreEqual(True, S.UseBmpPipe);
     Assert.IsTrue(S.SaveFormat = sfPNG);
-    Assert.AreEqual(WCX_DEF_JPEG_QUALITY, S.JpegQuality);
-    Assert.AreEqual(WCX_DEF_PNG_COMPRESSION, S.PngCompression);
-    Assert.AreEqual(WCX_DEF_EXTENSION_LIST, S.ExtensionList);
+    Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+    Assert.AreEqual(DEF_PNG_COMPRESSION, S.PngCompression);
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
   finally
     S.Free;
   end;
@@ -110,7 +110,7 @@ begin
   try
     S.Load;
     { Defaults remain intact when file does not exist }
-    Assert.AreEqual(WCX_DEF_FRAMES_COUNT, S.FramesCount);
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
   finally
     S.Free;
   end;
@@ -266,7 +266,7 @@ begin
   S := TWcxSettings.Create(IniPath);
   try
     S.Load;
-    Assert.AreEqual(WCX_DEF_EXTENSION_LIST, S.ExtensionList);
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
   finally
     S.Free;
   end;
@@ -891,15 +891,15 @@ begin
     { Explicit value loaded }
     Assert.AreEqual(8, S.FramesCount);
     { All other settings fall back to defaults }
-    Assert.AreEqual(WCX_DEF_SKIP_EDGES, S.SkipEdgesPercent);
-    Assert.AreEqual(WCX_DEF_JPEG_QUALITY, S.JpegQuality);
-    Assert.AreEqual(WCX_DEF_PNG_COMPRESSION, S.PngCompression);
+    Assert.AreEqual(DEF_SKIP_EDGES, S.SkipEdgesPercent);
+    Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+    Assert.AreEqual(DEF_PNG_COMPRESSION, S.PngCompression);
     Assert.AreEqual(WCX_DEF_COMBINED_COLS, S.CombinedColumns);
     Assert.AreEqual(WCX_DEF_SHOW_TIMESTAMP, S.ShowTimestamp);
     Assert.AreEqual(WCX_DEF_CELL_GAP, S.CellGap);
-    Assert.AreEqual(WCX_DEF_EXTENSION_LIST, S.ExtensionList);
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
     Assert.AreEqual(WCX_DEF_SHOW_FILE_SIZES, S.ShowFileSizes);
-    Assert.IsTrue(S.SaveFormat = WCX_DEF_SAVE_FORMAT);
+    Assert.IsTrue(S.SaveFormat = DEF_SAVE_FORMAT);
     Assert.IsTrue(S.OutputMode = WCX_DEF_OUTPUT_MODE);
   finally
     S.Free;

@@ -24,6 +24,7 @@ uses
   uPathExpand in '..\src\uPathExpand.pas',
   uColorConv in '..\src\uColorConv.pas',
   uRunProcess in '..\src\uRunProcess.pas',
+  uDefaults in '..\src\uDefaults.pas',
   uFrameExtractor in '..\src\uFrameExtractor.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   uSettings in '..\src\uSettings.pas';

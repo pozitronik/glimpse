@@ -22,7 +22,7 @@ function RenderCombinedImage(const AFrames: TArray<TBitmap>;
 implementation
 
 uses
-  System.SysUtils, System.Math, System.Types, Vcl.GraphUtil;
+  System.SysUtils, System.Math, System.Types;
 
 function RenderCombinedImage(const AFrames: TArray<TBitmap>;
   const AOffsets: TFrameOffsetArray; ACols, AGap: Integer;

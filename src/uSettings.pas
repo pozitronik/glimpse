@@ -6,7 +6,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver, uTypes;
+  uBitmapSaver, uTypes, uDefaults;
 
 type
   TPluginSettings = class
@@ -108,15 +108,10 @@ type
   end;
 
 const
+  { WLX-specific defaults }
   DEF_FFMPEG_MODE        = fmAuto;
   DEF_FFMPEG_EXE_PATH    = '';
   DEF_FFMPEG_AUTO_DL     = False;
-
-  DEF_FRAMES_COUNT          = 4;
-  DEF_SKIP_EDGES_PERCENT = 2;
-  DEF_MAX_WORKERS        = 1;
-  DEF_MAX_THREADS        = -1;  { -1 = no limit, 0 = auto (CPU core count) }
-  DEF_USE_BMP_PIPE       = True;
   DEF_VIEW_MODE          = vmGrid;
   DEF_ZOOM_MODE          = zmFitWindow;
   DEF_BACKGROUND         = TColor($001E1E1E);
@@ -125,14 +120,13 @@ const
   DEF_SHOW_STATUS_BAR    = True;
   DEF_TC_BACK_COLOR      = TColor($002D2D2D);
   DEF_TC_BACK_ALPHA      = 180;
-  DEF_EXTENSION_LIST     = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
-  DEF_SAVE_FORMAT        = sfPNG;
-  DEF_JPEG_QUALITY       = 90;
-  DEF_PNG_COMPRESSION    = 6;
   DEF_SAVE_FOLDER        = '';
   DEF_CACHE_ENABLED      = True;
   DEF_CACHE_FOLDER       = '';
   DEF_CACHE_MAX_SIZE_MB  = 500;
+
+  { Alias: uSettings historically used _PERCENT suffix }
+  DEF_SKIP_EDGES_PERCENT = DEF_SKIP_EDGES;
 
 { Returns the default cache folder path used when CacheFolder setting is empty. }
 function DefaultCacheFolder: string;
@@ -211,10 +205,14 @@ begin
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', DEF_FFMPEG_EXE_PATH);
     FFFmpegAutoDownloaded := Ini.ReadBool('ffmpeg', 'AutoDownloaded', DEF_FFMPEG_AUTO_DL);
 
-    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), 1, 99);
-    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES_PERCENT), 0, 49);
-    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), 0, 16);
-    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads', DEF_MAX_THREADS), -1, 64);
+    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount',
+      DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
+    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges',
+      DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
+    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers',
+      DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
+    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads',
+      DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
     FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
@@ -233,8 +231,10 @@ begin
       FExtensionList := DEF_EXTENSION_LIST;
 
     FSaveFormat := StrToSaveFormat(Ini.ReadString('save', 'Format', ''));
-    FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality', DEF_JPEG_QUALITY), 1, 100);
-    FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), 0, 9);
+    FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality',
+      DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+    FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression',
+      DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
