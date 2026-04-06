@@ -25,29 +25,31 @@ Provides an instant visual summary of a video's content without opening a media 
 
 ### Keyboard Shortcuts
 
-| Key          | Action                                                                                            |
-|--------------|---------------------------------------------------------------------------------------------------|
-| Ctrl+1..5    | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
-| +/-          | Zoom in / out                                                                                     |
-| 0            | Reset zoom to 1x                                                                                  |
-| Left/Right   | Previous / next frame (single mode)                                                               |
-| Ctrl+Up/Down | Increase / decrease frame count                                                                   |
-| Ctrl+A       | Select all                                                                                        |
-| Ctrl+Click   | Toggle frame selection                                                                            |
-| Ctrl+S       | Save focused frame                                                                                |
-| Ctrl+Alt+S   | Save all frames                                                                                   |
-| Ctrl+Shift+S | Save combined image                                                                               |
-| Ctrl+C       | Copy focused frame to clipboard                                                                   |
-| Ctrl+Shift+C | Copy combined image to clipboard                                                                  |
-| T            | Toggle timecodes                                                                                  |
-| R            | Refresh (re-extract all frames)                                                                   |
-| Space        | Next video file in directory                                                                      |
-| Backspace    | Previous video file in directory                                                                  |
-| Z            | Previous video file in directory                                                                  |
-| ~            | Open hamburger menu (when toolbar is collapsed)                                                   |
-| F2           | Settings                                                                                          |
-| F3           | Toggle status bar                                                                                 |
-| F4           | Toggle toolbar                                                                                    |
+| Key             | Action                                                                                            |
+|-----------------|---------------------------------------------------------------------------------------------------|
+| Ctrl+1..5       | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
+| +/-             | Zoom in / out                                                                                     |
+| 0               | Reset zoom to 1x                                                                                  |
+| Left/Right      | Previous / next video file in directory                                                           |
+| PageUp/Down     | Previous / next video file in directory                                                           |
+| Ctrl+Left/Right | Previous / next frame (single mode)                                                               |
+| Ctrl+Up/Down    | Increase / decrease frame count                                                                   |
+| Ctrl+A          | Select all                                                                                        |
+| Ctrl+Click      | Toggle frame selection                                                                            |
+| Ctrl+S          | Save focused frame                                                                                |
+| Ctrl+Alt+S      | Save all frames                                                                                   |
+| Ctrl+Shift+S    | Save combined image                                                                               |
+| Ctrl+C          | Copy focused frame to clipboard                                                                   |
+| Ctrl+Shift+C    | Copy combined image to clipboard                                                                  |
+| T               | Toggle timecodes                                                                                  |
+| R               | Refresh (re-extract all frames)                                                                   |
+| Space           | Next video file in directory                                                                      |
+| Backspace       | Previous video file in directory                                                                  |
+| Z               | Previous video file in directory                                                                  |
+| ~               | Open hamburger menu (when toolbar is collapsed)                                                   |
+| F2              | Settings                                                                                          |
+| F3              | Toggle status bar                                                                                 |
+| F4              | Toggle toolbar                                                                                    |
 
 ### Configuration
 

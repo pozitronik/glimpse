@@ -1099,25 +1099,29 @@ begin
     Exit;
   end;
 
-  { Single mode: bare arrow keys navigate between frames }
-  if (Shift = []) and (FFrameView.ViewMode = vmSingle) then
+  { Ctrl+Left/Right: navigate frames in single mode }
+  if (Shift = [ssCtrl]) and (Key in [VK_LEFT, VK_RIGHT]) and
+     (FFrameView.ViewMode = vmSingle) then
   begin
-    case Key of
-      VK_LEFT, VK_UP:
-        begin
-          FFrameView.NavigateFrame(-1);
-          Key := 0;
-          FKeyConsumed := True;
-          Exit;
-        end;
-      VK_RIGHT, VK_DOWN:
-        begin
-          FFrameView.NavigateFrame(1);
-          Key := 0;
-          FKeyConsumed := True;
-          Exit;
-        end;
-    end;
+    if Key = VK_LEFT then
+      FFrameView.NavigateFrame(-1)
+    else
+      FFrameView.NavigateFrame(1);
+    Key := 0;
+    FKeyConsumed := True;
+    Exit;
+  end;
+
+  { Bare Left/Right/PageUp/PageDown: navigate between files }
+  if (Shift = []) and (Key in [VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT]) then
+  begin
+    if Key in [VK_LEFT, VK_PRIOR] then
+      NavigateToAdjacentFile(-1)
+    else
+      NavigateToAdjacentFile(1);
+    Key := 0;
+    FKeyConsumed := True;
+    Exit;
   end;
 
   case Key of
