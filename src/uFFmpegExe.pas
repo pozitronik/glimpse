@@ -280,35 +280,48 @@ begin
   Result := Copy(AText, P, LineEnd - P);
 end;
 
+{ Scans backward from position P through characters in ADigitChars,
+  returning the extracted number string. P is unchanged. }
+function ScanNumberBefore(const ALine: string; P: Integer;
+  const ADigitChars: TSysCharSet): string;
+var
+  Start: Integer;
+begin
+  Result := '';
+  Start := P;
+  while (Start > 0) and CharInSet(ALine[Start], ADigitChars) do Dec(Start);
+  Inc(Start);
+  if Start <= P then
+    Result := Copy(ALine, Start, P - Start + 1);
+end;
+
+{ Skips whitespace backward from position P, returns updated position }
+function SkipSpacesBack(const ALine: string; P: Integer): Integer;
+begin
+  while (P > 0) and (ALine[P] = ' ') do Dec(P);
+  Result := P;
+end;
+
 function ParseFps(const AText: string): Double;
 var
-  Line: string;
-  P, Start: Integer;
-  NumStr: string;
+  Line, NumStr: string;
+  P: Integer;
 begin
   Result := 0;
   Line := ExtractStreamLine(AText, 'Video:');
   if Line = '' then Exit;
-  { Look for "NN fps" or "NN.NN fps" pattern }
   P := Pos(' fps', Line);
   if P < 2 then Exit;
-  { Walk backwards to find the number }
-  Dec(P);
-  while (P > 0) and (Line[P] = ' ') do Dec(P);
-  Start := P;
-  while (Start > 0) and CharInSet(Line[Start], ['0'..'9', '.']) do Dec(Start);
-  Inc(Start);
-  if Start <= P then
-  begin
-    NumStr := Copy(Line, Start, P - Start + 1);
+  P := SkipSpacesBack(Line, P - 1);
+  NumStr := ScanNumberBefore(Line, P, ['0'..'9', '.']);
+  if NumStr <> '' then
     Result := StrToFloatDef(NumStr, 0, TFormatSettings.Invariant);
-  end;
 end;
 
 { Parses bitrate (kb/s) from a single stream line }
 function ParseStreamBitrate(const ALine: string): Integer;
 var
-  P, Start: Integer;
+  P: Integer;
   NumStr: string;
 begin
   Result := 0;
@@ -318,16 +331,10 @@ begin
   begin
     if (ALine[P] = 's') and (Copy(ALine, P - 3, 4) = 'kb/s') then
     begin
-      P := P - 4; { position before "kb/s" }
-      while (P > 0) and (ALine[P] = ' ') do Dec(P);
-      Start := P;
-      while (Start > 0) and CharInSet(ALine[Start], ['0'..'9']) do Dec(Start);
-      Inc(Start);
-      if Start <= P then
-      begin
-        NumStr := Copy(ALine, Start, P - Start + 1);
+      P := SkipSpacesBack(ALine, P - 4);
+      NumStr := ScanNumberBefore(ALine, P, ['0'..'9']);
+      if NumStr <> '' then
         Result := StrToIntDef(NumStr, 0);
-      end;
       Exit;
     end;
     Dec(P);
@@ -357,24 +364,17 @@ end;
 
 function ParseAudioSampleRate(const AText: string): Integer;
 var
-  Line: string;
-  P, Start: Integer;
-  NumStr: string;
+  Line, NumStr: string;
+  P: Integer;
 begin
   Result := 0;
   Line := ExtractStreamLine(AText, 'Audio:');
   if Line = '' then Exit;
   P := Pos(' Hz', Line);
   if P < 2 then Exit;
-  Dec(P);
-  Start := P;
-  while (Start > 0) and CharInSet(Line[Start], ['0'..'9']) do Dec(Start);
-  Inc(Start);
-  if Start <= P then
-  begin
-    NumStr := Copy(Line, Start, P - Start + 1);
+  NumStr := ScanNumberBefore(Line, P - 1, ['0'..'9']);
+  if NumStr <> '' then
     Result := StrToIntDef(NumStr, 0);
-  end;
 end;
 
 function ParseAudioChannels(const AText: string): string;
