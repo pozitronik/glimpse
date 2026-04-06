@@ -91,6 +91,23 @@ implementation
 uses
   System.Math, uBitmapSaver, uRunProcess;
 
+{ Decodes bytes as UTF-8, replacing invalid sequences instead of raising.
+  ffmpeg may embed legacy-encoded metadata (e.g. CP1251 titles) that is
+  not valid UTF-8; strict decoding would raise EEncodingError. }
+function LenientUTF8Decode(const ABytes: TBytes): string;
+var
+  Enc: TEncoding;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  Enc := TUTF8Encoding.Create(CP_UTF8, 0, 0);
+  try
+    Result := Enc.GetString(ABytes);
+  finally
+    Enc.Free;
+  end;
+end;
+
 { Parsing }
 
 function ParseDuration(const AText: string): Double;
@@ -433,9 +450,9 @@ begin
   if RunProcess(CmdLine, StdOut, StdErr, 5000) <> 0 then
     Exit;
   if Length(StdOut) > 0 then
-    Output := TEncoding.UTF8.GetString(StdOut)
+    Output := LenientUTF8Decode(StdOut)
   else if Length(StdErr) > 0 then
-    Output := TEncoding.UTF8.GetString(StdErr)
+    Output := LenientUTF8Decode(StdErr)
   else
     Exit;
   Result := ParseFFmpegVersion(Output);
@@ -468,7 +485,7 @@ begin
     Exit;
   end;
 
-  StdErrStr := TEncoding.UTF8.GetString(StdErr);
+  StdErrStr := LenientUTF8Decode(StdErr);
   Result.Duration := ParseDuration(StdErrStr);
   ParseResolution(StdErrStr, Result.Width, Result.Height);
   Result.VideoCodec := ParseVideoCodec(StdErrStr);
