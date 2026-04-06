@@ -49,6 +49,9 @@ type
     [Test] procedure PrependBanner_AddsHeightAboveSource;
     [Test] procedure PrependBanner_PreservesSourceContent;
     [Test] procedure PrependBanner_NilSource_ReturnsEmptyBitmap;
+    [Test] procedure PrependBanner_NarrowImage_SmallBanner;
+    [Test] procedure PrependBanner_WideImage_LargerBanner;
+    [Test] procedure PrependBanner_LongLine_Truncated;
   end;
 
 implementation
@@ -574,7 +577,7 @@ begin
   Src := MakeFrame(100, 80, Integer(clRed));
   try
     SetLength(EmptyLines, 0);
-    R := PrependBanner(Src, EmptyLines, 'Consolas', 9);
+    R := PrependBanner(Src, EmptyLines);
     try
       Assert.AreEqual(100, R.Width);
       Assert.AreEqual(80, R.Height);
@@ -592,7 +595,7 @@ var
 begin
   Src := MakeFrame(200, 100, Integer(clBlue));
   try
-    R := PrependBanner(Src, ['Line 1', 'Line 2'], 'Consolas', 9);
+    R := PrependBanner(Src, ['Line 1', 'Line 2']);
     try
       Assert.AreEqual(200, R.Width, 'Width should match source');
       Assert.IsTrue(R.Height > 100, 'Height should exceed source by banner');
@@ -611,7 +614,7 @@ var
 begin
   Src := MakeFrame(100, 50, Integer(clRed));
   try
-    R := PrependBanner(Src, ['Test'], 'Consolas', 9);
+    R := PrependBanner(Src, ['Test']);
     try
       BannerH := R.Height - 50;
       Assert.IsTrue(BannerH > 0, 'Banner should add height');
@@ -631,12 +634,79 @@ procedure TTestCombinedImage.PrependBanner_NilSource_ReturnsEmptyBitmap;
 var
   R: TBitmap;
 begin
-  R := PrependBanner(nil, ['Line'], 'Consolas', 9);
+  R := PrependBanner(nil, ['Line']);
   try
     Assert.AreEqual(0, R.Width);
     Assert.AreEqual(0, R.Height);
   finally
     R.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_NarrowImage_SmallBanner;
+var
+  Narrow, Wide, R1, R2: TBitmap;
+  H1, H2: Integer;
+begin
+  { A narrow image should get a smaller font, hence shorter banner }
+  Narrow := MakeFrame(200, 100, Integer(clBlack));
+  Wide := MakeFrame(1200, 100, Integer(clBlack));
+  try
+    R1 := PrependBanner(Narrow, ['Test line']);
+    R2 := PrependBanner(Wide, ['Test line']);
+    try
+      H1 := R1.Height - 100;
+      H2 := R2.Height - 100;
+      Assert.IsTrue(H1 > 0, 'Narrow banner should have height');
+      Assert.IsTrue(H2 > H1, 'Wide image banner should be taller than narrow');
+    finally
+      R1.Free;
+      R2.Free;
+    end;
+  finally
+    Narrow.Free;
+    Wide.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_WideImage_LargerBanner;
+var
+  Src, R: TBitmap;
+  BannerH: Integer;
+begin
+  { Font size caps at BANNER_FONT_MAX for very wide images }
+  Src := MakeFrame(2000, 100, Integer(clBlack));
+  try
+    R := PrependBanner(Src, ['Line']);
+    try
+      BannerH := R.Height - 100;
+      Assert.IsTrue(BannerH > 0, 'Banner should have height');
+      Assert.AreEqual(2000, R.Width, 'Width must match source');
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_LongLine_Truncated;
+var
+  Src, R: TBitmap;
+  LongText: string;
+begin
+  { A very long line on a narrow image must not overflow }
+  Src := MakeFrame(200, 100, Integer(clBlack));
+  try
+    LongText := StringOfChar('W', 500);
+    R := PrependBanner(Src, [LongText]);
+    try
+      Assert.AreEqual(200, R.Width, 'Width must match source, not expand');
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
   end;
 end;
 

@@ -29,13 +29,12 @@ type
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
 
 { Prepends a dark info banner to an existing bitmap.
+  Font is auto-scaled to fit the image width.
   @param ASrc Source bitmap (not freed; caller still owns it)
   @param ALines Text lines to display (empty array = no banner, returns copy of ASrc)
-  @param AFontName Font face for banner text
-  @param AFontSize Font size in points for banner text
   @return New bitmap with banner above source content. Caller owns result. }
-function PrependBanner(ASrc: TBitmap; const ALines: TArray<string>;
-  const AFontName: string; AFontSize: Integer): TBitmap;
+function PrependBanner(ASrc: TBitmap;
+  const ALines: TArray<string>): TBitmap;
 
 { Renders all frames into a single grid image.
   @param AFrames Array of frame bitmaps (nil entries are skipped)
@@ -63,6 +62,11 @@ const
   BANNER_PADDING_H   = 10;  { horizontal padding }
   BANNER_PADDING_V   = 6;   { vertical padding (top and bottom) }
   BANNER_LINE_GAP    = 2;   { extra spacing between lines }
+  BANNER_FONT_NAME   = 'Segoe UI';
+  BANNER_FONT_MIN    = 8;   { minimum font size in points }
+  BANNER_FONT_MAX    = 16;  { maximum font size in points }
+  BANNER_FONT_RATIO  = 55;  { image width divisor for font size }
+  BANNER_ELLIPSIS    = '...';
 
 { Formats a file size as a human-readable string }
 function FormatFileSize(ABytes: Int64): string;
@@ -146,11 +150,29 @@ begin
   Result := [Line1, Line2, Line3];
 end;
 
-function PrependBanner(ASrc: TBitmap; const ALines: TArray<string>;
-  const AFontName: string; AFontSize: Integer): TBitmap;
+{ Truncates text to fit within MaxW pixels, appending ellipsis if needed }
+function TruncateToFit(ACanvas: TCanvas; const AText: string;
+  AMaxW: Integer): string;
 var
-  LineH, BannerH, I: Integer;
+  Len: Integer;
+  EllW: Integer;
+begin
+  if ACanvas.TextWidth(AText) <= AMaxW then
+    Exit(AText);
+
+  EllW := ACanvas.TextWidth(BANNER_ELLIPSIS);
+  Len := Length(AText);
+  while (Len > 0) and (ACanvas.TextWidth(Copy(AText, 1, Len)) + EllW > AMaxW) do
+    Dec(Len);
+  Result := Copy(AText, 1, Len) + BANNER_ELLIPSIS;
+end;
+
+function PrependBanner(ASrc: TBitmap;
+  const ALines: TArray<string>): TBitmap;
+var
+  FontSize, LineH, BannerH, MaxTextW, I: Integer;
   TempBmp: TBitmap;
+  Line: string;
 begin
   if (Length(ALines) = 0) or (ASrc = nil) then
   begin
@@ -161,11 +183,16 @@ begin
     Exit;
   end;
 
+  { Auto-scale font size from image width }
+  FontSize := EnsureRange(ASrc.Width div BANNER_FONT_RATIO,
+    BANNER_FONT_MIN, BANNER_FONT_MAX);
+  MaxTextW := ASrc.Width - 2 * BANNER_PADDING_H;
+
   { Measure banner height using a temporary bitmap }
   TempBmp := TBitmap.Create;
   try
-    TempBmp.Canvas.Font.Name := AFontName;
-    TempBmp.Canvas.Font.Size := AFontSize;
+    TempBmp.Canvas.Font.Name := BANNER_FONT_NAME;
+    TempBmp.Canvas.Font.Size := FontSize;
     LineH := TempBmp.Canvas.TextHeight('Wg');
   finally
     TempBmp.Free;
@@ -181,14 +208,17 @@ begin
   Result.Canvas.Brush.Color := BANNER_BG_COLOR;
   Result.Canvas.FillRect(Rect(0, 0, Result.Width, BannerH));
 
-  { Draw text lines }
-  Result.Canvas.Font.Name := AFontName;
-  Result.Canvas.Font.Size := AFontSize;
+  { Draw text lines, truncating if needed }
+  Result.Canvas.Font.Name := BANNER_FONT_NAME;
+  Result.Canvas.Font.Size := FontSize;
   Result.Canvas.Font.Color := BANNER_TEXT_COLOR;
   Result.Canvas.Brush.Style := bsClear;
   for I := 0 to Length(ALines) - 1 do
+  begin
+    Line := TruncateToFit(Result.Canvas, ALines[I], MaxTextW);
     Result.Canvas.TextOut(BANNER_PADDING_H,
-      BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), ALines[I]);
+      BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), Line);
+  end;
 
   { Draw source image below banner }
   Result.Canvas.Draw(0, BannerH, ASrc);

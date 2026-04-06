@@ -149,8 +149,7 @@ begin
       if H.Settings.ShowBanner then
       begin
         WithBanner := PrependBanner(Combined,
-          FormatBannerLines(BuildBannerInfo(H)),
-          H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+          FormatBannerLines(BuildBannerInfo(H)));
         Combined.Free;
         Combined := WithBanner;
       end;
@@ -446,8 +445,7 @@ begin
         if H.Settings.ShowBanner then
         begin
           WithBanner := PrependBanner(Combined,
-            FormatBannerLines(BuildBannerInfo(H)),
-            H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+            FormatBannerLines(BuildBannerInfo(H)));
           Combined.Free;
           Combined := WithBanner;
         end;

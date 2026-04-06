@@ -82,8 +82,7 @@ begin
   if FSettings.ShowBanner then
   begin
     Result := PrependBanner(ABmp,
-      FormatBannerLines(FBannerInfo),
-      FSettings.TimestampFontName, FSettings.TimestampFontSize);
+      FormatBannerLines(FBannerInfo));
     ABmp.Free;
   end
   else
