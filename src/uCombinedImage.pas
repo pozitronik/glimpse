@@ -95,9 +95,9 @@ begin
   M := (Total mod 3600) div 60;
   S := Total mod 60;
   if H > 0 then
-    Result := Format('%d:%02d:%02d', [H, M, S])
+    Result := Format('%d:%.2d:%.2d', [H, M, S])
   else
-    Result := Format('%02d:%02d', [M, S]);
+    Result := Format('%.2d:%.2d', [M, S]);
 end;
 
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
