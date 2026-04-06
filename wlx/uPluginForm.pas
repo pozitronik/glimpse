@@ -61,6 +61,10 @@ type
     FHamburgerMenuOpen: Boolean;
     { Suppresses WM_CHAR after OnKeyDown consumed the keystroke }
     FKeyConsumed: Boolean;
+    { Tick count when LoadFile started (for load time measurement) }
+    FLoadStartTick: UInt64;
+    { Formatted load time string, populated when extraction completes }
+    FLoadTimeStr: string;
 
     procedure CreateToolbar;
     procedure LayoutToolbar;
@@ -102,6 +106,7 @@ type
     procedure UpdateProgress;
     procedure ShowProgress(const AText: string);
     procedure HideProgress;
+    procedure FinalizeLoadTime;
     procedure RepositionProgressBar;
     procedure OnAnimTimer(Sender: TObject);
     procedure OnFrameCountChange(Sender: TObject);
@@ -245,10 +250,11 @@ const
   SBP_DURATION_W   = 100;
   SBP_BITRATE_W    = 100;
   SBP_VIDEOCODEC_W = 90;
-  SBP_AUDIO_W      = 200;
+  SBP_AUDIO_W      = 300;
   SBP_NOAUDIO_W    = 110;
+  SBP_LOADTIME_W   = 110;
   { Total width including per-panel borders added by the common control }
-  SBP_TOTAL_RIGHT  = 760;
+  SBP_TOTAL_RIGHT  = 1000;
 
   { Command tags, mode captions, sizing labels, and toolbar actions
     are defined in uToolbarLayout }
@@ -719,13 +725,15 @@ procedure TPluginForm.UpdateStatusBar;
       Result := Format('%d kbps', [AKbps]);
   end;
 
-  procedure AddPanel(const AText: string; AWidth: Integer);
+  procedure AddPanel(const AText: string; AWidth: Integer;
+    AAlignment: TAlignment = taLeftJustify);
   var
     Panel: TStatusPanel;
   begin
     Panel := FStatusBar.Panels.Add;
     Panel.Text := AText;
     Panel.Width := AWidth;
+    Panel.Alignment := AAlignment;
   end;
 
 var
@@ -770,6 +778,14 @@ begin
   end
   else
     AddPanel('No audio', SBP_NOAUDIO_W);
+
+  { Load time (shown after extraction completes) }
+  if FLoadTimeStr <> '' then
+  begin
+    AddPanel(FLoadTimeStr, SBP_LOADTIME_W, taRightJustify);
+    { Dummy panel absorbs last-panel stretching from the common control }
+    AddPanel('', 0);
+  end;
 end;
 
 procedure TPluginForm.OnStatusBarDblClick(Sender: TObject);
@@ -938,6 +954,8 @@ var
   FFmpeg: TFFmpegExe;
 begin
   FormLog(Format('LoadFile: %s', [AFileName]));
+  FLoadStartTick := GetTickCount64;
+  FLoadTimeStr := '';
   FFileName := AFileName;
   SetWindowText(FParentWnd, PChar(Format('Lister (glimpse) - [%s]', [AFileName])));
   FExtractCtrl.Stop;
@@ -1017,6 +1035,8 @@ var
   Extractor: IFrameExtractor;
 begin
   FExtractCtrl.Stop;
+  FLoadStartTick := GetTickCount64;
+  FLoadTimeStr := '';
   UpdateToolbarButtons;
 
   FProgressBar.Style := pbstMarquee;
@@ -1057,6 +1077,30 @@ begin
   FStatusBar.Visible := FSettings.ShowStatusBar;
 end;
 
+procedure TPluginForm.FinalizeLoadTime;
+var
+  ElapsedMs: UInt64;
+  H, M, S, Ms: Integer;
+begin
+  if FLoadStartTick = 0 then Exit;
+  if FLoadTimeStr <> '' then Exit; { already finalized }
+
+  ElapsedMs := GetTickCount64 - FLoadStartTick;
+  H := ElapsedMs div 3600000;
+  M := (ElapsedMs mod 3600000) div 60000;
+  S := (ElapsedMs mod 60000) div 1000;
+  Ms := ElapsedMs mod 1000;
+
+  if H > 0 then
+    FLoadTimeStr := Format('%d:%.2d:%.2d', [H, M, S])
+  else if M > 0 then
+    FLoadTimeStr := Format('%d:%.2d.%.3d', [M, S, Ms])
+  else
+    FLoadTimeStr := Format('%d.%.3d s', [S, Ms]);
+
+  UpdateStatusBar;
+end;
+
 procedure TPluginForm.RepositionProgressBar;
 var
   Margin, BarWidth: Integer;
@@ -1074,6 +1118,7 @@ begin
   UpdateToolbarButtons;
   if FExtractCtrl.FramesLoaded >= FExtractCtrl.TotalFrames then
   begin
+    FinalizeLoadTime;
     HideProgress;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   end
@@ -1096,6 +1141,7 @@ begin
     [FExtractCtrl.FramesLoaded, FExtractCtrl.TotalFrames]));
   { Safety net: process any frames that arrived after the last notification }
   FExtractCtrl.ProcessPendingFrames;
+  FinalizeLoadTime;
   HideProgress;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
