@@ -70,7 +70,7 @@ var
 begin
   SetLength(Frames, 0);
   SetLength(Offsets, 0);
-  R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False);
+  R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
   Assert.IsNull(R);
 end;
 
@@ -87,7 +87,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 1.0;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width);
@@ -114,7 +114,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, '2 cols * 50px');
@@ -141,7 +141,7 @@ begin
     Frames[I] := MakeFrame(60, 40, 0);
   SetLength(Offsets, 4);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(120, R.Width, '2 cols * 60px');
@@ -167,7 +167,7 @@ begin
     Frames[I] := MakeFrame(60, 40, 0);
   SetLength(Offsets, 4);
   try
-    R := RenderCombinedImage(Frames, Offsets, 1, 0, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 1, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(60, R.Width, '1 col * 60px');
@@ -194,7 +194,7 @@ begin
     Frames[I] := MakeFrame(50, 30, 0);
   SetLength(Offsets, 3);
   try
-    R := RenderCombinedImage(Frames, Offsets, 2, 0, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 2, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, '2 cols * 50px');
@@ -221,7 +221,7 @@ begin
   Frames[0] := MakeFrame(100, 80, 0);
   SetLength(Offsets, 1);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 10, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 10, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, 'No gap for single frame');
@@ -246,7 +246,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 5, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 5, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(105, R.Width, '2*50 + 1*5');
@@ -273,7 +273,7 @@ begin
     Frames[I] := MakeFrame(30, 20, 0);
   SetLength(Offsets, 4);
   try
-    R := RenderCombinedImage(Frames, Offsets, 2, 4, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 2, 4, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(64, R.Width, '2*30 + 1*4');
@@ -305,7 +305,7 @@ begin
     Frames[I] := MakeFrame(20, 20, Integer(clRed));
   SetLength(Offsets, 3);
   try
-    R := RenderCombinedImage(Frames, Offsets, 2, 0, BgColor, False);
+    R := RenderCombinedImage(Frames, Offsets, 2, 0, BgColor, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       { Check pixel in the empty cell (row 1, col 1) }
@@ -333,7 +333,7 @@ begin
   SetLength(Frames, 1);
   Frames[0] := nil;
   SetLength(Offsets, 1);
-  R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False);
+  R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
   Assert.IsNotNull(R);
   try
     Assert.AreEqual(320, R.Width, 'Default cell width');
@@ -357,7 +357,7 @@ begin
   Frames[1] := nil;
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clWhite, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clWhite, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(80, R.Width, '2 cols * 40px');
@@ -388,7 +388,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 10, 0, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 10, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, 'Clamped to 2 cols * 50px');
@@ -415,7 +415,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True);
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(pf24bit, R.PixelFormat);
@@ -440,7 +440,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 10.0;
   try
-    WithoutTS := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False);
+    WithoutTS := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(WithoutTS);
     try
       { Bottom-left pixel should be the frame color when no timestamp }
@@ -470,7 +470,7 @@ begin
     Frames[I] := MakeFrame(40, 30, 0);
   SetLength(Offsets, 9);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 2, clBlack, False);
+    R := RenderCombinedImage(Frames, Offsets, 0, 2, clBlack, False, 'Consolas', 9);
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(3 * 40 + 2 * 2, R.Width, '3 cols * 40px + 2 gaps * 2px');

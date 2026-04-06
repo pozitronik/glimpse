@@ -44,6 +44,11 @@ type
     EdtTCAlpha: TEdit;
     UdTCAlpha: TUpDown;
     LblTCAlphaHint: TLabel;
+    LblTimestampFont: TLabel;
+    EdtTimestampFont: TEdit;
+    LblTimestampFontSize: TLabel;
+    EdtTimestampFontSize: TEdit;
+    UdTimestampFontSize: TUpDown;
     ChkShowToolbar: TCheckBox;
     ChkShowStatusBar: TCheckBox;
     GbxSave: TGroupBox;
@@ -136,6 +141,8 @@ begin
   PnlBackground.Color := ASettings.Background;
   PnlTCBack.Color := ASettings.TimecodeBackColor;
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
+  EdtTimestampFont.Text := ASettings.TimestampFontName;
+  UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
 
@@ -181,6 +188,8 @@ begin
   ASettings.Background := PnlBackground.Color;
   ASettings.TimecodeBackColor := PnlTCBack.Color;
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
+  ASettings.TimestampFontName := EdtTimestampFont.Text;
+  ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
 

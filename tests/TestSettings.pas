@@ -72,6 +72,14 @@ type
     [Test]
     procedure TestTimecodeBackColorAlphaEdgeCases;
     [Test]
+    procedure TestTimestampFontDefaults;
+    [Test]
+    procedure TestTimestampFontRoundTrip;
+    [Test]
+    procedure TestTimestampFontSizeClamped;
+    [Test]
+    procedure TestTimestampFontEmptyFallback;
+    [Test]
     procedure TestCacheMaxSizeBoundaries;
     [Test]
     procedure TestTryParseHexRGBValid;
@@ -819,6 +827,108 @@ begin
       'Empty string should fall back to default color');
     Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
       'Empty string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(DEF_TIMESTAMP_FONT, S.TimestampFontName);
+    Assert.AreEqual(DEF_TIMESTAMP_FONT_SIZE, S.TimestampFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'font.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.TimestampFontName := 'Consolas';
+    S1.TimestampFontSize := 12;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual('Consolas', S2.TimestampFontName);
+    Assert.AreEqual(12, S2.TimestampFontSize);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontSizeClamped;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontclamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampFontSize', 2);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_TIMESTAMP_FONT_SIZE, S.TimestampFontSize,
+      'Font size below minimum should be clamped');
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampFontSize', 200);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_TIMESTAMP_FONT_SIZE, S.TimestampFontSize,
+      'Font size above maximum should be clamped');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontEmptyFallback;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontempty.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('view', 'TimestampFont', '   ');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_TIMESTAMP_FONT, S.TimestampFontName,
+      'Empty/whitespace font name should fall back to default');
   finally
     S.Free;
   end;

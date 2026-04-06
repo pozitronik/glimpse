@@ -33,6 +33,8 @@ type
     FShowTimestamp: Boolean;
     FBackground: TColor;
     FCellGap: Integer;
+    FTimestampFontName: string;
+    FTimestampFontSize: Integer;
     { [output] }
     FShowFileSizes: Boolean;
   public
@@ -56,6 +58,8 @@ type
     property ShowTimestamp: Boolean read FShowTimestamp write FShowTimestamp;
     property Background: TColor read FBackground write FBackground;
     property CellGap: Integer read FCellGap write FCellGap;
+    property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
+    property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
   end;
 
@@ -66,6 +70,8 @@ const
   WCX_DEF_SHOW_TIMESTAMP  = True;
   WCX_DEF_BACKGROUND      = TColor($001E1E1E);
   WCX_DEF_CELL_GAP        = 2;
+  WCX_DEF_TIMESTAMP_FONT  = 'Consolas';
+  WCX_DEF_TIMESTAMP_FONT_SIZE = 9;
   WCX_DEF_SHOW_FILE_SIZES = False;
 
 implementation
@@ -94,6 +100,8 @@ begin
   FShowTimestamp := WCX_DEF_SHOW_TIMESTAMP;
   FBackground := WCX_DEF_BACKGROUND;
   FCellGap := WCX_DEF_CELL_GAP;
+  FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
+  FTimestampFontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
 end;
 
@@ -135,6 +143,11 @@ begin
       Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
     FCellGap := EnsureRange(
       Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), 0, 20);
+    FTimestampFontName := Ini.ReadString('combined', 'TimestampFont', WCX_DEF_TIMESTAMP_FONT);
+    if FTimestampFontName.Trim = '' then
+      FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
+    FTimestampFontSize := EnsureRange(Ini.ReadInteger('combined', 'TimestampFontSize',
+      WCX_DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
   finally
@@ -171,6 +184,8 @@ begin
     Ini.WriteBool('combined', 'ShowTimestamp', FShowTimestamp);
     Ini.WriteString('combined', 'Background', ColorToHex(FBackground));
     Ini.WriteInteger('combined', 'CellGap', FCellGap);
+    Ini.WriteString('combined', 'TimestampFont', FTimestampFontName);
+    Ini.WriteInteger('combined', 'TimestampFontSize', FTimestampFontSize);
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
   finally

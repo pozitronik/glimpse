@@ -49,6 +49,8 @@ type
     FShowTimecode: Boolean;
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
+    FTimestampFontName: string;
+    FTimestampFontSize: Integer;
     FBlendBmp: TBitmap;          { reusable 1x1 bitmap for alpha-blended timecode background }
     FBlendBmpColor: TColor;      { cached color to avoid redundant Pixels[] writes }
     FOnCtrlWheel: TCtrlWheelEvent;
@@ -110,6 +112,8 @@ type
     property ShowTimecode: Boolean read FShowTimecode write SetShowTimecode;
     property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
+    property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
+    property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
     property PopupMenu;
     property BaseW: Integer read GetBaseW;
@@ -155,6 +159,8 @@ begin
   FShowTimecode := True;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
+  FTimestampFontName := DEF_TIMESTAMP_FONT;
+  FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
   FZoomMode := zmFitWindow;
@@ -325,8 +331,8 @@ function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer
 var
   TW: Integer;
 begin
-  Canvas.Font.Name := FONT_NAME;
-  Canvas.Font.Size := FONT_TIMECODE;
+  Canvas.Font.Name := FTimestampFontName;
+  Canvas.Font.Size := FTimestampFontSize;
   TW := Canvas.TextWidth(FCells[AIndex].Timecode) + TIMECODE_PADDING;
   Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H,
     ACellRect.Left + TW, ACellRect.Bottom);
@@ -495,8 +501,8 @@ begin
   if not FShowTimecode then Exit;
   if FCells[AIndex].Timecode = '' then Exit;
   R := TimecodeRectFromCell(ACellRect, AIndex);
-  Canvas.Font.Name := FONT_NAME;
-  Canvas.Font.Size := FONT_TIMECODE;
+  Canvas.Font.Name := FTimestampFontName;
+  Canvas.Font.Size := FTimestampFontSize;
 
   { Alpha-blended background for readability }
   if FTimecodeBackAlpha > 0 then

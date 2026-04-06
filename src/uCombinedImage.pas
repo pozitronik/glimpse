@@ -14,10 +14,13 @@ uses
   @param AGap Pixel gap between cells
   @param ABackground Background fill color
   @param AShowTimestamp Whether to overlay timecodes on each cell
+  @param AFontName Font face for timestamp text
+  @param AFontSize Font size in points for timestamp text
   @return Combined bitmap, or nil if AFrames is empty. Caller owns result. }
 function RenderCombinedImage(const AFrames: TArray<TBitmap>;
   const AOffsets: TFrameOffsetArray; ACols, AGap: Integer;
-  ABackground: TColor; AShowTimestamp: Boolean): TBitmap;
+  ABackground: TColor; AShowTimestamp: Boolean;
+  const AFontName: string; AFontSize: Integer): TBitmap;
 
 implementation
 
@@ -26,7 +29,8 @@ uses
 
 function RenderCombinedImage(const AFrames: TArray<TBitmap>;
   const AOffsets: TFrameOffsetArray; ACols, AGap: Integer;
-  ABackground: TColor; AShowTimestamp: Boolean): TBitmap;
+  ABackground: TColor; AShowTimestamp: Boolean;
+  const AFontName: string; AFontSize: Integer): TBitmap;
 var
   Cols, Rows, CellW, CellH, I, Row, Col, X, Y: Integer;
   FrameCount: Integer;
@@ -74,8 +78,8 @@ begin
     if AShowTimestamp and (I < Length(AOffsets)) then
     begin
       Tc := FormatTimecode(AOffsets[I].TimeOffset);
-      Result.Canvas.Font.Name := 'Consolas';
-      Result.Canvas.Font.Size := 9;
+      Result.Canvas.Font.Name := AFontName;
+      Result.Canvas.Font.Size := AFontSize;
       Result.Canvas.Font.Style := [fsBold];
       TH := Result.Canvas.TextHeight(Tc);
       { Shadow for readability }

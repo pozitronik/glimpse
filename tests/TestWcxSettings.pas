@@ -36,6 +36,11 @@ type
     [Test] procedure TestCellGapClamped;
     [Test] procedure TestShowFileSizesDefault;
     [Test] procedure TestShowFileSizesRoundTrip;
+    { Timestamp font }
+    [Test] procedure TestTimestampFontDefaults;
+    [Test] procedure TestTimestampFontRoundTrip;
+    [Test] procedure TestTimestampFontSizeClamped;
+    [Test] procedure TestTimestampFontEmptyFallback;
     { Lower bound clamping }
     [Test] procedure TestFramesCountClampedLower;
     [Test] procedure TestSkipEdgesClampedLower;
@@ -544,6 +549,107 @@ begin
     Assert.AreEqual(True, S2.ShowFileSizes);
   finally
     S2.Free;
+  end;
+end;
+
+{ Timestamp font }
+
+procedure TTestWcxSettings.TestTimestampFontDefaults;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'fontdef.ini'));
+  try
+    Assert.AreEqual(WCX_DEF_TIMESTAMP_FONT, S.TimestampFontName);
+    Assert.AreEqual(WCX_DEF_TIMESTAMP_FONT_SIZE, S.TimestampFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampFontRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontrt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.TimestampFontName := 'Arial';
+    S1.TimestampFontSize := 14;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual('Arial', S2.TimestampFontName);
+    Assert.AreEqual(14, S2.TimestampFontSize);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampFontSizeClamped;
+var
+  S: TWcxSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontclamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'TimestampFontSize', 2);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_TIMESTAMP_FONT_SIZE, S.TimestampFontSize);
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'TimestampFontSize', 200);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_TIMESTAMP_FONT_SIZE, S.TimestampFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampFontEmptyFallback;
+var
+  S: TWcxSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontempty.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('combined', 'TimestampFont', '   ');
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(WCX_DEF_TIMESTAMP_FONT, S.TimestampFontName);
+  finally
+    S.Free;
   end;
 end;
 

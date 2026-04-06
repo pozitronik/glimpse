@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 624
+  ClientHeight = 653
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -307,7 +307,7 @@ object WcxSettingsForm: TWcxSettingsForm
     Left = 8
     Top = 434
     Width = 444
-    Height = 138
+    Height = 167
     Caption = ' Combined image '
     TabOrder = 2
     object LblColumns: TLabel
@@ -396,10 +396,50 @@ object WcxSettingsForm: TWcxSettingsForm
       Caption = 'Show timestamps on frames'
       TabOrder = 6
     end
+    object LblTimestampFont: TLabel
+      Left = 12
+      Top = 140
+      Width = 90
+      Height = 15
+      Caption = 'Timestamp font:'
+    end
+    object EdtTimestampFont: TEdit
+      Left = 130
+      Top = 136
+      Width = 180
+      Height = 23
+      TabOrder = 7
+    end
+    object LblTimestampFontSize: TLabel
+      Left = 320
+      Top = 140
+      Width = 25
+      Height = 15
+      Caption = 'Size:'
+    end
+    object EdtTimestampFontSize: TEdit
+      Left = 350
+      Top = 136
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 8
+    end
+    object UdTimestampFontSize: TUpDown
+      Left = 395
+      Top = 136
+      Width = 17
+      Height = 23
+      Associate = EdtTimestampFontSize
+      Min = 6
+      Max = 72
+      Thousands = False
+      TabOrder = 9
+    end
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 584
+    Top = 613
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -408,7 +448,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 584
+    Top = 613
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -418,7 +458,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 584
+    Top = 613
     Width = 75
     Height = 28
     Cancel = True
@@ -429,6 +469,6 @@ object WcxSettingsForm: TWcxSettingsForm
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]
     Left = 408
-    Top = 584
+    Top = 613
   end
 end

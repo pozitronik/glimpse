@@ -23,6 +23,10 @@ const
   { Extension list }
   DEF_EXTENSION_LIST  = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
 
+  { Timestamp font size range (shared by both plugins) }
+  MIN_TIMESTAMP_FONT_SIZE = 6;
+  MAX_TIMESTAMP_FONT_SIZE = 72;
+
   { Clamping ranges }
   MIN_FRAMES_COUNT    = 1;
   MAX_FRAMES_COUNT    = 99;

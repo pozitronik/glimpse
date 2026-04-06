@@ -57,6 +57,11 @@ type
     PnlBackground: TPanel;
     BtnBackground: TButton;
     ChkTimestamp: TCheckBox;
+    LblTimestampFont: TLabel;
+    EdtTimestampFont: TEdit;
+    LblTimestampFontSize: TLabel;
+    EdtTimestampFontSize: TEdit;
+    UdTimestampFontSize: TUpDown;
     BtnDefaults: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
@@ -118,6 +123,8 @@ begin
   UdCellGap.Position := ASettings.CellGap;
   PnlBackground.Color := ASettings.Background;
   ChkTimestamp.Checked := ASettings.ShowTimestamp;
+  EdtTimestampFont.Text := ASettings.TimestampFontName;
+  UdTimestampFontSize.Position := ASettings.TimestampFontSize;
 
   UpdateMaxWorkersControls;
   UpdateCombinedState;
@@ -151,6 +158,8 @@ begin
   ASettings.CellGap := UdCellGap.Position;
   ASettings.Background := PnlBackground.Color;
   ASettings.ShowTimestamp := ChkTimestamp.Checked;
+  ASettings.TimestampFontName := EdtTimestampFont.Text;
+  ASettings.TimestampFontSize := UdTimestampFontSize.Position;
 end;
 
 procedure TWcxSettingsForm.UpdateCombinedState;
@@ -166,6 +175,9 @@ begin
   PnlBackground.Enabled := IsCombined;
   BtnBackground.Enabled := IsCombined;
   ChkTimestamp.Enabled := IsCombined;
+  EdtTimestampFont.Enabled := IsCombined;
+  EdtTimestampFontSize.Enabled := IsCombined;
+  UdTimestampFontSize.Enabled := IsCombined;
 end;
 
 procedure TWcxSettingsForm.UpdateMaxWorkersControls;

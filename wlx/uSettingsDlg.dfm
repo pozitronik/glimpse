@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 686
+  ClientHeight = 715
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -191,7 +191,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 227
     Width = 444
-    Height = 138
+    Height = 167
     Caption = ' Appearance '
     TabOrder = 1
     object LblBackground: TLabel
@@ -288,26 +288,66 @@ object SettingsForm: TSettingsForm
       Thousands = False
       TabOrder = 5
     end
-    object ChkShowToolbar: TCheckBox
+    object LblTimestampFont: TLabel
       Left = 12
       Top = 111
+      Width = 90
+      Height = 15
+      Caption = 'Timestamp font:'
+    end
+    object EdtTimestampFont: TEdit
+      Left = 130
+      Top = 107
+      Width = 180
+      Height = 23
+      TabOrder = 6
+    end
+    object LblTimestampFontSize: TLabel
+      Left = 320
+      Top = 111
+      Width = 25
+      Height = 15
+      Caption = 'Size:'
+    end
+    object EdtTimestampFontSize: TEdit
+      Left = 350
+      Top = 107
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 7
+    end
+    object UdTimestampFontSize: TUpDown
+      Left = 395
+      Top = 107
+      Width = 17
+      Height = 23
+      Associate = EdtTimestampFontSize
+      Min = 6
+      Max = 72
+      Thousands = False
+      TabOrder = 8
+    end
+    object ChkShowToolbar: TCheckBox
+      Left = 12
+      Top = 140
       Width = 200
       Height = 17
       Caption = 'Show toolbar (F4 to toggle)'
-      TabOrder = 6
+      TabOrder = 9
     end
     object ChkShowStatusBar: TCheckBox
       Left = 230
-      Top = 111
+      Top = 140
       Width = 200
       Height = 17
       Caption = 'Show status bar (F3 to toggle)'
-      TabOrder = 7
+      TabOrder = 10
     end
   end
   object GbxSave: TGroupBox
     Left = 8
-    Top = 371
+    Top = 400
     Width = 444
     Height = 138
     Caption = ' Save '
@@ -409,7 +449,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 515
+    Top = 544
     Width = 444
     Height = 123
     Caption = ' Cache '
@@ -517,7 +557,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 650
+    Top = 679
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -526,7 +566,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 650
+    Top = 679
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -536,7 +576,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 650
+    Top = 679
     Width = 75
     Height = 28
     Cancel = True

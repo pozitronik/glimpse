@@ -123,7 +123,8 @@ begin
 
     Combined := RenderCombinedImage(Frames, H.Offsets,
       H.Settings.CombinedColumns, H.Settings.CellGap,
-      H.Settings.Background, H.Settings.ShowTimestamp);
+      H.Settings.Background, H.Settings.ShowTimestamp,
+      H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
     if Combined <> nil then
     try
       TempPath := TPath.Combine(GCachedTempDir,
@@ -410,7 +411,8 @@ begin
 
       Combined := RenderCombinedImage(Frames, H.Offsets,
         H.Settings.CombinedColumns, H.Settings.CellGap,
-        H.Settings.Background, H.Settings.ShowTimestamp);
+        H.Settings.Background, H.Settings.ShowTimestamp,
+        H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
       if Combined = nil then
         Exit(E_BAD_DATA);
       try

@@ -31,6 +31,8 @@ type
     FShowStatusBar: Boolean;
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
+    FTimestampFontName: string;
+    FTimestampFontSize: Integer;
     { [extensions] }
     FExtensionList: string;
     { [save] }
@@ -91,6 +93,8 @@ type
     property ShowStatusBar: Boolean read FShowStatusBar write FShowStatusBar;
     property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
+    property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
+    property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
 
     { [extensions] }
     property ExtensionList: string read FExtensionList write FExtensionList;
@@ -120,6 +124,8 @@ const
   DEF_SHOW_STATUS_BAR    = True;
   DEF_TC_BACK_COLOR      = TColor($002D2D2D);
   DEF_TC_BACK_ALPHA      = 180;
+  DEF_TIMESTAMP_FONT     = 'Segoe UI';
+  DEF_TIMESTAMP_FONT_SIZE = 8;
   DEF_SAVE_FOLDER        = '';
   DEF_CACHE_ENABLED      = True;
   DEF_CACHE_FOLDER       = '';
@@ -181,6 +187,8 @@ begin
   FShowStatusBar := DEF_SHOW_STATUS_BAR;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
+  FTimestampFontName := DEF_TIMESTAMP_FONT;
+  FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
   FExtensionList := DEF_EXTENSION_LIST;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
@@ -225,6 +233,11 @@ begin
     FShowStatusBar := Ini.ReadBool('view', 'ShowStatusBar', DEF_SHOW_STATUS_BAR);
     HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''),
       DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
+    FTimestampFontName := Ini.ReadString('view', 'TimestampFont', DEF_TIMESTAMP_FONT);
+    if FTimestampFontName.Trim = '' then
+      FTimestampFontName := DEF_TIMESTAMP_FONT;
+    FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize',
+      DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
@@ -273,6 +286,8 @@ begin
     Ini.WriteBool('view', 'ShowStatusBar', FShowStatusBar);
     Ini.WriteString('view', 'TimecodeBackground',
       ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
+    Ini.WriteString('view', 'TimestampFont', FTimestampFontName);
+    Ini.WriteInteger('view', 'TimestampFontSize', FTimestampFontSize);
 
     Ini.WriteString('extensions', 'List', FExtensionList);
 
