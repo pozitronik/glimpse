@@ -62,6 +62,7 @@ type
     LblTimestampFontSize: TLabel;
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
+    ChkShowBanner: TCheckBox;
     BtnDefaults: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
@@ -125,6 +126,7 @@ begin
   ChkTimestamp.Checked := ASettings.ShowTimestamp;
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
+  ChkShowBanner.Checked := ASettings.ShowBanner;
 
   UpdateMaxWorkersControls;
   UpdateCombinedState;
@@ -160,6 +162,7 @@ begin
   ASettings.ShowTimestamp := ChkTimestamp.Checked;
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
+  ASettings.ShowBanner := ChkShowBanner.Checked;
 end;
 
 procedure TWcxSettingsForm.UpdateCombinedState;
@@ -178,6 +181,7 @@ begin
   EdtTimestampFont.Enabled := IsCombined;
   EdtTimestampFontSize.Enabled := IsCombined;
   UdTimestampFontSize.Enabled := IsCombined;
+  ChkShowBanner.Enabled := IsCombined;
 end;
 
 procedure TWcxSettingsForm.UpdateMaxWorkersControls;

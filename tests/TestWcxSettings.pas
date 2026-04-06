@@ -41,6 +41,9 @@ type
     [Test] procedure TestTimestampFontRoundTrip;
     [Test] procedure TestTimestampFontSizeClamped;
     [Test] procedure TestTimestampFontEmptyFallback;
+    { Banner }
+    [Test] procedure TestShowBannerDefault;
+    [Test] procedure TestShowBannerRoundTrip;
     { Lower bound clamping }
     [Test] procedure TestFramesCountClampedLower;
     [Test] procedure TestSkipEdgesClampedLower;
@@ -650,6 +653,43 @@ begin
     Assert.AreEqual(WCX_DEF_TIMESTAMP_FONT, S.TimestampFontName);
   finally
     S.Free;
+  end;
+end;
+
+{ Banner }
+
+procedure TTestWcxSettings.TestShowBannerDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create('');
+  try
+    Assert.IsFalse(S.ShowBanner, 'ShowBanner should default to False');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestShowBannerRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'banner.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.ShowBanner := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsTrue(S2.ShowBanner, 'ShowBanner should persist as True');
+  finally
+    S2.Free;
   end;
 end;
 

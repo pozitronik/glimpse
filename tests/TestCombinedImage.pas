@@ -40,6 +40,15 @@ type
     [Test] procedure TimestampDisabled_NoTextDrawn;
     { Large grid }
     [Test] procedure NineFrames_AutoCols_Produces3x3;
+    { FormatBannerLines }
+    [Test] procedure BannerLines_FullInfo_ThreeLines;
+    [Test] procedure BannerLines_NoAudio_OmitsAudioPart;
+    [Test] procedure BannerLines_FileSizeFormatting;
+    { PrependBanner }
+    [Test] procedure PrependBanner_EmptyLines_ReturnsCopy;
+    [Test] procedure PrependBanner_AddsHeightAboveSource;
+    [Test] procedure PrependBanner_PreservesSourceContent;
+    [Test] procedure PrependBanner_NilSource_ReturnsEmptyBitmap;
   end;
 
 implementation
@@ -481,6 +490,153 @@ begin
   finally
     for I := 0 to 8 do
       Frames[I].Free;
+  end;
+end;
+
+{ FormatBannerLines }
+
+procedure TTestCombinedImage.BannerLines_FullInfo_ThreeLines;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'C:\Videos\test.mp4';
+  Info.FileSizeBytes := 1536 * 1024 * 1024; { 1.5 GB }
+  Info.DurationSec := 3723.5; { 1:02:03 }
+  Info.Width := 1920;
+  Info.Height := 1080;
+  Info.VideoCodec := 'h264';
+  Info.VideoBitrateKbps := 5000;
+  Info.Fps := 23.976;
+  Info.AudioCodec := 'aac';
+  Info.AudioSampleRate := 48000;
+  Info.AudioChannels := 'stereo';
+  Info.AudioBitrateKbps := 128;
+
+  Lines := FormatBannerLines(Info);
+  Assert.AreEqual(3, Integer(Length(Lines)));
+  Assert.IsTrue(Lines[0].Contains('test.mp4'), 'Line 1 should contain filename');
+  Assert.IsTrue(Lines[0].Contains('GB'), 'Line 1 should show file size');
+  Assert.IsTrue(Lines[1].Contains('1920x1080'), 'Line 2 should show resolution');
+  Assert.IsTrue(Pos('Duration:', Lines[1]) > 0,
+    Format('Line 2 should show duration, got: [%s]', [Lines[1]]));
+  Assert.IsTrue(Lines[1].Contains('23.976'), 'Line 2 should show fps');
+  Assert.IsTrue(Lines[2].Contains('h264'), 'Line 3 should show video codec');
+  Assert.IsTrue(Lines[2].Contains('aac'), 'Line 3 should show audio codec');
+  Assert.IsTrue(Lines[2].Contains('48000'), 'Line 3 should show sample rate');
+end;
+
+procedure TTestCombinedImage.BannerLines_NoAudio_OmitsAudioPart;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'silent.mp4';
+  Info.DurationSec := 60;
+  Info.Width := 640;
+  Info.Height := 480;
+  Info.VideoCodec := 'h264';
+  { AudioCodec empty = no audio }
+
+  Lines := FormatBannerLines(Info);
+  Assert.AreEqual(3, Integer(Length(Lines)));
+  Assert.IsTrue(Lines[2].Contains('h264'), 'Line 3 should show video codec');
+  Assert.IsFalse(Lines[2].Contains('Audio'), 'No audio section when codec is empty');
+end;
+
+procedure TTestCombinedImage.BannerLines_FileSizeFormatting;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { MB range }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'small.mp4';
+  Info.FileSizeBytes := 50 * 1024 * 1024;
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[0].Contains('MB'), 'Should format as MB');
+
+  { KB range }
+  Info.FileSizeBytes := 500 * 1024;
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[0].Contains('KB'), 'Should format as KB');
+end;
+
+{ PrependBanner }
+
+procedure TTestCombinedImage.PrependBanner_EmptyLines_ReturnsCopy;
+var
+  Src, R: TBitmap;
+  EmptyLines: TArray<string>;
+begin
+  Src := MakeFrame(100, 80, Integer(clRed));
+  try
+    SetLength(EmptyLines, 0);
+    R := PrependBanner(Src, EmptyLines, 'Consolas', 9);
+    try
+      Assert.AreEqual(100, R.Width);
+      Assert.AreEqual(80, R.Height);
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_AddsHeightAboveSource;
+var
+  Src, R: TBitmap;
+begin
+  Src := MakeFrame(200, 100, Integer(clBlue));
+  try
+    R := PrependBanner(Src, ['Line 1', 'Line 2'], 'Consolas', 9);
+    try
+      Assert.AreEqual(200, R.Width, 'Width should match source');
+      Assert.IsTrue(R.Height > 100, 'Height should exceed source by banner');
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_PreservesSourceContent;
+var
+  Src, R: TBitmap;
+  BannerH: Integer;
+begin
+  Src := MakeFrame(100, 50, Integer(clRed));
+  try
+    R := PrependBanner(Src, ['Test'], 'Consolas', 9);
+    try
+      BannerH := R.Height - 50;
+      Assert.IsTrue(BannerH > 0, 'Banner should add height');
+      { Check a pixel in the source area (below banner) }
+      Assert.AreEqual(Integer(clRed),
+        Integer(R.Canvas.Pixels[50, BannerH + 25]),
+        'Source content should be preserved below banner');
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_NilSource_ReturnsEmptyBitmap;
+var
+  R: TBitmap;
+begin
+  R := PrependBanner(nil, ['Line'], 'Consolas', 9);
+  try
+    Assert.AreEqual(0, R.Width);
+    Assert.AreEqual(0, R.Height);
+  finally
+    R.Free;
   end;
 end;
 

@@ -6,7 +6,7 @@ interface
 
 uses
   Vcl.Graphics,
-  uFrameView, uSettings, uBitmapSaver;
+  uFrameView, uSettings, uBitmapSaver, uCombinedImage;
 
 type
   { Handles save-to-file and copy-to-clipboard for video frames. }
@@ -14,7 +14,9 @@ type
   strict private
     FFrameView: TFrameView;
     FSettings: TPluginSettings;
+    FBannerInfo: TBannerInfo;
     function RenderFrameView: TBitmap;
+    function RenderWithBanner(ABmp: TBitmap): TBitmap;
     function ShowSaveDialog(const ATitle, ADefaultName: string;
       AOverwritePrompt: Boolean; out APath: string;
       out AFormat: TSaveFormat): Boolean;
@@ -33,6 +35,7 @@ type
     procedure SaveAllFrames(const AFileName: string);
     procedure CopyFrameToClipboard(AContextCellIndex: Integer);
     procedure CopyAllToClipboard;
+    procedure UpdateBannerInfo(const AInfo: TBannerInfo);
   end;
 
 implementation
@@ -72,6 +75,24 @@ begin
   Result.Canvas.Brush.Color := FFrameView.BackColor;
   Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
   FFrameView.PaintTo(Result.Canvas, 0, 0);
+end;
+
+function TFrameExporter.RenderWithBanner(ABmp: TBitmap): TBitmap;
+begin
+  if FSettings.ShowBanner then
+  begin
+    Result := PrependBanner(ABmp,
+      FormatBannerLines(FBannerInfo),
+      FSettings.TimestampFontName, FSettings.TimestampFontSize);
+    ABmp.Free;
+  end
+  else
+    Result := ABmp;
+end;
+
+procedure TFrameExporter.UpdateBannerInfo(const AInfo: TBannerInfo);
+begin
+  FBannerInfo := AInfo;
 end;
 
 function TFrameExporter.ShowSaveDialog(const ATitle, ADefaultName: string;
@@ -183,7 +204,7 @@ begin
     True, Path, Fmt) then
     Exit;
 
-  Bmp := RenderFrameView;
+  Bmp := RenderWithBanner(RenderFrameView);
   try
     uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt,
       FSettings.JpegQuality, FSettings.PngCompression);
@@ -222,7 +243,7 @@ var
   Bmp: TBitmap;
 begin
   if FFrameView.CellCount = 0 then Exit;
-  Bmp := RenderFrameView;
+  Bmp := RenderWithBanner(RenderFrameView);
   try
     Clipboard.Assign(Bmp);
   finally

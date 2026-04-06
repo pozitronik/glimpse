@@ -80,6 +80,10 @@ type
     [Test]
     procedure TestTimestampFontEmptyFallback;
     [Test]
+    procedure TestShowBannerDefault;
+    [Test]
+    procedure TestShowBannerRoundTrip;
+    [Test]
     procedure TestCacheMaxSizeBoundaries;
     [Test]
     procedure TestTryParseHexRGBValid;
@@ -931,6 +935,41 @@ begin
       'Empty/whitespace font name should fall back to default');
   finally
     S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestShowBannerDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.IsFalse(S.ShowBanner, 'ShowBanner should default to False');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestShowBannerRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'banner.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.ShowBanner := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsTrue(S2.ShowBanner, 'ShowBanner should persist as True');
+  finally
+    S2.Free;
   end;
 end;
 

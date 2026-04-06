@@ -106,12 +106,31 @@ begin
       H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
 end;
 
+{ Builds banner info from archive handle for combined image rendering }
+function BuildBannerInfo(H: TArchiveHandle): TBannerInfo;
+begin
+  Result := Default(TBannerInfo);
+  Result.FileName := H.FileName;
+  if TFile.Exists(H.FileName) then
+    Result.FileSizeBytes := TFile.GetSize(H.FileName);
+  Result.DurationSec := H.VideoInfo.Duration;
+  Result.Width := H.VideoInfo.Width;
+  Result.Height := H.VideoInfo.Height;
+  Result.VideoCodec := H.VideoInfo.VideoCodec;
+  Result.VideoBitrateKbps := H.VideoInfo.VideoBitrateKbps;
+  Result.Fps := H.VideoInfo.Fps;
+  Result.AudioCodec := H.VideoInfo.AudioCodec;
+  Result.AudioSampleRate := H.VideoInfo.AudioSampleRate;
+  Result.AudioChannels := H.VideoInfo.AudioChannels;
+  Result.AudioBitrateKbps := H.VideoInfo.AudioBitrateKbps;
+end;
+
 { Extracts all frames, renders a combined image, and saves to cache }
 procedure ExtractCombinedToCache(H: TArchiveHandle;
   const AExtractor: IFrameExtractor);
 var
   Frames: TArray<TBitmap>;
-  Combined: TBitmap;
+  Combined, WithBanner: TBitmap;
   TempPath: string;
   I: Integer;
 begin
@@ -127,6 +146,14 @@ begin
       H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
     if Combined <> nil then
     try
+      if H.Settings.ShowBanner then
+      begin
+        WithBanner := PrependBanner(Combined,
+          FormatBannerLines(BuildBannerInfo(H)),
+          H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+        Combined.Free;
+        Combined := WithBanner;
+      end;
       TempPath := TPath.Combine(GCachedTempDir,
         GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
       SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
@@ -378,7 +405,7 @@ function DoExtractCombined(H: TArchiveHandle;
 var
   Extractor: IFrameExtractor;
   Frames: TArray<TBitmap>;
-  Combined: TBitmap;
+  Combined, WithBanner: TBitmap;
   FullPath: string;
   I: Integer;
 begin
@@ -416,6 +443,14 @@ begin
       if Combined = nil then
         Exit(E_BAD_DATA);
       try
+        if H.Settings.ShowBanner then
+        begin
+          WithBanner := PrependBanner(Combined,
+            FormatBannerLines(BuildBannerInfo(H)),
+            H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+          Combined.Free;
+          Combined := WithBanner;
+        end;
         SaveBitmapToFile(Combined, FullPath, H.Settings.SaveFormat,
           H.Settings.JpegQuality, H.Settings.PngCompression);
       finally

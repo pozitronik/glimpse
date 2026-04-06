@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 715
+  ClientHeight = 738
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -349,7 +349,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 400
     Width = 444
-    Height = 138
+    Height = 161
     Caption = ' Save '
     TabOrder = 2
     object LblSaveFormat: TLabel
@@ -446,10 +446,18 @@ object SettingsForm: TSettingsForm
       TabOrder = 6
       OnClick = BtnSaveFolderClick
     end
+    object ChkShowBanner: TCheckBox
+      Left = 12
+      Top = 136
+      Width = 424
+      Height = 17
+      Caption = 'Include file info banner in combined image export'
+      TabOrder = 7
+    end
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 544
+    Top = 567
     Width = 444
     Height = 123
     Caption = ' Cache '
@@ -557,7 +565,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 679
+    Top = 702
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -566,7 +574,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 679
+    Top = 702
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -576,7 +584,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 679
+    Top = 702
     Width = 75
     Height = 28
     Cancel = True

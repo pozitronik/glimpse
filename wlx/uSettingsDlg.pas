@@ -63,6 +63,7 @@ type
     LblSaveFolder: TLabel;
     EdtSaveFolder: TEdit;
     BtnSaveFolder: TButton;
+    ChkShowBanner: TCheckBox;
     GbxCache: TGroupBox;
     ChkCacheEnabled: TCheckBox;
     LblCacheFolder: TLabel;
@@ -150,6 +151,7 @@ begin
   UdJpegQuality.Position := ASettings.JpegQuality;
   UdPngCompression.Position := ASettings.PngCompression;
   EdtSaveFolder.Text := ASettings.SaveFolder;
+  ChkShowBanner.Checked := ASettings.ShowBanner;
 
   ChkCacheEnabled.Checked := ASettings.CacheEnabled;
   EdtCacheFolder.Text := ASettings.CacheFolder;
@@ -197,6 +199,7 @@ begin
   ASettings.JpegQuality := UdJpegQuality.Position;
   ASettings.PngCompression := UdPngCompression.Position;
   ASettings.SaveFolder := EdtSaveFolder.Text;
+  ASettings.ShowBanner := ChkShowBanner.Checked;
 
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;
   ASettings.CacheFolder := EdtCacheFolder.Text;

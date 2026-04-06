@@ -40,6 +40,7 @@ type
     FJpegQuality: Integer;
     FPngCompression: Integer;
     FSaveFolder: string;
+    FShowBanner: Boolean;
     { [cache] }
     FCacheEnabled: Boolean;
     FCacheFolder: string;
@@ -104,6 +105,7 @@ type
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
+    property ShowBanner: Boolean read FShowBanner write FShowBanner;
 
     { [cache] }
     property CacheEnabled: Boolean read FCacheEnabled write FCacheEnabled;
@@ -127,6 +129,7 @@ const
   DEF_TIMESTAMP_FONT     = 'Segoe UI';
   DEF_TIMESTAMP_FONT_SIZE = 8;
   DEF_SAVE_FOLDER        = '';
+  DEF_SHOW_BANNER        = False;
   DEF_CACHE_ENABLED      = True;
   DEF_CACHE_FOLDER       = '';
   DEF_CACHE_MAX_SIZE_MB  = 500;
@@ -194,6 +197,7 @@ begin
   FJpegQuality := DEF_JPEG_QUALITY;
   FPngCompression := DEF_PNG_COMPRESSION;
   FSaveFolder := DEF_SAVE_FOLDER;
+  FShowBanner := DEF_SHOW_BANNER;
   FCacheEnabled := DEF_CACHE_ENABLED;
   FCacheFolder := DEF_CACHE_FOLDER;
   FCacheMaxSizeMB := DEF_CACHE_MAX_SIZE_MB;
@@ -249,6 +253,7 @@ begin
     FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression',
       DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
+    FShowBanner := Ini.ReadBool('save', 'ShowBanner', DEF_SHOW_BANNER);
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
@@ -295,6 +300,7 @@ begin
     Ini.WriteInteger('save', 'JpegQuality', FJpegQuality);
     Ini.WriteInteger('save', 'PngCompression', FPngCompression);
     Ini.WriteString('save', 'SaveFolder', FSaveFolder);
+    Ini.WriteBool('save', 'ShowBanner', FShowBanner);
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
     Ini.WriteString('cache', 'Folder', FCacheFolder);

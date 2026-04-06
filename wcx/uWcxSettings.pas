@@ -35,6 +35,7 @@ type
     FCellGap: Integer;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
+    FShowBanner: Boolean;
     { [output] }
     FShowFileSizes: Boolean;
   public
@@ -60,6 +61,7 @@ type
     property CellGap: Integer read FCellGap write FCellGap;
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
+    property ShowBanner: Boolean read FShowBanner write FShowBanner;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
   end;
 
@@ -72,6 +74,7 @@ const
   WCX_DEF_CELL_GAP        = 2;
   WCX_DEF_TIMESTAMP_FONT  = 'Consolas';
   WCX_DEF_TIMESTAMP_FONT_SIZE = 9;
+  WCX_DEF_SHOW_BANNER     = False;
   WCX_DEF_SHOW_FILE_SIZES = False;
 
 implementation
@@ -102,6 +105,7 @@ begin
   FCellGap := WCX_DEF_CELL_GAP;
   FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
   FTimestampFontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
+  FShowBanner := WCX_DEF_SHOW_BANNER;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
 end;
 
@@ -148,6 +152,7 @@ begin
       FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
     FTimestampFontSize := EnsureRange(Ini.ReadInteger('combined', 'TimestampFontSize',
       WCX_DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+    FShowBanner := Ini.ReadBool('combined', 'ShowBanner', WCX_DEF_SHOW_BANNER);
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
   finally
@@ -186,6 +191,7 @@ begin
     Ini.WriteInteger('combined', 'CellGap', FCellGap);
     Ini.WriteString('combined', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('combined', 'TimestampFontSize', FTimestampFontSize);
+    Ini.WriteBool('combined', 'ShowBanner', FShowBanner);
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
   finally

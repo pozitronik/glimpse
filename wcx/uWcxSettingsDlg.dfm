@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 653
+  ClientHeight = 676
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -307,7 +307,7 @@ object WcxSettingsForm: TWcxSettingsForm
     Left = 8
     Top = 434
     Width = 444
-    Height = 167
+    Height = 190
     Caption = ' Combined image '
     TabOrder = 2
     object LblColumns: TLabel
@@ -436,10 +436,18 @@ object WcxSettingsForm: TWcxSettingsForm
       Thousands = False
       TabOrder = 9
     end
+    object ChkShowBanner: TCheckBox
+      Left = 12
+      Top = 165
+      Width = 424
+      Height = 17
+      Caption = 'Include file info banner'
+      TabOrder = 10
+    end
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 613
+    Top = 636
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -448,7 +456,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 613
+    Top = 636
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -458,7 +466,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 613
+    Top = 636
     Width = 75
     Height = 28
     Cancel = True
@@ -469,6 +477,6 @@ object WcxSettingsForm: TWcxSettingsForm
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]
     Left = 408
-    Top = 613
+    Top = 636
   end
 end
