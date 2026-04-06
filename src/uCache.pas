@@ -253,7 +253,17 @@ begin
 
     { Atomic replace: MoveFileEx with MOVEFILE_REPLACE_EXISTING is atomic
       on NTFS, eliminating the window where concurrent readers see no file }
-    MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING);
+    if not MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING) then
+    begin
+      DebugLog('Cache', Format('  MoveFileEx failed err=%d', [GetLastError]));
+      try
+        if TFile.Exists(TempPath) then
+          TFile.Delete(TempPath);
+      except
+        { Best-effort temp file cleanup }
+      end;
+      Exit;
+    end;
     DebugLog('Cache', Format('  moved to %s', [FinalPath]));
   except
     on E: Exception do
