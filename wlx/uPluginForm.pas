@@ -472,9 +472,9 @@ begin
 
   FBtnHamburger := TButton.Create(FToolbar);
   FBtnHamburger.Parent := FToolbar;
-  BW := Canvas.TextWidth(#$2630) + BTN_PAD;
+  BW := Canvas.TextWidth(#$2261) + BTN_PAD;
   FBtnHamburger.SetBounds(0, CY, BW, CtrlH);
-  FBtnHamburger.Caption := #$2630;
+  FBtnHamburger.Caption := #$2261;
   FBtnHamburger.OnClick := OnHamburgerClick;
   FBtnHamburger.Visible := False;
 end;
