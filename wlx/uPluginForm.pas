@@ -39,10 +39,10 @@ type
     FHamburgerMenu: TPopupMenu;
     FProgressBar: TProgressBar;
     FProgressVisible: Boolean;
-    { Stored X positions from initial layout for collapse threshold checks }
+    { Per-element right pixel edges for collapse threshold checks }
     FFrameCountRight: Integer;
-    FModeGroupRight: Integer;
-    FActionsRight: Integer;
+    FElementRights: array of Integer;
+    FVisibleElementCount: Integer;
     { Status bar }
     FStatusBar: TStatusBar;
     { Content }
@@ -398,6 +398,9 @@ begin
   Inc(X, FRAME_COUNT_EDIT_W + FUpDown.Width + CTRL_GAP);
   FFrameCountRight := X;
 
+  { Collapsible elements: modes, timecodes, actions (left to right) }
+  SetLength(FElementRights, ELEM_TOTAL_COUNT);
+
   { Create 5 mode buttons }
   TabIdx := 1;
   for VM := Low(TViewMode) to High(TViewMode) do
@@ -426,13 +429,13 @@ begin
       FModeButtons[VM].DropDownMenu := FModePopups[VM];
     end;
 
+    FElementRights[Ord(VM)] := X + BW;
     Inc(TabIdx);
     if VM < High(TViewMode) then
       Inc(X, BW + BTN_GAP)
     else
       Inc(X, BW + CTRL_GAP);
   end;
-  FModeGroupRight := X;
 
   FBtnTimecode := TSpeedButton.Create(FToolbar);
   FBtnTimecode.Parent := FToolbar;
@@ -442,6 +445,7 @@ begin
   FBtnTimecode.GroupIndex := 1;
   FBtnTimecode.AllowAllUp := True;
   FBtnTimecode.OnClick := OnTimecodeButtonClick;
+  FElementRights[ELEM_TIMECODE_INDEX] := X + BW;
   Inc(X, BW + CTRL_GAP);
 
   { Action buttons matching context menu (except selection-dependent commands) }
@@ -456,12 +460,11 @@ begin
     Btn.Tag := TB_ACTIONS[I].Tag;
     Btn.Enabled := False;
     Btn.OnClick := OnToolbarButtonClick;
+    FElementRights[ELEM_ACTION_FIRST + I] := X + BW;
     Inc(X, BW + BTN_GAP);
     SetLength(FToolbarButtons, Length(FToolbarButtons) + 1);
     FToolbarButtons[High(FToolbarButtons)] := Btn;
   end;
-  Inc(X, CTRL_GAP - BTN_GAP);
-  FActionsRight := X;
 
   { Hamburger overflow button: hidden until toolbar is too narrow }
   FHamburgerMenu := TPopupMenu.Create(Self);
@@ -486,20 +489,21 @@ var
 begin
   if not Assigned(FBtnHamburger) then Exit;
 
-  Layout := ComputeToolbarLayout(FToolbar.ClientWidth, FFrameCountRight,
-    FModeGroupRight, FActionsRight, FBtnHamburger.Width, CTRL_GAP);
+  Layout := ComputeToolbarLayout(FToolbar.ClientWidth, FElementRights,
+    FFrameCountRight, FBtnHamburger.Width, CTRL_GAP);
+  FVisibleElementCount := Layout.VisibleCount;
 
-  { Show/hide mode buttons }
+  { Per-button visibility based on element index }
   for VM := Low(TViewMode) to High(TViewMode) do
-    FModeButtons[VM].Visible := Layout.CollapseState <> tcsAllCollapsed;
+    FModeButtons[VM].Visible := Ord(VM) < Layout.VisibleCount;
 
-  { Show/hide timecodes + action buttons }
-  FBtnTimecode.Visible := Layout.CollapseState = tcsExpanded;
+  FBtnTimecode.Visible := ELEM_TIMECODE_INDEX < Layout.VisibleCount;
+
   for I := 0 to High(FToolbarButtons) do
-    FToolbarButtons[I].Visible := Layout.CollapseState = tcsExpanded;
+    FToolbarButtons[I].Visible := (ELEM_ACTION_FIRST + I) < Layout.VisibleCount;
 
   { Hamburger button }
-  FBtnHamburger.Visible := Layout.CollapseState <> tcsExpanded;
+  FBtnHamburger.Visible := Layout.HamburgerVisible;
   FBtnHamburger.Left := Layout.HamburgerLeft;
 end;
 
@@ -526,10 +530,7 @@ var
   State: THamburgerMenuState;
   VM: TViewMode;
 begin
-  if not FModeButtons[vmSmartGrid].Visible then
-    State.CollapseState := tcsAllCollapsed
-  else
-    State.CollapseState := tcsActionsCollapsed;
+  State.VisibleCount := FVisibleElementCount;
   State.ActiveMode := FFrameView.ViewMode;
   State.ShowTimecode := FFrameView.ShowTimecode;
   State.HasFrames := FExtractCtrl.FramesLoaded > 0;
