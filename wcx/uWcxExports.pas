@@ -134,7 +134,6 @@ var
   WithBanner: TBitmap;
   I: Integer;
 begin
-  Result := nil;
   SetLength(Frames, Length(H.Offsets));
   try
     for I := 0 to Length(H.Offsets) - 1 do
