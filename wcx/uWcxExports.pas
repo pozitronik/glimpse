@@ -125,46 +125,58 @@ begin
   Result.AudioBitrateKbps := H.VideoInfo.AudioBitrateKbps;
 end;
 
-{ Extracts all frames, renders a combined image, and saves to cache }
-procedure ExtractCombinedToCache(H: TArchiveHandle;
-  const AExtractor: IFrameExtractor);
+{ Extracts all frames, renders a combined grid with optional banner.
+  Caller owns the returned bitmap (nil on failure). }
+function RenderCombinedBitmap(H: TArchiveHandle;
+  const AExtractor: IFrameExtractor): TBitmap;
 var
   Frames: TArray<TBitmap>;
-  Combined, WithBanner: TBitmap;
-  TempPath: string;
+  WithBanner: TBitmap;
   I: Integer;
 begin
+  Result := nil;
   SetLength(Frames, Length(H.Offsets));
   try
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName,
         H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
 
-    Combined := RenderCombinedImage(Frames, H.Offsets,
+    Result := RenderCombinedImage(Frames, H.Offsets,
       H.Settings.CombinedColumns, H.Settings.CellGap,
       H.Settings.Background, H.Settings.ShowTimestamp,
       H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
-    if Combined <> nil then
-    try
-      if H.Settings.ShowBanner then
-      begin
-        WithBanner := PrependBanner(Combined,
-          FormatBannerLines(BuildBannerInfo(H)));
-        Combined.Free;
-        Combined := WithBanner;
-      end;
-      TempPath := TPath.Combine(GCachedTempDir,
-        GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
-      SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
-        H.Settings.JpegQuality, H.Settings.PngCompression);
-      GCachedTempPaths[0] := TempPath;
-      GCachedEntrySizes[0] := TFile.GetSize(TempPath);
-    finally
-      Combined.Free;
+
+    if (Result <> nil) and H.Settings.ShowBanner then
+    begin
+      WithBanner := PrependBanner(Result,
+        FormatBannerLines(BuildBannerInfo(H)));
+      Result.Free;
+      Result := WithBanner;
     end;
   finally
     for I := 0 to Length(Frames) - 1 do
       Frames[I].Free;
+  end;
+end;
+
+{ Extracts all frames, renders a combined image, and saves to cache }
+procedure ExtractCombinedToCache(H: TArchiveHandle;
+  const AExtractor: IFrameExtractor);
+var
+  Combined: TBitmap;
+  TempPath: string;
+begin
+  Combined := RenderCombinedBitmap(H, AExtractor);
+  if Combined = nil then Exit;
+  try
+    TempPath := TPath.Combine(GCachedTempDir,
+      GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
+    SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
+      H.Settings.JpegQuality, H.Settings.PngCompression);
+    GCachedTempPaths[0] := TempPath;
+    GCachedEntrySizes[0] := TFile.GetSize(TempPath);
+  finally
+    Combined.Free;
   end;
 end;
 
@@ -376,9 +388,11 @@ begin
   if (H.TempPaths <> nil) and (H.CurrentIndex < Length(H.TempPaths))
     and (H.TempPaths[H.CurrentIndex] <> '')
     and TFile.Exists(H.TempPaths[H.CurrentIndex]) then
-  begin
+  try
     TFile.Copy(H.TempPaths[H.CurrentIndex], FullPath, True);
     Exit(E_SUCCESS);
+  except
+    Exit(E_EWRITE);
   end;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
@@ -403,10 +417,8 @@ function DoExtractCombined(H: TArchiveHandle;
   const ADestPath, ADestName: string): Integer;
 var
   Extractor: IFrameExtractor;
-  Frames: TArray<TBitmap>;
-  Combined, WithBanner: TBitmap;
+  Combined: TBitmap;
   FullPath: string;
-  I: Integer;
 begin
   if ADestName <> '' then
     FullPath := ADestName
@@ -422,45 +434,27 @@ begin
   { Use pre-extracted file when available }
   if (H.TempPaths <> nil) and (Length(H.TempPaths) > 0)
     and (H.TempPaths[0] <> '') and TFile.Exists(H.TempPaths[0]) then
-  begin
+  try
     TFile.Copy(H.TempPaths[0], FullPath, True);
     Exit(E_SUCCESS);
+  except
+    Exit(E_EWRITE);
   end;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-  SetLength(Frames, Length(H.Offsets));
   try
+    Combined := RenderCombinedBitmap(H, Extractor);
+    if Combined = nil then
+      Exit(E_BAD_DATA);
     try
-      for I := 0 to Length(H.Offsets) - 1 do
-        Frames[I] := Extractor.ExtractFrame(H.FileName,
-          H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe);
-
-      Combined := RenderCombinedImage(Frames, H.Offsets,
-        H.Settings.CombinedColumns, H.Settings.CellGap,
-        H.Settings.Background, H.Settings.ShowTimestamp,
-        H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
-      if Combined = nil then
-        Exit(E_BAD_DATA);
-      try
-        if H.Settings.ShowBanner then
-        begin
-          WithBanner := PrependBanner(Combined,
-            FormatBannerLines(BuildBannerInfo(H)));
-          Combined.Free;
-          Combined := WithBanner;
-        end;
-        SaveBitmapToFile(Combined, FullPath, H.Settings.SaveFormat,
-          H.Settings.JpegQuality, H.Settings.PngCompression);
-      finally
-        Combined.Free;
-      end;
-      Result := E_SUCCESS;
-    except
-      Result := E_EWRITE;
+      SaveBitmapToFile(Combined, FullPath, H.Settings.SaveFormat,
+        H.Settings.JpegQuality, H.Settings.PngCompression);
+    finally
+      Combined.Free;
     end;
-  finally
-    for I := 0 to Length(Frames) - 1 do
-      Frames[I].Free;
+    Result := E_SUCCESS;
+  except
+    Result := E_EWRITE;
   end;
 end;
 
