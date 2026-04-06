@@ -68,13 +68,6 @@ object WcxSettingsForm: TWcxSettingsForm
       Font.Style = []
       ParentFont = False
     end
-    object LblExtensions: TLabel
-      Left = 12
-      Top = 169
-      Width = 63
-      Height = 15
-      Caption = 'Extensions:'
-    end
     object LblFFmpegPath: TLabel
       Left = 12
       Top = 198
@@ -186,13 +179,6 @@ object WcxSettingsForm: TWcxSettingsForm
       Height = 17
       Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
       TabOrder = 9
-    end
-    object EdtExtensions: TEdit
-      Left = 130
-      Top = 165
-      Width = 306
-      Height = 23
-      TabOrder = 10
     end
     object EdtFFmpegPath: TEdit
       Left = 130

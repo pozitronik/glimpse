@@ -30,8 +30,6 @@ type
     EdtMaxThreads: TEdit;
     UdMaxThreads: TUpDown;
     ChkUseBmpPipe: TCheckBox;
-    LblExtensions: TLabel;
-    EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
@@ -104,7 +102,6 @@ begin
   else
     UdMaxThreads.Position := 0;
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
-  EdtExtensions.Text := ASettings.ExtensionList;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
   if ASettings.OutputMode = womCombined then
@@ -138,7 +135,6 @@ begin
     ASettings.MaxWorkers := UdMaxWorkers.Position;
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
-  ASettings.ExtensionList := EdtExtensions.Text;
   ASettings.FFmpegExePath := EdtFFmpegPath.Text;
 
   if CbxOutputMode.ItemIndex = 1 then

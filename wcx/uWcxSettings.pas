@@ -33,8 +33,6 @@ type
     FShowTimestamp: Boolean;
     FBackground: TColor;
     FCellGap: Integer;
-    { [extensions] }
-    FExtensionList: string;
     { [output] }
     FShowFileSizes: Boolean;
   public
@@ -58,7 +56,6 @@ type
     property ShowTimestamp: Boolean read FShowTimestamp write FShowTimestamp;
     property Background: TColor read FBackground write FBackground;
     property CellGap: Integer read FCellGap write FCellGap;
-    property ExtensionList: string read FExtensionList write FExtensionList;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
   end;
 
@@ -97,7 +94,6 @@ begin
   FShowTimestamp := WCX_DEF_SHOW_TIMESTAMP;
   FBackground := WCX_DEF_BACKGROUND;
   FCellGap := WCX_DEF_CELL_GAP;
-  FExtensionList := DEF_EXTENSION_LIST;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
 end;
 
@@ -140,10 +136,6 @@ begin
     FCellGap := EnsureRange(
       Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), 0, 20);
 
-    FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
-    if FExtensionList.Trim = '' then
-      FExtensionList := DEF_EXTENSION_LIST;
-
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
   finally
     Ini.Free;
@@ -179,8 +171,6 @@ begin
     Ini.WriteBool('combined', 'ShowTimestamp', FShowTimestamp);
     Ini.WriteString('combined', 'Background', ColorToHex(FBackground));
     Ini.WriteInteger('combined', 'CellGap', FCellGap);
-
-    Ini.WriteString('extensions', 'List', FExtensionList);
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
   finally

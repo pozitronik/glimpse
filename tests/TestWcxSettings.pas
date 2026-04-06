@@ -20,7 +20,6 @@ type
     [Test] procedure TestSkipEdgesClamped;
     [Test] procedure TestJpegQualityClamped;
     [Test] procedure TestPngCompressionClamped;
-    [Test] procedure TestEmptyExtensionListGetsDefault;
     [Test] procedure TestSaveFormatJPEG;
     [Test] procedure TestSaveFormatPNG;
     [Test] procedure TestMaxWorkersClamped;
@@ -96,7 +95,6 @@ begin
     Assert.IsTrue(S.SaveFormat = sfPNG);
     Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
     Assert.AreEqual(DEF_PNG_COMPRESSION, S.PngCompression);
-    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
   finally
     S.Free;
   end;
@@ -133,7 +131,6 @@ begin
     S1.JpegQuality := 75;
     S1.PngCompression := 3;
     S1.FFmpegExePath := 'C:\tools\ffmpeg.exe';
-    S1.ExtensionList := 'mp4,mkv';
     S1.Save;
   finally
     S1.Free;
@@ -151,7 +148,6 @@ begin
     Assert.AreEqual(75, S2.JpegQuality);
     Assert.AreEqual(3, S2.PngCompression);
     Assert.AreEqual('C:\tools\ffmpeg.exe', S2.FFmpegExePath);
-    Assert.AreEqual('mp4,mkv', S2.ExtensionList);
   finally
     S2.Free;
   end;
@@ -244,29 +240,6 @@ begin
   try
     S.Load;
     Assert.AreEqual(9, S.PngCompression);
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TTestWcxSettings.TestEmptyExtensionListGetsDefault;
-var
-  S: TWcxSettings;
-  IniPath: string;
-  Ini: TIniFile;
-begin
-  IniPath := TPath.Combine(FTempDir, 'ext.ini');
-  Ini := TIniFile.Create(IniPath);
-  try
-    Ini.WriteString('extensions', 'List', '   ');
-  finally
-    Ini.Free;
-  end;
-
-  S := TWcxSettings.Create(IniPath);
-  try
-    S.Load;
-    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
   finally
     S.Free;
   end;
@@ -897,7 +870,6 @@ begin
     Assert.AreEqual(WCX_DEF_COMBINED_COLS, S.CombinedColumns);
     Assert.AreEqual(WCX_DEF_SHOW_TIMESTAMP, S.ShowTimestamp);
     Assert.AreEqual(WCX_DEF_CELL_GAP, S.CellGap);
-    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
     Assert.AreEqual(WCX_DEF_SHOW_FILE_SIZES, S.ShowFileSizes);
     Assert.IsTrue(S.SaveFormat = DEF_SAVE_FORMAT);
     Assert.IsTrue(S.OutputMode = WCX_DEF_OUTPUT_MODE);
