@@ -52,6 +52,12 @@ type
     [Test] procedure PrependBanner_NarrowImage_SmallBanner;
     [Test] procedure PrependBanner_WideImage_LargerBanner;
     [Test] procedure PrependBanner_LongLine_Truncated;
+    { FormatBannerLines edge cases }
+    [Test] procedure BannerLines_AllEmpty_StillThreeLines;
+    [Test] procedure BannerLines_ZeroDuration_OmitsDuration;
+    [Test] procedure BannerLines_ByteRangeFileSize;
+    [Test] procedure BannerLines_ShortDuration_NoHours;
+    [Test] procedure BannerLines_AudioBitrate_Shown;
   end;
 
 implementation
@@ -708,6 +714,84 @@ begin
   finally
     Src.Free;
   end;
+end;
+
+{ FormatBannerLines edge cases }
+
+procedure TTestCombinedImage.BannerLines_AllEmpty_StillThreeLines;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { Default-initialized record with no meaningful data }
+  Info := Default(TBannerInfo);
+  Lines := FormatBannerLines(Info);
+  Assert.AreEqual(3, Integer(Length(Lines)),
+    'Must always return exactly 3 lines');
+  Assert.IsTrue(Lines[0].Contains('File:'),
+    'Line 1 should still have the File: prefix');
+end;
+
+procedure TTestCombinedImage.BannerLines_ZeroDuration_OmitsDuration;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.DurationSec := 0;
+  Info.Width := 640;
+  Info.Height := 480;
+  Lines := FormatBannerLines(Info);
+  Assert.IsFalse(Lines[1].Contains('Duration:'),
+    'Zero duration should omit the Duration field');
+  Assert.IsTrue(Lines[1].Contains('640x480'),
+    'Resolution should still appear');
+end;
+
+procedure TTestCombinedImage.BannerLines_ByteRangeFileSize;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { Files under 1 KB should format as bytes }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'tiny.mp4';
+  Info.FileSizeBytes := 512;
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[0].Contains('512 B'),
+    'Sub-KB file size should format as bytes');
+end;
+
+procedure TTestCombinedImage.BannerLines_ShortDuration_NoHours;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { Duration under 1 hour should not include an hours prefix }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'clip.mp4';
+  Info.DurationSec := 125; { 2:05 }
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[1].Contains('Duration:'),
+    Format('Should show duration, got: [%s]', [Lines[1]]));
+  { Should not have 3-part H:MM:SS format }
+  Assert.IsFalse(Lines[1].Contains('0:02'),
+    'Should not have hour prefix for short clips');
+end;
+
+procedure TTestCombinedImage.BannerLines_AudioBitrate_Shown;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.AudioCodec := 'aac';
+  Info.AudioBitrateKbps := 320;
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[2].Contains('320 kbps'),
+    'Audio bitrate should appear in codec line');
 end;
 
 end.

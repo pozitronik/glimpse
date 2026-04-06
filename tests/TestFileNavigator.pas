@@ -28,6 +28,8 @@ type
     [Test] procedure TestCurrentFileNotInList;
     [Test] procedure TestLargeNegativeDelta;
     [Test] procedure TestLargePositiveDelta;
+    [Test] procedure TestZeroDelta_ReturnsSameFile;
+    [Test] procedure TestSpacesInExtensionList;
   end;
 
 implementation
@@ -182,6 +184,23 @@ begin
   { delta=100 from a (idx 0): 100 mod 3 = 1 -> b }
   Assert.AreEqual(FTempDir + 'b.mp4',
     FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', 100));
+end;
+
+procedure TTestFileNavigator.TestZeroDelta_ReturnsSameFile;
+begin
+  { ADelta=0 should return the same file (no navigation).
+    The caller filters this with SameText check. }
+  CreateFiles(['a.mp4', 'b.mp4']);
+  Assert.AreEqual(FTempDir + 'a.mp4',
+    FindAdjacentFile(FTempDir + 'a.mp4', 'mp4', 0));
+end;
+
+procedure TTestFileNavigator.TestSpacesInExtensionList;
+begin
+  { Extension list with spaces around commas should still work }
+  CreateFiles(['a.mp4', 'b.mkv', 'c.avi']);
+  Assert.AreEqual(FTempDir + 'b.mkv',
+    FindAdjacentFile(FTempDir + 'a.mp4', ' mp4 , mkv , avi ', 1));
 end;
 
 end.

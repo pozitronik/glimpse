@@ -14,6 +14,7 @@ uses
   uFrameOffsets in '..\src\uFrameOffsets.pas',
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',
   uFFmpegExe in '..\src\uFFmpegExe.pas',
+  TestFFmpegLocator in 'TestFFmpegLocator.pas',
   TestSettings in 'TestSettings.pas',
   TestFrameOffsets in 'TestFrameOffsets.pas',
   TestFFmpegExe in 'TestFFmpegExe.pas',
