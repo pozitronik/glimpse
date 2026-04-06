@@ -194,6 +194,38 @@ begin
 end;
 
 const
+  { Deferred self-subclass: installed after TC subclasses us so we fire first }
+  FORM_SUBCLASS_ID = 2;
+  WM_DEFERRED_INIT = WM_USER + 102; { Triggers self-subclass installation }
+  WM_PLUGIN_FKEY   = WM_USER + 103; { Re-posted F-key intercepted from TC }
+
+{ Self-subclass callback on the plugin form window.
+  Installed AFTER TC subclasses us (via deferred PostMessage), so it fires
+  first in the chain. Intercepts bare F2/F3 before TC can consume them. }
+function FormSubclassProc(hWnd: HWND; uMsg: UINT; wParam: WPARAM;
+  lParam: LPARAM; uIdSubclass: UINT_PTR;
+  dwRefData: DWORD_PTR): LRESULT; stdcall;
+begin
+  case uMsg of
+    WM_KEYDOWN:
+      if ((wParam = VK_F2) or (wParam = VK_F3)) and
+         (GetKeyState(VK_CONTROL) >= 0) and
+         (GetKeyState(VK_SHIFT) >= 0) and
+         (GetKeyState(VK_MENU) >= 0) then
+      begin
+        { Bare F2/F3: re-post as custom message so our WndProc handles it
+          instead of TC treating F2 as refresh and F3 as find. }
+        PostMessage(hWnd, WM_PLUGIN_FKEY, wParam, 0);
+        Result := 0;
+        Exit;
+      end;
+    WM_NCDESTROY:
+      RemoveWindowSubclass(hWnd, @FormSubclassProc, FORM_SUBCLASS_ID);
+  end;
+  Result := DefSubclassProc(hWnd, uMsg, wParam, lParam);
+end;
+
+const
   CLR_ERROR_LABEL      = TColor($00888888); { error message label }
   FONT_ERROR_LABEL  = 11;
 
@@ -266,6 +298,11 @@ begin
   { Focus the form handle so TC recognises N/P as Lister shortcuts.
     Rapid N/P may lose focus due to TC briefly focusing its file list. }
   Winapi.Windows.SetFocus(Handle);
+  { Install self-subclass AFTER TC subclasses us (which happens when ListLoad
+    returns). PostMessage defers execution until the message loop resumes,
+    guaranteeing TC's subclass is already in place. Our subclass then fires
+    first and can intercept keys TC would otherwise consume (F2/F3). }
+  PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
 
   {$IFDEF DEBUG}
   uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
@@ -295,6 +332,8 @@ end;
 
 destructor TPluginForm.Destroy;
 begin
+  if HandleAllocated then
+    RemoveWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID);
   if FParentWnd <> 0 then
     RemoveWindowSubclass(FParentWnd, @ParentSubclassProc, 1);
   { FAnimTimer may not exist yet if destructor runs during CreateForPlugin
@@ -1462,7 +1501,22 @@ begin
 end;
 
 procedure TPluginForm.WndProc(var Message: TMessage);
+var
+  Key: Word;
 begin
+  case Message.Msg of
+    WM_DEFERRED_INIT:
+      begin
+        SetWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID, DWORD_PTR(Self));
+        Exit;
+      end;
+    WM_PLUGIN_FKEY:
+      begin
+        Key := Message.WParam;
+        OnFormKeyDown(Self, Key, []);
+        Exit;
+      end;
+  end;
   inherited;
   if csDestroying in ComponentState then
     Exit;
