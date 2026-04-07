@@ -56,6 +56,50 @@ Provides an instant visual summary of a video's content without opening a media 
 
 All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu.
 
+#### General
+
+| Setting                      | Default     | Description                                                                                                              |
+|------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------|
+| Skip edges                   | 2%          | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                              |
+| Max workers                  | 1           | Number of parallel ffmpeg processes for frame extraction. More workers = faster loading, higher CPU usage                |
+| One per frame                | Off         | Launches a separate worker for each frame instead of using a fixed worker count                                          |
+| Limit workers count          | No limit    | When "One per frame" is active, caps the total number of simultaneous workers. 0 = auto (matches CPU core count)         |
+| Use BMP pipe                 | On          | Transfers frames via BMP pipe instead of temporary PNG files. Faster but uses more memory                                |
+| Scale frames to display size | Off         | Tells ffmpeg to downscale frames to match the current display size. Significantly faster for high-resolution video (4K+) |
+| Min side (px)                | 120         | Minimum allowed frame dimension (bigger side) when scaled extraction is active. Prevents frames from becoming too small  |
+| Max side (px)                | 1920        | Maximum allowed frame dimension (bigger side) when scaled extraction is active. Caps upscaling for low-res video         |
+| Extensions                   | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                     |
+| FFmpeg path                  | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                           |
+
+#### Appearance
+
+| Setting          | Default       | Description                                                                    |
+|------------------|---------------|--------------------------------------------------------------------------------|
+| Background       | Dark grey     | Background color behind the frame grid                                         |
+| Timecode bg      | Dark grey     | Background color of the timecode overlay on each frame                         |
+| Timecode opacity | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque) |
+| Timestamp font   | Segoe UI, 8pt | Font face and size for timecode labels on frames                               |
+| Show toolbar     | On            | Display the toolbar at the top of the lister window (F4 to toggle)             |
+| Show status bar  | On            | Display the status bar at the bottom of the lister window (F3 to toggle)       |
+
+#### Save
+
+| Setting                  | Default | Description                                                                            |
+|--------------------------|---------|----------------------------------------------------------------------------------------|
+| Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                            |
+| JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)      |
+| PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)             |
+| Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                 |
+| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to combined image exports |
+
+#### Cache
+
+| Setting           | Default              | Description                                                                                     |
+|-------------------|----------------------|-------------------------------------------------------------------------------------------------|
+| Enable disk cache | On                   | Caches extracted frames on disk so re-opening the same video loads instantly                    |
+| Folder            | %TEMP%\Glimpse\cache | Directory for cached frame files. Supports environment variables                                |
+| Max size          | 500 MB               | Maximum total size of the cache directory. Oldest entries are evicted when the limit is reached |
+
 ## WCX Plugin (Packer)
 
 Presents a video file as a virtual archive containing frame images. Opening a video in TC shows files like `video_frame_001_00m05s.png` that can be copied, viewed, or batch-extracted using standard TC operations.
@@ -68,18 +112,42 @@ Presents a video file as a virtual archive containing frame images. Opening a vi
 
 ### Configuration
 
-Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin.
+Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing.
 
-Settings include:
-- Frame count, skip edges percentage
-- Parallel extraction: max workers, thread limit, BMP pipe mode
-- Supported file extensions
-- FFmpeg path (auto-detected if not specified)
-- Output mode: separate frame files or a single combined grid image
-- Image format (PNG/JPEG), quality and compression
-- Combined image options: column count, cell gap, background color, timestamp overlay
+#### General
 
-After changing settings, re-enter the video file to see the updated listing.
+| Setting             | Default     | Description                                                                   |
+|---------------------|-------------|-------------------------------------------------------------------------------|
+| Frame count         | 4           | Number of frames to extract from the video (1-99)                             |
+| Skip edges          | 2%          | Percentage of video duration to skip at the beginning and end                 |
+| Max workers         | 1           | Number of parallel ffmpeg processes for frame extraction                      |
+| One per frame       | Off         | Launches a separate worker for each frame                                     |
+| Limit workers count | No limit    | When "One per frame" is active, caps the total number of simultaneous workers |
+| Use BMP pipe        | On          | Transfers frames via BMP pipe instead of temporary files                      |
+| FFmpeg path         | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect                     |
+
+#### Output
+
+| Setting         | Default         | Description                                                                                                  |
+|-----------------|-----------------|--------------------------------------------------------------------------------------------------------------|
+| Output mode     | Separate frames | `Separate frames` shows individual image files in the archive; `Combined image` produces a single grid image |
+| Image format    | PNG             | Image format for extracted frames (PNG or JPEG)                                                              |
+| JPEG quality    | 90              | Compression quality for JPEG output (1-100)                                                                  |
+| PNG compression | 6               | Compression level for PNG output (0-9)                                                                       |
+| Show file sizes | Off             | Displays actual file sizes in the archive listing. Requires extracting all frames when entering the archive  |
+
+#### Combined image
+
+These settings only apply when output mode is set to "Combined image":
+
+| Setting                  | Default       | Description                                                              |
+|--------------------------|---------------|--------------------------------------------------------------------------|
+| Columns                  | 0 (auto)      | Number of columns in the grid. 0 = automatic layout based on frame count |
+| Cell gap (px)            | 2             | Spacing in pixels between frames in the grid                             |
+| Background               | Black         | Background color visible in cell gaps and margins                        |
+| Show timestamps          | On            | Overlays timecode labels on each frame                                   |
+| Timestamp font           | Segoe UI, 8pt | Font face and size for timecode labels                                   |
+| Include file info banner | Off           | Adds a header with video file name, resolution, and duration             |
 
 ## Installation
 
