@@ -58,6 +58,14 @@ type
     [Test] procedure BannerLines_ByteRangeFileSize;
     [Test] procedure BannerLines_ShortDuration_NoHours;
     [Test] procedure BannerLines_AudioBitrate_Shown;
+    [Test] procedure BannerLines_VideoBitrate_Shown;
+    [Test] procedure BannerLines_NegativeDuration_OmitsDuration;
+    [Test] procedure BannerLines_ExactHourDuration;
+    [Test] procedure BannerLines_FpsOnly_NoSeparatorPrefix;
+    [Test] procedure BannerLines_AudioOnly_NoVideoCodec;
+    [Test] procedure BannerLines_AudioChannelsShown;
+    [Test] procedure BannerLines_NoFileSize_OmitsSize;
+    [Test] procedure BannerLines_GBFileSize;
   end;
 
 implementation
@@ -791,6 +799,128 @@ begin
   Lines := FormatBannerLines(Info);
   Assert.IsTrue(Lines[2].Contains('320 kbps'),
     'Audio bitrate should appear in codec line');
+end;
+
+procedure TTestCombinedImage.BannerLines_VideoBitrate_Shown;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.VideoCodec := 'h264';
+  Info.VideoBitrateKbps := 5000;
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[2].Contains('5000 kbps'),
+    Format('Video bitrate should appear, got: [%s]', [Lines[2]]));
+end;
+
+procedure TTestCombinedImage.BannerLines_NegativeDuration_OmitsDuration;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.DurationSec := -10.0;
+  Info.Width := 320;
+  Info.Height := 240;
+  Lines := FormatBannerLines(Info);
+  Assert.IsFalse(Lines[1].Contains('Duration:'),
+    'Negative duration should omit the Duration field');
+  Assert.IsTrue(Lines[1].Contains('320x240'),
+    'Resolution should still appear with negative duration');
+end;
+
+procedure TTestCombinedImage.BannerLines_ExactHourDuration;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'long.mp4';
+  Info.DurationSec := 3600; { exactly 1 hour }
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[1].Contains('1:00:00'),
+    Format('1 hour should show 1:00:00, got: [%s]', [Lines[1]]));
+end;
+
+procedure TTestCombinedImage.BannerLines_FpsOnly_NoSeparatorPrefix;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { FPS only, no duration, no resolution: line should start with fps, no leading separator }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.Fps := 29.970;
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[1].Contains('29.970 fps'),
+    Format('FPS should appear, got: [%s]', [Lines[1]]));
+  Assert.IsFalse(Lines[1].StartsWith('  |'),
+    'Line should not start with a separator when FPS is the only field');
+end;
+
+procedure TTestCombinedImage.BannerLines_AudioOnly_NoVideoCodec;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { Audio codec present, video codec empty: no pipe separator, no "Video:" prefix }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'audio_only.mp4';
+  Info.AudioCodec := 'mp3';
+  Info.AudioSampleRate := 44100;
+  Lines := FormatBannerLines(Info);
+  Assert.IsFalse(Lines[2].Contains('Video:'),
+    'No Video: prefix when video codec is empty');
+  Assert.IsTrue(Lines[2].Contains('Audio: mp3'),
+    Format('Audio codec should appear, got: [%s]', [Lines[2]]));
+  Assert.IsTrue(Lines[2].Contains('44100 Hz'),
+    'Audio sample rate should appear');
+  Assert.IsFalse(Lines[2].Contains('|'),
+    'No pipe separator when only audio is present');
+end;
+
+procedure TTestCombinedImage.BannerLines_AudioChannelsShown;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.AudioCodec := 'aac';
+  Info.AudioChannels := '5.1(side)';
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[2].Contains('5.1(side)'),
+    Format('Audio channels should appear, got: [%s]', [Lines[2]]));
+end;
+
+procedure TTestCombinedImage.BannerLines_NoFileSize_OmitsSize;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { FileSizeBytes = 0: no size section }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'test.mp4';
+  Info.FileSizeBytes := 0;
+  Lines := FormatBannerLines(Info);
+  Assert.IsFalse(Lines[0].Contains('Size:'),
+    'Zero file size should omit Size field');
+end;
+
+procedure TTestCombinedImage.BannerLines_GBFileSize;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  Info := Default(TBannerInfo);
+  Info.FileName := 'huge.mp4';
+  Info.FileSizeBytes := Int64(3) * 1024 * 1024 * 1024; { 3 GB }
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[0].Contains('3.00 GB'),
+    Format('3 GB file should show GB, got: [%s]', [Lines[0]]));
 end;
 
 end.
