@@ -115,25 +115,6 @@ begin
       H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
 end;
 
-{ Builds banner info from archive handle for combined image rendering }
-function BuildBannerInfo(H: TArchiveHandle): TBannerInfo;
-begin
-  Result := Default(TBannerInfo);
-  Result.FileName := H.FileName;
-  if TFile.Exists(H.FileName) then
-    Result.FileSizeBytes := TFile.GetSize(H.FileName);
-  Result.DurationSec := H.VideoInfo.Duration;
-  Result.Width := H.VideoInfo.Width;
-  Result.Height := H.VideoInfo.Height;
-  Result.VideoCodec := H.VideoInfo.VideoCodec;
-  Result.VideoBitrateKbps := H.VideoInfo.VideoBitrateKbps;
-  Result.Fps := H.VideoInfo.Fps;
-  Result.AudioCodec := H.VideoInfo.AudioCodec;
-  Result.AudioSampleRate := H.VideoInfo.AudioSampleRate;
-  Result.AudioChannels := H.VideoInfo.AudioChannels;
-  Result.AudioBitrateKbps := H.VideoInfo.AudioBitrateKbps;
-end;
-
 { Extracts all frames, renders a combined grid with optional banner.
   Caller owns the returned bitmap (nil on failure). }
 function RenderCombinedBitmap(H: TArchiveHandle;
@@ -157,7 +138,7 @@ begin
     if (Result <> nil) and H.Settings.ShowBanner then
     begin
       WithBanner := PrependBanner(Result,
-        FormatBannerLines(BuildBannerInfo(H)));
+        FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)));
       Result.Free;
       Result := WithBanner;
     end;

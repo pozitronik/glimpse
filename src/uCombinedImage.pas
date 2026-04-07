@@ -5,7 +5,7 @@ unit uCombinedImage;
 interface
 
 uses
-  System.UITypes, Vcl.Graphics, uFrameOffsets;
+  System.UITypes, Vcl.Graphics, uFrameOffsets, uFFmpegExe;
 
 type
   { Video metadata for the info banner. Populated by the caller from
@@ -27,6 +27,10 @@ type
 { Formats banner info into human-readable text lines.
   Returns an empty array if AInfo has no meaningful data. }
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
+
+{ Builds a TBannerInfo from a filename and probed video metadata.
+  Reads file size from disk; all other fields come from AVideoInfo. }
+function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
 
 { Prepends a dark info banner to an existing bitmap.
   Font is auto-scaled to fit the image width.
@@ -54,7 +58,7 @@ function RenderCombinedImage(const AFrames: TArray<TBitmap>;
 implementation
 
 uses
-  System.SysUtils, System.Math, System.Types;
+  System.SysUtils, System.IOUtils, System.Math, System.Types;
 
 const
   BANNER_BG_COLOR    = TColor($00282828); { dark gray background }
@@ -82,6 +86,24 @@ begin
     Result := Format('%.0f KB', [ABytes / 1024.0], Fmt)
   else
     Result := Format('%d B', [ABytes]);
+end;
+
+function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
+begin
+  Result := Default(TBannerInfo);
+  Result.FileName := AFileName;
+  if TFile.Exists(AFileName) then
+    Result.FileSizeBytes := TFile.GetSize(AFileName);
+  Result.DurationSec := AVideoInfo.Duration;
+  Result.Width := AVideoInfo.Width;
+  Result.Height := AVideoInfo.Height;
+  Result.VideoCodec := AVideoInfo.VideoCodec;
+  Result.VideoBitrateKbps := AVideoInfo.VideoBitrateKbps;
+  Result.Fps := AVideoInfo.Fps;
+  Result.AudioCodec := AVideoInfo.AudioCodec;
+  Result.AudioSampleRate := AVideoInfo.AudioSampleRate;
+  Result.AudioChannels := AVideoInfo.AudioChannels;
+  Result.AudioBitrateKbps := AVideoInfo.AudioBitrateKbps;
 end;
 
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;

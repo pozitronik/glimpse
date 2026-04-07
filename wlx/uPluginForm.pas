@@ -968,22 +968,7 @@ begin
     FProbeCache.Put(FFileName, FVideoInfo);
   end;
 
-  { Update banner info for combined image export }
-  var BI: TBannerInfo := Default(TBannerInfo);
-  BI.FileName := FFileName;
-  if TFile.Exists(FFileName) then
-    BI.FileSizeBytes := TFile.GetSize(FFileName);
-  BI.DurationSec := FVideoInfo.Duration;
-  BI.Width := FVideoInfo.Width;
-  BI.Height := FVideoInfo.Height;
-  BI.VideoCodec := FVideoInfo.VideoCodec;
-  BI.VideoBitrateKbps := FVideoInfo.VideoBitrateKbps;
-  BI.Fps := FVideoInfo.Fps;
-  BI.AudioCodec := FVideoInfo.AudioCodec;
-  BI.AudioSampleRate := FVideoInfo.AudioSampleRate;
-  BI.AudioChannels := FVideoInfo.AudioChannels;
-  BI.AudioBitrateKbps := FVideoInfo.AudioBitrateKbps;
-  FExporter.UpdateBannerInfo(BI);
+  FExporter.UpdateBannerInfo(BuildBannerInfo(FFileName, FVideoInfo));
 
   UpdateStatusBar;
 
