@@ -15,13 +15,14 @@ type
     FFrameView: TFrameView;
     FSettings: TPluginSettings;
     FBannerInfo: TBannerInfo;
-    function RenderFrameView: TBitmap;
-    function RenderWithBanner(ABmp: TBitmap): TBitmap;
     function ShowSaveDialog(const ATitle, ADefaultName: string;
       AOverwritePrompt: Boolean; out APath: string;
       out AFormat: TSaveFormat): Boolean;
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat;
       ASelectedOnly: Boolean; const AFileName: string);
+  protected
+    function RenderFrameView: TBitmap;
+    function RenderWithBanner(ABmp: TBitmap): TBitmap;
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
     { Resolves which frame to act on: prefers AContextCellIndex, falls back

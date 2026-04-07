@@ -18,11 +18,44 @@ type
     [Test] procedure TestOutOfRangeContextIgnored;
   end;
 
+  [TestFixture]
+  TTestFrameExportRender = class
+  public
+    { RenderFrameView }
+    [Test] procedure TestRenderFrameViewProducesBitmap;
+    [Test] procedure TestRenderFrameViewMatchesViewportSize;
+
+    { RenderWithBanner }
+    [Test] procedure TestRenderWithBannerDisabledReturnsSameSize;
+    [Test] procedure TestRenderWithBannerEnabledIncreasesHeight;
+    [Test] procedure TestRenderWithBannerEmptyInfoReturnsSameSize;
+    [Test] procedure TestRenderWithBannerFreesInput;
+  end;
+
 implementation
 
 uses
-  System.SysUtils, System.Types, Vcl.Forms, Vcl.Controls, Vcl.Graphics,
-  uFrameView, uFrameOffsets, uSettings, uFrameExport;
+  System.SysUtils, System.Types,
+  Vcl.Forms, Vcl.Controls, Vcl.Graphics,
+  uFrameView, uFrameOffsets, uSettings, uFrameExport, uCombinedImage;
+
+type
+  { Test subclass that exposes protected render methods }
+  TTestableExporter = class(TFrameExporter)
+  public
+    function TestRenderFrameView: TBitmap;
+    function TestRenderWithBanner(ABmp: TBitmap): TBitmap;
+  end;
+
+function TTestableExporter.TestRenderFrameView: TBitmap;
+begin
+  Result := RenderFrameView;
+end;
+
+function TTestableExporter.TestRenderWithBanner(ABmp: TBitmap): TBitmap;
+begin
+  Result := RenderWithBanner(ABmp);
+end;
 
 { Helper: creates a temporary TFrameView parented to a form }
 function CreateTestFrameView(AForm: TForm; ACellCount: Integer;
@@ -212,5 +245,264 @@ begin
     Form.Free;
   end;
 end;
+
+{ TTestFrameExportRender }
+
+function CreateSettingsWithBanner(AShowBanner: Boolean): TPluginSettings;
+begin
+  { Non-existent INI path: settings use defaults }
+  Result := TPluginSettings.Create('__nonexistent__.ini');
+  Result.ShowBanner := AShowBanner;
+end;
+
+procedure TTestFrameExportRender.TestRenderFrameViewProducesBitmap;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    View.Width := 800;
+    View.Height := 600;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderFrameView;
+        try
+          Assert.IsNotNull(Bmp, 'RenderFrameView must return a bitmap');
+          Assert.IsTrue(Bmp.Width > 0, 'Bitmap width must be positive');
+          Assert.IsTrue(Bmp.Height > 0, 'Bitmap height must be positive');
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderFrameViewMatchesViewportSize;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 2, [0, 1]);
+    View.Width := 640;
+    View.Height := 480;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderFrameView;
+        try
+          Assert.AreEqual(640, Bmp.Width, 'Bitmap width must match control width');
+          Assert.AreEqual(480, Bmp.Height, 'Bitmap height must match control height');
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderWithBannerDisabledReturnsSameSize;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Input, Output: TBitmap;
+  OrigH: Integer;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 2, [0, 1]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Input := TBitmap.Create;
+        Input.SetSize(200, 150);
+        OrigH := Input.Height;
+        { When ShowBanner=False, RenderWithBanner returns the same bitmap }
+        Output := Exporter.TestRenderWithBanner(Input);
+        try
+          Assert.AreEqual(OrigH, Output.Height,
+            'Height must be unchanged when banner is disabled');
+          Assert.IsTrue(Input = Output,
+            'Must return the same bitmap instance when banner is disabled');
+        finally
+          Output.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderWithBannerEnabledIncreasesHeight;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Input, Output: TBitmap;
+  OrigH: Integer;
+  Info: TBannerInfo;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 2, [0, 1]);
+    Settings := CreateSettingsWithBanner(True);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Info := Default(TBannerInfo);
+        Info.FileName := 'test_video.mp4';
+        Info.FileSizeBytes := 1024 * 1024;
+        Info.DurationSec := 120.0;
+        Info.Width := 1920;
+        Info.Height := 1080;
+        Info.VideoCodec := 'h264';
+        Exporter.UpdateBannerInfo(Info);
+
+        Input := TBitmap.Create;
+        Input.SetSize(400, 300);
+        OrigH := Input.Height;
+        { RenderWithBanner frees Input and returns a new, taller bitmap }
+        Output := Exporter.TestRenderWithBanner(Input);
+        try
+          Assert.IsTrue(Output.Height > OrigH,
+            Format('Banner must increase height: got %d, original %d',
+              [Output.Height, OrigH]));
+          Assert.AreEqual(400, Output.Width,
+            'Width must be preserved when adding banner');
+        finally
+          Output.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderWithBannerEmptyInfoReturnsSameSize;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Input, Output: TBitmap;
+  OrigH: Integer;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 2, [0, 1]);
+    Settings := CreateSettingsWithBanner(True);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        { No UpdateBannerInfo called: FBannerInfo is default (all zeroes/empty).
+          FormatBannerLines with empty info still produces lines, but
+          PrependBanner handles them; the test verifies no crash. }
+        Input := TBitmap.Create;
+        Input.SetSize(300, 200);
+        OrigH := Input.Height;
+        Output := Exporter.TestRenderWithBanner(Input);
+        try
+          Assert.IsTrue(Output.Height >= OrigH,
+            'Output height must be >= input even with empty banner info');
+        finally
+          Output.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderWithBannerFreesInput;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Input, Output: TBitmap;
+  Info: TBannerInfo;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 2, [0, 1]);
+    Settings := CreateSettingsWithBanner(True);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Info := Default(TBannerInfo);
+        Info.FileName := 'video.mp4';
+        Info.DurationSec := 60.0;
+        Exporter.UpdateBannerInfo(Info);
+
+        Input := TBitmap.Create;
+        Input.SetSize(200, 100);
+        Output := Exporter.TestRenderWithBanner(Input);
+        try
+          { When banner is enabled, Output must be a different object
+            because RenderWithBanner frees the input and returns a new bitmap }
+          Assert.IsTrue(Input <> Output,
+            'Must return a new bitmap instance when banner is enabled');
+        finally
+          Output.Free;
+        end;
+        { Input was freed by RenderWithBanner; do NOT free it again }
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
+  TDUnitX.RegisterTestFixture(TTestFrameExportRender);
 
 end.
