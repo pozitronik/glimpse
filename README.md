@@ -19,6 +19,7 @@ Provides an instant visual summary of a video's content without opening a media 
 - Optional disk cache for instant re-preview
 - Parallel frame extraction with configurable worker count and thread limit
 - BMP pipe mode for faster frame extraction (configurable in settings)
+- Scaled extraction: automatically downscale frames to display size, reducing memory usage and improving speed for high-resolution video
 - Navigate between video files in the current directory without leaving the preview
 - Collapsible toolbar with hamburger overflow menu for narrow windows
 - Environment variable expansion in all configured paths (e.g. `%USERPROFILE%`)
