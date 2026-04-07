@@ -18,6 +18,7 @@ uses
   uFFmpegExe in '..\src\uFFmpegExe.pas',
   uDebugLog in '..\src\uDebugLog.pas',
   uCache in '..\src\uCache.pas',
+  uCacheKey in '..\src\uCacheKey.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',
   uBitmapSaver in '..\src\uBitmapSaver.pas',
   uExtractionPlanner in '..\src\uExtractionPlanner.pas',

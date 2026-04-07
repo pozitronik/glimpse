@@ -24,6 +24,8 @@ uses
   TestFrameView in 'TestFrameView.pas',
   uDebugLog in '..\src\uDebugLog.pas',
   uCache in '..\src\uCache.pas',
+  uCacheKey in '..\src\uCacheKey.pas',
+  TestCacheKey in 'TestCacheKey.pas',
   TestCache in 'TestCache.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',
   TestFrameFileNames in 'TestFrameFileNames.pas',

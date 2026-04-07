@@ -59,6 +59,7 @@
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="..\src\uDebugLog.pas"/>
         <DCCReference Include="..\src\uCache.pas"/>
+        <DCCReference Include="..\src\uCacheKey.pas"/>
         <DCCReference Include="..\src\uFrameFileNames.pas"/>
         <DCCReference Include="..\src\uBitmapSaver.pas"/>
         <DCCReference Include="uZoomController.pas"/>

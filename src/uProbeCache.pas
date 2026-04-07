@@ -16,8 +16,6 @@ type
     FCacheDir: string;
     class function BuildKeyString(const AFilePath: string;
       AFileSize: Int64; AFileTime: TDateTime): string; static;
-    class function HashKey(const AKeyString: string): string; static;
-    function KeyToPath(const AKey: string): string;
     function ProbeKey(const AFilePath: string): string;
   public
     constructor Create(const ACacheDir: string);
@@ -34,13 +32,7 @@ function DefaultProbeCacheDir: string;
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, System.Hash;
-
-const
-  SHARD_PREFIX_LEN = 2;
-
-var
-  InvFmt: TFormatSettings;
+  System.SysUtils, System.Classes, System.IOUtils, uCacheKey;
 
 function DefaultProbeCacheDir: string;
 begin
@@ -63,18 +55,6 @@ begin
     FormatDateTime('yyyymmddhhnnsszzz', AFileTime);
 end;
 
-class function TProbeCache.HashKey(const AKeyString: string): string;
-begin
-  Result := THashMD5.GetHashString(AKeyString).ToLower;
-end;
-
-function TProbeCache.KeyToPath(const AKey: string): string;
-begin
-  Result := TPath.Combine(
-    TPath.Combine(FCacheDir, Copy(AKey, 1, SHARD_PREFIX_LEN)),
-    AKey + '.probe');
-end;
-
 function TProbeCache.ProbeKey(const AFilePath: string): string;
 var
   FileSize: Int64;
@@ -86,7 +66,7 @@ begin
       Exit;
     FileSize := TFile.GetSize(AFilePath);
     FileTime := TFile.GetLastWriteTime(AFilePath);
-    Result := HashKey(BuildKeyString(AFilePath, FileSize, FileTime));
+    Result := CacheHashKey(BuildKeyString(AFilePath, FileSize, FileTime));
   except
     { File inaccessible }
   end;
@@ -106,7 +86,7 @@ begin
   if Key = '' then
     Exit;
 
-  Path := KeyToPath(Key);
+  Path := ShardedKeyPath(FCacheDir, Key, '.probe');
   if not TFile.Exists(Path) then
     Exit;
 
@@ -147,7 +127,7 @@ begin
   if Key = '' then
     Exit;
 
-  Path := KeyToPath(Key);
+  Path := ShardedKeyPath(FCacheDir, Key, '.probe');
   Dir := ExtractFilePath(Path);
 
   Lines := TStringList.Create;
@@ -173,8 +153,5 @@ begin
     Lines.Free;
   end;
 end;
-
-initialization
-  InvFmt := TFormatSettings.Invariant;
 
 end.

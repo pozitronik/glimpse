@@ -86,6 +86,8 @@
         <DCCReference Include="TestFrameView.pas"/>
         <DCCReference Include="..\src\uDebugLog.pas"/>
         <DCCReference Include="..\src\uCache.pas"/>
+        <DCCReference Include="..\src\uCacheKey.pas"/>
+        <DCCReference Include="TestCacheKey.pas"/>
         <DCCReference Include="TestCache.pas"/>
         <DCCReference Include="..\src\uFrameFileNames.pas"/>
         <DCCReference Include="TestFrameFileNames.pas"/>

@@ -6,7 +6,7 @@ unit uCache;
 interface
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes, System.Hash,
+  System.SysUtils, System.IOUtils, System.Classes,
   System.Generics.Collections, System.Generics.Defaults,
   Vcl.Graphics, Vcl.Imaging.pngimage, uBitmapSaver;
 
@@ -77,8 +77,6 @@ type
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64;
       AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer;
       AUseKeyframes: Boolean): string; static;
-    class function HashKey(const AKeyString: string): string; static;
-    function KeyToPath(const AKey: string): string;
 
   public
     constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
@@ -107,17 +105,12 @@ function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICach
 implementation
 
 uses
-  System.DateUtils, uDebugLog;
+  System.DateUtils, uDebugLog, uCacheKey;
 
 const
   MOVEFILE_REPLACE_EXISTING = 1;
-  SHARD_PREFIX_LEN = 2; { directory sharding depth: first N chars of the hash key }
 
 function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
-
-{ Invariant format settings for deterministic key strings }
-var
-  InvFmt: TFormatSettings;
 
 { TNullFrameCache }
 
@@ -181,16 +174,6 @@ begin
     Result := Result + '|kf';
 end;
 
-class function TFrameCache.HashKey(const AKeyString: string): string;
-begin
-  Result := THashMD5.GetHashString(AKeyString).ToLower;
-end;
-
-function TFrameCache.KeyToPath(const AKey: string): string;
-begin
-  Result := TPath.Combine(TPath.Combine(FCacheDir, Copy(AKey, 1, SHARD_PREFIX_LEN)), AKey + '.png');
-end;
-
 class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double;
   AMaxSide: Integer; AUseKeyframes: Boolean): string;
 var
@@ -203,7 +186,7 @@ begin
       Exit;
     FileSize := TFile.GetSize(AFilePath);
     FileTime := TFile.GetLastWriteTime(AFilePath);
-    Result := HashKey(BuildKeyString(AFilePath, FileSize, FileTime,
+    Result := CacheHashKey(BuildKeyString(AFilePath, FileSize, FileTime,
       ATimeOffset, AMaxSide, AUseKeyframes));
   except
     { File inaccessible - return empty, caller treats as cache miss }
@@ -221,7 +204,7 @@ begin
   if Key = '' then
     Exit;
   try
-    Path := KeyToPath(Key);
+    Path := ShardedKeyPath(FCacheDir, Key, '.png');
     if not TFile.Exists(Path) then
     begin
       DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]));
@@ -245,7 +228,7 @@ begin
     cannot discard the successfully loaded bitmap. }
   if Result <> nil then
   try
-    TFile.SetLastAccessTime(KeyToPath(Key), Now);
+    TFile.SetLastAccessTime(ShardedKeyPath(FCacheDir, Key, '.png'), Now);
   except
     { Access time is cosmetic for LRU; failure is harmless }
   end;
@@ -264,7 +247,7 @@ begin
     Exit;
   DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
   try
-    FinalPath := KeyToPath(Key);
+    FinalPath := ShardedKeyPath(FCacheDir, Key, '.png');
     SubDir := ExtractFilePath(FinalPath);
     if not TDirectory.Exists(SubDir) then
       TDirectory.CreateDirectory(SubDir);
@@ -427,8 +410,5 @@ function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICach
 begin
   Result := TFrameCache.Create(ACacheDir, AMaxSizeMB);
 end;
-
-initialization
-  InvFmt := TFormatSettings.Invariant;
 
 end.
