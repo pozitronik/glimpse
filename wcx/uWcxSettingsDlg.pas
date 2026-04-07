@@ -77,11 +77,16 @@ type
     procedure PnlBackgroundClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
+    FOwnerWnd: HWND;
     procedure SettingsToControls(ASettings: TWcxSettings);
     procedure ControlsToSettings(ASettings: TWcxSettings);
     procedure UpdateCombinedState;
     procedure UpdateMaxWorkersControls;
     procedure UpdateFFmpegInfo;
+  protected
+    procedure CreateParams(var Params: TCreateParams); override;
+  public
+    constructor CreateWithOwner(AOwnerWnd: HWND);
   end;
 
 { Shows the WCX settings dialog. Returns True if the user clicked OK. }
@@ -311,6 +316,19 @@ begin
   end;
 end;
 
+constructor TWcxSettingsForm.CreateWithOwner(AOwnerWnd: HWND);
+begin
+  FOwnerWnd := AOwnerWnd;
+  inherited Create(nil);
+end;
+
+procedure TWcxSettingsForm.CreateParams(var Params: TCreateParams);
+begin
+  inherited;
+  if FOwnerWnd <> 0 then
+    Params.WndParent := FOwnerWnd;
+end;
+
 { Public API }
 
 function ShowWcxSettingsDialog(AParentWnd: HWND;
@@ -319,7 +337,7 @@ var
   Dlg: TWcxSettingsForm;
 begin
   Result := False;
-  Dlg := TWcxSettingsForm.Create(nil);
+  Dlg := TWcxSettingsForm.CreateWithOwner(AParentWnd);
   try
     Dlg.SettingsToControls(ASettings);
     if Dlg.ShowModal = mrOk then

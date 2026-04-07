@@ -104,6 +104,7 @@ type
     procedure BtnClearCacheClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
+    FOwnerWnd: HWND;
     FResolvedFFmpegPath: string;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
@@ -116,6 +117,10 @@ type
     procedure UpdateCacheSizeInfo;
     procedure PickColor(APanel: TPanel);
     procedure BrowseFolder(AEdit: TEdit);
+  protected
+    procedure CreateParams(var Params: TCreateParams); override;
+  public
+    constructor CreateWithOwner(AOwnerWnd: HWND);
   end;
 
 { Shows the settings dialog.
@@ -123,7 +128,8 @@ type
   when auto-detected). Shown as informational text when the explicit path is empty.
   Returns True if the user pressed OK (ASettings is updated).
   Returns False if dismissed (ASettings unchanged). }
-function ShowSettingsDialog(ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings;
+  const AResolvedFFmpegPath: string): Boolean;
 
 implementation
 
@@ -492,12 +498,28 @@ begin
     LblCacheSizeInfo.Caption := '(current: empty)';
 end;
 
-function ShowSettingsDialog(ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
+constructor TSettingsForm.CreateWithOwner(AOwnerWnd: HWND);
+begin
+  { Must be set before inherited: DFM loading may force handle creation,
+    and CreateParams needs the value at that point }
+  FOwnerWnd := AOwnerWnd;
+  inherited Create(nil);
+end;
+
+procedure TSettingsForm.CreateParams(var Params: TCreateParams);
+begin
+  inherited;
+  if FOwnerWnd <> 0 then
+    Params.WndParent := FOwnerWnd;
+end;
+
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings;
+  const AResolvedFFmpegPath: string): Boolean;
 var
   Form: TSettingsForm;
 begin
   Result := False;
-  Form := TSettingsForm.Create(nil);
+  Form := TSettingsForm.CreateWithOwner(AParentWnd);
   try
     Form.FResolvedFFmpegPath := AResolvedFFmpegPath;
     Form.SettingsToControls(ASettings);

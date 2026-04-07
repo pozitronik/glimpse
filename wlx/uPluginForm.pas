@@ -1708,7 +1708,7 @@ var
 begin
   Snap := TakeSettingsSnapshot(FSettings);
 
-  if not ShowSettingsDialog(FSettings, FFFmpegPath) then
+  if not ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath) then
     Exit;
 
   FSettings.Save;
