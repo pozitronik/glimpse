@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 854
+  ClientHeight = 943
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -642,34 +642,66 @@ object SettingsForm: TSettingsForm
       TabOrder = 4
     end
   end
+  object GbxQuickView: TGroupBox
+    Left = 8
+    Top = 814
+    Width = 444
+    Height = 85
+    Caption = ' Quick View (Ctrl+Q) '
+    TabOrder = 4
+    object ChkQVDisableNavigation: TCheckBox
+      Left = 16
+      Top = 20
+      Width = 412
+      Height = 17
+      Caption = 'Disable internal file navigation'
+      TabOrder = 0
+    end
+    object ChkQVHideToolbar: TCheckBox
+      Left = 16
+      Top = 41
+      Width = 412
+      Height = 17
+      Caption = 'Hide toolbar'
+      TabOrder = 1
+    end
+    object ChkQVHideStatusBar: TCheckBox
+      Left = 16
+      Top = 62
+      Width = 412
+      Height = 17
+      Caption = 'Hide status bar'
+      TabOrder = 2
+    end
+  end
   object BtnDefaults: TButton
     Left = 8
-    Top = 818
+    Top = 907
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
-    TabOrder = 4
+    TabOrder = 5
     OnClick = BtnDefaultsClick
   end
   object BtnOK: TButton
     Left = 296
-    Top = 818
+    Top = 907
     Width = 75
     Height = 28
     Caption = 'OK'
     Default = True
     ModalResult = 1
-    TabOrder = 5
+    TabOrder = 6
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 818
+    Top = 907
     Width = 75
     Height = 28
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 6
+    TabOrder = 7
   end
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]

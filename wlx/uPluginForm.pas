@@ -58,6 +58,8 @@ type
     FAnimTimer: TTimer;
     { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
     FUpdatingLayout: Boolean;
+    { True when the plugin is hosted in TC's Quick View panel (Ctrl+Q) }
+    FQuickViewMode: Boolean;
     { Prevents key-triggered reopen while Popup is still returning }
     FHamburgerMenuOpen: Boolean;
     { Suppresses WM_CHAR after OnKeyDown consumed the keystroke }
@@ -287,6 +289,10 @@ begin
 
   Winapi.Windows.GetClientRect(AParentWin, R);
   SetBounds(0, 0, R.Right, R.Bottom);
+
+  { Quick View panel is a child window; Lister is a top-level window.
+    Must be set before ApplySettings so QV defaults take effect. }
+  FQuickViewMode := (GetWindowLong(AParentWin, GWL_STYLE) and WS_CHILD) <> 0;
 
   CreateToolbar;
   CreateStatusBar;
@@ -814,8 +820,10 @@ begin
     SyncZoomMenuChecks(VM, FSettings.ModeZoom[VM]);
 
   UpdateViewModeButtons;
-  FToolbar.Visible := FSettings.ShowToolbar;
-  FStatusBar.Visible := FSettings.ShowStatusBar;
+  FToolbar.Visible := FSettings.ShowToolbar
+    and not (FQuickViewMode and FSettings.QVHideToolbar);
+  FStatusBar.Visible := FSettings.ShowStatusBar
+    and not (FQuickViewMode and FSettings.QVHideStatusBar);
   FFrameView.ShowTimecode := FSettings.ShowTimecode;
   FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
   FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
@@ -1060,7 +1068,8 @@ procedure TPluginForm.HideProgress;
 begin
   FProgressBar.Visible := False;
   FProgressVisible := False;
-  FStatusBar.Visible := FSettings.ShowStatusBar;
+  FStatusBar.Visible := FSettings.ShowStatusBar
+    and not (FQuickViewMode and FSettings.QVHideStatusBar);
 end;
 
 procedure TPluginForm.FinalizeLoadTime;
@@ -1288,8 +1297,11 @@ begin
       if Shift = [] then
       begin
         FStatusBar.Visible := not FStatusBar.Visible;
-        FSettings.ShowStatusBar := FStatusBar.Visible;
-        FSettings.Save;
+        if not FQuickViewMode then
+        begin
+          FSettings.ShowStatusBar := FStatusBar.Visible;
+          FSettings.Save;
+        end;
         Key := 0;
       end;
     VK_F4:
@@ -1299,8 +1311,11 @@ begin
         { Reclaim focus so TC's subclass sees keystrokes again }
         if not FToolbar.Visible then
           Winapi.Windows.SetFocus(Handle);
-        FSettings.ShowToolbar := FToolbar.Visible;
-        FSettings.Save;
+        if not FQuickViewMode then
+        begin
+          FSettings.ShowToolbar := FToolbar.Visible;
+          FSettings.Save;
+        end;
         Key := 0;
       end;
     VK_OEM_3: { ~ / ` key }
@@ -1740,6 +1755,8 @@ procedure TPluginForm.NavigateToAdjacentFile(ADelta: Integer);
 var
   Next: string;
 begin
+  if FQuickViewMode and FSettings.QVDisableNavigation then
+    Exit;
   Next := FindAdjacentFile(FFileName, FSettings.ExtensionList, ADelta);
   if (Next <> '') and not SameText(Next, FFileName) then
     LoadFile(Next);

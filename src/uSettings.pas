@@ -50,6 +50,10 @@ type
     FCacheEnabled: Boolean;
     FCacheFolder: string;
     FCacheMaxSizeMB: Integer;
+    { [quickview] }
+    FQVDisableNavigation: Boolean;
+    FQVHideToolbar: Boolean;
+    FQVHideStatusBar: Boolean;
 
     class function StrToFFmpegMode(const AValue: string): TFFmpegMode; static;
     class function FFmpegModeToStr(AMode: TFFmpegMode): string; static;
@@ -121,6 +125,11 @@ type
     property CacheEnabled: Boolean read FCacheEnabled write FCacheEnabled;
     property CacheFolder: string read FCacheFolder write FCacheFolder;
     property CacheMaxSizeMB: Integer read FCacheMaxSizeMB write FCacheMaxSizeMB;
+
+    { [quickview] }
+    property QVDisableNavigation: Boolean read FQVDisableNavigation write FQVDisableNavigation;
+    property QVHideToolbar: Boolean read FQVHideToolbar write FQVHideToolbar;
+    property QVHideStatusBar: Boolean read FQVHideStatusBar write FQVHideStatusBar;
   end;
 
 const
@@ -143,6 +152,9 @@ const
   DEF_CACHE_ENABLED      = True;
   DEF_CACHE_FOLDER       = '';
   DEF_CACHE_MAX_SIZE_MB  = 500;
+  DEF_QV_DISABLE_NAV     = True;
+  DEF_QV_HIDE_TOOLBAR    = True;
+  DEF_QV_HIDE_STATUSBAR  = True;
 
   { Alias: uSettings historically used _PERCENT suffix }
   DEF_SKIP_EDGES_PERCENT = DEF_SKIP_EDGES;
@@ -216,6 +228,9 @@ begin
   FCacheEnabled := DEF_CACHE_ENABLED;
   FCacheFolder := DEF_CACHE_FOLDER;
   FCacheMaxSizeMB := DEF_CACHE_MAX_SIZE_MB;
+  FQVDisableNavigation := DEF_QV_DISABLE_NAV;
+  FQVHideToolbar := DEF_QV_HIDE_TOOLBAR;
+  FQVHideStatusBar := DEF_QV_HIDE_STATUSBAR;
 end;
 
 procedure TPluginSettings.Load;
@@ -280,6 +295,10 @@ begin
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
     FCacheMaxSizeMB := EnsureRange(Ini.ReadInteger('cache', 'MaxSizeMB', DEF_CACHE_MAX_SIZE_MB), 10, 10000);
+
+    FQVDisableNavigation := Ini.ReadBool('quickview', 'DisableNavigation', DEF_QV_DISABLE_NAV);
+    FQVHideToolbar := Ini.ReadBool('quickview', 'HideToolbar', DEF_QV_HIDE_TOOLBAR);
+    FQVHideStatusBar := Ini.ReadBool('quickview', 'HideStatusBar', DEF_QV_HIDE_STATUSBAR);
   finally
     Ini.Free;
   end;
@@ -332,6 +351,10 @@ begin
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
     Ini.WriteString('cache', 'Folder', FCacheFolder);
     Ini.WriteInteger('cache', 'MaxSizeMB', FCacheMaxSizeMB);
+
+    Ini.WriteBool('quickview', 'DisableNavigation', FQVDisableNavigation);
+    Ini.WriteBool('quickview', 'HideToolbar', FQVHideToolbar);
+    Ini.WriteBool('quickview', 'HideStatusBar', FQVHideStatusBar);
   finally
     Ini.Free;
   end;

@@ -93,6 +93,14 @@ type
     { EffectiveCacheFolder + env var integration }
     [Test]
     procedure TestEffectiveCacheFolderExpandsEnvVars;
+
+    { Quick View settings }
+    [Test]
+    procedure TestQVSettingsDefaultsAllTrue;
+    [Test]
+    procedure TestQVSettingsRoundTrip;
+    [Test]
+    procedure TestQVSettingsMissingInIniUsesDefaults;
   end;
 
 implementation
@@ -142,6 +150,9 @@ begin
     Assert.AreEqual(DEF_CACHE_ENABLED, S.CacheEnabled);
     Assert.AreEqual(DEF_CACHE_FOLDER, S.CacheFolder);
     Assert.AreEqual(DEF_CACHE_MAX_SIZE_MB, S.CacheMaxSizeMB);
+    Assert.AreEqual(DEF_QV_DISABLE_NAV, S.QVDisableNavigation);
+    Assert.AreEqual(DEF_QV_HIDE_TOOLBAR, S.QVHideToolbar);
+    Assert.AreEqual(DEF_QV_HIDE_STATUSBAR, S.QVHideStatusBar);
   finally
     S.Free;
   end;
@@ -175,6 +186,9 @@ begin
     S1.CacheEnabled := True;
     S1.CacheFolder := 'C:\Cache';
     S1.CacheMaxSizeMB := 1000;
+    S1.QVDisableNavigation := False;
+    S1.QVHideToolbar := False;
+    S1.QVHideStatusBar := False;
     S1.Save;
   finally
     S1.Free;
@@ -205,6 +219,9 @@ begin
     Assert.IsTrue(S2.CacheEnabled);
     Assert.AreEqual('C:\Cache', S2.CacheFolder);
     Assert.AreEqual(1000, S2.CacheMaxSizeMB);
+    Assert.IsFalse(S2.QVDisableNavigation);
+    Assert.IsFalse(S2.QVHideToolbar);
+    Assert.IsFalse(S2.QVHideStatusBar);
   finally
     S2.Free;
   end;
@@ -1071,6 +1088,70 @@ begin
     'EffectiveCacheFolder must expand environment variables');
   Assert.IsTrue(Result.EndsWith('\GlimpseTest'),
     'Folder name must be preserved after expansion');
+end;
+
+procedure TTestPluginSettings.TestQVSettingsDefaultsAllTrue;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    { Defaults without loading: all QV overrides should be active }
+    Assert.IsTrue(S.QVDisableNavigation);
+    Assert.IsTrue(S.QVHideToolbar);
+    Assert.IsTrue(S.QVHideStatusBar);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestQVSettingsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.QVDisableNavigation := False;
+    S1.QVHideToolbar := False;
+    S1.QVHideStatusBar := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.IsFalse(S2.QVDisableNavigation);
+    Assert.IsFalse(S2.QVHideToolbar);
+    Assert.IsTrue(S2.QVHideStatusBar);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestQVSettingsMissingInIniUsesDefaults;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Write an INI with no [quickview] section }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_QV_DISABLE_NAV, S.QVDisableNavigation);
+    Assert.AreEqual(DEF_QV_HIDE_TOOLBAR, S.QVHideToolbar);
+    Assert.AreEqual(DEF_QV_HIDE_STATUSBAR, S.QVHideStatusBar);
+  finally
+    S.Free;
+  end;
 end;
 
 initialization

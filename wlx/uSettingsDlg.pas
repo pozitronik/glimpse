@@ -85,6 +85,10 @@ type
     LblCacheMaxSizeUnit: TLabel;
     LblCacheSizeInfo: TLabel;
     BtnClearCache: TButton;
+    GbxQuickView: TGroupBox;
+    ChkQVDisableNavigation: TCheckBox;
+    ChkQVHideToolbar: TCheckBox;
+    ChkQVHideStatusBar: TCheckBox;
     BtnOK: TButton;
     BtnCancel: TButton;
     BtnDefaults: TButton;
@@ -180,6 +184,10 @@ begin
   EdtCacheFolder.Text := ASettings.CacheFolder;
   UdCacheMaxSize.Position := ASettings.CacheMaxSizeMB;
 
+  ChkQVDisableNavigation.Checked := ASettings.QVDisableNavigation;
+  ChkQVHideToolbar.Checked := ASettings.QVHideToolbar;
+  ChkQVHideStatusBar.Checked := ASettings.QVHideStatusBar;
+
   UpdateSaveFormatControls;
   UpdateCacheControls;
   UpdateFFmpegInfo;
@@ -232,6 +240,10 @@ begin
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;
   ASettings.CacheFolder := EdtCacheFolder.Text;
   ASettings.CacheMaxSizeMB := UdCacheMaxSize.Position;
+
+  ASettings.QVDisableNavigation := ChkQVDisableNavigation.Checked;
+  ASettings.QVHideToolbar := ChkQVHideToolbar.Checked;
+  ASettings.QVHideStatusBar := ChkQVHideStatusBar.Checked;
 end;
 
 procedure TSettingsForm.PickColor(APanel: TPanel);
