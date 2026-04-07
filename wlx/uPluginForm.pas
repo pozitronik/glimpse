@@ -1062,7 +1062,7 @@ begin
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets,
     FSettings.MaxWorkers, FSettings.MaxThreads, FSettings.UseBmpPipe,
-    MaxSide, ACacheOverride);
+    MaxSide, FSettings.HwAccel, ACacheOverride);
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);

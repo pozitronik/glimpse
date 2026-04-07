@@ -35,9 +35,11 @@ type
 
     { Extracts a single frame at the given time offset.
       AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
+      AHwAccel=True adds -hwaccel auto for GPU-accelerated decoding.
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double;
-      AUseBmp: Boolean = False; AMaxSide: Integer = 0): TBitmap;
+      AUseBmp: Boolean = False; AMaxSide: Integer = 0;
+      AHwAccel: Boolean = False): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -503,9 +505,9 @@ begin
 end;
 
 function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
-  AUseBmp: Boolean; AMaxSide: Integer): TBitmap;
+  AUseBmp: Boolean; AMaxSide: Integer; AHwAccel: Boolean): TBitmap;
 var
-  CmdLine, Codec, ScaleFilter: string;
+  CmdLine, Codec, ScaleFilter, HwAccelFlag: string;
   StdOut, StdErr: TBytes;
   ExitCode: Integer;
   Stream: TMemoryStream;
@@ -524,11 +526,16 @@ begin
   else
     ScaleFilter := '';
 
-  CmdLine := Format('"%s" -nostdin -loglevel error -ss %s -i "%s" ' +
+  if AHwAccel then
+    HwAccelFlag := '-hwaccel auto '
+  else
+    HwAccelFlag := '';
+
+  CmdLine := Format('"%s" -nostdin -loglevel error -ss %s %s-i "%s" ' +
     '-frames:v 1 %s%s pipe:1',
     [FExePath,
      Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
-     AFileName, ScaleFilter, Codec]);
+     HwAccelFlag, AFileName, ScaleFilter, Codec]);
 
   ExitCode := RunProcess(CmdLine, StdOut, StdErr);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then

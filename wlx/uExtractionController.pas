@@ -34,7 +34,8 @@ type
     procedure Start(const AExtractor: IFrameExtractor;
       const AFileName: string; const AOffsets: TFrameOffsetArray;
       AMaxWorkers, AMaxThreads: Integer; AUseBmpPipe: Boolean;
-      AMaxSide: Integer; const ACacheOverride: IFrameCache = nil);
+      AMaxSide: Integer; AHwAccel: Boolean;
+      const ACacheOverride: IFrameCache = nil);
     procedure Stop;
     { Drains the pending queue and delivers frames via OnFrameDelivered. }
     procedure ProcessPendingFrames;
@@ -86,7 +87,7 @@ end;
 procedure TExtractionController.Start(const AExtractor: IFrameExtractor;
   const AFileName: string; const AOffsets: TFrameOffsetArray;
   AMaxWorkers, AMaxThreads: Integer; AUseBmpPipe: Boolean;
-  AMaxSide: Integer; const ACacheOverride: IFrameCache);
+  AMaxSide: Integer; AHwAccel: Boolean; const ACacheOverride: IFrameCache);
 var
   ThreadCache: IFrameCache;
   Chunks: TArray<TWorkerChunk>;
@@ -111,7 +112,7 @@ begin
     Chunk := Copy(AOffsets, Chunks[W].Start, Chunks[W].Len);
     FWorkerThreads[W] := TExtractionThread.Create(AExtractor, AFileName,
       Chunk, FFormHandle, FPendingFrames, FPendingLock, ThreadCache,
-      @FActiveWorkerCount, AUseBmpPipe, AMaxSide);
+      @FActiveWorkerCount, AUseBmpPipe, AMaxSide, AHwAccel);
   end;
 
   { Start all threads after creation to minimize scheduling skew }

@@ -14,6 +14,7 @@ const
   DEF_MAX_WORKERS     = 1;
   DEF_MAX_THREADS     = -1;  { -1 = no limit, 0 = auto (CPU count) }
   DEF_USE_BMP_PIPE    = True;
+  DEF_HW_ACCEL          = True;
   DEF_SCALED_EXTRACTION = False;
   DEF_MIN_FRAME_SIDE  = 120;
   DEF_MAX_FRAME_SIDE  = 1920;

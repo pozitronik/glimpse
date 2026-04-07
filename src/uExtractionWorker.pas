@@ -36,6 +36,7 @@ type
     FActiveWorkerCount: PInteger; { shared counter; last thread posts WM_EXTRACTION_DONE }
     FUseBmpPipe: Boolean;
     FMaxSide: Integer;
+    FHwAccel: Boolean;
   protected
     procedure Execute; override;
   public
@@ -43,7 +44,7 @@ type
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
       const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-      AUseBmpPipe: Boolean; AMaxSide: Integer);
+      AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean);
   end;
 
 implementation
@@ -61,7 +62,7 @@ constructor TExtractionThread.Create(const AExtractor: IFrameExtractor;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
   AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
   const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-  AUseBmpPipe: Boolean; AMaxSide: Integer);
+  AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -75,6 +76,7 @@ begin
   FActiveWorkerCount := AActiveWorkerCount;
   FUseBmpPipe := AUseBmpPipe;
   FMaxSide := AMaxSide;
+  FHwAccel := AHwAccel;
 end;
 
 procedure TExtractionThread.Execute;
@@ -108,7 +110,7 @@ begin
         if Bmp = nil then
         begin
           Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset,
-            FUseBmpPipe, FMaxSide);
+            FUseBmpPipe, FMaxSide, FHwAccel);
           if Bmp <> nil then
           begin
             Source := 'extract';

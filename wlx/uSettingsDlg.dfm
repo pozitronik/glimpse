@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 796
+  ClientHeight = 825
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 8
     Top = 8
     Width = 444
-    Height = 271
+    Height = 300
     Caption = ' General '
     TabOrder = 0
     object LblSkipEdges: TLabel
@@ -98,9 +98,17 @@ object SettingsForm: TSettingsForm
       Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
       TabOrder = 8
     end
-    object ChkScaledExtraction: TCheckBox
+    object ChkHwAccel: TCheckBox
       Left = 12
       Top = 140
+      Width = 424
+      Height = 17
+      Caption = 'Use hardware-accelerated decoding (GPU)'
+      TabOrder = 16
+    end
+    object ChkScaledExtraction: TCheckBox
+      Left = 12
+      Top = 169
       Width = 424
       Height = 17
       Caption = 'Scale frames to display size (faster for high-res video)'
@@ -109,14 +117,14 @@ object SettingsForm: TSettingsForm
     end
     object LblMinFrameSide: TLabel
       Left = 32
-      Top = 169
+      Top = 198
       Width = 80
       Height = 15
       Caption = 'Min side (px):'
     end
     object EdtMinFrameSide: TEdit
       Left = 130
-      Top = 165
+      Top = 194
       Width = 55
       Height = 23
       NumbersOnly = True
@@ -124,7 +132,7 @@ object SettingsForm: TSettingsForm
     end
     object UdMinFrameSide: TUpDown
       Left = 185
-      Top = 165
+      Top = 194
       Width = 17
       Height = 23
       Associate = EdtMinFrameSide
@@ -136,14 +144,14 @@ object SettingsForm: TSettingsForm
     end
     object LblMaxFrameSide: TLabel
       Left = 230
-      Top = 169
+      Top = 198
       Width = 82
       Height = 15
       Caption = 'Max side (px):'
     end
     object EdtMaxFrameSide: TEdit
       Left = 320
-      Top = 165
+      Top = 194
       Width = 55
       Height = 23
       NumbersOnly = True
@@ -151,7 +159,7 @@ object SettingsForm: TSettingsForm
     end
     object UdMaxFrameSide: TUpDown
       Left = 375
-      Top = 165
+      Top = 194
       Width = 17
       Height = 23
       Associate = EdtMaxFrameSide
@@ -163,21 +171,21 @@ object SettingsForm: TSettingsForm
     end
     object LblExtensions: TLabel
       Left = 12
-      Top = 198
+      Top = 227
       Width = 63
       Height = 15
       Caption = 'Extensions:'
     end
     object LblFFmpegPath: TLabel
       Left = 12
-      Top = 227
+      Top = 256
       Width = 76
       Height = 15
       Caption = 'FFmpeg path:'
     end
     object LblFFmpegInfo: TLabel
       Left = 12
-      Top = 248
+      Top = 277
       Width = 3
       Height = 15
       Font.Charset = DEFAULT_CHARSET
@@ -226,14 +234,14 @@ object SettingsForm: TSettingsForm
     end
     object EdtExtensions: TEdit
       Left = 130
-      Top = 194
+      Top = 223
       Width = 306
       Height = 23
       TabOrder = 4
     end
     object EdtFFmpegPath: TEdit
       Left = 130
-      Top = 223
+      Top = 252
       Width = 274
       Height = 23
       TabOrder = 5
@@ -242,7 +250,7 @@ object SettingsForm: TSettingsForm
     end
     object BtnFFmpegPath: TButton
       Left = 408
-      Top = 223
+      Top = 252
       Width = 28
       Height = 23
       Caption = '...'
@@ -252,7 +260,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxAppearance: TGroupBox
     Left = 8
-    Top = 285
+    Top = 314
     Width = 444
     Height = 167
     Caption = ' Appearance '
@@ -410,7 +418,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxSave: TGroupBox
     Left = 8
-    Top = 458
+    Top = 487
     Width = 444
     Height = 161
     Caption = ' Save '
@@ -520,7 +528,7 @@ object SettingsForm: TSettingsForm
   end
   object GbxCache: TGroupBox
     Left = 8
-    Top = 625
+    Top = 654
     Width = 444
     Height = 123
     Caption = ' Cache '
@@ -628,7 +636,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 760
+    Top = 789
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -637,7 +645,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 760
+    Top = 789
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -647,7 +655,7 @@ object SettingsForm: TSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 760
+    Top = 789
     Width = 75
     Height = 28
     Cancel = True

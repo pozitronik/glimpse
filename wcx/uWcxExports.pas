@@ -138,7 +138,7 @@ begin
   try
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName,
-        H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe, 0);
+        H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe, 0, H.Settings.HwAccel);
 
     Result := RenderCombinedImage(Frames, H.Offsets,
       H.Settings.CombinedColumns, H.Settings.CellGap,
@@ -190,7 +190,7 @@ begin
   for I := 0 to Length(H.Offsets) - 1 do
   begin
     Bmp := AExtractor.ExtractFrame(H.FileName,
-      H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe, 0);
+      H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe, 0, H.Settings.HwAccel);
     if Bmp = nil then Continue;
     try
       TempPath := TPath.Combine(GCachedTempDir,
@@ -407,7 +407,8 @@ begin
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
     Bmp := Extractor.ExtractFrame(H.FileName,
-      H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.UseBmpPipe, 0);
+      H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.UseBmpPipe, 0,
+      H.Settings.HwAccel);
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try

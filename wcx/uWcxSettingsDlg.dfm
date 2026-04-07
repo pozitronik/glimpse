@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 676
+  ClientHeight = 705
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object WcxSettingsForm: TWcxSettingsForm
     Left = 8
     Top = 8
     Width = 444
-    Height = 242
+    Height = 271
     Caption = ' General '
     TabOrder = 0
     object LblFrameCount: TLabel
@@ -70,14 +70,14 @@ object WcxSettingsForm: TWcxSettingsForm
     end
     object LblFFmpegPath: TLabel
       Left = 12
-      Top = 198
+      Top = 227
       Width = 76
       Height = 15
       Caption = 'FFmpeg path:'
     end
     object LblFFmpegInfo: TLabel
       Left = 12
-      Top = 221
+      Top = 250
       Width = 3
       Height = 15
       Font.Charset = DEFAULT_CHARSET
@@ -180,9 +180,17 @@ object WcxSettingsForm: TWcxSettingsForm
       Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
       TabOrder = 9
     end
+    object ChkHwAccel: TCheckBox
+      Left = 12
+      Top = 169
+      Width = 424
+      Height = 17
+      Caption = 'Use hardware-accelerated decoding (GPU)'
+      TabOrder = 10
+    end
     object EdtFFmpegPath: TEdit
       Left = 130
-      Top = 194
+      Top = 223
       Width = 274
       Height = 23
       TabOrder = 11
@@ -191,7 +199,7 @@ object WcxSettingsForm: TWcxSettingsForm
     end
     object BtnFFmpegPath: TButton
       Left = 408
-      Top = 194
+      Top = 223
       Width = 28
       Height = 23
       Caption = '...'
@@ -201,7 +209,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object GbxOutput: TGroupBox
     Left = 8
-    Top = 258
+    Top = 287
     Width = 444
     Height = 168
     Caption = ' Output '
@@ -305,7 +313,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object GbxCombined: TGroupBox
     Left = 8
-    Top = 434
+    Top = 463
     Width = 444
     Height = 190
     Caption = ' Combined image '
@@ -447,7 +455,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 636
+    Top = 665
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
@@ -456,7 +464,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnOK: TButton
     Left = 296
-    Top = 636
+    Top = 665
     Width = 75
     Height = 28
     Caption = 'OK'
@@ -466,7 +474,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 636
+    Top = 665
     Width = 75
     Height = 28
     Cancel = True
@@ -477,6 +485,6 @@ object WcxSettingsForm: TWcxSettingsForm
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]
     Left = 408
-    Top = 636
+    Top = 665
   end
 end

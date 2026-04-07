@@ -23,6 +23,7 @@ type
     FMaxWorkers: Integer;
     FMaxThreads: Integer;
     FUseBmpPipe: Boolean;
+    FHwAccel: Boolean;
     { [output] }
     FOutputMode: TWcxOutputMode;
     FSaveFormat: TSaveFormat;
@@ -51,6 +52,7 @@ type
     property MaxWorkers: Integer read FMaxWorkers write FMaxWorkers;
     property MaxThreads: Integer read FMaxThreads write FMaxThreads;
     property UseBmpPipe: Boolean read FUseBmpPipe write FUseBmpPipe;
+    property HwAccel: Boolean read FHwAccel write FHwAccel;
     property OutputMode: TWcxOutputMode read FOutputMode write FOutputMode;
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
@@ -95,6 +97,7 @@ begin
   FMaxWorkers := DEF_MAX_WORKERS;
   FMaxThreads := DEF_MAX_THREADS;
   FUseBmpPipe := DEF_USE_BMP_PIPE;
+  FHwAccel := DEF_HW_ACCEL;
   FOutputMode := WCX_DEF_OUTPUT_MODE;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
@@ -126,6 +129,7 @@ begin
     FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads',
       DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
     FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
+    FHwAccel := Ini.ReadBool('extraction', 'HwAccel', DEF_HW_ACCEL);
 
     if SameText(Ini.ReadString('output', 'Mode', 'separate'), 'combined') then
       FOutputMode := womCombined
@@ -173,6 +177,7 @@ begin
     Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
     Ini.WriteInteger('extraction', 'MaxThreads', FMaxThreads);
     Ini.WriteBool('extraction', 'UseBmpPipe', FUseBmpPipe);
+    Ini.WriteBool('extraction', 'HwAccel', FHwAccel);
 
     if FOutputMode = womCombined then
       Ini.WriteString('output', 'Mode', 'combined')
