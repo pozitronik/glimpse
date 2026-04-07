@@ -59,7 +59,9 @@ uses
   TestWcxSettings in 'TestWcxSettings.pas',
   TestWcxAPI in 'TestWcxAPI.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
-  TestCombinedImage in 'TestCombinedImage.pas';
+  TestCombinedImage in 'TestCombinedImage.pas',
+  uProbeCache in '..\src\uProbeCache.pas',
+  TestProbeCache in 'TestProbeCache.pas';
 
 var
   Runner: ITestRunner;

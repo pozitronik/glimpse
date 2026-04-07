@@ -12,7 +12,7 @@ uses
   uTypes, uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uExtractionWorker,
-  uFrameExtractor, uFrameExport, uExtractionController;
+  uFrameExtractor, uFrameExport, uExtractionController, uProbeCache;
 
 type
   { Plugin form created as a child of TC's Lister window. }
@@ -53,6 +53,7 @@ type
     FExporter: TFrameExporter;
     { Extraction }
     FExtractCtrl: TExtractionController;
+    FProbeCache: TProbeCache;
     { Animation }
     FAnimTimer: TTimer;
     { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
@@ -316,6 +317,8 @@ begin
   {$ENDIF}
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
 
+  FProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
+
   { Create extraction controller with appropriate cache }
   if FSettings.CacheEnabled then
     FExtractCtrl := TExtractionController.Create(Handle,
@@ -348,6 +351,7 @@ begin
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
   FExtractCtrl.Free;
+  FProbeCache.Free;
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
   FExporter.Free;
@@ -969,12 +973,16 @@ begin
     Exit;
   end;
 
-  { Probe video metadata synchronously (fast, reads only header) }
-  FFmpeg := TFFmpegExe.Create(FFFmpegPath);
-  try
-    FVideoInfo := FFmpeg.ProbeVideo(FFileName);
-  finally
-    FFmpeg.Free;
+  { Try cached probe first; fall back to ffmpeg on miss }
+  if not FProbeCache.TryGet(FFileName, FVideoInfo) then
+  begin
+    FFmpeg := TFFmpegExe.Create(FFFmpegPath);
+    try
+      FVideoInfo := FFmpeg.ProbeVideo(FFileName);
+    finally
+      FFmpeg.Free;
+    end;
+    FProbeCache.Put(FFileName, FVideoInfo);
   end;
 
   { Update banner info for combined image export }

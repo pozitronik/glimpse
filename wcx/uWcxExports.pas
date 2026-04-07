@@ -48,7 +48,7 @@ uses
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor, uExtractionPlanner,
-  uCombinedImage, uDebugLog, uPathExpand;
+  uCombinedImage, uDebugLog, uPathExpand, uProbeCache;
 
 type
   { State for one open archive (video file) }
@@ -273,11 +273,21 @@ begin
       Exit;
     end;
 
-    FFmpeg := TFFmpegExe.Create(H.FFmpegPath);
+    { Try cached probe first; fall back to ffmpeg on miss }
+    var ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
     try
-      H.VideoInfo := FFmpeg.ProbeVideo(AFileName);
+      if not ProbeC.TryGet(AFileName, H.VideoInfo) then
+      begin
+        FFmpeg := TFFmpegExe.Create(H.FFmpegPath);
+        try
+          H.VideoInfo := FFmpeg.ProbeVideo(AFileName);
+        finally
+          FFmpeg.Free;
+        end;
+        ProbeC.Put(AFileName, H.VideoInfo);
+      end;
     finally
-      FFmpeg.Free;
+      ProbeC.Free;
     end;
 
     if not H.VideoInfo.IsValid then
