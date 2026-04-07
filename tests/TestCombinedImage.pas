@@ -768,13 +768,13 @@ var
   Info: TBannerInfo;
   Lines: TArray<string>;
 begin
-  { Duration under 1 hour should use zero-padded MM:SS without hours }
+  { Duration under 1 hour should show M:SS without hours }
   Info := Default(TBannerInfo);
   Info.FileName := 'clip.mp4';
   Info.DurationSec := 125; { 2:05 }
   Lines := FormatBannerLines(Info);
-  Assert.IsTrue(Lines[1].Contains('02:05'),
-    Format('Short duration should be zero-padded MM:SS, got: [%s]', [Lines[1]]));
+  Assert.IsTrue(Lines[1].Contains('2:05'),
+    Format('Short duration should show M:SS, got: [%s]', [Lines[1]]));
   Assert.IsFalse(Lines[1].Contains('0:02:05'),
     'Should not have hour prefix for short clips');
 end;

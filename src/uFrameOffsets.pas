@@ -28,6 +28,10 @@ function FormatTimecode(ASeconds: Double): string;
 { Formats a time in seconds as HH-MM-SS.mmm for use in filenames. }
 function FormatTimecodeForFilename(ASeconds: Double): string;
 
+{ Formats a duration in seconds as human-readable H:MM:SS or M:SS.
+  Returns '?' for non-positive values. }
+function FormatDurationHMS(ASeconds: Double): string;
+
 implementation
 
 uses
@@ -87,6 +91,22 @@ end;
 function FormatTimecodeForFilename(ASeconds: Double): string;
 begin
   Result := StringReplace(FormatTimecode(ASeconds), ':', '-', [rfReplaceAll]);
+end;
+
+function FormatDurationHMS(ASeconds: Double): string;
+var
+  Total, H, M, S: Integer;
+begin
+  if ASeconds <= 0 then
+    Exit('?');
+  Total := Round(ASeconds);
+  H := Total div 3600;
+  M := (Total mod 3600) div 60;
+  S := Total mod 60;
+  if H > 0 then
+    Result := Format('%d:%.2d:%.2d', [H, M, S])
+  else
+    Result := Format('%d:%.2d', [M, S]);
 end;
 
 end.

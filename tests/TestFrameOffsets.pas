@@ -70,6 +70,19 @@ type
     procedure TestSingleFrameWithEdgeGuard;
     [Test]
     procedure TestEdgeGuard50Raises;
+    { FormatDurationHMS tests }
+    [Test]
+    procedure TestDurationHMS_Zero;
+    [Test]
+    procedure TestDurationHMS_Negative;
+    [Test]
+    procedure TestDurationHMS_SecondsOnly;
+    [Test]
+    procedure TestDurationHMS_MinutesAndSeconds;
+    [Test]
+    procedure TestDurationHMS_Hours;
+    [Test]
+    procedure TestDurationHMS_Rounding;
   end;
 
 implementation
@@ -373,6 +386,46 @@ begin
   Assert.WillRaise(
     procedure begin CalculateFrameOffsets(100.0, 4, 50); end,
     EArgumentException, 'SkipEdgesPercent=50 must raise');
+end;
+
+{ FormatDurationHMS tests }
+
+procedure TTestFrameOffsets.TestDurationHMS_Zero;
+begin
+  Assert.AreEqual('?', FormatDurationHMS(0));
+end;
+
+procedure TTestFrameOffsets.TestDurationHMS_Negative;
+begin
+  Assert.AreEqual('?', FormatDurationHMS(-10));
+end;
+
+procedure TTestFrameOffsets.TestDurationHMS_SecondsOnly;
+begin
+  Assert.AreEqual('0:05', FormatDurationHMS(5));
+  Assert.AreEqual('0:59', FormatDurationHMS(59));
+end;
+
+procedure TTestFrameOffsets.TestDurationHMS_MinutesAndSeconds;
+begin
+  Assert.AreEqual('1:00', FormatDurationHMS(60));
+  Assert.AreEqual('1:01', FormatDurationHMS(61));
+  Assert.AreEqual('59:59', FormatDurationHMS(3599));
+end;
+
+procedure TTestFrameOffsets.TestDurationHMS_Hours;
+begin
+  Assert.AreEqual('1:00:00', FormatDurationHMS(3600));
+  Assert.AreEqual('1:01:01', FormatDurationHMS(3661));
+  Assert.AreEqual('25:00:00', FormatDurationHMS(90000));
+end;
+
+procedure TTestFrameOffsets.TestDurationHMS_Rounding;
+begin
+  { 90.6 rounds to 91 = 1:31 }
+  Assert.AreEqual('1:31', FormatDurationHMS(90.6));
+  { 59.5 rounds to 60 = 1:00 }
+  Assert.AreEqual('1:00', FormatDurationHMS(59.5));
 end;
 
 initialization

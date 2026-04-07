@@ -84,22 +84,6 @@ begin
     Result := Format('%d B', [ABytes]);
 end;
 
-{ Formats duration in seconds to HH:MM:SS }
-function FormatDurationHMS(ASec: Double): string;
-var
-  H, M, S: Integer;
-  Total: Integer;
-begin
-  Total := Round(ASec);
-  H := Total div 3600;
-  M := (Total mod 3600) div 60;
-  S := Total mod 60;
-  if H > 0 then
-    Result := Format('%d:%.2d:%.2d', [H, M, S])
-  else
-    Result := Format('%.2d:%.2d', [M, S]);
-end;
-
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
 var
   Line1, Line2, Line3, Audio: string;

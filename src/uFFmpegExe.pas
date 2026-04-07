@@ -5,7 +5,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, Winapi.Windows, Vcl.Graphics,
-  uFrameOffsets;
+  uFrameOffsets, uTypes;
 
 type
   TVideoInfo = record
@@ -39,8 +39,7 @@ type
       AUseKeyframes=True adds -noaccurate_seek to grab the nearest keyframe (faster).
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double;
-      AUseBmp: Boolean = False; AMaxSide: Integer = 0;
-      AHwAccel: Boolean = False; AUseKeyframes: Boolean = False): TBitmap;
+      const AOptions: TExtractionOptions): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -506,8 +505,7 @@ begin
 end;
 
 function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
-  AUseBmp: Boolean; AMaxSide: Integer; AHwAccel: Boolean;
-  AUseKeyframes: Boolean): TBitmap;
+  const AOptions: TExtractionOptions): TBitmap;
 var
   CmdLine, Codec, ScaleFilter, HwAccelFlag, KeyframeFlag: string;
   StdOut, StdErr: TBytes;
@@ -516,24 +514,24 @@ var
 begin
   Result := nil;
 
-  if AUseBmp then
+  if AOptions.UseBmpPipe then
     Codec := '-f image2pipe -vcodec bmp'
   else
     Codec := '-q:v 2 -f image2pipe -vcodec png';
 
-  { Fit within AMaxSide x AMaxSide box, preserve aspect ratio, even dimensions }
-  if AMaxSide > 0 then
+  { Fit within MaxSide x MaxSide box, preserve aspect ratio, even dimensions }
+  if AOptions.MaxSide > 0 then
     ScaleFilter := Format('-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ',
-      [AMaxSide, AMaxSide])
+      [AOptions.MaxSide, AOptions.MaxSide])
   else
     ScaleFilter := '';
 
-  if AHwAccel then
+  if AOptions.HwAccel then
     HwAccelFlag := '-hwaccel auto '
   else
     HwAccelFlag := '';
 
-  if AUseKeyframes then
+  if AOptions.UseKeyframes then
     KeyframeFlag := '-noaccurate_seek '
   else
     KeyframeFlag := '';
@@ -549,7 +547,7 @@ begin
     Exit;
 
   try
-    if AUseBmp then
+    if AOptions.UseBmpPipe then
     begin
       Stream := TMemoryStream.Create;
       try

@@ -9,7 +9,7 @@ uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   Winapi.Windows, Winapi.Messages,
   Vcl.Graphics,
-  uFrameOffsets, uFrameExtractor, uCache;
+  uFrameOffsets, uFrameExtractor, uCache, uTypes;
 
 const
   WM_FRAME_READY     = WM_USER + 100; { Notification: pending frames available in queue }
@@ -34,10 +34,7 @@ type
     FQueueLock: TCriticalSection;
     FCache: IFrameCache;
     FActiveWorkerCount: PInteger; { shared counter; last thread posts WM_EXTRACTION_DONE }
-    FUseBmpPipe: Boolean;
-    FMaxSide: Integer;
-    FHwAccel: Boolean;
-    FUseKeyframes: Boolean;
+    FOptions: TExtractionOptions;
   protected
     procedure Execute; override;
   public
@@ -45,8 +42,7 @@ type
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
       const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-      AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean;
-      AUseKeyframes: Boolean);
+      const AOptions: TExtractionOptions);
   end;
 
 implementation
@@ -64,8 +60,7 @@ constructor TExtractionThread.Create(const AExtractor: IFrameExtractor;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
   AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
   const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-  AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean;
-  AUseKeyframes: Boolean);
+  const AOptions: TExtractionOptions);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -77,10 +72,7 @@ begin
   FQueueLock := AQueueLock;
   FCache := ACache;
   FActiveWorkerCount := AActiveWorkerCount;
-  FUseBmpPipe := AUseBmpPipe;
-  FMaxSide := AMaxSide;
-  FHwAccel := AHwAccel;
-  FUseKeyframes := AUseKeyframes;
+  FOptions := AOptions;
 end;
 
 procedure TExtractionThread.Execute;
@@ -106,8 +98,8 @@ begin
       try
         Source := 'none';
 
-        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset, FMaxSide,
-          FUseKeyframes);
+        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset,
+          FOptions.MaxSide, FOptions.UseKeyframes);
         if Bmp <> nil then
           Source := 'cache';
 
@@ -115,12 +107,12 @@ begin
         if Bmp = nil then
         begin
           Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset,
-            FUseBmpPipe, FMaxSide, FHwAccel, FUseKeyframes);
+            FOptions);
           if Bmp <> nil then
           begin
             Source := 'extract';
-            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp, FMaxSide,
-              FUseKeyframes);
+            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp,
+              FOptions.MaxSide, FOptions.UseKeyframes);
           end;
         end;
 

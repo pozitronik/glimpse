@@ -9,7 +9,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Graphics,
   uFrameOffsets, uExtractionWorker, uFrameExtractor, uCache,
-  uExtractionPlanner;
+  uExtractionPlanner, uTypes;
 
 type
   { Callback: frame arrived from worker thread (ABitmap = nil signals error) }
@@ -33,8 +33,8 @@ type
     destructor Destroy; override;
     procedure Start(const AExtractor: IFrameExtractor;
       const AFileName: string; const AOffsets: TFrameOffsetArray;
-      AMaxWorkers, AMaxThreads: Integer; AUseBmpPipe: Boolean;
-      AMaxSide: Integer; AHwAccel: Boolean; AUseKeyframes: Boolean;
+      AMaxWorkers, AMaxThreads: Integer;
+      const AOptions: TExtractionOptions;
       const ACacheOverride: IFrameCache = nil);
     procedure Stop;
     { Drains the pending queue and delivers frames via OnFrameDelivered. }
@@ -86,8 +86,8 @@ end;
 
 procedure TExtractionController.Start(const AExtractor: IFrameExtractor;
   const AFileName: string; const AOffsets: TFrameOffsetArray;
-  AMaxWorkers, AMaxThreads: Integer; AUseBmpPipe: Boolean;
-  AMaxSide: Integer; AHwAccel: Boolean; AUseKeyframes: Boolean;
+  AMaxWorkers, AMaxThreads: Integer;
+  const AOptions: TExtractionOptions;
   const ACacheOverride: IFrameCache);
 var
   ThreadCache: IFrameCache;
@@ -113,7 +113,7 @@ begin
     Chunk := Copy(AOffsets, Chunks[W].Start, Chunks[W].Len);
     FWorkerThreads[W] := TExtractionThread.Create(AExtractor, AFileName,
       Chunk, FFormHandle, FPendingFrames, FPendingLock, ThreadCache,
-      @FActiveWorkerCount, AUseBmpPipe, AMaxSide, AHwAccel, AUseKeyframes);
+      @FActiveWorkerCount, AOptions);
   end;
 
   { Start all threads after creation to minimize scheduling skew }

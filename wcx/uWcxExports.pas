@@ -48,7 +48,7 @@ uses
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor, uExtractionPlanner,
-  uCombinedImage, uDebugLog, uPathExpand, uProbeCache;
+  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes;
 
 type
   { State for one open archive (video file) }
@@ -77,6 +77,15 @@ var
 procedure WcxLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
+end;
+
+{ Builds extraction options from WCX settings (always full resolution). }
+function WcxExtractionOptions(ASettings: TWcxSettings): TExtractionOptions;
+begin
+  Result.UseBmpPipe := ASettings.UseBmpPipe;
+  Result.MaxSide := 0;
+  Result.HwAccel := ASettings.HwAccel;
+  Result.UseKeyframes := ASettings.UseKeyframes;
 end;
 
 procedure InvalidateFrameCache;
@@ -138,8 +147,7 @@ begin
   try
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName,
-        H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe, 0, H.Settings.HwAccel,
-        H.Settings.UseKeyframes);
+        H.Offsets[I].TimeOffset, WcxExtractionOptions(H.Settings));
 
     Result := RenderCombinedImage(Frames, H.Offsets,
       H.Settings.CombinedColumns, H.Settings.CellGap,
@@ -191,8 +199,7 @@ begin
   for I := 0 to Length(H.Offsets) - 1 do
   begin
     Bmp := AExtractor.ExtractFrame(H.FileName,
-      H.Offsets[I].TimeOffset, H.Settings.UseBmpPipe, 0, H.Settings.HwAccel,
-      H.Settings.UseKeyframes);
+      H.Offsets[I].TimeOffset, WcxExtractionOptions(H.Settings));
     if Bmp = nil then Continue;
     try
       TempPath := TPath.Combine(GCachedTempDir,
@@ -409,8 +416,8 @@ begin
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
     Bmp := Extractor.ExtractFrame(H.FileName,
-      H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.UseBmpPipe, 0,
-      H.Settings.HwAccel, H.Settings.UseKeyframes);
+      H.Offsets[H.CurrentIndex].TimeOffset,
+      WcxExtractionOptions(H.Settings));
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try

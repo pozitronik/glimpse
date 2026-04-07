@@ -15,6 +15,7 @@ type
     [Test] procedure ZoomModeOrdinals;
     [Test] procedure ZoomModeRange;
     [Test] procedure FFmpegModeOrdinals;
+    [Test] procedure ExtractionOptionsValueSemantics;
   end;
 
 implementation
@@ -54,6 +55,29 @@ procedure TTestTypes.FFmpegModeOrdinals;
 begin
   Assert.AreEqual(0, Ord(fmAuto));
   Assert.AreEqual(1, Ord(fmExe));
+end;
+
+procedure TTestTypes.ExtractionOptionsValueSemantics;
+var
+  A, B: TExtractionOptions;
+begin
+  A.UseBmpPipe := True;
+  A.MaxSide := 480;
+  A.HwAccel := True;
+  A.UseKeyframes := False;
+
+  { Record copy preserves all fields }
+  B := A;
+  Assert.IsTrue(B.UseBmpPipe);
+  Assert.AreEqual(480, B.MaxSide);
+  Assert.IsTrue(B.HwAccel);
+  Assert.IsFalse(B.UseKeyframes);
+
+  { Modifying copy does not affect original }
+  B.MaxSide := 1920;
+  B.UseKeyframes := True;
+  Assert.AreEqual(480, A.MaxSide);
+  Assert.IsFalse(A.UseKeyframes);
 end;
 
 end.

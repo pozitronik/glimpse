@@ -704,23 +704,6 @@ end;
 
 procedure TPluginForm.UpdateStatusBar;
 
-  function FormatDuration(ASeconds: Double): string;
-  var
-    H, M, S: Integer;
-    Total: Integer;
-  begin
-    if ASeconds <= 0 then
-      Exit('?');
-    Total := Round(ASeconds);
-    H := Total div 3600;
-    M := (Total mod 3600) div 60;
-    S := Total mod 60;
-    if H > 0 then
-      Result := Format('%d:%.2d:%.2d', [H, M, S])
-    else
-      Result := Format('%d:%.2d', [M, S]);
-  end;
-
   function FormatBitrate(AKbps: Integer): string;
   begin
     if AKbps >= 1000 then
@@ -758,7 +741,7 @@ begin
 
   { Duration }
   if FVideoInfo.Duration > 0 then
-    AddPanel(FormatDuration(FVideoInfo.Duration), SBP_DURATION_W);
+    AddPanel(FormatDurationHMS(FVideoInfo.Duration), SBP_DURATION_W);
 
   { Overall bitrate }
   if FVideoInfo.Bitrate > 0 then
@@ -1041,7 +1024,7 @@ end;
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
   Extractor: IFrameExtractor;
-  MaxSide: Integer;
+  Options: TExtractionOptions;
 begin
   FExtractCtrl.Stop;
   FLoadStartTick := GetTickCount64;
@@ -1052,17 +1035,19 @@ begin
   ShowProgress('Extracting...');
   FAnimTimer.Enabled := True;
 
-  MaxSide := 0;
+  Options.UseBmpPipe := FSettings.UseBmpPipe;
+  Options.MaxSide := 0;
   if FSettings.ScaledExtraction then
-    MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight,
-      Length(FOffsets), FFrameView.AspectRatio,
+    Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth,
+      FScrollBox.ClientHeight, Length(FOffsets), FFrameView.AspectRatio,
       FVideoInfo.Width, FVideoInfo.Height,
       FSettings.MinFrameSide, FSettings.MaxFrameSide);
+  Options.HwAccel := FSettings.HwAccel;
+  Options.UseKeyframes := FSettings.UseKeyframes;
 
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets,
-    FSettings.MaxWorkers, FSettings.MaxThreads, FSettings.UseBmpPipe,
-    MaxSide, FSettings.HwAccel, FSettings.UseKeyframes, ACacheOverride);
+    FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
