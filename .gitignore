@@ -27,3 +27,5 @@
 /src/Win64/Debug/Glimpse.wlx64
 /src/Win64/Debug/glimpse_debug.log
 /src/Win64/Debug/Glimpse.ini
+*.zip
+*.jpg

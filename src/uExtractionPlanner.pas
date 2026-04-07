@@ -13,7 +13,8 @@ type
     Len: Integer;    { number of frames in this chunk }
   end;
 
-  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged);
+  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged,
+    scScaledExtractionChanged);
   TSettingsChanges = set of TSettingsChange;
 
   TSettingsSnapshot = record
@@ -22,6 +23,9 @@ type
     CacheMaxSizeMB: Integer;
     SkipEdgesPercent: Integer;
     FFmpegExePath: string;
+    ScaledExtraction: Boolean;
+    MinFrameSide: Integer;
+    MaxFrameSide: Integer;
   end;
 
 { Splits FrameCount frames into chunks for parallel extraction.
@@ -38,10 +42,19 @@ function TakeSettingsSnapshot(ASettings: TPluginSettings): TSettingsSnapshot;
 function DetectSettingsChanges(const AOld: TSettingsSnapshot;
   ASettings: TPluginSettings): TSettingsChanges;
 
+{ Calculates the extraction max side (bigger dimension) for scaled extraction.
+  Returns 0 when scaling is not needed (video already fits, or feature disabled).
+  AViewportW/H: available display area; AFrameCount: number of frames;
+  AAspectRatio: height/width ratio of the video;
+  ANativeW/H: native video dimensions;
+  AMinSide/AMaxSide: user-configured boundaries for the bigger side. }
+function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer;
+  AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
+
 implementation
 
 uses
-  System.Math;
+  System.Math, uDefaults;
 
 function PlanWorkerChunks(FrameCount, MaxWorkers, MaxThreads: Integer): TArray<TWorkerChunk>;
 var
@@ -84,6 +97,39 @@ begin
   end;
 end;
 
+function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer;
+  AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
+var
+  AreaPerFrame, FrameW, FrameH: Double;
+  BiggerSide, NativeBigger: Integer;
+begin
+  Result := 0;
+  if (AViewportW <= 0) or (AViewportH <= 0) or (AFrameCount <= 0) then
+    Exit;
+  if AAspectRatio <= 0 then
+    AAspectRatio := 9.0 / 16.0;
+
+  { Area available per frame, then derive dimensions preserving aspect ratio }
+  AreaPerFrame := (Int64(AViewportW) * AViewportH) / AFrameCount;
+  { AspectRatio = H/W, so W = sqrt(Area / AR), H = sqrt(Area * AR) }
+  FrameW := Sqrt(AreaPerFrame / AAspectRatio);
+  FrameH := FrameW * AAspectRatio;
+  BiggerSide := Round(Max(FrameW, FrameH));
+
+  { Clamp to user-configured boundaries }
+  BiggerSide := EnsureRange(BiggerSide, AMinSide, AMaxSide);
+
+  { Round up to nearest bucket for cache key stability }
+  BiggerSide := ((BiggerSide + SCALE_BUCKET - 1) div SCALE_BUCKET) * SCALE_BUCKET;
+
+  { No point scaling if video is already small enough }
+  NativeBigger := Max(ANativeW, ANativeH);
+  if (NativeBigger > 0) and (NativeBigger <= BiggerSide) then
+    Exit(0);
+
+  Result := BiggerSide;
+end;
+
 function TakeSettingsSnapshot(ASettings: TPluginSettings): TSettingsSnapshot;
 begin
   Result.CacheEnabled := ASettings.CacheEnabled;
@@ -91,6 +137,9 @@ begin
   Result.CacheMaxSizeMB := ASettings.CacheMaxSizeMB;
   Result.SkipEdgesPercent := ASettings.SkipEdgesPercent;
   Result.FFmpegExePath := ASettings.FFmpegExePath;
+  Result.ScaledExtraction := ASettings.ScaledExtraction;
+  Result.MinFrameSide := ASettings.MinFrameSide;
+  Result.MaxFrameSide := ASettings.MaxFrameSide;
 end;
 
 function DetectSettingsChanges(const AOld: TSettingsSnapshot;
@@ -109,6 +158,11 @@ begin
 
   if ASettings.SkipEdgesPercent <> AOld.SkipEdgesPercent then
     Include(Result, scSkipEdgesChanged);
+
+  if (ASettings.ScaledExtraction <> AOld.ScaledExtraction)
+    or (ASettings.MinFrameSide <> AOld.MinFrameSide)
+    or (ASettings.MaxFrameSide <> AOld.MaxFrameSide) then
+    Include(Result, scScaledExtractionChanged);
 end;
 
 end.

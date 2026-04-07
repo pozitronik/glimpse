@@ -1033,6 +1033,7 @@ end;
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
   Extractor: IFrameExtractor;
+  MaxSide: Integer;
 begin
   FExtractCtrl.Stop;
   FLoadStartTick := GetTickCount64;
@@ -1043,10 +1044,17 @@ begin
   ShowProgress('Extracting...');
   FAnimTimer.Enabled := True;
 
+  MaxSide := 0;
+  if FSettings.ScaledExtraction then
+    MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight,
+      Length(FOffsets), FFrameView.AspectRatio,
+      FVideoInfo.Width, FVideoInfo.Height,
+      FSettings.MinFrameSide, FSettings.MaxFrameSide);
+
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets,
     FSettings.MaxWorkers, FSettings.MaxThreads, FSettings.UseBmpPipe,
-    ACacheOverride);
+    MaxSide, ACacheOverride);
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
@@ -1744,8 +1752,8 @@ begin
     Exit;
   end;
 
-  { Re-extract if skip edges changed }
-  if scSkipEdgesChanged in Changes then
+  { Re-extract if skip edges or scaled extraction settings changed }
+  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged]) <> [] then
     RefreshExtraction;
 end;
 

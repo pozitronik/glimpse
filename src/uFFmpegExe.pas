@@ -37,7 +37,7 @@ type
       AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double;
-      AUseBmp: Boolean = False): TBitmap;
+      AUseBmp: Boolean = False; AMaxSide: Integer = 0): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -503,9 +503,9 @@ begin
 end;
 
 function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
-  AUseBmp: Boolean): TBitmap;
+  AUseBmp: Boolean; AMaxSide: Integer): TBitmap;
 var
-  CmdLine, Codec: string;
+  CmdLine, Codec, ScaleFilter: string;
   StdOut, StdErr: TBytes;
   ExitCode: Integer;
   Stream: TMemoryStream;
@@ -517,11 +517,18 @@ begin
   else
     Codec := '-q:v 2 -f image2pipe -vcodec png';
 
+  { Fit within AMaxSide x AMaxSide box, preserve aspect ratio, even dimensions }
+  if AMaxSide > 0 then
+    ScaleFilter := Format('-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ',
+      [AMaxSide, AMaxSide])
+  else
+    ScaleFilter := '';
+
   CmdLine := Format('"%s" -nostdin -loglevel error -ss %s -i "%s" ' +
-    '-frames:v 1 %s pipe:1',
+    '-frames:v 1 %s%s pipe:1',
     [FExePath,
      Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
-     AFileName, Codec]);
+     AFileName, ScaleFilter, Codec]);
 
   ExitCode := RunProcess(CmdLine, StdOut, StdErr);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then

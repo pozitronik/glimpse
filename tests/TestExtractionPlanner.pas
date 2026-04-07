@@ -35,6 +35,20 @@ type
     [Test] procedure TestDetectSettingsChangesFFmpegPath;
     [Test] procedure TestDetectSettingsChangesSkipEdges;
     [Test] procedure TestDetectSettingsChangesMultiple;
+    [Test] procedure TestDetectSettingsChangesScaledExtraction;
+    [Test] procedure TestDetectSettingsChangesMinFrameSide;
+    [Test] procedure TestDetectSettingsChangesMaxFrameSide;
+
+    { CalcExtractionMaxSide tests }
+    [Test] procedure TestCalcMaxSideLandscape;
+    [Test] procedure TestCalcMaxSidePortrait;
+    [Test] procedure TestCalcMaxSideClampsToMin;
+    [Test] procedure TestCalcMaxSideClampsToMax;
+    [Test] procedure TestCalcMaxSideBucketed;
+    [Test] procedure TestCalcMaxSideNoUpscale;
+    [Test] procedure TestCalcMaxSideZeroFrames;
+    [Test] procedure TestCalcMaxSideZeroViewport;
+    [Test] procedure TestCalcMaxSideSingleFrame;
   end;
 
 implementation
@@ -225,6 +239,9 @@ begin
     Assert.AreEqual(500, Snap.CacheMaxSizeMB);
     Assert.AreEqual(5, Snap.SkipEdgesPercent);
     Assert.AreEqual('C:\ffmpeg.exe', Snap.FFmpegExePath);
+    Assert.IsFalse(Snap.ScaledExtraction);
+    Assert.AreEqual(120, Snap.MinFrameSide);
+    Assert.AreEqual(1920, Snap.MaxFrameSide);
   finally
     S.Free;
   end;
@@ -349,6 +366,145 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesScaledExtraction;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.ScaledExtraction := True;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scScaledExtractionChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesMinFrameSide;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.MinFrameSide := 200;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scScaledExtractionChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesMaxFrameSide;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.MaxFrameSide := 3840;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scScaledExtractionChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+{ CalcExtractionMaxSide tests }
+
+procedure TTestExtractionPlanner.TestCalcMaxSideLandscape;
+var
+  R: Integer;
+begin
+  { 1024x768 viewport, 4 frames, 16:9 video (AR=0.5625), native 1920x1080 }
+  R := CalcExtractionMaxSide(1024, 768, 4, 9/16, 1920, 1080, 120, 1920);
+  Assert.IsTrue(R > 0, 'Should scale down 1920x1080 for 4 thumbnails');
+  Assert.IsTrue(R <= 1920, 'Must not exceed max');
+  Assert.IsTrue(R >= 120, 'Must not go below min');
+  Assert.AreEqual(0, R mod 160, 'Must be bucketed to 160px step');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSidePortrait;
+var
+  R: Integer;
+begin
+  { 1024x768 viewport, 4 frames, 9:16 portrait video (AR=16/9), native 1080x1920 }
+  R := CalcExtractionMaxSide(1024, 768, 4, 16/9, 1080, 1920, 120, 1920);
+  Assert.IsTrue(R > 0, 'Should scale down 1080x1920 for 4 thumbnails');
+  Assert.IsTrue(R <= 1920, 'Must not exceed max');
+  Assert.AreEqual(0, R mod 160, 'Must be bucketed to 160px step');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideClampsToMin;
+var
+  R: Integer;
+begin
+  { Tiny viewport with many frames: raw result would be below MinFrameSide }
+  R := CalcExtractionMaxSide(200, 150, 99, 9/16, 3840, 2160, 120, 1920);
+  Assert.IsTrue(R >= 160, 'Result must be at least one bucket above min');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideClampsToMax;
+var
+  R: Integer;
+begin
+  { Large viewport, single frame: raw result would exceed MaxFrameSide }
+  R := CalcExtractionMaxSide(3840, 2160, 1, 9/16, 7680, 4320, 120, 1920);
+  Assert.IsTrue(R <= 1920, 'Result must not exceed MaxFrameSide');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideBucketed;
+var
+  R: Integer;
+begin
+  { Verify result is always a multiple of SCALE_BUCKET (160) }
+  R := CalcExtractionMaxSide(1024, 768, 10, 9/16, 1920, 1080, 120, 1920);
+  if R > 0 then
+    Assert.AreEqual(0, R mod 160, 'Result must be a multiple of 160');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideNoUpscale;
+var
+  R: Integer;
+begin
+  { Video is smaller than the calculated target: no scaling needed }
+  R := CalcExtractionMaxSide(1920, 1080, 1, 9/16, 320, 180, 120, 1920);
+  Assert.AreEqual(0, R, 'Must return 0 when video is already small enough');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideZeroFrames;
+var
+  R: Integer;
+begin
+  R := CalcExtractionMaxSide(1024, 768, 0, 9/16, 1920, 1080, 120, 1920);
+  Assert.AreEqual(0, R, 'Must return 0 for zero frames');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideZeroViewport;
+var
+  R: Integer;
+begin
+  R := CalcExtractionMaxSide(0, 0, 4, 9/16, 1920, 1080, 120, 1920);
+  Assert.AreEqual(0, R, 'Must return 0 for zero viewport');
+end;
+
+procedure TTestExtractionPlanner.TestCalcMaxSideSingleFrame;
+var
+  R: Integer;
+begin
+  { Single frame in 1920x1080 viewport: bigger side should match the viewport }
+  R := CalcExtractionMaxSide(1920, 1080, 1, 9/16, 3840, 2160, 120, 1920);
+  Assert.IsTrue(R > 0, 'Should scale down 3840 to fit viewport');
+  Assert.IsTrue(R <= 1920, 'Must not exceed max');
 end;
 
 initialization

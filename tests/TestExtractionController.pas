@@ -94,7 +94,7 @@ begin
   try
     Ctrl.RecreateCache(False, '', 0);
     { Null cache always misses }
-    Assert.IsNull(Ctrl.Cache.TryGet('nonexistent.mp4', 1.0));
+    Assert.IsNull(Ctrl.Cache.TryGet('nonexistent.mp4', 1.0, 0));
   finally
     Ctrl.Free;
   end;

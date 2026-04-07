@@ -14,6 +14,9 @@ const
   DEF_MAX_WORKERS     = 1;
   DEF_MAX_THREADS     = -1;  { -1 = no limit, 0 = auto (CPU count) }
   DEF_USE_BMP_PIPE    = True;
+  DEF_SCALED_EXTRACTION = False;
+  DEF_MIN_FRAME_SIDE  = 120;
+  DEF_MAX_FRAME_SIDE  = 1920;
 
   { Output format defaults }
   DEF_SAVE_FORMAT     = sfPNG;
@@ -36,6 +39,9 @@ const
   MAX_MAX_WORKERS     = 16;
   MIN_MAX_THREADS     = -1;
   MAX_MAX_THREADS     = 64;
+  MIN_FRAME_SIDE      = 32;
+  MAX_FRAME_SIDE      = 7680;  { 8K }
+  SCALE_BUCKET        = 160;   { resolution bucket step for cache key stability }
   MIN_JPEG_QUALITY    = 1;
   MAX_JPEG_QUALITY    = 100;
   MIN_PNG_COMPRESSION = 0;

@@ -22,6 +22,9 @@ type
     FMaxWorkers: Integer;
     FMaxThreads: Integer;
     FUseBmpPipe: Boolean;
+    FScaledExtraction: Boolean;
+    FMinFrameSide: Integer;
+    FMaxFrameSide: Integer;
     { [view] }
     FViewMode: TViewMode;
     FModeZoom: array[TViewMode] of TZoomMode;
@@ -81,6 +84,9 @@ type
     property MaxWorkers: Integer read FMaxWorkers write FMaxWorkers;
     property MaxThreads: Integer read FMaxThreads write FMaxThreads;
     property UseBmpPipe: Boolean read FUseBmpPipe write FUseBmpPipe;
+    property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
+    property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
+    property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;
 
     { [view] }
     property ViewMode: TViewMode read FViewMode write FViewMode;
@@ -181,6 +187,9 @@ begin
   FMaxWorkers := DEF_MAX_WORKERS;
   FMaxThreads := DEF_MAX_THREADS;
   FUseBmpPipe := DEF_USE_BMP_PIPE;
+  FScaledExtraction := DEF_SCALED_EXTRACTION;
+  FMinFrameSide := DEF_MIN_FRAME_SIDE;
+  FMaxFrameSide := DEF_MAX_FRAME_SIDE;
   FViewMode := DEF_VIEW_MODE;
   for var VM := Low(TViewMode) to High(TViewMode) do
     FModeZoom[VM] := DEF_ZOOM_MODE;
@@ -226,6 +235,11 @@ begin
     FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads',
       DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
     FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
+    FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
+    FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide',
+      DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
+    FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide',
+      DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
@@ -280,6 +294,9 @@ begin
     Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
     Ini.WriteInteger('extraction', 'MaxThreads', FMaxThreads);
     Ini.WriteBool('extraction', 'UseBmpPipe', FUseBmpPipe);
+    Ini.WriteBool('extraction', 'ScaledExtraction', FScaledExtraction);
+    Ini.WriteInteger('extraction', 'MinFrameSide', FMinFrameSide);
+    Ini.WriteInteger('extraction', 'MaxFrameSide', FMaxFrameSide);
 
     Ini.WriteString('view', 'Mode', ViewModeToStr(FViewMode));
     for var VM := Low(TViewMode) to High(TViewMode) do

@@ -35,6 +35,7 @@ type
     FCache: IFrameCache;
     FActiveWorkerCount: PInteger; { shared counter; last thread posts WM_EXTRACTION_DONE }
     FUseBmpPipe: Boolean;
+    FMaxSide: Integer;
   protected
     procedure Execute; override;
   public
@@ -42,7 +43,7 @@ type
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
       const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-      AUseBmpPipe: Boolean);
+      AUseBmpPipe: Boolean; AMaxSide: Integer);
   end;
 
 implementation
@@ -60,7 +61,7 @@ constructor TExtractionThread.Create(const AExtractor: IFrameExtractor;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
   AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
   const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-  AUseBmpPipe: Boolean);
+  AUseBmpPipe: Boolean; AMaxSide: Integer);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -73,6 +74,7 @@ begin
   FCache := ACache;
   FActiveWorkerCount := AActiveWorkerCount;
   FUseBmpPipe := AUseBmpPipe;
+  FMaxSide := AMaxSide;
 end;
 
 procedure TExtractionThread.Execute;
@@ -98,18 +100,19 @@ begin
       try
         Source := 'none';
 
-        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset);
+        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset, FMaxSide);
         if Bmp <> nil then
           Source := 'cache';
 
         { Cache miss: extract via extractor }
         if Bmp = nil then
         begin
-          Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset, FUseBmpPipe);
+          Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset,
+            FUseBmpPipe, FMaxSide);
           if Bmp <> nil then
           begin
             Source := 'extract';
-            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp);
+            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp, FMaxSide);
           end;
         end;
 

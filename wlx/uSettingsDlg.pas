@@ -23,6 +23,13 @@ type
     UdMaxWorkers: TUpDown;
     ChkMaxWorkersAuto: TCheckBox;
     ChkUseBmpPipe: TCheckBox;
+    ChkScaledExtraction: TCheckBox;
+    LblMinFrameSide: TLabel;
+    EdtMinFrameSide: TEdit;
+    UdMinFrameSide: TUpDown;
+    LblMaxFrameSide: TLabel;
+    EdtMaxFrameSide: TEdit;
+    UdMaxFrameSide: TUpDown;
     LblMaxThreads: TLabel;
     LblMaxThreadsAuto: TLabel;
     EdtMaxThreads: TEdit;
@@ -90,6 +97,7 @@ type
     procedure BtnFFmpegPathClick(Sender: TObject);
     procedure EdtFFmpegPathChange(Sender: TObject);
     procedure EdtMaxThreadsChange(Sender: TObject);
+    procedure ChkScaledExtractionClick(Sender: TObject);
     procedure EdtCacheFolderChange(Sender: TObject);
     procedure BtnClearCacheClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
@@ -100,6 +108,7 @@ type
     procedure UpdateMaxWorkersControls;
     procedure UpdateSaveFormatControls;
     procedure UpdateCacheControls;
+    procedure UpdateScaledExtractionControls;
     procedure UpdateFFmpegInfo;
     procedure UpdateCacheFolderInfo;
     procedure UpdateCacheSizeInfo;
@@ -135,7 +144,11 @@ begin
     UdMaxThreads.Position := ASettings.MaxThreads
   else
     UdMaxThreads.Position := 0;
+  ChkScaledExtraction.Checked := ASettings.ScaledExtraction;
+  UdMinFrameSide.Position := ASettings.MinFrameSide;
+  UdMaxFrameSide.Position := ASettings.MaxFrameSide;
   UpdateMaxWorkersControls;
+  UpdateScaledExtractionControls;
   EdtExtensions.Text := ASettings.ExtensionList;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
@@ -172,6 +185,9 @@ begin
   else
     ASettings.MaxWorkers := UdMaxWorkers.Position;
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
+  ASettings.ScaledExtraction := ChkScaledExtraction.Checked;
+  ASettings.MinFrameSide := UdMinFrameSide.Position;
+  ASettings.MaxFrameSide := UdMaxFrameSide.Position;
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
@@ -333,6 +349,11 @@ begin
   UpdateMaxWorkersControls;
 end;
 
+procedure TSettingsForm.ChkScaledExtractionClick(Sender: TObject);
+begin
+  UpdateScaledExtractionControls;
+end;
+
 procedure TSettingsForm.ChkCacheEnabledClick(Sender: TObject);
 begin
   UpdateCacheControls;
@@ -386,6 +407,19 @@ begin
   EdtCacheMaxSize.Enabled := CacheOn;
   UdCacheMaxSize.Enabled := CacheOn;
   LblCacheMaxSizeUnit.Enabled := CacheOn;
+end;
+
+procedure TSettingsForm.UpdateScaledExtractionControls;
+var
+  Enabled: Boolean;
+begin
+  Enabled := ChkScaledExtraction.Checked;
+  LblMinFrameSide.Enabled := Enabled;
+  EdtMinFrameSide.Enabled := Enabled;
+  UdMinFrameSide.Enabled := Enabled;
+  LblMaxFrameSide.Enabled := Enabled;
+  EdtMaxFrameSide.Enabled := Enabled;
+  UdMaxFrameSide.Enabled := Enabled;
 end;
 
 procedure TSettingsForm.UpdateFFmpegInfo;
