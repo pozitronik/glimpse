@@ -23,6 +23,7 @@ type
     FMaxThreads: Integer;
     FUseBmpPipe: Boolean;
     FHwAccel: Boolean;
+    FUseKeyframes: Boolean;
     FScaledExtraction: Boolean;
     FMinFrameSide: Integer;
     FMaxFrameSide: Integer;
@@ -86,6 +87,7 @@ type
     property MaxThreads: Integer read FMaxThreads write FMaxThreads;
     property UseBmpPipe: Boolean read FUseBmpPipe write FUseBmpPipe;
     property HwAccel: Boolean read FHwAccel write FHwAccel;
+    property UseKeyframes: Boolean read FUseKeyframes write FUseKeyframes;
     property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;
@@ -190,6 +192,7 @@ begin
   FMaxThreads := DEF_MAX_THREADS;
   FUseBmpPipe := DEF_USE_BMP_PIPE;
   FHwAccel := DEF_HW_ACCEL;
+  FUseKeyframes := DEF_USE_KEYFRAMES;
   FScaledExtraction := DEF_SCALED_EXTRACTION;
   FMinFrameSide := DEF_MIN_FRAME_SIDE;
   FMaxFrameSide := DEF_MAX_FRAME_SIDE;
@@ -239,6 +242,7 @@ begin
       DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
     FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
     FHwAccel := Ini.ReadBool('extraction', 'HwAccel', DEF_HW_ACCEL);
+    FUseKeyframes := Ini.ReadBool('extraction', 'UseKeyframes', DEF_USE_KEYFRAMES);
     FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
     FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide',
       DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
@@ -299,6 +303,7 @@ begin
     Ini.WriteInteger('extraction', 'MaxThreads', FMaxThreads);
     Ini.WriteBool('extraction', 'UseBmpPipe', FUseBmpPipe);
     Ini.WriteBool('extraction', 'HwAccel', FHwAccel);
+    Ini.WriteBool('extraction', 'UseKeyframes', FUseKeyframes);
     Ini.WriteBool('extraction', 'ScaledExtraction', FScaledExtraction);
     Ini.WriteInteger('extraction', 'MinFrameSide', FMinFrameSide);
     Ini.WriteInteger('extraction', 'MaxFrameSide', FMaxFrameSide);

@@ -24,6 +24,7 @@ type
     ChkMaxWorkersAuto: TCheckBox;
     ChkUseBmpPipe: TCheckBox;
     ChkHwAccel: TCheckBox;
+    ChkUseKeyframes: TCheckBox;
     ChkScaledExtraction: TCheckBox;
     LblMinFrameSide: TLabel;
     EdtMinFrameSide: TEdit;
@@ -142,6 +143,7 @@ begin
     UdMaxWorkers.Position := 1;
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
   ChkHwAccel.Checked := ASettings.HwAccel;
+  ChkUseKeyframes.Checked := ASettings.UseKeyframes;
   if ASettings.MaxThreads > 0 then
     UdMaxThreads.Position := ASettings.MaxThreads
   else
@@ -188,6 +190,7 @@ begin
     ASettings.MaxWorkers := UdMaxWorkers.Position;
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
+  ASettings.UseKeyframes := ChkUseKeyframes.Checked;
   ASettings.ScaledExtraction := ChkScaledExtraction.Checked;
   ASettings.MinFrameSide := UdMinFrameSide.Position;
   ASettings.MaxFrameSide := UdMaxFrameSide.Position;

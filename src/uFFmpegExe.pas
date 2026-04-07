@@ -36,10 +36,11 @@ type
     { Extracts a single frame at the given time offset.
       AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
       AHwAccel=True adds -hwaccel auto for GPU-accelerated decoding.
+      AUseKeyframes=True adds -noaccurate_seek to grab the nearest keyframe (faster).
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double;
       AUseBmp: Boolean = False; AMaxSide: Integer = 0;
-      AHwAccel: Boolean = False): TBitmap;
+      AHwAccel: Boolean = False; AUseKeyframes: Boolean = False): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -505,9 +506,10 @@ begin
 end;
 
 function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
-  AUseBmp: Boolean; AMaxSide: Integer; AHwAccel: Boolean): TBitmap;
+  AUseBmp: Boolean; AMaxSide: Integer; AHwAccel: Boolean;
+  AUseKeyframes: Boolean): TBitmap;
 var
-  CmdLine, Codec, ScaleFilter, HwAccelFlag: string;
+  CmdLine, Codec, ScaleFilter, HwAccelFlag, KeyframeFlag: string;
   StdOut, StdErr: TBytes;
   ExitCode: Integer;
   Stream: TMemoryStream;
@@ -531,9 +533,14 @@ begin
   else
     HwAccelFlag := '';
 
-  CmdLine := Format('"%s" -nostdin -loglevel error -ss %s %s-i "%s" ' +
+  if AUseKeyframes then
+    KeyframeFlag := '-noaccurate_seek '
+  else
+    KeyframeFlag := '';
+
+  CmdLine := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' +
     '-frames:v 1 %s%s pipe:1',
-    [FExePath,
+    [FExePath, KeyframeFlag,
      Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
      HwAccelFlag, AFileName, ScaleFilter, Codec]);
 

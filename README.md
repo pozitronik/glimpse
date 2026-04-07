@@ -66,6 +66,7 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers. 0 = auto (matches CPU core count)         |
 | Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary PNG files. Faster but uses more memory                                |
 | Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available (DXVA2, NVDEC, QuickSync). Falls back to software decoding silently        |
+| Use keyframes                     | Off         | Seeks to the nearest keyframe instead of decoding to the exact timestamp. Faster but timecodes may be less precise       |
 | Scale frames to display size      | Off         | Tells ffmpeg to downscale frames to match the current display size. Significantly faster for high-resolution video (4K+) |
 | Min side (px)                     | 120         | Minimum allowed frame dimension (bigger side) when scaled extraction is active. Prevents frames from becoming too small  |
 | Max side (px)                     | 1920        | Maximum allowed frame dimension (bigger side) when scaled extraction is active. Caps upscaling for low-res video         |
@@ -126,6 +127,7 @@ Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin u
 | Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers  |
 | Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary files                       |
 | Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available. Falls back to software silently |
+| Use keyframes                     | Off         | Seeks to the nearest keyframe instead of exact timestamp. Faster seeking       |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect                      |
 
 #### Output

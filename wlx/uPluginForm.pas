@@ -1062,7 +1062,7 @@ begin
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets,
     FSettings.MaxWorkers, FSettings.MaxThreads, FSettings.UseBmpPipe,
-    MaxSide, FSettings.HwAccel, ACacheOverride);
+    MaxSide, FSettings.HwAccel, FSettings.UseKeyframes, ACacheOverride);
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
@@ -1760,8 +1760,9 @@ begin
     Exit;
   end;
 
-  { Re-extract if skip edges or scaled extraction settings changed }
-  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged]) <> [] then
+  { Re-extract if skip edges, scaled extraction, or keyframes settings changed }
+  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged,
+    scUseKeyframesChanged]) <> [] then
     RefreshExtraction;
 end;
 

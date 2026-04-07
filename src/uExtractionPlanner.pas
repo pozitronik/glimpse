@@ -14,7 +14,7 @@ type
   end;
 
   TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged,
-    scScaledExtractionChanged);
+    scScaledExtractionChanged, scUseKeyframesChanged);
   TSettingsChanges = set of TSettingsChange;
 
   TSettingsSnapshot = record
@@ -26,6 +26,7 @@ type
     ScaledExtraction: Boolean;
     MinFrameSide: Integer;
     MaxFrameSide: Integer;
+    UseKeyframes: Boolean;
   end;
 
 { Splits FrameCount frames into chunks for parallel extraction.
@@ -140,6 +141,7 @@ begin
   Result.ScaledExtraction := ASettings.ScaledExtraction;
   Result.MinFrameSide := ASettings.MinFrameSide;
   Result.MaxFrameSide := ASettings.MaxFrameSide;
+  Result.UseKeyframes := ASettings.UseKeyframes;
 end;
 
 function DetectSettingsChanges(const AOld: TSettingsSnapshot;
@@ -163,6 +165,9 @@ begin
     or (ASettings.MinFrameSide <> AOld.MinFrameSide)
     or (ASettings.MaxFrameSide <> AOld.MaxFrameSide) then
     Include(Result, scScaledExtractionChanged);
+
+  if ASettings.UseKeyframes <> AOld.UseKeyframes then
+    Include(Result, scUseKeyframesChanged);
 end;
 
 end.

@@ -38,6 +38,7 @@ type
     [Test] procedure TestDetectSettingsChangesScaledExtraction;
     [Test] procedure TestDetectSettingsChangesMinFrameSide;
     [Test] procedure TestDetectSettingsChangesMaxFrameSide;
+    [Test] procedure TestDetectSettingsChangesUseKeyframes;
 
     { CalcExtractionMaxSide tests }
     [Test] procedure TestCalcMaxSideLandscape;
@@ -242,6 +243,7 @@ begin
     Assert.IsFalse(Snap.ScaledExtraction);
     Assert.AreEqual(120, Snap.MinFrameSide);
     Assert.AreEqual(1920, Snap.MaxFrameSide);
+    Assert.IsFalse(Snap.UseKeyframes);
   finally
     S.Free;
   end;
@@ -414,6 +416,23 @@ begin
     S.MaxFrameSide := 3840;
     Changes := DetectSettingsChanges(Snap, S);
     Assert.IsTrue(scScaledExtractionChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesUseKeyframes;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.UseKeyframes := True;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scUseKeyframesChanged in Changes);
   finally
     S.Free;
   end;

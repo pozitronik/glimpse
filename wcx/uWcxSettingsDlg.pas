@@ -31,6 +31,7 @@ type
     UdMaxThreads: TUpDown;
     ChkUseBmpPipe: TCheckBox;
     ChkHwAccel: TCheckBox;
+    ChkUseKeyframes: TCheckBox;
     LblFFmpegPath: TLabel;
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
@@ -110,6 +111,7 @@ begin
     UdMaxThreads.Position := 0;
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
   ChkHwAccel.Checked := ASettings.HwAccel;
+  ChkUseKeyframes.Checked := ASettings.UseKeyframes;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
   if ASettings.OutputMode = womCombined then
@@ -147,6 +149,7 @@ begin
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
+  ASettings.UseKeyframes := ChkUseKeyframes.Checked;
   ASettings.FFmpegExePath := EdtFFmpegPath.Text;
 
   if CbxOutputMode.ItemIndex = 1 then

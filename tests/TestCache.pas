@@ -150,8 +150,8 @@ var
   K1, K2: string;
 begin
   FilePath := CreateDummyFile('video1.mp4', 1024);
-  K1 := TFrameCache.FrameKey(FilePath, 10.500, 0);
-  K2 := TFrameCache.FrameKey(FilePath, 10.500, 0);
+  K1 := TFrameCache.FrameKey(FilePath, 10.500, 0, False);
+  K2 := TFrameCache.FrameKey(FilePath, 10.500, 0, False);
   Assert.AreEqual(K1, K2, 'Same inputs must produce same key');
   Assert.AreEqual(32, Length(K1), 'Key must be 32-char MD5 hex');
 end;
@@ -163,8 +163,8 @@ begin
   Path1 := CreateDummyFile('video_a.mp4', 1024);
   Path2 := CreateDummyFile('video_b.mp4', 1024);
   Assert.AreNotEqual(
-    TFrameCache.FrameKey(Path1, 5.0, 0),
-    TFrameCache.FrameKey(Path2, 5.0, 0),
+    TFrameCache.FrameKey(Path1, 5.0, 0, False),
+    TFrameCache.FrameKey(Path2, 5.0, 0, False),
     'Different paths must produce different keys');
 end;
 
@@ -175,8 +175,8 @@ begin
   Path1 := CreateDummyFile('size_a.mp4', 1000);
   Path2 := CreateDummyFile('size_b.mp4', 2000);
   Assert.AreNotEqual(
-    TFrameCache.FrameKey(Path1, 5.0, 0),
-    TFrameCache.FrameKey(Path2, 5.0, 0),
+    TFrameCache.FrameKey(Path1, 5.0, 0, False),
+    TFrameCache.FrameKey(Path2, 5.0, 0, False),
     'Different file sizes must produce different keys');
 end;
 
@@ -188,10 +188,10 @@ begin
   FilePath := CreateDummyFile('mtime.mp4', 1024);
 
   SetFileWriteTime(FilePath, EncodeDateTime(2024, 1, 1, 12, 0, 0, 0));
-  K1 := TFrameCache.FrameKey(FilePath, 5.0, 0);
+  K1 := TFrameCache.FrameKey(FilePath, 5.0, 0, False);
 
   SetFileWriteTime(FilePath, EncodeDateTime(2025, 6, 15, 8, 30, 0, 0));
-  K2 := TFrameCache.FrameKey(FilePath, 5.0, 0);
+  K2 := TFrameCache.FrameKey(FilePath, 5.0, 0, False);
 
   Assert.AreNotEqual(K1, K2,
     'Different modification times must produce different keys');
@@ -203,8 +203,8 @@ var
 begin
   FilePath := CreateDummyFile('offset.mp4', 1024);
   Assert.AreNotEqual(
-    TFrameCache.FrameKey(FilePath, 10.0, 0),
-    TFrameCache.FrameKey(FilePath, 20.0, 0),
+    TFrameCache.FrameKey(FilePath, 10.0, 0, False),
+    TFrameCache.FrameKey(FilePath, 20.0, 0, False),
     'Different time offsets must produce different keys');
 end;
 
@@ -218,8 +218,8 @@ begin
     paths resolve to the same physical file. }
   FilePath := CreateDummyFile('CaseTest.mp4', 512);
 
-  KeyLower := TFrameCache.FrameKey(AnsiLowerCase(FilePath), 1.0, 0);
-  KeyUpper := TFrameCache.FrameKey(AnsiUpperCase(FilePath), 1.0, 0);
+  KeyLower := TFrameCache.FrameKey(AnsiLowerCase(FilePath), 1.0, 0, False);
+  KeyUpper := TFrameCache.FrameKey(AnsiUpperCase(FilePath), 1.0, 0, False);
 
   Assert.AreEqual(KeyLower, KeyUpper,
     'Path casing must not affect cache key');
@@ -238,12 +238,12 @@ begin
   try
     Bmp := CreateTestBitmap(64, 48);
     try
-      Cache.Put(FilePath, 5.0, Bmp, 0);
+      Cache.Put(FilePath, 5.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
 
-    Retrieved := Cache.TryGet(FilePath, 5.0, 0);
+    Retrieved := Cache.TryGet(FilePath, 5.0, 0, False);
     try
       Assert.IsNotNull(Retrieved, 'Cached bitmap must be retrievable');
       Assert.AreEqual(64, Retrieved.Width, 'Width must match');
@@ -265,7 +265,7 @@ begin
   FilePath := CreateDummyFile('miss.mp4', 256);
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
-    Bmp := Cache.TryGet(FilePath, 99.0, 0);
+    Bmp := Cache.TryGet(FilePath, 99.0, 0, False);
     Assert.IsNull(Bmp, 'Non-existent cache entry must return nil');
   finally
     Cache.Free;
@@ -283,7 +283,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
     { Compute the key to find where the cache file would be stored }
-    Key := TFrameCache.FrameKey(FilePath, 1.0, 0);
+    Key := TFrameCache.FrameKey(FilePath, 1.0, 0, False);
     Assert.IsNotEmpty(Key, 'Key must not be empty for existing file');
 
     { Manually place a corrupt file at the expected cache path }
@@ -297,7 +297,7 @@ begin
       FS.Free;
     end;
 
-    Bmp := Cache.TryGet(FilePath, 1.0, 0);
+    Bmp := Cache.TryGet(FilePath, 1.0, 0, False);
     Assert.IsNull(Bmp, 'Corrupt PNG must return nil, not raise exception');
   finally
     Cache.Free;
@@ -315,12 +315,12 @@ begin
   try
     Bmp := CreateTestBitmap(16, 16);
     try
-      Cache.Put(FilePath, 5.0, Bmp, 0);
+      Cache.Put(FilePath, 5.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
 
-    Key := TFrameCache.FrameKey(FilePath, 5.0, 0);
+    Key := TFrameCache.FrameKey(FilePath, 5.0, 0, False);
     ExpectedSubDir := TPath.Combine(FCacheDir, Copy(Key, 1, 2));
     ExpectedFile := TPath.Combine(ExpectedSubDir, Key + '.png');
 
@@ -350,17 +350,17 @@ begin
   try
     Bmp := CreateTestBitmap(100, 100);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0);
-      Cache.Put(FilePath2, 1.0, Bmp, 0);
-      Cache.Put(FilePath3, 1.0, Bmp, 0);
+      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
+      Cache.Put(FilePath2, 1.0, Bmp, 0, False);
+      Cache.Put(FilePath3, 1.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
 
     { Set access times so we can verify eviction order }
-    Key1 := TFrameCache.FrameKey(FilePath1, 1.0, 0);
-    Key2 := TFrameCache.FrameKey(FilePath2, 1.0, 0);
-    Key3 := TFrameCache.FrameKey(FilePath3, 1.0, 0);
+    Key1 := TFrameCache.FrameKey(FilePath1, 1.0, 0, False);
+    Key2 := TFrameCache.FrameKey(FilePath2, 1.0, 0, False);
+    Key3 := TFrameCache.FrameKey(FilePath3, 1.0, 0, False);
 
     TFile.SetLastAccessTime(
       TPath.Combine(TPath.Combine(FCacheDir, Copy(Key1, 1, 2)), Key1 + '.png'),
@@ -401,14 +401,14 @@ begin
   try
     Bmp := CreateTestBitmap(50, 50);
     try
-      Cache.Put(FilePathOld, 1.0, Bmp, 0);
-      Cache.Put(FilePathNew, 1.0, Bmp, 0);
+      Cache.Put(FilePathOld, 1.0, Bmp, 0, False);
+      Cache.Put(FilePathNew, 1.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
 
-    KeyOld := TFrameCache.FrameKey(FilePathOld, 1.0, 0);
-    KeyNew := TFrameCache.FrameKey(FilePathNew, 1.0, 0);
+    KeyOld := TFrameCache.FrameKey(FilePathOld, 1.0, 0, False);
+    KeyNew := TFrameCache.FrameKey(FilePathNew, 1.0, 0, False);
     PathOld := TPath.Combine(TPath.Combine(FCacheDir, Copy(KeyOld, 1, 2)), KeyOld + '.png');
     PathNew := TPath.Combine(TPath.Combine(FCacheDir, Copy(KeyNew, 1, 2)), KeyNew + '.png');
 
@@ -433,7 +433,7 @@ begin
   try
     Bmp := CreateTestBitmap(50, 50);
     try
-      Cache.Put(FilePathNew, 1.0, Bmp, 0);
+      Cache.Put(FilePathNew, 1.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
@@ -459,8 +459,8 @@ begin
   try
     Bmp := CreateTestBitmap(32, 32);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0);
-      Cache.Put(FilePath2, 2.0, Bmp, 0);
+      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
+      Cache.Put(FilePath2, 2.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
@@ -493,7 +493,7 @@ begin
 
     Bmp := CreateTestBitmap(32, 32);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0);
+      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
@@ -502,7 +502,7 @@ begin
 
     Bmp := CreateTestBitmap(64, 64);
     try
-      Cache.Put(FilePath2, 2.0, Bmp, 0);
+      Cache.Put(FilePath2, 2.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
@@ -524,7 +524,7 @@ var
 begin
   FilePath := CreateDummyFile('null_get.mp4', 128);
   Cache := TNullFrameCache.Create;
-  Bmp := Cache.TryGet(FilePath, 5.0, 0);
+  Bmp := Cache.TryGet(FilePath, 5.0, 0, False);
   Assert.IsNull(Bmp, 'Null cache must always return nil');
 end;
 
@@ -539,7 +539,7 @@ begin
   Cache := TNullFrameCache.Create;
   Bmp := CreateTestBitmap(16, 16);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0);
+    Cache.Put(FilePath, 1.0, Bmp, 0, False);
   finally
     Bmp.Free;
   end;
@@ -563,19 +563,19 @@ begin
   { Store a frame in the real cache }
   Bmp := CreateTestBitmap(32, 32);
   try
-    RealCache.Put(FilePath, 5.0, Bmp, 0);
+    RealCache.Put(FilePath, 5.0, Bmp, 0, False);
   finally
     Bmp.Free;
   end;
 
   { Verify the frame is in the real cache }
-  Bmp := RealCache.TryGet(FilePath, 5.0, 0);
+  Bmp := RealCache.TryGet(FilePath, 5.0, 0, False);
   Assert.IsNotNull(Bmp, 'Frame must exist in real cache');
   Bmp.Free;
 
   { Bypass must return nil even though the frame is cached }
   Bypass := TBypassFrameCache.Create(RealCache);
-  Bmp := Bypass.TryGet(FilePath, 5.0, 0);
+  Bmp := Bypass.TryGet(FilePath, 5.0, 0, False);
   Assert.IsNull(Bmp, 'Bypass cache must always return nil on TryGet');
 end;
 
@@ -594,13 +594,13 @@ begin
   Bypass := TBypassFrameCache.Create(RealCache);
   Bmp := CreateTestBitmap(48, 48);
   try
-    Bypass.Put(FilePath, 3.0, Bmp, 0);
+    Bypass.Put(FilePath, 3.0, Bmp, 0, False);
   finally
     Bmp.Free;
   end;
 
   { Verify the frame landed in the real cache }
-  Bmp := RealCache.TryGet(FilePath, 3.0, 0);
+  Bmp := RealCache.TryGet(FilePath, 3.0, 0, False);
   try
     Assert.IsNotNull(Bmp, 'Bypass Put must delegate to inner cache');
     Assert.AreEqual(48, Bmp.Width, 'Width must match');
@@ -629,11 +629,11 @@ begin
   try
     Bmp := CreateTestBitmap(64, 64);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0);
+      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
       Sleep(50);
-      Cache.Put(FilePath2, 2.0, Bmp, 0);
+      Cache.Put(FilePath2, 2.0, Bmp, 0, False);
       Sleep(50);
-      Cache.Put(FilePath3, 3.0, Bmp, 0);
+      Cache.Put(FilePath3, 3.0, Bmp, 0, False);
     finally
       Bmp.Free;
     end;
@@ -680,7 +680,7 @@ begin
     { First put: 10x10 bitmap }
     Bmp1 := CreateTestBitmap(10, 10);
     try
-      Cache.Put(VideoPath, 1.0, Bmp1, 0);
+      Cache.Put(VideoPath, 1.0, Bmp1, 0, False);
     finally
       Bmp1.Free;
     end;
@@ -688,13 +688,13 @@ begin
     { Second put: 20x15 bitmap at same offset }
     Bmp2 := CreateTestBitmap(20, 15);
     try
-      Cache.Put(VideoPath, 1.0, Bmp2, 0);
+      Cache.Put(VideoPath, 1.0, Bmp2, 0, False);
     finally
       Bmp2.Free;
     end;
 
     { Get should return the second bitmap's dimensions }
-    Got := Cache.TryGet(VideoPath, 1.0, 0);
+    Got := Cache.TryGet(VideoPath, 1.0, 0, False);
     try
       Assert.IsNotNull(Got, 'Should retrieve overwritten entry');
       Assert.AreEqual(20, Got.Width, 'Width should match second put');
@@ -720,7 +720,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   Bmp := CreateTestBitmap(32, 32);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0);
+    Cache.Put(FilePath, 1.0, Bmp, 0, False);
   finally
     Bmp.Free;
   end;
@@ -742,7 +742,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   Bmp := CreateTestBitmap(64, 64);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0);
+    Cache.Put(FilePath, 1.0, Bmp, 0, False);
   finally
     Bmp.Free;
   end;
@@ -767,7 +767,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   Bmp := CreateTestBitmap(32, 32);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0);
+    Cache.Put(FilePath, 1.0, Bmp, 0, False);
   finally
     Bmp.Free;
   end;

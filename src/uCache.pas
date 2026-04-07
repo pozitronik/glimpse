@@ -17,12 +17,13 @@ type
     ['{A7E3B2C1-4D5F-6E7A-8B9C-0D1E2F3A4B5C}']
     { Loads a cached frame for the given video file at the specified offset.
       AMaxSide > 0 narrows lookup to scaled variant; 0 means full resolution.
+      AUseKeyframes distinguishes keyframe-only from accurate-seek entries.
       Returns nil on miss or if caching is not supported. Caller owns the bitmap. }
     function TryGet(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer): TBitmap;
+      AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap;
     { Stores a frame bitmap for the given video file at the specified offset. }
     procedure Put(const AFilePath: string; ATimeOffset: Double;
-      ABitmap: TBitmap; AMaxSide: Integer);
+      ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean);
   end;
 
   { Cache management operations: size queries, eviction, clearing.
@@ -38,9 +39,9 @@ type
   TFrameCacheBase = class(TInterfacedObject, IFrameCache)
   public
     function TryGet(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer): TBitmap; virtual; abstract;
+      AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap; virtual; abstract;
     procedure Put(const AFilePath: string; ATimeOffset: Double;
-      ABitmap: TBitmap; AMaxSide: Integer); virtual; abstract;
+      ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean); virtual; abstract;
   end;
 
   { No-op cache: always misses, never stores. Used when caching is disabled
@@ -48,9 +49,9 @@ type
   TNullFrameCache = class(TFrameCacheBase)
   public
     function TryGet(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer): TBitmap; override;
+      AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap; override;
     procedure Put(const AFilePath: string; ATimeOffset: Double;
-      ABitmap: TBitmap; AMaxSide: Integer); override;
+      ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean); override;
   end;
 
   { Decorator that skips cache reads but delegates writes to the inner cache.
@@ -62,9 +63,9 @@ type
   public
     constructor Create(const AInner: IFrameCache);
     function TryGet(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer): TBitmap; override;
+      AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap; override;
     procedure Put(const AFilePath: string; ATimeOffset: Double;
-      ABitmap: TBitmap; AMaxSide: Integer); override;
+      ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean); override;
   end;
 
   { Real disk cache with sharded PNG storage and LRU eviction. }
@@ -74,7 +75,8 @@ type
     FMaxSizeBytes: Int64;
 
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64;
-      AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer): string; static;
+      AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer;
+      AUseKeyframes: Boolean): string; static;
     class function HashKey(const AKeyString: string): string; static;
     function KeyToPath(const AKey: string): string;
 
@@ -84,12 +86,12 @@ type
     { Generates a cache key for a frame by reading file metadata from disk.
       Returns empty string if the file cannot be stat'd. }
     class function FrameKey(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer): string; static;
+      AMaxSide: Integer; AUseKeyframes: Boolean): string; static;
 
     function TryGet(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer): TBitmap; override;
+      AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap; override;
     procedure Put(const AFilePath: string; ATimeOffset: Double;
-      ABitmap: TBitmap; AMaxSide: Integer); override;
+      ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean); override;
 
     procedure Clear;
     procedure Evict;
@@ -120,13 +122,13 @@ var
 { TNullFrameCache }
 
 function TNullFrameCache.TryGet(const AFilePath: string; ATimeOffset: Double;
-  AMaxSide: Integer): TBitmap;
+  AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap;
 begin
   Result := nil;
 end;
 
 procedure TNullFrameCache.Put(const AFilePath: string; ATimeOffset: Double;
-  ABitmap: TBitmap; AMaxSide: Integer);
+  ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean);
 begin
   { Intentionally empty }
 end;
@@ -140,15 +142,15 @@ begin
 end;
 
 function TBypassFrameCache.TryGet(const AFilePath: string; ATimeOffset: Double;
-  AMaxSide: Integer): TBitmap;
+  AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap;
 begin
   Result := nil;
 end;
 
 procedure TBypassFrameCache.Put(const AFilePath: string; ATimeOffset: Double;
-  ABitmap: TBitmap; AMaxSide: Integer);
+  ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean);
 begin
-  FInner.Put(AFilePath, ATimeOffset, ABitmap, AMaxSide);
+  FInner.Put(AFilePath, ATimeOffset, ABitmap, AMaxSide, AUseKeyframes);
 end;
 
 { TFrameCache }
@@ -165,7 +167,7 @@ end;
 
 class function TFrameCache.BuildKeyString(const AFilePath: string;
   AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double;
-  AMaxSide: Integer): string;
+  AMaxSide: Integer; AUseKeyframes: Boolean): string;
 begin
   Result := AnsiLowerCase(AFilePath) + '|' +
     IntToStr(AFileSize) + '|' +
@@ -174,6 +176,9 @@ begin
   { Append scaled resolution to distinguish from full-size cache entries }
   if AMaxSide > 0 then
     Result := Result + '|s' + IntToStr(AMaxSide);
+  { Keyframe-only seek produces different frames than accurate seek }
+  if AUseKeyframes then
+    Result := Result + '|kf';
 end;
 
 class function TFrameCache.HashKey(const AKeyString: string): string;
@@ -187,7 +192,7 @@ begin
 end;
 
 class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double;
-  AMaxSide: Integer): string;
+  AMaxSide: Integer; AUseKeyframes: Boolean): string;
 var
   FileSize: Int64;
   FileTime: TDateTime;
@@ -198,20 +203,21 @@ begin
       Exit;
     FileSize := TFile.GetSize(AFilePath);
     FileTime := TFile.GetLastWriteTime(AFilePath);
-    Result := HashKey(BuildKeyString(AFilePath, FileSize, FileTime, ATimeOffset, AMaxSide));
+    Result := HashKey(BuildKeyString(AFilePath, FileSize, FileTime,
+      ATimeOffset, AMaxSide, AUseKeyframes));
   except
     { File inaccessible - return empty, caller treats as cache miss }
   end;
 end;
 
 function TFrameCache.TryGet(const AFilePath: string; ATimeOffset: Double;
-  AMaxSide: Integer): TBitmap;
+  AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap;
 var
   Key, Path: string;
   Data: TBytes;
 begin
   Result := nil;
-  Key := FrameKey(AFilePath, ATimeOffset, AMaxSide);
+  Key := FrameKey(AFilePath, ATimeOffset, AMaxSide, AUseKeyframes);
   if Key = '' then
     Exit;
   try
@@ -246,14 +252,14 @@ begin
 end;
 
 procedure TFrameCache.Put(const AFilePath: string; ATimeOffset: Double;
-  ABitmap: TBitmap; AMaxSide: Integer);
+  ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean);
 var
   Key, FinalPath, TempPath, SubDir: string;
   Png: TPngImage;
 begin
   if ABitmap = nil then
     Exit;
-  Key := FrameKey(AFilePath, ATimeOffset, AMaxSide);
+  Key := FrameKey(AFilePath, ATimeOffset, AMaxSide, AUseKeyframes);
   if Key = '' then
     Exit;
   DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));

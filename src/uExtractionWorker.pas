@@ -37,6 +37,7 @@ type
     FUseBmpPipe: Boolean;
     FMaxSide: Integer;
     FHwAccel: Boolean;
+    FUseKeyframes: Boolean;
   protected
     procedure Execute; override;
   public
@@ -44,7 +45,8 @@ type
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
       const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-      AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean);
+      AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean;
+      AUseKeyframes: Boolean);
   end;
 
 implementation
@@ -62,7 +64,8 @@ constructor TExtractionThread.Create(const AExtractor: IFrameExtractor;
   const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
   AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
   const ACache: IFrameCache; AActiveWorkerCount: PInteger;
-  AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean);
+  AUseBmpPipe: Boolean; AMaxSide: Integer; AHwAccel: Boolean;
+  AUseKeyframes: Boolean);
 begin
   inherited Create(True); { suspended }
   FreeOnTerminate := False;
@@ -77,6 +80,7 @@ begin
   FUseBmpPipe := AUseBmpPipe;
   FMaxSide := AMaxSide;
   FHwAccel := AHwAccel;
+  FUseKeyframes := AUseKeyframes;
 end;
 
 procedure TExtractionThread.Execute;
@@ -102,7 +106,8 @@ begin
       try
         Source := 'none';
 
-        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset, FMaxSide);
+        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset, FMaxSide,
+          FUseKeyframes);
         if Bmp <> nil then
           Source := 'cache';
 
@@ -110,11 +115,12 @@ begin
         if Bmp = nil then
         begin
           Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset,
-            FUseBmpPipe, FMaxSide, FHwAccel);
+            FUseBmpPipe, FMaxSide, FHwAccel, FUseKeyframes);
           if Bmp <> nil then
           begin
             Source := 'extract';
-            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp, FMaxSide);
+            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp, FMaxSide,
+              FUseKeyframes);
           end;
         end;
 
