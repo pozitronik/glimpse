@@ -11,7 +11,7 @@ uses
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons,
   uTypes, uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
-  uExtractionPlanner, uToolbarLayout, uFrameView, uExtractionWorker,
+  uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache;
 
 type

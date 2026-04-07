@@ -10,9 +10,6 @@ uses
   Vcl.Controls, Vcl.Graphics,
   uTypes, uSettings, uFrameOffsets, uViewModeLayout;
 
-const
-  DEF_ASPECT_RATIO = 9.0 / 16.0; { fallback for 16:9 video }
-
 type
   TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);
 
