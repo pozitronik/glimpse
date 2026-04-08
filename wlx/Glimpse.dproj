@@ -39,6 +39,9 @@
     <PropertyGroup Condition="'$(Base)'!=''">
         <GenDll>true</GenDll>
         <SanitizedProjectName>Glimpse</SanitizedProjectName>
+        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
+        <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <Debugger_HostApplication>D:\DSHELL\TOTALCMD64.EXE</Debugger_HostApplication>
