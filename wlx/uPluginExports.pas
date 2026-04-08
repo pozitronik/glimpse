@@ -23,12 +23,19 @@ implementation
 
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
-  uSettings, uFFmpegLocator, uPluginForm, uCache, uDebugLog;
+  Vcl.Graphics,
+  uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uCache, uDebugLog,
+  uThumbnailRender;
 
 var
   GSettings: TPluginSettings;
   GPluginDir: string;
   GFFmpegPath: string;
+  { Long-lived frame cache for the thumbnail path. Created in
+    ListSetDefaultParams; TNullFrameCache when caching is off. The TC
+    thumbnail worker calls DoGetPreviewBitmap from background threads, so
+    this must outlive any single call. }
+  GThumbnailCache: IFrameCache;
 
 procedure Log(const AMsg: string);
 begin
@@ -222,20 +229,61 @@ begin
     try
       CreateCacheManager(CacheDir, GSettings.CacheMaxSizeMB).Evict;
       Log(Format('  CacheDir=%s', [CacheDir]));
+      { Long-lived thumbnail cache: same directory + budget as the main
+        cache so the two paths share evicted entries }
+      GThumbnailCache := TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB);
     except
       on E: Exception do
+      begin
         Log(Format('  Cache init failed: %s', [E.Message]));
+        GThumbnailCache := TNullFrameCache.Create;
+      end;
     end;
-  end;
+  end
+  else
+    GThumbnailCache := TNullFrameCache.Create;
 end;
 
-{ Returns a preview bitmap for TC thumbnail view.
-  Not implemented: TC calls this for thumbnails panel, which requires
-  synchronous single-frame extraction; the current architecture is
-  async-only. Returns 0 so TC falls back to its default thumbnail. }
+{ Returns a preview bitmap for the TC thumbnail panel.
+  Runs synchronously on TC's worker thread. Failures are swallowed
+  (returning 0) so TC falls back to its default icon. }
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
+var
+  FFmpeg: TFFmpegExe;
+  Bmp: TBitmap;
 begin
   Result := 0;
+  if (GSettings = nil) or not GSettings.ThumbnailsEnabled then
+    Exit;
+  if (GFFmpegPath = '') or not FileExists(GFFmpegPath) then
+    Exit;
+  if GThumbnailCache = nil then
+    Exit;
+
+  try
+    FFmpeg := TFFmpegExe.Create(GFFmpegPath);
+    try
+      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height,
+        GSettings, GThumbnailCache);
+      if Bmp <> nil then
+      try
+        { TC takes ownership of the returned HBITMAP; ReleaseHandle
+          detaches it from the TBitmap so destruction below doesn't
+          free it out from under TC. }
+        Result := Bmp.ReleaseHandle;
+      finally
+        Bmp.Free;
+      end;
+    finally
+      FFmpeg.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      Log(Format('DoGetPreviewBitmap exception: %s: %s', [E.ClassName, E.Message]));
+      Result := 0;
+    end;
+  end;
 end;
 
 function ListGetPreviewBitmap(FileToLoad: PAnsiChar; Width, Height: Integer; ContentBuf: PAnsiChar; ContentBufLen: Integer): HBITMAP; stdcall;
@@ -253,6 +301,7 @@ initialization
 
 finalization
   Log('finalization');
+  GThumbnailCache := nil;
   FreeAndNil(GSettings);
 
 end.

@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 943
+  ClientHeight = 1061
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -642,13 +642,110 @@ object SettingsForm: TSettingsForm
       TabOrder = 4
     end
   end
-  object GbxQuickView: TGroupBox
+  object GbxThumbnails: TGroupBox
     Left = 8
     Top = 814
     Width = 444
+    Height = 110
+    Caption = ' Thumbnails (TC panels) '
+    TabOrder = 4
+    object LblThumbnailMode: TLabel
+      Left = 12
+      Top = 46
+      Width = 36
+      Height = 15
+      Caption = 'Mode:'
+    end
+    object LblThumbnailPosition: TLabel
+      Left = 12
+      Top = 76
+      Width = 49
+      Height = 15
+      Caption = 'Position:'
+    end
+    object LblThumbnailPositionUnit: TLabel
+      Left = 198
+      Top = 76
+      Width = 11
+      Height = 15
+      Caption = '%'
+    end
+    object LblThumbnailGridFrames: TLabel
+      Left = 240
+      Top = 76
+      Width = 68
+      Height = 15
+      Caption = 'Grid frames:'
+    end
+    object ChkThumbnailsEnabled: TCheckBox
+      Left = 12
+      Top = 20
+      Width = 412
+      Height = 17
+      Caption = 'Enable thumbnails for TC panels'
+      TabOrder = 0
+      OnClick = ChkThumbnailsEnabledClick
+    end
+    object CbxThumbnailMode: TComboBox
+      Left = 130
+      Top = 42
+      Width = 110
+      Height = 23
+      Style = csDropDownList
+      TabOrder = 1
+      OnChange = CbxThumbnailModeChange
+      Items.Strings = (
+        'Single frame'
+        'Grid')
+    end
+    object EdtThumbnailPosition: TEdit
+      Left = 130
+      Top = 72
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 2
+    end
+    object UdThumbnailPosition: TUpDown
+      Left = 175
+      Top = 72
+      Width = 17
+      Height = 23
+      Associate = EdtThumbnailPosition
+      Min = 0
+      Max = 100
+      Position = 50
+      Thousands = False
+      TabOrder = 3
+    end
+    object EdtThumbnailGridFrames: TEdit
+      Left = 320
+      Top = 72
+      Width = 45
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 4
+    end
+    object UdThumbnailGridFrames: TUpDown
+      Left = 365
+      Top = 72
+      Width = 17
+      Height = 23
+      Associate = EdtThumbnailGridFrames
+      Min = 2
+      Max = 16
+      Position = 4
+      Thousands = False
+      TabOrder = 5
+    end
+  end
+  object GbxQuickView: TGroupBox
+    Left = 8
+    Top = 932
+    Width = 444
     Height = 85
     Caption = ' Quick View (Ctrl+Q) '
-    TabOrder = 4
+    TabOrder = 5
     object ChkQVDisableNavigation: TCheckBox
       Left = 16
       Top = 20
@@ -676,32 +773,32 @@ object SettingsForm: TSettingsForm
   end
   object BtnDefaults: TButton
     Left = 8
-    Top = 907
+    Top = 1025
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
-    TabOrder = 5
+    TabOrder = 6
     OnClick = BtnDefaultsClick
   end
   object BtnOK: TButton
     Left = 296
-    Top = 907
+    Top = 1025
     Width = 75
     Height = 28
     Caption = 'OK'
     Default = True
     ModalResult = 1
-    TabOrder = 6
+    TabOrder = 7
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 907
+    Top = 1025
     Width = 75
     Height = 28
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 7
+    TabOrder = 8
   end
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]

@@ -8,6 +8,9 @@ type
   TFFmpegMode = (fmAuto, fmExe);
   TViewMode = (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
   TZoomMode = (zmFitWindow, zmFitIfLarger, zmActual);
+  { Thumbnail rendering mode for TC panel previews. Single = one frame at
+    a configurable position; Grid = mini multi-frame composite. }
+  TThumbnailMode = (tnmSingle, tnmGrid);
 
   { Bundles extraction parameters that travel together through the
     extraction pipeline (controller -> worker -> extractor). }

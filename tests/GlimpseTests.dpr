@@ -65,7 +65,9 @@ uses
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
-  TestBitmapResize in 'TestBitmapResize.pas';
+  TestBitmapResize in 'TestBitmapResize.pas',
+  uThumbnailRender in '..\src\uThumbnailRender.pas',
+  TestThumbnailRender in 'TestThumbnailRender.pas';
 
 var
   Runner: ITestRunner;

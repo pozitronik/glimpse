@@ -54,6 +54,11 @@ type
     FQVDisableNavigation: Boolean;
     FQVHideToolbar: Boolean;
     FQVHideStatusBar: Boolean;
+    { [thumbnails] }
+    FThumbnailsEnabled: Boolean;
+    FThumbnailMode: TThumbnailMode;
+    FThumbnailPosition: Integer;     { 0..100 percent }
+    FThumbnailGridFrames: Integer;   { count for grid mode }
 
     class function StrToFFmpegMode(const AValue: string): TFFmpegMode; static;
     class function FFmpegModeToStr(AMode: TFFmpegMode): string; static;
@@ -63,6 +68,8 @@ type
     class function ZoomModeToStr(AMode: TZoomMode): string; static;
     class function StrToSaveFormat(const AValue: string): TSaveFormat; static;
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
+    class function StrToThumbnailMode(const AValue: string): TThumbnailMode; static;
+    class function ThumbnailModeToStr(AMode: TThumbnailMode): string; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
     function GetActiveZoom: TZoomMode;
@@ -130,6 +137,12 @@ type
     property QVDisableNavigation: Boolean read FQVDisableNavigation write FQVDisableNavigation;
     property QVHideToolbar: Boolean read FQVHideToolbar write FQVHideToolbar;
     property QVHideStatusBar: Boolean read FQVHideStatusBar write FQVHideStatusBar;
+
+    { [thumbnails] }
+    property ThumbnailsEnabled: Boolean read FThumbnailsEnabled write FThumbnailsEnabled;
+    property ThumbnailMode: TThumbnailMode read FThumbnailMode write FThumbnailMode;
+    property ThumbnailPosition: Integer read FThumbnailPosition write FThumbnailPosition;
+    property ThumbnailGridFrames: Integer read FThumbnailGridFrames write FThumbnailGridFrames;
   end;
 
 const
@@ -231,6 +244,10 @@ begin
   FQVDisableNavigation := DEF_QV_DISABLE_NAV;
   FQVHideToolbar := DEF_QV_HIDE_TOOLBAR;
   FQVHideStatusBar := DEF_QV_HIDE_STATUSBAR;
+  FThumbnailsEnabled := DEF_THUMBNAILS_ENABLED;
+  FThumbnailMode := DEF_THUMBNAIL_MODE;
+  FThumbnailPosition := DEF_THUMBNAIL_POSITION;
+  FThumbnailGridFrames := DEF_THUMBNAIL_GRID_FRAMES;
 end;
 
 procedure TPluginSettings.Load;
@@ -299,6 +316,13 @@ begin
     FQVDisableNavigation := Ini.ReadBool('quickview', 'DisableNavigation', DEF_QV_DISABLE_NAV);
     FQVHideToolbar := Ini.ReadBool('quickview', 'HideToolbar', DEF_QV_HIDE_TOOLBAR);
     FQVHideStatusBar := Ini.ReadBool('quickview', 'HideStatusBar', DEF_QV_HIDE_STATUSBAR);
+
+    FThumbnailsEnabled := Ini.ReadBool('thumbnails', 'Enabled', DEF_THUMBNAILS_ENABLED);
+    FThumbnailMode := StrToThumbnailMode(Ini.ReadString('thumbnails', 'Mode', ''));
+    FThumbnailPosition := EnsureRange(Ini.ReadInteger('thumbnails', 'Position',
+      DEF_THUMBNAIL_POSITION), MIN_THUMBNAIL_POSITION, MAX_THUMBNAIL_POSITION);
+    FThumbnailGridFrames := EnsureRange(Ini.ReadInteger('thumbnails', 'GridFrames',
+      DEF_THUMBNAIL_GRID_FRAMES), MIN_THUMBNAIL_GRID_FRAMES, MAX_THUMBNAIL_GRID_FRAMES);
   finally
     Ini.Free;
   end;
@@ -355,6 +379,11 @@ begin
     Ini.WriteBool('quickview', 'DisableNavigation', FQVDisableNavigation);
     Ini.WriteBool('quickview', 'HideToolbar', FQVHideToolbar);
     Ini.WriteBool('quickview', 'HideStatusBar', FQVHideStatusBar);
+
+    Ini.WriteBool('thumbnails', 'Enabled', FThumbnailsEnabled);
+    Ini.WriteString('thumbnails', 'Mode', ThumbnailModeToStr(FThumbnailMode));
+    Ini.WriteInteger('thumbnails', 'Position', FThumbnailPosition);
+    Ini.WriteInteger('thumbnails', 'GridFrames', FThumbnailGridFrames);
   finally
     Ini.Free;
   end;
@@ -437,6 +466,23 @@ begin
     sfJPEG: Result := 'JPEG';
   else
     Result := 'PNG';
+  end;
+end;
+
+class function TPluginSettings.StrToThumbnailMode(const AValue: string): TThumbnailMode;
+begin
+  if SameText(AValue, 'grid') then
+    Result := tnmGrid
+  else
+    Result := tnmSingle;
+end;
+
+class function TPluginSettings.ThumbnailModeToStr(AMode: TThumbnailMode): string;
+begin
+  case AMode of
+    tnmGrid: Result := 'grid';
+  else
+    Result := 'single';
   end;
 end;
 

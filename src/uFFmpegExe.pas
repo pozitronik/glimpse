@@ -37,9 +37,12 @@ type
       AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
       AHwAccel=True adds -hwaccel auto for GPU-accelerated decoding.
       AUseKeyframes=True adds -noaccurate_seek to grab the nearest keyframe (faster).
+      ATimeoutMs caps how long the ffmpeg call may run; default 30s matches the
+      generic RunProcess default. Use a shorter value (e.g. for thumbnail panels)
+      to avoid stalling on broken files.
       Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
     function ExtractFrame(const AFileName: string; ATimeOffset: Double;
-      const AOptions: TExtractionOptions): TBitmap;
+      const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -505,7 +508,7 @@ begin
 end;
 
 function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
-  const AOptions: TExtractionOptions): TBitmap;
+  const AOptions: TExtractionOptions; ATimeoutMs: DWORD): TBitmap;
 var
   CmdLine, Codec, ScaleFilter, HwAccelFlag, KeyframeFlag: string;
   StdOut, StdErr: TBytes;
@@ -544,7 +547,7 @@ begin
      Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
      HwAccelFlag, AFileName, ScaleFilter, Codec]);
 
-  ExitCode := RunProcess(CmdLine, StdOut, StdErr);
+  ExitCode := RunProcess(CmdLine, StdOut, StdErr, ATimeoutMs);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then
     Exit;
 

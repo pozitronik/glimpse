@@ -85,6 +85,17 @@ type
     LblCacheMaxSizeUnit: TLabel;
     LblCacheSizeInfo: TLabel;
     BtnClearCache: TButton;
+    GbxThumbnails: TGroupBox;
+    ChkThumbnailsEnabled: TCheckBox;
+    LblThumbnailMode: TLabel;
+    CbxThumbnailMode: TComboBox;
+    LblThumbnailPosition: TLabel;
+    EdtThumbnailPosition: TEdit;
+    UdThumbnailPosition: TUpDown;
+    LblThumbnailPositionUnit: TLabel;
+    LblThumbnailGridFrames: TLabel;
+    EdtThumbnailGridFrames: TEdit;
+    UdThumbnailGridFrames: TUpDown;
     GbxQuickView: TGroupBox;
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
@@ -107,6 +118,8 @@ type
     procedure EdtCacheFolderChange(Sender: TObject);
     procedure BtnClearCacheClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
+    procedure ChkThumbnailsEnabledClick(Sender: TObject);
+    procedure CbxThumbnailModeChange(Sender: TObject);
   private
     FOwnerWnd: HWND;
     FResolvedFFmpegPath: string;
@@ -116,6 +129,7 @@ type
     procedure UpdateSaveFormatControls;
     procedure UpdateCacheControls;
     procedure UpdateScaledExtractionControls;
+    procedure UpdateThumbnailControls;
     procedure UpdateFFmpegInfo;
     procedure UpdateCacheFolderInfo;
     procedure UpdateCacheSizeInfo;
@@ -188,8 +202,14 @@ begin
   ChkQVHideToolbar.Checked := ASettings.QVHideToolbar;
   ChkQVHideStatusBar.Checked := ASettings.QVHideStatusBar;
 
+  ChkThumbnailsEnabled.Checked := ASettings.ThumbnailsEnabled;
+  CbxThumbnailMode.ItemIndex := Ord(ASettings.ThumbnailMode);
+  UdThumbnailPosition.Position := ASettings.ThumbnailPosition;
+  UdThumbnailGridFrames.Position := ASettings.ThumbnailGridFrames;
+
   UpdateSaveFormatControls;
   UpdateCacheControls;
+  UpdateThumbnailControls;
   UpdateFFmpegInfo;
   UpdateCacheFolderInfo;
   UpdateCacheSizeInfo;
@@ -244,6 +264,11 @@ begin
   ASettings.QVDisableNavigation := ChkQVDisableNavigation.Checked;
   ASettings.QVHideToolbar := ChkQVHideToolbar.Checked;
   ASettings.QVHideStatusBar := ChkQVHideStatusBar.Checked;
+
+  ASettings.ThumbnailsEnabled := ChkThumbnailsEnabled.Checked;
+  ASettings.ThumbnailMode := TThumbnailMode(CbxThumbnailMode.ItemIndex);
+  ASettings.ThumbnailPosition := UdThumbnailPosition.Position;
+  ASettings.ThumbnailGridFrames := UdThumbnailGridFrames.Position;
 end;
 
 procedure TSettingsForm.PickColor(APanel: TPanel);
@@ -383,6 +408,16 @@ begin
   UpdateCacheControls;
 end;
 
+procedure TSettingsForm.ChkThumbnailsEnabledClick(Sender: TObject);
+begin
+  UpdateThumbnailControls;
+end;
+
+procedure TSettingsForm.CbxThumbnailModeChange(Sender: TObject);
+begin
+  UpdateThumbnailControls;
+end;
+
 procedure TSettingsForm.UpdateMaxWorkersControls;
 var
   Manual, OnePerFrame: Boolean;
@@ -444,6 +479,29 @@ begin
   LblMaxFrameSide.Enabled := Enabled;
   EdtMaxFrameSide.Enabled := Enabled;
   UdMaxFrameSide.Enabled := Enabled;
+end;
+
+procedure TSettingsForm.UpdateThumbnailControls;
+var
+  GroupOn, IsSingle, IsGrid: Boolean;
+begin
+  GroupOn := ChkThumbnailsEnabled.Checked;
+  LblThumbnailMode.Enabled := GroupOn;
+  CbxThumbnailMode.Enabled := GroupOn;
+
+  { Position controls only meaningful in Single mode; grid frames only in
+    Grid mode. Disabling avoids the user editing fields that won't be used. }
+  IsSingle := GroupOn and (CbxThumbnailMode.ItemIndex = Ord(tnmSingle));
+  IsGrid := GroupOn and (CbxThumbnailMode.ItemIndex = Ord(tnmGrid));
+
+  LblThumbnailPosition.Enabled := IsSingle;
+  EdtThumbnailPosition.Enabled := IsSingle;
+  UdThumbnailPosition.Enabled := IsSingle;
+  LblThumbnailPositionUnit.Enabled := IsSingle;
+
+  LblThumbnailGridFrames.Enabled := IsGrid;
+  EdtThumbnailGridFrames.Enabled := IsGrid;
+  UdThumbnailGridFrames.Enabled := IsGrid;
 end;
 
 procedure TSettingsForm.UpdateFFmpegInfo;

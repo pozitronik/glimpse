@@ -5,7 +5,7 @@ unit uDefaults;
 interface
 
 uses
-  uBitmapSaver;
+  uBitmapSaver, uTypes;
 
 const
   { Extraction defaults }
@@ -48,6 +48,22 @@ const
   MAX_JPEG_QUALITY    = 100;
   MIN_PNG_COMPRESSION = 0;
   MAX_PNG_COMPRESSION = 9;
+
+  { Thumbnail (TC panel preview) defaults }
+  DEF_THUMBNAILS_ENABLED    = True;
+  DEF_THUMBNAIL_MODE        = tnmSingle;
+  { Position 0.0 = first frame, 0.5 = middle, 1.0 = last frame.
+    Stored as integer percent in INI for human readability. }
+  DEF_THUMBNAIL_POSITION    = 50;
+  DEF_THUMBNAIL_GRID_FRAMES = 4;
+  { Hard cap on a single ffmpeg call from the thumbnail path so a broken
+    file cannot stall the TC thumbnail worker thread indefinitely. }
+  DEF_THUMBNAIL_TIMEOUT_MS  = 5000;
+
+  MIN_THUMBNAIL_POSITION    = 0;
+  MAX_THUMBNAIL_POSITION    = 100;
+  MIN_THUMBNAIL_GRID_FRAMES = 2;
+  MAX_THUMBNAIL_GRID_FRAMES = 16;
 
 implementation
 

@@ -36,7 +36,10 @@ uses
   uFrameExtractor in '..\src\uFrameExtractor.pas',
   uViewModeLayout in 'uViewModeLayout.pas',
   uFrameExport in 'uFrameExport.pas',
-  uExtractionController in 'uExtractionController.pas';
+  uExtractionController in 'uExtractionController.pas',
+  uCombinedImage in '..\src\uCombinedImage.pas',
+  uBitmapResize in '..\src\uBitmapResize.pas',
+  uThumbnailRender in '..\src\uThumbnailRender.pas';
 
 exports
   ListLoad,

@@ -101,6 +101,24 @@ type
     procedure TestQVSettingsRoundTrip;
     [Test]
     procedure TestQVSettingsMissingInIniUsesDefaults;
+
+    { Thumbnail settings }
+    [Test]
+    procedure TestThumbnailSettingsDefaults;
+    [Test]
+    procedure TestThumbnailSettingsRoundTrip;
+    [Test]
+    procedure TestThumbnailSettingsMissingInIniUsesDefaults;
+    [Test]
+    procedure TestThumbnailPositionClampedHigh;
+    [Test]
+    procedure TestThumbnailPositionClampedLow;
+    [Test]
+    procedure TestThumbnailGridFramesClampedHigh;
+    [Test]
+    procedure TestThumbnailGridFramesClampedLow;
+    [Test]
+    procedure TestThumbnailModeUnknownStringFallsBackToSingle;
   end;
 
 implementation
@@ -1149,6 +1167,192 @@ begin
     Assert.AreEqual(DEF_QV_DISABLE_NAV, S.QVDisableNavigation);
     Assert.AreEqual(DEF_QV_HIDE_TOOLBAR, S.QVHideToolbar);
     Assert.AreEqual(DEF_QV_HIDE_STATUSBAR, S.QVHideStatusBar);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailSettingsDefaults;
+var
+  S: TPluginSettings;
+begin
+  { Fresh instance must match the DEF_* constants — no Load needed }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Assert.AreEqual(DEF_THUMBNAILS_ENABLED, S.ThumbnailsEnabled);
+    Assert.IsTrue(S.ThumbnailMode = DEF_THUMBNAIL_MODE,
+      'ThumbnailMode default mismatch');
+    Assert.AreEqual(DEF_THUMBNAIL_POSITION, S.ThumbnailPosition);
+    Assert.AreEqual(DEF_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailSettingsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  { Mutate every field, save, reload, verify each value survived }
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.ThumbnailsEnabled := False;
+    S1.ThumbnailMode := tnmGrid;
+    S1.ThumbnailPosition := 25;
+    S1.ThumbnailGridFrames := 9;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.IsFalse(S2.ThumbnailsEnabled);
+    Assert.IsTrue(S2.ThumbnailMode = tnmGrid, 'Mode did not round-trip');
+    Assert.AreEqual(25, S2.ThumbnailPosition);
+    Assert.AreEqual(9, S2.ThumbnailGridFrames);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailSettingsMissingInIniUsesDefaults;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { An INI without a [thumbnails] section must yield default values for
+    every thumbnail field — no exceptions, no zeroed numerics. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_THUMBNAILS_ENABLED, S.ThumbnailsEnabled);
+    Assert.IsTrue(S.ThumbnailMode = DEF_THUMBNAIL_MODE,
+      'Default ThumbnailMode mismatch on missing section');
+    Assert.AreEqual(DEF_THUMBNAIL_POSITION, S.ThumbnailPosition);
+    Assert.AreEqual(DEF_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailPositionClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { A hand-edited INI could supply nonsense like 9999. Load must clamp,
+    not propagate the bad value into the renderer. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'Position', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_THUMBNAIL_POSITION, S.ThumbnailPosition);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailPositionClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'Position', -50);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_THUMBNAIL_POSITION, S.ThumbnailPosition);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailGridFramesClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Ridiculous frame counts would create absurd extraction work; clamp
+    to MAX so we can never spend minutes on a single thumbnail. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'GridFrames', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailGridFramesClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { GridFrames < MIN would produce a degenerate grid (1 cell or empty).
+    Clamp upward to keep grid mode meaningful. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'GridFrames', 0);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailModeUnknownStringFallsBackToSingle;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { An unknown / corrupted Mode value must fall back to single (the
+    safest mode), not raise. Mirrors the StrToThumbnailMode contract. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('thumbnails', 'Mode', 'banana');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.ThumbnailMode = tnmSingle,
+      'Unknown Mode string should fall back to tnmSingle');
   finally
     S.Free;
   end;
