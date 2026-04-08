@@ -519,9 +519,11 @@ begin
   else
     Codec := '-q:v 2 -f image2pipe -vcodec png';
 
-  { Fit within MaxSide x MaxSide box, preserve aspect ratio, even dimensions }
+  { Square box: ffmpeg's force_original_aspect_ratio=decrease fits the longer
+    dimension to MaxSide regardless of orientation. }
   if AOptions.MaxSide > 0 then
-    ScaleFilter := Format('-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ',
+    ScaleFilter := Format(
+      '-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ',
       [AOptions.MaxSide, AOptions.MaxSide])
   else
     ScaleFilter := '';

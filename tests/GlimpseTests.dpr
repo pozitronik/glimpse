@@ -63,7 +63,9 @@ uses
   uCombinedImage in '..\src\uCombinedImage.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
-  TestProbeCache in 'TestProbeCache.pas';
+  TestProbeCache in 'TestProbeCache.pas',
+  uBitmapResize in '..\src\uBitmapResize.pas',
+  TestBitmapResize in 'TestBitmapResize.pas';
 
 var
   Runner: ITestRunner;

@@ -40,6 +40,12 @@ type
     FShowBanner: Boolean;
     { [output] }
     FShowFileSizes: Boolean;
+    { Output size cap in pixels, 0 = no limit. The cap applies to whichever
+      side is longer, so it works regardless of orientation. The frame cap
+      drives ffmpeg's scale filter for separate-mode extraction; the combined
+      cap triggers a post-render HALFTONE downscale of the assembled grid. }
+    FFrameMaxSide: Integer;
+    FCombinedMaxSide: Integer;
   public
     constructor Create(const AIniPath: string);
     procedure Load;
@@ -67,6 +73,8 @@ type
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property ShowBanner: Boolean read FShowBanner write FShowBanner;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
+    property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
+    property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
   end;
 
 const
@@ -80,6 +88,10 @@ const
   WCX_DEF_TIMESTAMP_FONT_SIZE = 9;
   WCX_DEF_SHOW_BANNER     = False;
   WCX_DEF_SHOW_FILE_SIZES = False;
+  WCX_DEF_FRAME_MAX_SIDE    = 0;  { 0 = no limit }
+  WCX_DEF_COMBINED_MAX_SIDE = 0;
+  WCX_MIN_OUTPUT_SIDE       = 0;
+  WCX_MAX_OUTPUT_SIDE       = MAX_FRAME_SIDE;  { 8K }
 
 implementation
 
@@ -113,6 +125,8 @@ begin
   FTimestampFontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
   FShowBanner := WCX_DEF_SHOW_BANNER;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
+  FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
+  FCombinedMaxSide := WCX_DEF_COMBINED_MAX_SIDE;
 end;
 
 procedure TWcxSettings.Load;
@@ -163,6 +177,11 @@ begin
     FShowBanner := Ini.ReadBool('combined', 'ShowBanner', WCX_DEF_SHOW_BANNER);
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
+
+    FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide',
+      WCX_DEF_FRAME_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide',
+      WCX_DEF_COMBINED_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
   finally
     Ini.Free;
   end;
@@ -204,6 +223,9 @@ begin
     Ini.WriteBool('combined', 'ShowBanner', FShowBanner);
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
+
+    Ini.WriteInteger('output', 'FrameMaxSide', FFrameMaxSide);
+    Ini.WriteInteger('combined', 'CombinedMaxSide', FCombinedMaxSide);
   finally
     Ini.Free;
   end;

@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 734
+  ClientHeight = 836
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -461,38 +461,100 @@ object WcxSettingsForm: TWcxSettingsForm
       TabOrder = 10
     end
   end
+  object GbxSizeLimit: TGroupBox
+    Left = 8
+    Top = 690
+    Width = 444
+    Height = 92
+    Caption = ' Output size limit (longer side, px, 0 = no limit) '
+    TabOrder = 3
+    object LblFrameMax: TLabel
+      Left = 12
+      Top = 24
+      Width = 138
+      Height = 15
+      Caption = 'Separate frames longer side:'
+    end
+    object LblCombinedMax: TLabel
+      Left = 12
+      Top = 53
+      Width = 145
+      Height = 15
+      Caption = 'Combined image longer side:'
+    end
+    object EdtFrameMax: TEdit
+      Left = 170
+      Top = 20
+      Width = 60
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 0
+    end
+    object UdFrameMax: TUpDown
+      Left = 230
+      Top = 20
+      Width = 17
+      Height = 23
+      Associate = EdtFrameMax
+      Min = 0
+      Max = 7680
+      Increment = 16
+      Thousands = False
+      TabOrder = 1
+    end
+    object EdtCombinedMax: TEdit
+      Left = 170
+      Top = 49
+      Width = 60
+      Height = 23
+      NumbersOnly = True
+      TabOrder = 2
+    end
+    object UdCombinedMax: TUpDown
+      Left = 230
+      Top = 49
+      Width = 17
+      Height = 23
+      Associate = EdtCombinedMax
+      Min = 0
+      Max = 7680
+      Increment = 16
+      Thousands = False
+      TabOrder = 3
+    end
+  end
   object BtnDefaults: TButton
     Left = 8
-    Top = 694
+    Top = 796
     Width = 100
     Height = 28
     Caption = 'Reset Defaults'
-    TabOrder = 3
+    TabOrder = 4
     OnClick = BtnDefaultsClick
   end
   object BtnOK: TButton
     Left = 296
-    Top = 694
+    Top = 796
     Width = 75
     Height = 28
     Caption = 'OK'
     Default = True
     ModalResult = 1
-    TabOrder = 4
+    TabOrder = 5
   end
   object BtnCancel: TButton
     Left = 377
-    Top = 694
+    Top = 796
     Width = 75
     Height = 28
     Cancel = True
     Caption = 'Cancel'
     ModalResult = 2
-    TabOrder = 5
+    TabOrder = 6
   end
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]
     Left = 408
-    Top = 694
+    Top = 796
   end
 end

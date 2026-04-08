@@ -47,8 +47,8 @@ uses
   System.SysUtils, System.AnsiStrings, System.IOUtils,
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
-  uFrameFileNames, uBitmapSaver, uFrameExtractor, uExtractionPlanner,
-  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes;
+  uFrameFileNames, uBitmapSaver, uFrameExtractor,
+  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize;
 
 type
   { State for one open archive (video file) }
@@ -79,13 +79,27 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
-{ Builds extraction options from WCX settings (always full resolution). }
-function WcxExtractionOptions(ASettings: TWcxSettings): TExtractionOptions;
+{ Builds extraction options for combined-mode rendering: no size limits.
+  The combined image is shrunk after grid assembly so cell gaps are
+  included in the output bound. }
+function WcxExtractionOptionsForCombined(ASettings: TWcxSettings): TExtractionOptions;
 begin
+  Result := Default(TExtractionOptions);
   Result.UseBmpPipe := ASettings.UseBmpPipe;
-  Result.MaxSide := 0;
   Result.HwAccel := ASettings.HwAccel;
   Result.UseKeyframes := ASettings.UseKeyframes;
+end;
+
+{ Builds extraction options for separate-frame mode. FrameMaxSide drives
+  ffmpeg's scale filter (force_original_aspect_ratio=decrease), which fits
+  the longer dimension to the cap regardless of source orientation. }
+function WcxExtractionOptionsForFrame(H: TArchiveHandle): TExtractionOptions;
+begin
+  Result := Default(TExtractionOptions);
+  Result.UseBmpPipe := H.Settings.UseBmpPipe;
+  Result.HwAccel := H.Settings.HwAccel;
+  Result.UseKeyframes := H.Settings.UseKeyframes;
+  Result.MaxSide := H.Settings.FrameMaxSide;
 end;
 
 procedure InvalidateFrameCache;
@@ -121,19 +135,31 @@ function RenderCombinedBitmap(H: TArchiveHandle;
   const AExtractor: IFrameExtractor): TBitmap;
 var
   Frames: TArray<TBitmap>;
-  WithBanner: TBitmap;
+  Resized, WithBanner: TBitmap;
   I: Integer;
 begin
   SetLength(Frames, Length(H.Offsets));
   try
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName,
-        H.Offsets[I].TimeOffset, WcxExtractionOptions(H.Settings));
+        H.Offsets[I].TimeOffset, WcxExtractionOptionsForCombined(H.Settings));
 
     Result := RenderCombinedImage(Frames, H.Offsets,
       H.Settings.CombinedColumns, H.Settings.CellGap,
       H.Settings.Background, H.Settings.ShowTimestamp,
       H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+
+    { Apply combined size limit BEFORE the banner so the banner stays
+      at full width and is not counted toward the limit }
+    if Result <> nil then
+    begin
+      Resized := DownscaleBitmapToFit(Result, H.Settings.CombinedMaxSide);
+      if Resized <> nil then
+      begin
+        Result.Free;
+        Result := Resized;
+      end;
+    end;
 
     if (Result <> nil) and H.Settings.ShowBanner then
     begin
@@ -176,11 +202,13 @@ var
   Bmp: TBitmap;
   TempPath: string;
   I: Integer;
+  Options: TExtractionOptions;
 begin
+  Options := WcxExtractionOptionsForFrame(H);
   for I := 0 to Length(H.Offsets) - 1 do
   begin
     Bmp := AExtractor.ExtractFrame(H.FileName,
-      H.Offsets[I].TimeOffset, WcxExtractionOptions(H.Settings));
+      H.Offsets[I].TimeOffset, Options);
     if Bmp = nil then Continue;
     try
       TempPath := TPath.Combine(GCachedTempDir,
@@ -398,7 +426,7 @@ begin
   try
     Bmp := Extractor.ExtractFrame(H.FileName,
       H.Offsets[H.CurrentIndex].TimeOffset,
-      WcxExtractionOptions(H.Settings));
+      WcxExtractionOptionsForFrame(H));
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try

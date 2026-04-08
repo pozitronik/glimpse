@@ -66,6 +66,12 @@ type
     [Test] procedure TestPartialIniUsesDefaults;
     { UseBmpPipe round-trip }
     [Test] procedure TestUseBmpPipeRoundTrip;
+    { Output size limits }
+    [Test] procedure TestOutputSizeLimitsDefault;
+    [Test] procedure TestFrameMaxSideRoundTrip;
+    [Test] procedure TestCombinedMaxSideRoundTrip;
+    [Test] procedure TestFrameMaxSideClampedUpper;
+    [Test] procedure TestCombinedMaxSideClampedLower;
   end;
 
 implementation
@@ -1046,6 +1052,116 @@ begin
     Assert.AreEqual(False, S2.UseBmpPipe);
   finally
     S2.Free;
+  end;
+end;
+
+{ Output size limits }
+
+procedure TTestWcxSettings.TestOutputSizeLimitsDefault;
+var
+  S: TWcxSettings;
+begin
+  { Both size limits default to 0 (no constraint) }
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'sz_def.ini'));
+  try
+    Assert.AreEqual(0, S.FrameMaxSide);
+    Assert.AreEqual(0, S.CombinedMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestFrameMaxSideRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fms_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.FrameMaxSide := 1280;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(1280, S2.FrameMaxSide);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedMaxSideRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cms_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.CombinedMaxSide := 1920;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(1920, S2.CombinedMaxSide);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestFrameMaxSideClampedUpper;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { Values larger than 8K must be clamped down }
+  IniPath := TPath.Combine(FTempDir, 'fms_hi.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('output', 'FrameMaxSide', 999999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(WCX_MAX_OUTPUT_SIDE, S.FrameMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedMaxSideClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { Negative values must clamp up to 0 }
+  IniPath := TPath.Combine(FTempDir, 'cms_lo.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'CombinedMaxSide', -1);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(0, S.CombinedMaxSide);
+  finally
+    S.Free;
   end;
 end;
 

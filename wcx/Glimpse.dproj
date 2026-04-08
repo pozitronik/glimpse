@@ -58,6 +58,7 @@
         <DCCReference Include="..\src\uFrameFileNames.pas"/>
         <DCCReference Include="..\src\uBitmapSaver.pas"/>
         <DCCReference Include="..\src\uExtractionPlanner.pas"/>
+        <DCCReference Include="..\src\uBitmapResize.pas"/>
         <DCCReference Include="..\src\uPathExpand.pas"/>
         <DCCReference Include="..\src\uColorConv.pas"/>
         <DCCReference Include="..\src\uRunProcess.pas"/>

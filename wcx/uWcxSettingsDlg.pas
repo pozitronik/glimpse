@@ -65,6 +65,13 @@ type
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
     ChkShowBanner: TCheckBox;
+    GbxSizeLimit: TGroupBox;
+    LblFrameMax: TLabel;
+    LblCombinedMax: TLabel;
+    EdtFrameMax: TEdit;
+    UdFrameMax: TUpDown;
+    EdtCombinedMax: TEdit;
+    UdCombinedMax: TUpDown;
     BtnDefaults: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
@@ -137,6 +144,9 @@ begin
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   ChkShowBanner.Checked := ASettings.ShowBanner;
 
+  UdFrameMax.Position := ASettings.FrameMaxSide;
+  UdCombinedMax.Position := ASettings.CombinedMaxSide;
+
   UpdateMaxWorkersControls;
   UpdateCombinedState;
   UpdateFFmpegInfo;
@@ -174,6 +184,9 @@ begin
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.ShowBanner := ChkShowBanner.Checked;
+
+  ASettings.FrameMaxSide := UdFrameMax.Position;
+  ASettings.CombinedMaxSide := UdCombinedMax.Position;
 end;
 
 procedure TWcxSettingsForm.UpdateCombinedState;

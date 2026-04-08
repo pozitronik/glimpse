@@ -1028,8 +1028,9 @@ begin
   ShowProgress('Extracting...');
   FAnimTimer.Enabled := True;
 
+  { Zero-init so any future TExtractionOptions fields default to 0 }
+  Options := Default(TExtractionOptions);
   Options.UseBmpPipe := FSettings.UseBmpPipe;
-  Options.MaxSide := 0;
   if FSettings.ScaledExtraction then
     Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth,
       FScrollBox.ClientHeight, Length(FOffsets), FFrameView.AspectRatio,

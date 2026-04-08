@@ -22,6 +22,7 @@ uses
   uFrameFileNames in '..\src\uFrameFileNames.pas',
   uBitmapSaver in '..\src\uBitmapSaver.pas',
   uExtractionPlanner in '..\src\uExtractionPlanner.pas',
+  uBitmapResize in '..\src\uBitmapResize.pas',
   uPathExpand in '..\src\uPathExpand.pas',
   uColorConv in '..\src\uColorConv.pas',
   uRunProcess in '..\src\uRunProcess.pas',

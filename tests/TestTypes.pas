@@ -61,6 +61,7 @@ procedure TTestTypes.ExtractionOptionsValueSemantics;
 var
   A, B: TExtractionOptions;
 begin
+  A := Default(TExtractionOptions);
   A.UseBmpPipe := True;
   A.MaxSide := 480;
   A.HwAccel := True;
