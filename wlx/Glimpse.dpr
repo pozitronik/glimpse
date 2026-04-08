@@ -22,6 +22,7 @@ uses
   uDebugLog in '..\src\uDebugLog.pas',
   uCache in '..\src\uCache.pas',
   uCacheKey in '..\src\uCacheKey.pas',
+  uProbeCache in '..\src\uProbeCache.pas',
   uSettingsDlg in 'uSettingsDlg.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',
   uBitmapSaver in '..\src\uBitmapSaver.pas',
