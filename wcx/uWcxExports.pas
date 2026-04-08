@@ -79,27 +79,19 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
-{ Builds extraction options for combined-mode rendering: no size limits.
-  The combined image is shrunk after grid assembly so cell gaps are
-  included in the output bound. }
-function WcxExtractionOptionsForCombined(ASettings: TWcxSettings): TExtractionOptions;
+{ Builds extraction options from WCX settings.
+  AMaxSide = 0 means no scale limit (combined-mode caller relies on this:
+  the assembled grid is shrunk separately after rendering). For
+  separate-frame mode, pass H.Settings.FrameMaxSide so ffmpeg's scale
+  filter fits the longer dimension to the cap. }
+function BuildExtractionOptions(ASettings: TWcxSettings;
+  AMaxSide: Integer = 0): TExtractionOptions;
 begin
   Result := Default(TExtractionOptions);
   Result.UseBmpPipe := ASettings.UseBmpPipe;
   Result.HwAccel := ASettings.HwAccel;
   Result.UseKeyframes := ASettings.UseKeyframes;
-end;
-
-{ Builds extraction options for separate-frame mode. FrameMaxSide drives
-  ffmpeg's scale filter (force_original_aspect_ratio=decrease), which fits
-  the longer dimension to the cap regardless of source orientation. }
-function WcxExtractionOptionsForFrame(H: TArchiveHandle): TExtractionOptions;
-begin
-  Result := Default(TExtractionOptions);
-  Result.UseBmpPipe := H.Settings.UseBmpPipe;
-  Result.HwAccel := H.Settings.HwAccel;
-  Result.UseKeyframes := H.Settings.UseKeyframes;
-  Result.MaxSide := H.Settings.FrameMaxSide;
+  Result.MaxSide := AMaxSide;
 end;
 
 procedure InvalidateFrameCache;
@@ -142,7 +134,7 @@ begin
   try
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName,
-        H.Offsets[I].TimeOffset, WcxExtractionOptionsForCombined(H.Settings));
+        H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
 
     Result := RenderCombinedImage(Frames, H.Offsets,
       H.Settings.CombinedColumns, H.Settings.CellGap,
@@ -204,7 +196,7 @@ var
   I: Integer;
   Options: TExtractionOptions;
 begin
-  Options := WcxExtractionOptionsForFrame(H);
+  Options := BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide);
   for I := 0 to Length(H.Offsets) - 1 do
   begin
     Bmp := AExtractor.ExtractFrame(H.FileName,
@@ -426,7 +418,7 @@ begin
   try
     Bmp := Extractor.ExtractFrame(H.FileName,
       H.Offsets[H.CurrentIndex].TimeOffset,
-      WcxExtractionOptionsForFrame(H));
+      BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide));
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try
