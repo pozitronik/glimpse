@@ -39,7 +39,8 @@ uses
   uExtractionController in 'uExtractionController.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
-  uThumbnailRender in '..\src\uThumbnailRender.pas';
+  uThumbnailRender in '..\src\uThumbnailRender.pas',
+  uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas';
 
 exports
   ListLoad,

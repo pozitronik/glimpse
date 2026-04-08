@@ -105,7 +105,7 @@ implementation
 {$R *.dfm}
 
 uses
-  uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator;
+  uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 begin
@@ -210,58 +210,45 @@ end;
 
 procedure TWcxSettingsForm.UpdateMaxWorkersControls;
 var
-  Manual, OnePerFrame: Boolean;
+  OnePerFrame: Boolean;
 begin
   OnePerFrame := ChkMaxWorkersAuto.Checked;
-  Manual := not OnePerFrame;
-  LblMaxWorkers.Enabled := Manual;
-  EdtMaxWorkers.Enabled := Manual;
-  UdMaxWorkers.Enabled := Manual;
+  LblMaxWorkers.Enabled := not OnePerFrame;
+  EdtMaxWorkers.Enabled := not OnePerFrame;
+  UdMaxWorkers.Enabled := not OnePerFrame;
   LblMaxThreads.Enabled := OnePerFrame;
   EdtMaxThreads.Enabled := OnePerFrame;
   UdMaxThreads.Enabled := OnePerFrame;
-  if not OnePerFrame then
-    LblMaxThreadsAuto.Caption := ''
-  else if UdMaxThreads.Position < 0 then
-    LblMaxThreadsAuto.Caption := '(no limit)'
-  else if UdMaxThreads.Position = 0 then
-    LblMaxThreadsAuto.Caption := Format('(auto: %d cores)', [CPUCount])
-  else
-    LblMaxThreadsAuto.Caption := '';
+  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame,
+    UdMaxThreads.Position, CPUCount);
 end;
 
 procedure TWcxSettingsForm.UpdateFFmpegInfo;
 var
-  Path, Ver: string;
+  Input, Path, Ver: string;
+  State: TFFmpegProbeState;
 begin
-  Path := EdtFFmpegPath.Text;
-  if Path <> '' then
-    Path := ExpandEnvVars(Path)
+  Input := EdtFFmpegPath.Text;
+  if Input <> '' then
+    Path := ExpandEnvVars(Input)
   else
     Path := FindFFmpegExe(ExtractFilePath(Application.ExeName), '');
 
+  Ver := '';
   if Path = '' then
-  begin
-    LblFFmpegInfo.Caption := 'Not found';
-    Exit;
-  end;
-
-  if not FileExists(Path) then
-  begin
-    LblFFmpegInfo.Caption := Format('Not found: %s', [Path]);
-    Exit;
-  end;
-
-  Ver := ValidateFFmpeg(Path);
-  if Ver <> '' then
-  begin
-    if EdtFFmpegPath.Text = '' then
-      LblFFmpegInfo.Caption := Format('Detected: %s (%s)', [Path, Ver])
-    else
-      LblFFmpegInfo.Caption := Format('Version: %s', [Ver]);
-  end
+    State := fpsNoPath
+  else if not FileExists(Path) then
+    State := fpsFileMissing
   else
-    LblFFmpegInfo.Caption := Format('Invalid executable: %s', [Path]);
+  begin
+    Ver := ValidateFFmpeg(Path);
+    if Ver = '' then
+      State := fpsInvalid
+    else
+      State := fpsValid;
+  end;
+
+  LblFFmpegInfo.Caption := FFmpegInfoLabelText(State, Path, Ver, Input = '');
 end;
 
 procedure TWcxSettingsForm.CbxOutputModeChange(Sender: TObject);

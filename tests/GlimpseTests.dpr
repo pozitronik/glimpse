@@ -67,7 +67,9 @@ uses
   uBitmapResize in '..\src\uBitmapResize.pas',
   TestBitmapResize in 'TestBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
-  TestThumbnailRender in 'TestThumbnailRender.pas';
+  TestThumbnailRender in 'TestThumbnailRender.pas',
+  uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
+  TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas';
 
 var
   Runner: ITestRunner;
