@@ -525,7 +525,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkShowBanner: TCheckBox
         Left = 12
-        Top = 136
+        Top = 140
         Width = 424
         Height = 17
         Caption = 'Include file info banner in combined image export'
@@ -544,7 +544,7 @@ object SettingsForm: TSettingsForm
       end
       object LblCacheFolderInfo: TLabel
         Left = 12
-        Top = 73
+        Top = 82
         Width = 3
         Height = 15
         Font.Color = clGray
@@ -552,21 +552,21 @@ object SettingsForm: TSettingsForm
       end
       object LblCacheMaxSize: TLabel
         Left = 12
-        Top = 96
+        Top = 111
         Width = 47
         Height = 15
         Caption = 'Max size:'
       end
       object LblCacheMaxSizeUnit: TLabel
         Left = 218
-        Top = 96
+        Top = 111
         Width = 18
         Height = 15
         Caption = 'MB'
       end
       object LblCacheSizeInfo: TLabel
         Left = 244
-        Top = 96
+        Top = 111
         Width = 3
         Height = 15
         Font.Color = clGray
@@ -574,7 +574,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkCacheEnabled: TCheckBox
         Left = 12
-        Top = 22
+        Top = 24
         Width = 140
         Height = 17
         Caption = 'Enable disk cache'
@@ -583,7 +583,7 @@ object SettingsForm: TSettingsForm
       end
       object BtnClearCache: TButton
         Left = 364
-        Top = 18
+        Top = 20
         Width = 88
         Height = 23
         Anchors = [akTop, akRight]
@@ -613,7 +613,7 @@ object SettingsForm: TSettingsForm
       end
       object EdtCacheMaxSize: TEdit
         Left = 130
-        Top = 92
+        Top = 107
         Width = 65
         Height = 23
         NumbersOnly = True
@@ -622,7 +622,7 @@ object SettingsForm: TSettingsForm
       end
       object UdCacheMaxSize: TUpDown
         Left = 195
-        Top = 92
+        Top = 107
         Width = 17
         Height = 23
         Associate = EdtCacheMaxSize
@@ -638,35 +638,35 @@ object SettingsForm: TSettingsForm
       ImageIndex = 4
       object LblThumbnailMode: TLabel
         Left = 12
-        Top = 46
+        Top = 53
         Width = 34
         Height = 15
         Caption = 'Mode:'
       end
       object LblThumbnailPosition: TLabel
         Left = 12
-        Top = 76
+        Top = 82
         Width = 46
         Height = 15
         Caption = 'Position:'
       end
       object LblThumbnailPositionUnit: TLabel
         Left = 198
-        Top = 76
+        Top = 82
         Width = 10
         Height = 15
         Caption = '%'
       end
       object LblThumbnailGridFrames: TLabel
         Left = 240
-        Top = 76
+        Top = 82
         Width = 64
         Height = 15
         Caption = 'Grid frames:'
       end
       object ChkThumbnailsEnabled: TCheckBox
         Left = 12
-        Top = 20
+        Top = 24
         Width = 412
         Height = 17
         Caption = 'Enable thumbnails for TC panels'
@@ -675,7 +675,7 @@ object SettingsForm: TSettingsForm
       end
       object CbxThumbnailMode: TComboBox
         Left = 130
-        Top = 42
+        Top = 49
         Width = 110
         Height = 23
         Style = csDropDownList
@@ -687,7 +687,7 @@ object SettingsForm: TSettingsForm
       end
       object EdtThumbnailPosition: TEdit
         Left = 130
-        Top = 72
+        Top = 78
         Width = 45
         Height = 23
         NumbersOnly = True
@@ -696,7 +696,7 @@ object SettingsForm: TSettingsForm
       end
       object UdThumbnailPosition: TUpDown
         Left = 175
-        Top = 72
+        Top = 78
         Width = 17
         Height = 23
         Associate = EdtThumbnailPosition
@@ -706,7 +706,7 @@ object SettingsForm: TSettingsForm
       end
       object EdtThumbnailGridFrames: TEdit
         Left = 320
-        Top = 72
+        Top = 78
         Width = 45
         Height = 23
         NumbersOnly = True
@@ -715,7 +715,7 @@ object SettingsForm: TSettingsForm
       end
       object UdThumbnailGridFrames: TUpDown
         Left = 365
-        Top = 72
+        Top = 78
         Width = 17
         Height = 23
         Associate = EdtThumbnailGridFrames
@@ -731,7 +731,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 5
       object ChkQVDisableNavigation: TCheckBox
         Left = 12
-        Top = 20
+        Top = 24
         Width = 424
         Height = 17
         Caption = 'Disable internal file navigation'
@@ -739,7 +739,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkQVHideToolbar: TCheckBox
         Left = 12
-        Top = 41
+        Top = 53
         Width = 424
         Height = 17
         Caption = 'Hide toolbar'
@@ -747,7 +747,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkQVHideStatusBar: TCheckBox
         Left = 12
-        Top = 62
+        Top = 82
         Width = 424
         Height = 17
         Caption = 'Hide status bar'
