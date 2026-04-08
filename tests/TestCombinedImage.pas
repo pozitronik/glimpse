@@ -69,13 +69,17 @@ type
     [Test] procedure BannerLines_AudioChannelsShown;
     [Test] procedure BannerLines_NoFileSize_OmitsSize;
     [Test] procedure BannerLines_GBFileSize;
+    { BuildBannerInfo }
+    [Test] procedure BuildBannerInfo_ExistingFile_CopiesAllFields;
+    [Test] procedure BuildBannerInfo_MissingFile_FileSizeIsZero;
+    [Test] procedure BuildBannerInfo_EmptyVideoInfo_ReturnsZeroedRecord;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Types, System.UITypes,
-  uFrameOffsets, uCombinedImage;
+  System.SysUtils, System.IOUtils, System.Types, System.UITypes,
+  uFrameOffsets, uFFmpegExe, uCombinedImage;
 
 { Helper }
 
@@ -1033,6 +1037,105 @@ begin
   Lines := FormatBannerLines(Info);
   Assert.IsTrue(Lines[0].Contains('3.00 GB'),
     Format('3 GB file should show GB, got: [%s]', [Lines[0]]));
+end;
+
+procedure TTestCombinedImage.BuildBannerInfo_ExistingFile_CopiesAllFields;
+var
+  TempFile: string;
+  VideoInfo: TVideoInfo;
+  Banner: TBannerInfo;
+begin
+  { A real file on disk so BuildBannerInfo's TFile.GetSize branch runs.
+    Every TVideoInfo field is set to a distinct sentinel so we can prove
+    each is copied (not silently dropped or remapped). }
+  TempFile := TPath.Combine(TPath.GetTempPath,
+    'VT_BuildBanner_' + TGuid.NewGuid.ToString + '.bin');
+  TFile.WriteAllBytes(TempFile, TBytes.Create($DE, $AD, $BE, $EF, $00, $11, $22));
+  try
+    VideoInfo := Default(TVideoInfo);
+    VideoInfo.Duration := 123.5;
+    VideoInfo.Width := 1920;
+    VideoInfo.Height := 1080;
+    VideoInfo.VideoCodec := 'h264';
+    VideoInfo.VideoBitrateKbps := 4500;
+    VideoInfo.Fps := 29.97;
+    VideoInfo.AudioCodec := 'aac';
+    VideoInfo.AudioSampleRate := 48000;
+    VideoInfo.AudioChannels := 'stereo';
+    VideoInfo.AudioBitrateKbps := 192;
+    VideoInfo.IsValid := True;
+
+    Banner := BuildBannerInfo(TempFile, VideoInfo);
+
+    Assert.AreEqual(TempFile, Banner.FileName);
+    Assert.AreEqual<Int64>(7, Banner.FileSizeBytes);
+    Assert.AreEqual(123.5, Banner.DurationSec, 0.001);
+    Assert.AreEqual(1920, Banner.Width);
+    Assert.AreEqual(1080, Banner.Height);
+    Assert.AreEqual('h264', Banner.VideoCodec);
+    Assert.AreEqual(4500, Banner.VideoBitrateKbps);
+    Assert.AreEqual(29.97, Banner.Fps, 0.001);
+    Assert.AreEqual('aac', Banner.AudioCodec);
+    Assert.AreEqual(48000, Banner.AudioSampleRate);
+    Assert.AreEqual('stereo', Banner.AudioChannels);
+    Assert.AreEqual(192, Banner.AudioBitrateKbps);
+  finally
+    if TFile.Exists(TempFile) then
+      TFile.Delete(TempFile);
+  end;
+end;
+
+procedure TTestCombinedImage.BuildBannerInfo_MissingFile_FileSizeIsZero;
+var
+  Missing: string;
+  VideoInfo: TVideoInfo;
+  Banner: TBannerInfo;
+begin
+  { Defensive: a probe could succeed and the file then disappear before
+    BuildBannerInfo runs (network share, antivirus quarantine, etc.).
+    The function must return FileSizeBytes=0 — not raise — so the banner
+    still renders with the rest of the metadata. }
+  Missing := TPath.Combine(TPath.GetTempPath,
+    'VT_BuildBanner_missing_' + TGuid.NewGuid.ToString + '.bin');
+  Assert.IsFalse(TFile.Exists(Missing), 'Pre-condition: file must not exist');
+
+  VideoInfo := Default(TVideoInfo);
+  VideoInfo.Duration := 60.0;
+  VideoInfo.Width := 640;
+  VideoInfo.Height := 480;
+  VideoInfo.VideoCodec := 'mpeg4';
+
+  Banner := BuildBannerInfo(Missing, VideoInfo);
+
+  Assert.AreEqual(Missing, Banner.FileName);
+  Assert.AreEqual<Int64>(0, Banner.FileSizeBytes);
+  { The other fields must still come through unchanged }
+  Assert.AreEqual(60.0, Banner.DurationSec, 0.001);
+  Assert.AreEqual(640, Banner.Width);
+  Assert.AreEqual(480, Banner.Height);
+  Assert.AreEqual('mpeg4', Banner.VideoCodec);
+end;
+
+procedure TTestCombinedImage.BuildBannerInfo_EmptyVideoInfo_ReturnsZeroedRecord;
+var
+  Banner: TBannerInfo;
+begin
+  { An empty filename + Default(TVideoInfo) must produce a fully-zeroed
+    TBannerInfo. Belt-and-braces against accidental field initialization
+    creeping in (e.g. someone setting Width := 1 by mistake). }
+  Banner := BuildBannerInfo('', Default(TVideoInfo));
+  Assert.AreEqual('', Banner.FileName);
+  Assert.AreEqual<Int64>(0, Banner.FileSizeBytes);
+  Assert.AreEqual(0.0, Banner.DurationSec, 0.001);
+  Assert.AreEqual(0, Banner.Width);
+  Assert.AreEqual(0, Banner.Height);
+  Assert.AreEqual('', Banner.VideoCodec);
+  Assert.AreEqual(0, Banner.VideoBitrateKbps);
+  Assert.AreEqual(0.0, Banner.Fps, 0.001);
+  Assert.AreEqual('', Banner.AudioCodec);
+  Assert.AreEqual(0, Banner.AudioSampleRate);
+  Assert.AreEqual('', Banner.AudioChannels);
+  Assert.AreEqual(0, Banner.AudioBitrateKbps);
 end;
 
 end.
