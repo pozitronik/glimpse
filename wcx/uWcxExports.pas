@@ -359,7 +359,7 @@ begin
   if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
     HeaderData.UnpSize := H.EntrySizes[H.CurrentIndex];
   HeaderData.FileTime := H.FileTime;
-  HeaderData.FileAttr := $20; { FILE_ATTRIBUTE_ARCHIVE }
+  HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
 
   Result := E_SUCCESS;
 end;
@@ -385,7 +385,7 @@ begin
     HeaderData.UnpSizeHigh := DWORD(Size shr 32);
   end;
   HeaderData.FileTime := H.FileTime;
-  HeaderData.FileAttr := $20;
+  HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
 
   Result := E_SUCCESS;
 end;
