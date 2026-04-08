@@ -1,11 +1,11 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{C8F5B3E2-6D9A-4F7B-A0C1-3E4F5A6B7C8D}</ProjectGuid>
         <ProjectVersion>20.3</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
         <MainSource>Glimpse.dpr</MainSource>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Library</AppType>
@@ -18,37 +18,41 @@
         <Cfg_1>true</Cfg_1>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
-        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
-    </PropertyGroup>
-    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win64)'!=''">
-        <Cfg_1_Win64>true</Cfg_1_Win64>
-        <CfgParent>Cfg_1</CfgParent>
-        <Cfg_1>true</Cfg_1>
-        <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
         <Cfg_2>true</Cfg_2>
         <CfgParent>Base</CfgParent>
         <Base>true</Base>
     </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win64)'!=''">
+        <Cfg_2_Win64>true</Cfg_2_Win64>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <GenDll>true</GenDll>
         <SanitizedProjectName>Glimpse</SanitizedProjectName>
     </PropertyGroup>
-    <PropertyGroup Condition="'$(Base)'=='true'">
-        <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
-        <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
-        <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+    <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
+        <DCC_AssertionsAtRuntime>false</DCC_AssertionsAtRuntime>
+        <DCC_DebugInformation>0</DCC_DebugInformation>
+        <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
+        <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
+        <VerInfo_Locale>1049</VerInfo_Locale>
+        <DCC_ImportedDataReferences>false</DCC_ImportedDataReferences>
+        <Manifest_File>(None)</Manifest_File>
+        <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
     </PropertyGroup>
     <ItemGroup>
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="..\src\uTypes.pas"/>
         <DCCReference Include="uWcxAPI.pas"/>
         <DCCReference Include="uWcxExports.pas"/>
         <DCCReference Include="uWcxSettings.pas"/>
         <DCCReference Include="uWcxSettingsDlg.pas"/>
-        <DCCReference Include="..\src\uTypes.pas"/>
         <DCCReference Include="..\src\uFrameOffsets.pas"/>
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>
@@ -63,7 +67,9 @@
         <DCCReference Include="..\src\uPathExpand.pas"/>
         <DCCReference Include="..\src\uColorConv.pas"/>
         <DCCReference Include="..\src\uRunProcess.pas"/>
+        <DCCReference Include="..\src\uDefaults.pas"/>
         <DCCReference Include="..\src\uFrameExtractor.pas"/>
+        <DCCReference Include="..\src\uCombinedImage.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
         <BuildConfiguration Include="Base">
@@ -83,7 +89,10 @@
         <Borland.ProjectType>LibraryType</Borland.ProjectType>
         <BorlandProject>
             <Delphi.Personality>
-                <Excluded_Packages/>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k280.bpl">Microsoft Office 2000 Sample Automation Server Wrapper Components</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp280.bpl">Microsoft Office XP Sample Automation Server Wrapper Components</Excluded_Packages>
+                </Excluded_Packages>
                 <Source>
                     <Source Name="MainSource">Glimpse.dpr</Source>
                 </Source>
