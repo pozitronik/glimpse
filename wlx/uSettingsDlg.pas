@@ -13,7 +13,8 @@ uses
 
 type
   TSettingsForm = class(TForm)
-    GbxGeneral: TGroupBox;
+    PageControl: TPageControl;
+    TshGeneral: TTabSheet;
     LblSkipEdges: TLabel;
     EdtSkipEdges: TEdit;
     UdSkipEdges: TUpDown;
@@ -22,6 +23,10 @@ type
     EdtMaxWorkers: TEdit;
     UdMaxWorkers: TUpDown;
     ChkMaxWorkersAuto: TCheckBox;
+    LblMaxThreads: TLabel;
+    EdtMaxThreads: TEdit;
+    UdMaxThreads: TUpDown;
+    LblMaxThreadsAuto: TLabel;
     ChkUseBmpPipe: TCheckBox;
     ChkHwAccel: TCheckBox;
     ChkUseKeyframes: TCheckBox;
@@ -32,17 +37,13 @@ type
     LblMaxFrameSide: TLabel;
     EdtMaxFrameSide: TEdit;
     UdMaxFrameSide: TUpDown;
-    LblMaxThreads: TLabel;
-    LblMaxThreadsAuto: TLabel;
-    EdtMaxThreads: TEdit;
-    UdMaxThreads: TUpDown;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
     LblFFmpegInfo: TLabel;
-    GbxAppearance: TGroupBox;
+    TshAppearance: TTabSheet;
     LblBackground: TLabel;
     PnlBackground: TPanel;
     BtnBackground: TButton;
@@ -60,7 +61,7 @@ type
     UdTimestampFontSize: TUpDown;
     ChkShowToolbar: TCheckBox;
     ChkShowStatusBar: TCheckBox;
-    GbxSave: TGroupBox;
+    TshSave: TTabSheet;
     LblSaveFormat: TLabel;
     CbxSaveFormat: TComboBox;
     LblJpegQuality: TLabel;
@@ -73,8 +74,9 @@ type
     EdtSaveFolder: TEdit;
     BtnSaveFolder: TButton;
     ChkShowBanner: TCheckBox;
-    GbxCache: TGroupBox;
+    TshCache: TTabSheet;
     ChkCacheEnabled: TCheckBox;
+    BtnClearCache: TButton;
     LblCacheFolder: TLabel;
     EdtCacheFolder: TEdit;
     BtnCacheFolder: TButton;
@@ -84,8 +86,7 @@ type
     UdCacheMaxSize: TUpDown;
     LblCacheMaxSizeUnit: TLabel;
     LblCacheSizeInfo: TLabel;
-    BtnClearCache: TButton;
-    GbxThumbnails: TGroupBox;
+    TshThumbnails: TTabSheet;
     ChkThumbnailsEnabled: TCheckBox;
     LblThumbnailMode: TLabel;
     CbxThumbnailMode: TComboBox;
@@ -96,13 +97,14 @@ type
     LblThumbnailGridFrames: TLabel;
     EdtThumbnailGridFrames: TEdit;
     UdThumbnailGridFrames: TUpDown;
-    GbxQuickView: TGroupBox;
+    TshQuickView: TTabSheet;
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
     ChkQVHideStatusBar: TCheckBox;
+    PnlButtons: TPanel;
+    BtnDefaults: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
-    BtnDefaults: TButton;
     ColorDlg: TColorDialog;
     procedure PnlBackgroundClick(Sender: TObject);
     procedure PnlTCBackClick(Sender: TObject);
