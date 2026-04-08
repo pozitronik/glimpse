@@ -1,6 +1,6 @@
-{ View mode layout strategies: compute cell positions, sizes, and scroll behavior.
-  Extracted from TFrameView to satisfy OCP: adding a view mode means adding
-  a class, not editing switch statements across the control. }
+{View mode layout strategies: compute cell positions, sizes, and scroll behavior.
+ Extracted from TFrameView to satisfy OCP: adding a view mode means adding
+ a class, not editing switch statements across the control.}
 unit uViewModeLayout;
 
 interface
@@ -10,30 +10,30 @@ uses
   uTypes;
 
 const
-  DEF_ASPECT_RATIO = 9.0 / 16.0; { 16:9 fallback, height/width }
+  DEF_ASPECT_RATIO = 9.0 / 16.0; {16:9 fallback, height/width}
 
 type
   TViewLayoutContext = record
-    BaseW: Integer;           { base viewport width (frozen when zoomed) }
-    BaseH: Integer;           { base viewport height }
+    BaseW: Integer; {base viewport width (frozen when zoomed)}
+    BaseH: Integer; {base viewport height}
     CellCount: Integer;
     CellGap: Integer;
-    AspectRatio: Double;      { height / width }
+    AspectRatio: Double; {height / width}
     NativeW: Integer;
     NativeH: Integer;
     ZoomMode: TZoomMode;
     ZoomFactor: Double;
-    ClientWidth: Integer;     { actual control width }
+    ClientWidth: Integer; {actual control width}
     ClientHeight: Integer;
     CurrentFrameIndex: Integer;
     ViewportW: Integer;
     ViewportH: Integer;
-    ColumnCount: Integer;     { user-set, 0 = auto }
+    ColumnCount: Integer; {user-set, 0 = auto}
   end;
 
   TLayoutWheelAction = (lwaVerticalScroll, lwaHorizontalScroll, lwaNavigateFrame);
 
-  { Abstract base: each subclass defines geometry for one view mode. }
+  {Abstract base: each subclass defines geometry for one view mode.}
   TViewModeLayout = class abstract
   public
     function GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect; virtual; abstract;
@@ -100,10 +100,9 @@ implementation
 uses
   System.Math, uZoomController;
 
-{ TViewModeLayout }
+{TViewModeLayout}
 
-function TViewModeLayout.CellIndexAt(const APoint: TPoint;
-  const ACtx: TViewLayoutContext): Integer;
+function TViewModeLayout.CellIndexAt(const APoint: TPoint; const ACtx: TViewLayoutContext): Integer;
 var
   I: Integer;
 begin
@@ -113,13 +112,13 @@ begin
   Result := -1;
 end;
 
-{ TGridLayout }
+{TGridLayout}
 
 function TGridLayout.GetColumnCount(const ACtx: TViewLayoutContext): Integer;
 begin
   if ACtx.CellCount <= 1 then
     Exit(1);
-  { Original size: columns based on native frame width }
+  {Original size: columns based on native frame width}
   if (ACtx.ZoomMode = zmActual) and (ACtx.NativeW > 0) then
     Exit(Max(1, (ACtx.BaseW - ACtx.CellGap) div (ACtx.NativeW + ACtx.CellGap)));
   if ACtx.ColumnCount > 0 then
@@ -137,8 +136,7 @@ begin
   Result.cy := Max(1, Round(Result.cx * ACtx.AspectRatio));
 end;
 
-function TGridLayout.GetCellRect(AIndex: Integer;
-  const ACtx: TViewLayoutContext): TRect;
+function TGridLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
   Cols, Col, Row, Rows: Integer;
   Sz: TSize;
@@ -154,21 +152,21 @@ begin
   GridW := Cols * (Sz.cx + ACtx.CellGap) + ACtx.CellGap;
   GridH := ACtx.CellGap + Rows * RowH;
 
-  { Center grid horizontally }
+  {Center grid horizontally}
   if GridW < ACtx.ClientWidth then
     OffsetX := (ACtx.ClientWidth - GridW) div 2
   else
     OffsetX := 0;
 
-  { Center grid vertically }
+  {Center grid vertically}
   if GridH < ACtx.ClientHeight then
     OffsetY := (ACtx.ClientHeight - GridH) div 2
   else
     OffsetY := 0;
 
-  Result.Left   := OffsetX + ACtx.CellGap + Col * (Sz.cx + ACtx.CellGap);
-  Result.Top    := OffsetY + ACtx.CellGap + Row * RowH;
-  Result.Right  := Result.Left + Sz.cx;
+  Result.Left := OffsetX + ACtx.CellGap + Col * (Sz.cx + ACtx.CellGap);
+  Result.Top := OffsetY + ACtx.CellGap + Row * RowH;
+  Result.Right := Result.Left + Sz.cx;
   Result.Bottom := Result.Top + Sz.cy;
 end;
 
@@ -190,15 +188,14 @@ begin
   Result := lwaVerticalScroll;
 end;
 
-{ TScrollLayout }
+{TScrollLayout}
 
 function TScrollLayout.GetColumnCount(const ACtx: TViewLayoutContext): Integer;
 begin
   Result := 1;
 end;
 
-function TScrollLayout.GetCellRect(AIndex: Integer;
-  const ACtx: TViewLayoutContext): TRect;
+function TScrollLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
   CellW, CellH, RowH, LeftX: Integer;
 begin
@@ -215,27 +212,27 @@ begin
           CellW := ACtx.NativeW;
         CellH := Max(1, Round(CellW * ACtx.AspectRatio));
       end;
-  else { zmFitWindow }
-    begin
-      CellW := Max(1, ACtx.BaseW - 2 * ACtx.CellGap);
-      CellH := Max(1, Round(CellW * ACtx.AspectRatio));
-    end;
+    else {zmFitWindow}
+      begin
+        CellW := Max(1, ACtx.BaseW - 2 * ACtx.CellGap);
+        CellH := Max(1, Round(CellW * ACtx.AspectRatio));
+      end;
   end;
 
-  { Apply continuous zoom }
+  {Apply continuous zoom}
   CellW := Max(1, Round(CellW * ACtx.ZoomFactor));
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
 
-  { Center horizontally when cell is narrower than control }
+  {Center horizontally when cell is narrower than control}
   if CellW + 2 * ACtx.CellGap < ACtx.ClientWidth then
     LeftX := (ACtx.ClientWidth - CellW) div 2
   else
     LeftX := ACtx.CellGap;
 
   RowH := CellH + ACtx.CellGap;
-  Result.Left   := LeftX;
-  Result.Top    := ACtx.CellGap + AIndex * RowH;
-  Result.Right  := Result.Left + CellW;
+  Result.Left := LeftX;
+  Result.Top := ACtx.CellGap + AIndex * RowH;
+  Result.Right := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
 
@@ -245,8 +242,7 @@ var
 begin
   R0 := GetCellRect(0, ACtx);
   Result.cx := Max(ACtx.ViewportW, R0.Width + 2 * ACtx.CellGap);
-  Result.cy := Max(ACtx.ViewportH,
-    ACtx.CellGap + ACtx.CellCount * (R0.Height + ACtx.CellGap));
+  Result.cy := Max(ACtx.ViewportH, ACtx.CellGap + ACtx.CellCount * (R0.Height + ACtx.CellGap));
 end;
 
 function TScrollLayout.WheelScrollKind: TLayoutWheelAction;
@@ -254,15 +250,14 @@ begin
   Result := lwaVerticalScroll;
 end;
 
-{ TFilmstripLayout }
+{TFilmstripLayout}
 
 function TFilmstripLayout.GetColumnCount(const ACtx: TViewLayoutContext): Integer;
 begin
   Result := Max(1, ACtx.CellCount);
 end;
 
-function TFilmstripLayout.GetCellRect(AIndex: Integer;
-  const ACtx: TViewLayoutContext): TRect;
+function TFilmstripLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
   CellH, CellW, AvailH, TopY: Integer;
 begin
@@ -277,23 +272,23 @@ begin
         if (ACtx.NativeH > 0) and (ACtx.NativeH < CellH) then
           CellH := ACtx.NativeH;
       end;
-  else { zmFitWindow }
-    CellH := AvailH;
+    else {zmFitWindow}
+      CellH := AvailH;
   end;
 
-  { Apply continuous zoom }
+  {Apply continuous zoom}
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
   CellW := Max(1, Round(CellH / Max(ACtx.AspectRatio, DEF_ASPECT_RATIO)));
 
-  { Center vertically within control }
+  {Center vertically within control}
   if CellH < AvailH then
     TopY := (ACtx.ClientHeight - CellH) div 2
   else
     TopY := ACtx.CellGap;
 
-  Result.Left   := ACtx.CellGap + AIndex * (CellW + ACtx.CellGap);
-  Result.Top    := TopY;
-  Result.Right  := Result.Left + CellW;
+  Result.Left := ACtx.CellGap + AIndex * (CellW + ACtx.CellGap);
+  Result.Top := TopY;
+  Result.Right := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
 
@@ -302,8 +297,7 @@ var
   R0: TRect;
 begin
   R0 := GetCellRect(0, ACtx);
-  Result.cx := Max(ACtx.ViewportW,
-    ACtx.CellGap + ACtx.CellCount * (R0.Width + ACtx.CellGap));
+  Result.cx := Max(ACtx.ViewportW, ACtx.CellGap + ACtx.CellCount * (R0.Width + ACtx.CellGap));
   Result.cy := Max(ACtx.ViewportH, R0.Height + 2 * ACtx.CellGap);
 end;
 
@@ -312,20 +306,19 @@ begin
   Result := lwaHorizontalScroll;
 end;
 
-{ TSingleLayout }
+{TSingleLayout}
 
 function TSingleLayout.GetColumnCount(const ACtx: TViewLayoutContext): Integer;
 begin
   Result := 1;
 end;
 
-function TSingleLayout.GetCellRect(AIndex: Integer;
-  const ACtx: TViewLayoutContext): TRect;
+function TSingleLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
   CellW, CellH: Integer;
   AvailW, AvailH: Integer;
 begin
-  { Base available space from frozen viewport, not control size }
+  {Base available space from frozen viewport, not control size}
   AvailW := Max(1, ACtx.BaseW - 2 * ACtx.CellGap);
   AvailH := Max(1, ACtx.BaseH - 2 * ACtx.CellGap);
 
@@ -337,14 +330,11 @@ begin
       end;
     zmFitIfLarger:
       begin
-        if (ACtx.NativeW > 0) and (ACtx.NativeH > 0) and
-           (ACtx.NativeW <= AvailW) and (ACtx.NativeH <= AvailH) then
+        if (ACtx.NativeW > 0) and (ACtx.NativeH > 0) and (ACtx.NativeW <= AvailW) and (ACtx.NativeH <= AvailH) then
         begin
           CellW := ACtx.NativeW;
           CellH := ACtx.NativeH;
-        end
-        else
-        begin
+        end else begin
           CellW := AvailW;
           CellH := Round(CellW * ACtx.AspectRatio);
           if CellH > AvailH then
@@ -354,27 +344,26 @@ begin
           end;
         end;
       end;
-  else { zmFitWindow }
-    begin
-      CellW := AvailW;
-      CellH := Round(CellW * ACtx.AspectRatio);
-      if CellH > AvailH then
+    else {zmFitWindow}
       begin
-        CellH := AvailH;
-        CellW := Round(CellH / Max(ACtx.AspectRatio, DEF_ASPECT_RATIO));
+        CellW := AvailW;
+        CellH := Round(CellW * ACtx.AspectRatio);
+        if CellH > AvailH then
+        begin
+          CellH := AvailH;
+          CellW := Round(CellH / Max(ACtx.AspectRatio, DEF_ASPECT_RATIO));
+        end;
       end;
-    end;
   end;
 
-  { Apply continuous zoom }
+  {Apply continuous zoom}
   CellW := Max(1, Round(CellW * ACtx.ZoomFactor));
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
 
-  { Center in control }
-  Result.Left   := (ACtx.ClientWidth - CellW) div 2;
-  Result.Top    := ACtx.CellGap +
-    (Max(1, ACtx.ClientHeight - 2 * ACtx.CellGap) - CellH) div 2;
-  Result.Right  := Result.Left + CellW;
+  {Center in control}
+  Result.Left := (ACtx.ClientWidth - CellW) div 2;
+  Result.Top := ACtx.CellGap + (Max(1, ACtx.ClientHeight - 2 * ACtx.CellGap) - CellH) div 2;
+  Result.Right := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
 
@@ -392,21 +381,19 @@ begin
   Result := lwaNavigateFrame;
 end;
 
-function TSingleLayout.CellIndexAt(const APoint: TPoint;
-  const ACtx: TViewLayoutContext): Integer;
+function TSingleLayout.CellIndexAt(const APoint: TPoint; const ACtx: TViewLayoutContext): Integer;
 begin
-  if (ACtx.CurrentFrameIndex >= 0) and (ACtx.CurrentFrameIndex < ACtx.CellCount)
-    and GetCellRect(ACtx.CurrentFrameIndex, ACtx).Contains(APoint) then
+  if (ACtx.CurrentFrameIndex >= 0) and (ACtx.CurrentFrameIndex < ACtx.CellCount) and GetCellRect(ACtx.CurrentFrameIndex, ACtx).Contains(APoint) then
     Result := ACtx.CurrentFrameIndex
   else
     Result := -1;
 end;
 
-{ TSmartGridLayout }
+{TSmartGridLayout}
 
 function TSmartGridLayout.GetColumnCount(const ACtx: TViewLayoutContext): Integer;
 begin
-  Result := 1; { not meaningful for smart grid }
+  Result := 1; {not meaningful for smart grid}
 end;
 
 procedure TSmartGridLayout.CalcRows(const ACtx: TViewLayoutContext);
@@ -429,10 +416,10 @@ begin
   BestR := 1;
   BestScore := MaxDouble;
 
-  { Try each possible row count and find the one with least cropping }
+  {Try each possible row count and find the one with least cropping}
   for R := 1 to N do
   begin
-    { Score: sum of per-row aspect ratio deviation }
+    {Score: sum of per-row aspect ratio deviation}
     Score := 0;
     Base := N div R;
     Extra := N mod R;
@@ -452,7 +439,7 @@ begin
     end;
   end;
 
-  { Build row array with BestR rows }
+  {Build row array with BestR rows}
   SetLength(Rows, BestR);
   Base := N div BestR;
   Extra := N mod BestR;
@@ -467,8 +454,7 @@ begin
   FSmartRows := Rows;
 end;
 
-function TSmartGridLayout.GetCellRect(AIndex: Integer;
-  const ACtx: TViewLayoutContext): TRect;
+function TSmartGridLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
   RowIdx, CellInRow, RowTop, RowH, CellW, PrevCount: Integer;
   OffX, OffY: Integer;
@@ -478,7 +464,7 @@ begin
 
   RowH := ACtx.BaseH div Length(FSmartRows);
 
-  { Find which row this index belongs to }
+  {Find which row this index belongs to}
   PrevCount := 0;
   for RowIdx := 0 to High(FSmartRows) do
   begin
@@ -488,7 +474,7 @@ begin
       CellW := ACtx.BaseW div Max(1, FSmartRows[RowIdx].Count);
       RowTop := RowIdx * RowH;
 
-      { Last row/cell fills remaining space to avoid rounding gaps }
+      {Last row/cell fills remaining space to avoid rounding gaps}
       Result.Left := CellInRow * CellW;
       if CellInRow = FSmartRows[RowIdx].Count - 1 then
         Result.Right := ACtx.BaseW
@@ -501,16 +487,16 @@ begin
       else
         Result.Bottom := RowTop + RowH;
 
-      { Apply continuous zoom }
+      {Apply continuous zoom}
       if not SameValue(ACtx.ZoomFactor, 1.0, ZOOM_EPSILON) then
       begin
-        Result.Left   := Round(Result.Left * ACtx.ZoomFactor);
-        Result.Top    := Round(Result.Top * ACtx.ZoomFactor);
-        Result.Right  := Round(Result.Right * ACtx.ZoomFactor);
+        Result.Left := Round(Result.Left * ACtx.ZoomFactor);
+        Result.Top := Round(Result.Top * ACtx.ZoomFactor);
+        Result.Right := Round(Result.Right * ACtx.ZoomFactor);
         Result.Bottom := Round(Result.Bottom * ACtx.ZoomFactor);
       end;
 
-      { Center when zoomed content is smaller than control }
+      {Center when zoomed content is smaller than control}
       OffX := Max(0, (ACtx.ClientWidth - Round(ACtx.BaseW * ACtx.ZoomFactor)) div 2);
       OffY := Max(0, (ACtx.ClientHeight - Round(ACtx.BaseH * ACtx.ZoomFactor)) div 2);
       if (OffX > 0) or (OffY > 0) then
@@ -536,18 +522,23 @@ begin
   Result := lwaVerticalScroll;
 end;
 
-{ Factory }
+{Factory}
 
 function CreateViewModeLayout(AMode: TViewMode): TViewModeLayout;
 begin
   case AMode of
-    vmGrid:      Result := TGridLayout.Create;
-    vmSmartGrid: Result := TSmartGridLayout.Create;
-    vmScroll:    Result := TScrollLayout.Create;
-    vmFilmstrip: Result := TFilmstripLayout.Create;
-    vmSingle:    Result := TSingleLayout.Create;
-  else
-    Result := TGridLayout.Create;
+    vmGrid:
+      Result := TGridLayout.Create;
+    vmSmartGrid:
+      Result := TSmartGridLayout.Create;
+    vmScroll:
+      Result := TScrollLayout.Create;
+    vmFilmstrip:
+      Result := TFilmstripLayout.Create;
+    vmSingle:
+      Result := TSingleLayout.Create;
+    else
+      Result := TGridLayout.Create;
   end;
 end;
 

@@ -1,5 +1,5 @@
-{ Shared default values and clamping ranges for extraction and output settings.
-  Used by both WLX and WCX plugins to ensure consistent behavior. }
+{Shared default values and clamping ranges for extraction and output settings.
+ Used by both WLX and WCX plugins to ensure consistent behavior.}
 unit uDefaults;
 
 interface
@@ -8,60 +8,60 @@ uses
   uBitmapSaver, uTypes;
 
 const
-  { Extraction defaults }
-  DEF_FRAMES_COUNT    = 4;
-  DEF_SKIP_EDGES      = 2;
-  DEF_MAX_WORKERS     = 1;
-  DEF_MAX_THREADS     = -1;  { -1 = no limit, 0 = auto (CPU count) }
-  DEF_USE_BMP_PIPE    = True;
-  DEF_HW_ACCEL          = True;
-  DEF_USE_KEYFRAMES     = False;
+  {Extraction defaults}
+  DEF_FRAMES_COUNT = 4;
+  DEF_SKIP_EDGES = 2;
+  DEF_MAX_WORKERS = 1;
+  DEF_MAX_THREADS = -1; {-1 = no limit, 0 = auto (CPU count)}
+  DEF_USE_BMP_PIPE = True;
+  DEF_HW_ACCEL = True;
+  DEF_USE_KEYFRAMES = False;
   DEF_SCALED_EXTRACTION = False;
-  DEF_MIN_FRAME_SIDE  = 120;
-  DEF_MAX_FRAME_SIDE  = 1920;
+  DEF_MIN_FRAME_SIDE = 120;
+  DEF_MAX_FRAME_SIDE = 1920;
 
-  { Output format defaults }
-  DEF_SAVE_FORMAT     = sfPNG;
-  DEF_JPEG_QUALITY    = 90;
+  {Output format defaults}
+  DEF_SAVE_FORMAT = sfPNG;
+  DEF_JPEG_QUALITY = 90;
   DEF_PNG_COMPRESSION = 6;
 
-  { Extension list }
-  DEF_EXTENSION_LIST  = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
+  {Extension list}
+  DEF_EXTENSION_LIST = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
 
-  { Timestamp font size range (shared by both plugins) }
+  {Timestamp font size range (shared by both plugins)}
   MIN_TIMESTAMP_FONT_SIZE = 6;
   MAX_TIMESTAMP_FONT_SIZE = 72;
 
-  { Clamping ranges }
-  MIN_FRAMES_COUNT    = 1;
-  MAX_FRAMES_COUNT    = 99;
-  MIN_SKIP_EDGES      = 0;
-  MAX_SKIP_EDGES      = 49;
-  MIN_MAX_WORKERS     = 0;
-  MAX_MAX_WORKERS     = 16;
-  MIN_MAX_THREADS     = -1;
-  MAX_MAX_THREADS     = 64;
-  MIN_FRAME_SIDE      = 32;
-  MAX_FRAME_SIDE      = 7680;  { 8K }
-  SCALE_BUCKET        = 160;   { resolution bucket step for cache key stability }
-  MIN_JPEG_QUALITY    = 1;
-  MAX_JPEG_QUALITY    = 100;
+  {Clamping ranges}
+  MIN_FRAMES_COUNT = 1;
+  MAX_FRAMES_COUNT = 99;
+  MIN_SKIP_EDGES = 0;
+  MAX_SKIP_EDGES = 49;
+  MIN_MAX_WORKERS = 0;
+  MAX_MAX_WORKERS = 16;
+  MIN_MAX_THREADS = -1;
+  MAX_MAX_THREADS = 64;
+  MIN_FRAME_SIDE = 32;
+  MAX_FRAME_SIDE = 7680; {8K}
+  SCALE_BUCKET = 160; {resolution bucket step for cache key stability}
+  MIN_JPEG_QUALITY = 1;
+  MAX_JPEG_QUALITY = 100;
   MIN_PNG_COMPRESSION = 0;
   MAX_PNG_COMPRESSION = 9;
 
-  { Thumbnail (TC panel preview) defaults }
-  DEF_THUMBNAILS_ENABLED    = True;
-  DEF_THUMBNAIL_MODE        = tnmSingle;
-  { Position 0.0 = first frame, 0.5 = middle, 1.0 = last frame.
-    Stored as integer percent in INI for human readability. }
-  DEF_THUMBNAIL_POSITION    = 50;
+  {Thumbnail (TC panel preview) defaults}
+  DEF_THUMBNAILS_ENABLED = True;
+  DEF_THUMBNAIL_MODE = tnmSingle;
+  {Position 0.0 = first frame, 0.5 = middle, 1.0 = last frame.
+   Stored as integer percent in INI for human readability.}
+  DEF_THUMBNAIL_POSITION = 50;
   DEF_THUMBNAIL_GRID_FRAMES = 4;
-  { Hard cap on a single ffmpeg call from the thumbnail path so a broken
-    file cannot stall the TC thumbnail worker thread indefinitely. }
-  DEF_THUMBNAIL_TIMEOUT_MS  = 5000;
+  {Hard cap on a single ffmpeg call from the thumbnail path so a broken
+   file cannot stall the TC thumbnail worker thread indefinitely.}
+  DEF_THUMBNAIL_TIMEOUT_MS = 5000;
 
-  MIN_THUMBNAIL_POSITION    = 0;
-  MAX_THUMBNAIL_POSITION    = 100;
+  MIN_THUMBNAIL_POSITION = 0;
+  MAX_THUMBNAIL_POSITION = 100;
   MIN_THUMBNAIL_GRID_FRAMES = 2;
   MAX_THUMBNAIL_GRID_FRAMES = 16;
 

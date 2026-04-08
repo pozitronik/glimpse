@@ -1,8 +1,8 @@
-{ Persistent disk cache for video probe results (TVideoInfo).
-  Eliminates the 0.5-2s ffmpeg probe on re-opens by reading cached metadata
-  from a small text file instead of spawning a subprocess.
-  Stored separately from the frame cache so clearing frames does not
-  invalidate probe data. Always enabled, no user-facing toggle. }
+{Persistent disk cache for video probe results (TVideoInfo).
+ Eliminates the 0.5-2s ffmpeg probe on re-opens by reading cached metadata
+ from a small text file instead of spawning a subprocess.
+ Stored separately from the frame cache so clearing frames does not
+ invalidate probe data. Always enabled, no user-facing toggle.}
 unit uProbeCache;
 
 interface
@@ -14,19 +14,18 @@ type
   TProbeCache = class
   strict private
     FCacheDir: string;
-    class function BuildKeyString(const AFilePath: string;
-      AFileSize: Int64; AFileTime: TDateTime): string; static;
+    class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string; static;
     function ProbeKey(const AFilePath: string): string;
   public
     constructor Create(const ACacheDir: string);
-    { Returns True and populates AInfo if a valid cached probe exists for AFilePath.
-      Returns False on cache miss (file not cached, stale, or unreadable). }
+    {Returns True and populates AInfo if a valid cached probe exists for AFilePath.
+     Returns False on cache miss (file not cached, stale, or unreadable).}
     function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
-    { Stores a successful probe result for AFilePath. Only caches valid results. }
+    {Stores a successful probe result for AFilePath. Only caches valid results.}
     procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
   end;
 
-{ Default probe cache directory, separate from the frame cache. }
+  {Default probe cache directory, separate from the frame cache.}
 function DefaultProbeCacheDir: string;
 
 implementation
@@ -39,7 +38,7 @@ begin
   Result := TPath.Combine(TPath.GetTempPath, 'Glimpse' + PathDelim + 'probes');
 end;
 
-{ TProbeCache }
+{TProbeCache}
 
 constructor TProbeCache.Create(const ACacheDir: string);
 begin
@@ -47,12 +46,9 @@ begin
   FCacheDir := ACacheDir;
 end;
 
-class function TProbeCache.BuildKeyString(const AFilePath: string;
-  AFileSize: Int64; AFileTime: TDateTime): string;
+class function TProbeCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string;
 begin
-  Result := AnsiLowerCase(AFilePath) + '|' +
-    IntToStr(AFileSize) + '|' +
-    FormatDateTime('yyyymmddhhnnsszzz', AFileTime);
+  Result := AnsiLowerCase(AFilePath) + '|' + IntToStr(AFileSize) + '|' + FormatDateTime('yyyymmddhhnnsszzz', AFileTime);
 end;
 
 function TProbeCache.ProbeKey(const AFilePath: string): string;
@@ -68,18 +64,17 @@ begin
     FileTime := TFile.GetLastWriteTime(AFilePath);
     Result := CacheHashKey(BuildKeyString(AFilePath, FileSize, FileTime));
   except
-    { File inaccessible }
+    {File inaccessible}
   end;
 end;
 
-function TProbeCache.TryGet(const AFilePath: string;
-  out AInfo: TVideoInfo): Boolean;
+function TProbeCache.TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
 var
   Key, Path: string;
   Lines: TStringList;
 begin
   Result := False;
-  AInfo := Default(TVideoInfo);
+  AInfo := Default (TVideoInfo);
   AInfo.Duration := -1;
 
   Key := ProbeKey(AFilePath);
@@ -147,7 +142,7 @@ begin
       TDirectory.CreateDirectory(Dir);
       Lines.SaveToFile(Path, TEncoding.UTF8);
     except
-      { Write failure is non-fatal; next open will just probe again }
+      {Write failure is non-fatal; next open will just probe again}
     end;
   finally
     Lines.Free;

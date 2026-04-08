@@ -1,5 +1,5 @@
-{ Settings dialog for configuring plugin behavior.
-  Works on TPluginSettings directly; changes take effect only when OK is pressed. }
+{Settings dialog for configuring plugin behavior.
+ Works on TPluginSettings directly; changes take effect only when OK is pressed.}
 unit uSettingsDlg;
 
 interface
@@ -141,13 +141,12 @@ type
     constructor CreateWithOwner(AOwnerWnd: HWND);
   end;
 
-{ Shows the settings dialog.
-  AResolvedFFmpegPath is the currently active ffmpeg path (may differ from settings
-  when auto-detected). Shown as informational text when the explicit path is empty.
-  Returns True if the user pressed OK (ASettings is updated).
-  Returns False if dismissed (ASettings unchanged). }
-function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings;
-  const AResolvedFFmpegPath: string): Boolean;
+  {Shows the settings dialog.
+   AResolvedFFmpegPath is the currently active ffmpeg path (may differ from settings
+   when auto-detected). Shown as informational text when the explicit path is empty.
+   Returns True if the user pressed OK (ASettings is updated).
+   Returns False if dismissed (ASettings unchanged).}
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
 
 implementation
 
@@ -231,14 +230,12 @@ begin
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
-  { Switch to explicit mode when user provides a path }
+  {Switch to explicit mode when user provides a path}
   if EdtFFmpegPath.Text <> '' then
   begin
     ASettings.FFmpegExePath := EdtFFmpegPath.Text;
     ASettings.FFmpegMode := fmExe;
-  end
-  else
-  begin
+  end else begin
     ASettings.FFmpegExePath := '';
     ASettings.FFmpegMode := fmAuto;
   end;
@@ -332,7 +329,7 @@ begin
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
-      { OnChange fires automatically and updates the info label }
+      {OnChange fires automatically and updates the info label}
     end;
   finally
     Dlg.Free;
@@ -367,8 +364,7 @@ begin
     Exit;
   end;
 
-  if MessageBox(Handle, PChar(Format('Delete all cached frames in %s?', [Dir])),
-    'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
+  if MessageBox(Handle, PChar(Format('Delete all cached frames in %s?', [Dir])), 'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
 
   Mgr := CreateCacheManager(Dir, 0);
@@ -426,12 +422,11 @@ begin
   LblMaxWorkers.Enabled := not OnePerFrame;
   EdtMaxWorkers.Enabled := not OnePerFrame;
   UdMaxWorkers.Enabled := not OnePerFrame;
-  { Limit workers count is only relevant in one-per-frame mode }
+  {Limit workers count is only relevant in one-per-frame mode}
   LblMaxThreads.Enabled := OnePerFrame;
   EdtMaxThreads.Enabled := OnePerFrame;
   UdMaxThreads.Enabled := OnePerFrame;
-  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame,
-    UdMaxThreads.Position, CPUCount);
+  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame, UdMaxThreads.Position, CPUCount);
 end;
 
 procedure TSettingsForm.UpdateSaveFormatControls;
@@ -482,8 +477,8 @@ begin
   LblThumbnailMode.Enabled := GroupOn;
   CbxThumbnailMode.Enabled := GroupOn;
 
-  { Position controls only meaningful in Single mode; grid frames only in
-    Grid mode. Disabling avoids the user editing fields that won't be used. }
+  {Position controls only meaningful in Single mode; grid frames only in
+   Grid mode. Disabling avoids the user editing fields that won't be used.}
   IsSingle := GroupOn and (CbxThumbnailMode.ItemIndex = Ord(tnmSingle));
   IsGrid := GroupOn and (CbxThumbnailMode.ItemIndex = Ord(tnmGrid));
 
@@ -558,8 +553,8 @@ end;
 
 constructor TSettingsForm.CreateWithOwner(AOwnerWnd: HWND);
 begin
-  { Must be set before inherited: DFM loading may force handle creation,
-    and CreateParams needs the value at that point }
+  {Must be set before inherited: DFM loading may force handle creation,
+   and CreateParams needs the value at that point}
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
 end;
@@ -571,8 +566,7 @@ begin
     Params.WndParent := FOwnerWnd;
 end;
 
-function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings;
-  const AResolvedFFmpegPath: string): Boolean;
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
 var
   Form: TSettingsForm;
 begin

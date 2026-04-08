@@ -1,5 +1,5 @@
-{ Main plugin form: toolbar, frame display, and extraction coordination.
-  The form is parented to TC's Lister window. }
+{Main plugin form: toolbar, frame display, and extraction coordination.
+ The form is parented to TC's Lister window.}
 unit uPluginForm;
 
 interface
@@ -15,7 +15,7 @@ uses
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache;
 
 type
-  { Plugin form created as a child of TC's Lister window. }
+  {Plugin form created as a child of TC's Lister window.}
   TPluginForm = class(TForm)
   private
     FFileName: string;
@@ -24,13 +24,13 @@ type
     FVideoInfo: TVideoInfo;
     FOffsets: TFrameOffsetArray;
     FParentWnd: HWND;
-    { Toolbar }
+    {Toolbar}
     FToolbar: TPanel;
     FLblFrames: TLabel;
     FEditFrameCount: TEdit;
     FUpDown: TUpDown;
-    FModeButtons: array[TViewMode] of TButton;
-    FModePopups: array[TViewMode] of TPopupMenu;
+    FModeButtons: array [TViewMode] of TButton;
+    FModePopups: array [TViewMode] of TPopupMenu;
     FContextMenu: TPopupMenu;
     FContextCellIndex: Integer;
     FBtnTimecode: TSpeedButton;
@@ -39,34 +39,34 @@ type
     FHamburgerMenu: TPopupMenu;
     FProgressBar: TProgressBar;
     FProgressVisible: Boolean;
-    { Per-element right pixel edges for collapse threshold checks }
+    {Per-element right pixel edges for collapse threshold checks}
     FFrameCountRight: Integer;
     FElementRights: array of Integer;
     FVisibleElementCount: Integer;
-    { Status bar }
+    {Status bar}
     FStatusBar: TStatusBar;
-    { Content }
+    {Content}
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
     FLblError: TLabel;
-    { Export }
+    {Export}
     FExporter: TFrameExporter;
-    { Extraction }
+    {Extraction}
     FExtractCtrl: TExtractionController;
     FProbeCache: TProbeCache;
-    { Animation }
+    {Animation}
     FAnimTimer: TTimer;
-    { Layout guard: prevents re-entrant UpdateFrameViewSize during zoom }
+    {Layout guard: prevents re-entrant UpdateFrameViewSize during zoom}
     FUpdatingLayout: Boolean;
-    { True when the plugin is hosted in TC's Quick View panel (Ctrl+Q) }
+    {True when the plugin is hosted in TC's Quick View panel (Ctrl+Q)}
     FQuickViewMode: Boolean;
-    { Prevents key-triggered reopen while Popup is still returning }
+    {Prevents key-triggered reopen while Popup is still returning}
     FHamburgerMenuOpen: Boolean;
-    { Suppresses WM_CHAR after OnKeyDown consumed the keystroke }
+    {Suppresses WM_CHAR after OnKeyDown consumed the keystroke}
     FKeyConsumed: Boolean;
-    { Tick count when LoadFile started (for load time measurement) }
+    {Tick count when LoadFile started (for load time measurement)}
     FLoadStartTick: UInt64;
-    { Formatted load time string, populated when extraction completes }
+    {Formatted load time string, populated when extraction completes}
     FLoadTimeStr: string;
 
     procedure CreateToolbar;
@@ -128,11 +128,9 @@ type
   protected
     procedure WndProc(var Message: TMessage); override;
     procedure Resize; override;
-    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
-      MousePos: TPoint): Boolean; override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
   public
-    constructor CreateForPlugin(AParentWin: HWND; const AFileName: string;
-      ASettings: TPluginSettings; const AFFmpegPath: string);
+    constructor CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
     destructor Destroy; override;
     procedure LoadFile(const AFileName: string);
     procedure CopyFrameToClipboard;
@@ -150,15 +148,15 @@ begin
   DebugLog('Form', AMsg);
 end;
 
-{ Closes the active menu on the calling thread }
+{Closes the active menu on the calling thread}
 function EndMenu: BOOL; stdcall; external user32 name 'EndMenu';
 
 var
-  { Thread-local keyboard hook handle, active only during hamburger popup }
+  {Thread-local keyboard hook handle, active only during hamburger popup}
   GMenuHook: HHOOK;
 
-{ Intercepts VK_OEM_3 (tilde) during popup menu's modal loop to close it }
-function MenuKeyboardProc(nCode: Integer; wParam: WPARAM; lParam: LPARAM): LRESULT; stdcall;
+  {Intercepts VK_OEM_3 (tilde) during popup menu's modal loop to close it}
+function MenuKeyboardProc(nCode: Integer; wParam: wParam; lParam: lParam): LRESULT; stdcall;
 begin
   if (nCode = HC_ACTION) and (wParam = VK_OEM_3) and (lParam and (1 shl 31) = 0) then
   begin
@@ -169,100 +167,87 @@ begin
     Result := CallNextHookEx(GMenuHook, nCode, wParam, lParam);
 end;
 
-{ comctl32 v6 subclass API - lets us monitor the parent window's WM_SIZE }
-function SetWindowSubclass(hWnd: HWND; pfnSubclass: Pointer;
-  uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): BOOL; stdcall;
-  external 'comctl32.dll' name 'SetWindowSubclass';
-function RemoveWindowSubclass(hWnd: HWND; pfnSubclass: Pointer;
-  uIdSubclass: UINT_PTR): BOOL; stdcall;
-  external 'comctl32.dll' name 'RemoveWindowSubclass';
-function DefSubclassProc(hWnd: HWND; uMsg: UINT; wParam: WPARAM;
-  lParam: LPARAM): LRESULT; stdcall;
-  external 'comctl32.dll' name 'DefSubclassProc';
+{comctl32 v6 subclass API - lets us monitor the parent window's WM_SIZE}
+function SetWindowSubclass(HWND: HWND; pfnSubclass: Pointer; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): BOOL; stdcall; external 'comctl32.dll' name 'SetWindowSubclass';
+function RemoveWindowSubclass(HWND: HWND; pfnSubclass: Pointer; uIdSubclass: UINT_PTR): BOOL; stdcall; external 'comctl32.dll' name 'RemoveWindowSubclass';
+function DefSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam): LRESULT; stdcall; external 'comctl32.dll' name 'DefSubclassProc';
 
-{ Subclass callback on TC's Lister parent window.
-  TC may not resize the plugin child for all resize directions;
-  this ensures the plugin always fills the parent's client rect. }
-function ParentSubclassProc(hWnd: HWND; uMsg: UINT; wParam: WPARAM;
-  lParam: LPARAM; uIdSubclass: UINT_PTR;
-  dwRefData: DWORD_PTR): LRESULT; stdcall;
+{Subclass callback on TC's Lister parent window.
+ TC may not resize the plugin child for all resize directions;
+ this ensures the plugin always fills the parent's client rect.}
+function ParentSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): LRESULT; stdcall;
 var
   Form: TPluginForm;
   R: TRect;
 begin
-  Result := DefSubclassProc(hWnd, uMsg, wParam, lParam);
+  Result := DefSubclassProc(HWND, uMsg, wParam, lParam);
   if uMsg = WM_SIZE then
   begin
     Form := TPluginForm(Pointer(dwRefData));
     if (Form <> nil) and Form.HandleAllocated then
     begin
-      Winapi.Windows.GetClientRect(hWnd, R);
+      Winapi.Windows.GetClientRect(HWND, R);
       Form.SetBounds(0, 0, R.Right, R.Bottom);
     end;
   end;
 end;
 
 const
-  { Deferred self-subclass: installed after TC subclasses us so we fire first }
+  {Deferred self-subclass: installed after TC subclasses us so we fire first}
   FORM_SUBCLASS_ID = 2;
-  WM_DEFERRED_INIT = WM_USER + 102; { Triggers self-subclass installation }
-  WM_PLUGIN_FKEY   = WM_USER + 103; { Re-posted F-key intercepted from TC }
+  WM_DEFERRED_INIT = WM_USER + 102; {Triggers self-subclass installation}
+  WM_PLUGIN_FKEY = WM_USER + 103; {Re-posted F-key intercepted from TC}
 
-{ Self-subclass callback on the plugin form window.
-  Installed AFTER TC subclasses us (via deferred PostMessage), so it fires
-  first in the chain. Intercepts bare F2/F3 before TC can consume them. }
-function FormSubclassProc(hWnd: HWND; uMsg: UINT; wParam: WPARAM;
-  lParam: LPARAM; uIdSubclass: UINT_PTR;
-  dwRefData: DWORD_PTR): LRESULT; stdcall;
+  {Self-subclass callback on the plugin form window.
+   Installed AFTER TC subclasses us (via deferred PostMessage), so it fires
+   first in the chain. Intercepts bare F2/F3 before TC can consume them.}
+function FormSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): LRESULT; stdcall;
 begin
   case uMsg of
     WM_KEYDOWN:
-      if ((wParam = VK_F2) or (wParam = VK_F3)) and
-         (GetKeyState(VK_CONTROL) >= 0) and
-         (GetKeyState(VK_SHIFT) >= 0) and
-         (GetKeyState(VK_MENU) >= 0) then
+      if ((wParam = VK_F2) or (wParam = VK_F3)) and (GetKeyState(VK_CONTROL) >= 0) and (GetKeyState(VK_SHIFT) >= 0) and (GetKeyState(VK_MENU) >= 0) then
       begin
-        { Bare F2/F3: re-post as custom message so our WndProc handles it
-          instead of TC treating F2 as refresh and F3 as find. }
-        PostMessage(hWnd, WM_PLUGIN_FKEY, wParam, 0);
+        {Bare F2/F3: re-post as custom message so our WndProc handles it
+         instead of TC treating F2 as refresh and F3 as find.}
+        PostMessage(HWND, WM_PLUGIN_FKEY, wParam, 0);
         Result := 0;
         Exit;
       end;
     WM_NCDESTROY:
-      RemoveWindowSubclass(hWnd, @FormSubclassProc, FORM_SUBCLASS_ID);
+      RemoveWindowSubclass(HWND, @FormSubclassProc, FORM_SUBCLASS_ID);
   end;
-  Result := DefSubclassProc(hWnd, uMsg, wParam, lParam);
+  Result := DefSubclassProc(HWND, uMsg, wParam, lParam);
 end;
 
 const
-  CLR_ERROR_LABEL      = TColor($00888888); { error message label }
-  FONT_ERROR_LABEL  = 11;
+  CLR_ERROR_LABEL = TColor($00888888); {error message label}
+  FONT_ERROR_LABEL = 11;
 
-  { UI layout }
-  ANIM_INTERVAL_MS    = 80;   { placeholder spinner animation tick }
-  MAX_FRAME_COUNT     = 99;   { upper limit for frame count spin edit }
-  FRAME_COUNT_EDIT_W  = 40;   { width of the frame count edit control }
-  STATUSBAR_HEIGHT    = 21;
-  STATUSBAR_FONT      = 9;
-  PROGRESSBAR_H       = 14;   { desired height of the embedded progress bar }
-  PROGRESSBAR_MIN_W   = 40;   { minimum width before clamping }
+  {UI layout}
+  ANIM_INTERVAL_MS = 80; {placeholder spinner animation tick}
+  MAX_FRAME_COUNT = 99; {upper limit for frame count spin edit}
+  FRAME_COUNT_EDIT_W = 40; {width of the frame count edit control}
+  STATUSBAR_HEIGHT = 21;
+  STATUSBAR_FONT = 9;
+  PROGRESSBAR_H = 14; {desired height of the embedded progress bar}
+  PROGRESSBAR_MIN_W = 40; {minimum width before clamping}
 
-  { Status bar panel widths }
+  {Status bar panel widths}
   SBP_RESOLUTION_W = 120;
-  SBP_FRAMERATE_W  = 100;
-  SBP_DURATION_W   = 100;
-  SBP_BITRATE_W    = 100;
+  SBP_FRAMERATE_W = 100;
+  SBP_DURATION_W = 100;
+  SBP_BITRATE_W = 100;
   SBP_VIDEOCODEC_W = 90;
-  SBP_AUDIO_W      = 300;
-  SBP_NOAUDIO_W    = 110;
-  SBP_LOADTIME_W   = 110;
-  { Total width including per-panel borders added by the common control }
-  SBP_TOTAL_RIGHT  = 1000;
+  SBP_AUDIO_W = 300;
+  SBP_NOAUDIO_W = 110;
+  SBP_LOADTIME_W = 110;
+  {Total width including per-panel borders added by the common control}
+  SBP_TOTAL_RIGHT = 1000;
 
-  { Command tags, mode captions, sizing labels, and toolbar actions
-    are defined in uToolbarLayout }
+  {Command tags, mode captions, sizing labels, and toolbar actions
+   are defined in uToolbarLayout}
 
-{ TPluginForm }
+  {TPluginForm}
 
 procedure TPluginForm.OnFrameViewCtrlWheel(Sender: TObject; AWheelDelta: Integer);
 begin
@@ -272,8 +257,7 @@ begin
     ZoomBy(ZOOM_OUT_FACTOR);
 end;
 
-constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string;
-  ASettings: TPluginSettings; const AFFmpegPath: string);
+constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
 var
   R: TRect;
 begin
@@ -290,8 +274,8 @@ begin
   Winapi.Windows.GetClientRect(AParentWin, R);
   SetBounds(0, 0, R.Right, R.Bottom);
 
-  { Quick View panel is a child window; Lister is a top-level window.
-    Must be set before ApplySettings so QV defaults take effect. }
+  {Quick View panel is a child window; Lister is a top-level window.
+   Must be set before ApplySettings so QV defaults take effect.}
   FQuickViewMode := (GetWindowLong(AParentWin, GWL_STYLE) and WS_CHILD) <> 0;
 
   CreateToolbar;
@@ -301,38 +285,35 @@ begin
   CreateErrorLabel;
   ApplySettings;
 
-  { Wire OnChange after ApplySettings so initial Position assignment doesn't
-    trigger a save that overwrites the loaded FramesCount }
+  {Wire OnChange after ApplySettings so initial Position assignment doesn't
+   trigger a save that overwrites the loaded FramesCount}
   FEditFrameCount.OnChange := OnFrameCountChange;
 
   ParentWindow := AParentWin;
   FParentWnd := AParentWin;
   SetWindowSubclass(AParentWin, @ParentSubclassProc, 1, DWORD_PTR(Self));
   Visible := True;
-  { Focus the form handle so TC recognises N/P as Lister shortcuts.
-    Rapid N/P may lose focus due to TC briefly focusing its file list. }
+  {Focus the form handle so TC recognises N/P as Lister shortcuts.
+   Rapid N/P may lose focus due to TC briefly focusing its file list.}
   Winapi.Windows.SetFocus(Handle);
-  { Install self-subclass AFTER TC subclasses us (which happens when ListLoad
-    returns). PostMessage defers execution until the message loop resumes,
-    guaranteeing TC's subclass is already in place. Our subclass then fires
-    first and can intercept keys TC would otherwise consume (F2/F3). }
+  {Install self-subclass AFTER TC subclasses us (which happens when ListLoad
+   returns). PostMessage defers execution until the message loop resumes,
+   guaranteeing TC's subclass is already in place. Our subclass then fires
+   first and can intercept keys TC would otherwise consume (F2/F3).}
   PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
 
-  {$IFDEF DEBUG}
+{$IFDEF DEBUG}
   uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
-  {$ENDIF}
+{$ENDIF}
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
 
   FProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
 
-  { Create extraction controller with appropriate cache }
+  {Create extraction controller with appropriate cache}
   if FSettings.CacheEnabled then
-    FExtractCtrl := TExtractionController.Create(Handle,
-      TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder),
-        FSettings.CacheMaxSizeMB))
+    FExtractCtrl := TExtractionController.Create(Handle, TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB))
   else
-    FExtractCtrl := TExtractionController.Create(Handle,
-      TNullFrameCache.Create);
+    FExtractCtrl := TExtractionController.Create(Handle, TNullFrameCache.Create);
   FExtractCtrl.OnFrameDelivered := OnFrameDelivered;
   FExtractCtrl.OnProgress := OnExtractionProgress;
 
@@ -352,8 +333,8 @@ begin
     RemoveWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID);
   if FParentWnd <> 0 then
     RemoveWindowSubclass(FParentWnd, @ParentSubclassProc, 1);
-  { FAnimTimer may not exist yet if destructor runs during CreateForPlugin
-    (VCL can destroy a windowed control before the constructor finishes) }
+  {FAnimTimer may not exist yet if destructor runs during CreateForPlugin
+   (VCL can destroy a windowed control before the constructor finishes)}
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
   FExtractCtrl.Free;
@@ -366,12 +347,12 @@ end;
 
 procedure TPluginForm.CreateToolbar;
 const
-  TB_PAD   = 4;   { Vertical padding above and below controls }
-  CTRL_GAP = 8;   { Gap between control groups }
-  BTN_GAP  = 2;   { Gap between adjacent buttons in a group }
-  BTN_PAD  = 16;  { Horizontal text padding inside button (both sides) }
-  SPLIT_ARROW_W = 20; { Extra width for split button dropdown arrow }
-  PB_H     = 16;  { Progress bar height }
+  TB_PAD = 4; {Vertical padding above and below controls}
+  CTRL_GAP = 8; {Gap between control groups}
+  BTN_GAP = 2; {Gap between adjacent buttons in a group}
+  BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
+  SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
+  PB_H = 16; {Progress bar height}
 var
   X, CY, CtrlH, BW, I: Integer;
   VM: TViewMode;
@@ -384,7 +365,7 @@ begin
   FToolbar.BevelOuter := bvNone;
   FToolbar.ParentBackground := False;
 
-  { Create edit first: its auto-sized height is the reference for all controls }
+  {Create edit first: its auto-sized height is the reference for all controls}
   FEditFrameCount := TEdit.Create(FToolbar);
   FEditFrameCount.Parent := FToolbar;
   FEditFrameCount.Width := FRAME_COUNT_EDIT_W;
@@ -414,20 +395,20 @@ begin
   Inc(X, FRAME_COUNT_EDIT_W + FUpDown.Width + CTRL_GAP);
   FFrameCountRight := X;
 
-  { Collapsible elements: modes, timecodes, actions (left to right) }
+  {Collapsible elements: modes, timecodes, actions (left to right)}
   SetLength(FElementRights, ELEM_TOTAL_COUNT);
 
-  { Create 5 mode buttons }
+  {Create 5 mode buttons}
   TabIdx := 1;
   for VM := Low(TViewMode) to High(TViewMode) do
   begin
-    { Create popup menu first (needed for DropDownMenu assignment) }
+    {Create popup menu first (needed for DropDownMenu assignment)}
     FModePopups[VM] := CreateModePopup(VM);
 
     FModeButtons[VM] := TButton.Create(FToolbar);
     FModeButtons[VM].Parent := FToolbar;
 
-    { Auto-width: measure caption text and add padding }
+    {Auto-width: measure caption text and add padding}
     BW := Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
     if FModePopups[VM] <> nil then
       Inc(BW, SPLIT_ARROW_W);
@@ -438,7 +419,7 @@ begin
     FModeButtons[VM].TabOrder := TabIdx;
     FModeButtons[VM].OnClick := OnModeButtonClick;
 
-    { Split button: click activates mode, arrow shows submodes }
+    {Split button: click activates mode, arrow shows submodes}
     if FModePopups[VM] <> nil then
     begin
       FModeButtons[VM].Style := bsSplitButton;
@@ -464,7 +445,7 @@ begin
   FElementRights[ELEM_TIMECODE_INDEX] := X + BW;
   Inc(X, BW + CTRL_GAP);
 
-  { Action buttons matching context menu (except selection-dependent commands) }
+  {Action buttons matching context menu (except selection-dependent commands)}
   SetLength(FToolbarButtons, 0);
   for I := 0 to High(TB_ACTIONS) do
   begin
@@ -482,7 +463,7 @@ begin
     FToolbarButtons[High(FToolbarButtons)] := Btn;
   end;
 
-  { Hamburger overflow button: hidden until toolbar is too narrow }
+  {Hamburger overflow button: hidden until toolbar is too narrow}
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := OnHamburgerMenuPopup;
 
@@ -503,13 +484,13 @@ var
   VM: TViewMode;
   I: Integer;
 begin
-  if not Assigned(FBtnHamburger) then Exit;
+  if not Assigned(FBtnHamburger) then
+    Exit;
 
-  Layout := ComputeToolbarLayout(FToolbar.ClientWidth, FElementRights,
-    FFrameCountRight, FBtnHamburger.Width, CTRL_GAP);
+  Layout := ComputeToolbarLayout(FToolbar.ClientWidth, FElementRights, FFrameCountRight, FBtnHamburger.Width, CTRL_GAP);
   FVisibleElementCount := Layout.VisibleCount;
 
-  { Per-button visibility based on element index }
+  {Per-button visibility based on element index}
   for VM := Low(TViewMode) to High(TViewMode) do
     FModeButtons[VM].Visible := Ord(VM) < Layout.VisibleCount;
 
@@ -518,7 +499,7 @@ begin
   for I := 0 to High(FToolbarButtons) do
     FToolbarButtons[I].Visible := (ELEM_ACTION_FIRST + I) < Layout.VisibleCount;
 
-  { Hamburger button }
+  {Hamburger button}
   FBtnHamburger.Visible := Layout.HamburgerVisible;
   FBtnHamburger.Left := Layout.HamburgerLeft;
 end;
@@ -527,7 +508,8 @@ procedure TPluginForm.OnHamburgerClick(Sender: TObject);
 var
   P: TPoint;
 begin
-  if FHamburgerMenuOpen then Exit;
+  if FHamburgerMenuOpen then
+    Exit;
   FHamburgerMenuOpen := True;
   GMenuHook := SetWindowsHookEx(WH_KEYBOARD, @MenuKeyboardProc, 0, GetCurrentThreadId);
   try
@@ -556,9 +538,7 @@ begin
     State.ModeHasSubmenu[VM] := FModePopups[VM] <> nil;
   end;
 
-  PopulateHamburgerMenu(FHamburgerMenu, State,
-    OnHamburgerModeClick, OnHamburgerZoomClick,
-    OnHamburgerTimecodeClick, OnHamburgerActionClick);
+  PopulateHamburgerMenu(FHamburgerMenu, State, OnHamburgerModeClick, OnHamburgerZoomClick, OnHamburgerTimecodeClick, OnHamburgerActionClick);
 end;
 
 procedure TPluginForm.OnHamburgerModeClick(Sender: TObject);
@@ -576,12 +556,12 @@ begin
   AMode := TViewMode(Tag shr 8);
   AZoom := TZoomMode(Tag and $FF);
 
-  { First activate the mode, then override its zoom }
+  {First activate the mode, then override its zoom}
   ActivateMode(AMode);
   FFrameView.ZoomMode := AZoom;
   UpdateFrameViewSize;
 
-  { Persist and sync the popup menu checks }
+  {Persist and sync the popup menu checks}
   FSettings.ModeZoom[AMode] := AZoom;
   FSettings.ZoomMode := AZoom;
   FSettings.Save;
@@ -603,7 +583,7 @@ var
   ZM: TZoomMode;
   MI: TMenuItem;
 begin
-  { Grid modes always fit all frames to the available space }
+  {Grid modes always fit all frames to the available space}
   if AMode in [vmSmartGrid, vmGrid] then
     Exit(nil);
 
@@ -627,7 +607,7 @@ begin
   FScrollBox.Align := alClient;
   FScrollBox.BorderStyle := bsNone;
   FScrollBox.OnResize := OnScrollBoxResize;
-  { Update scroll position live during thumb drag, not just on release }
+  {Update scroll position live during thumb drag, not just on release}
   FScrollBox.VertScrollBar.Tracking := True;
   FScrollBox.HorzScrollBar.Tracking := True;
 
@@ -718,8 +698,7 @@ procedure TPluginForm.UpdateStatusBar;
       Result := Format('%d kbps', [AKbps]);
   end;
 
-  procedure AddPanel(const AText: string; AWidth: Integer;
-    AAlignment: TAlignment = taLeftJustify);
+  procedure AddPanel(const AText: string; AWidth: Integer; AAlignment: TAlignment = taLeftJustify);
   var
     Panel: TStatusPanel;
   begin
@@ -737,27 +716,27 @@ begin
   if not FVideoInfo.IsValid then
     Exit;
 
-  { Resolution }
+  {Resolution}
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
     AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W);
 
-  { Framerate }
+  {Framerate}
   if FVideoInfo.Fps > 0 then
     AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), SBP_FRAMERATE_W);
 
-  { Duration }
+  {Duration}
   if FVideoInfo.Duration > 0 then
     AddPanel(FormatDurationHMS(FVideoInfo.Duration), SBP_DURATION_W);
 
-  { Overall bitrate }
+  {Overall bitrate}
   if FVideoInfo.Bitrate > 0 then
     AddPanel(FormatBitrate(FVideoInfo.Bitrate), SBP_BITRATE_W);
 
-  { Video codec }
+  {Video codec}
   if FVideoInfo.VideoCodec <> '' then
     AddPanel(FVideoInfo.VideoCodec, SBP_VIDEOCODEC_W);
 
-  { Audio section }
+  {Audio section}
   if FVideoInfo.AudioCodec <> '' then
   begin
     AudioStr := FVideoInfo.AudioCodec;
@@ -772,11 +751,11 @@ begin
   else
     AddPanel('No audio', SBP_NOAUDIO_W);
 
-  { Load time (shown after extraction completes) }
+  {Load time (shown after extraction completes)}
   if FLoadTimeStr <> '' then
   begin
     AddPanel(FLoadTimeStr, SBP_LOADTIME_W, taRightJustify);
-    { Dummy panel absorbs last-panel stretching from the common control }
+    {Dummy panel absorbs last-panel stretching from the common control}
     AddPanel('', 0);
   end;
 end;
@@ -801,7 +780,7 @@ begin
     Inc(PanelLeft, FStatusBar.Panels[I].Width);
   end;
 
-  { Click past last panel: copy last panel }
+  {Click past last panel: copy last panel}
   Clipboard.AsText := FStatusBar.Panels[FStatusBar.Panels.Count - 1].Text;
 end;
 
@@ -809,21 +788,20 @@ procedure TPluginForm.ApplySettings;
 var
   VM: TViewMode;
 begin
-  if FSettings = nil then Exit;
+  if FSettings = nil then
+    Exit;
 
   FUpDown.Position := FSettings.FramesCount;
   FFrameView.ViewMode := FSettings.ViewMode;
   FFrameView.ZoomMode := FSettings.ZoomMode;
 
-  { Restore per-mode zoom selections in all popup menus }
+  {Restore per-mode zoom selections in all popup menus}
   for VM := Low(TViewMode) to High(TViewMode) do
     SyncZoomMenuChecks(VM, FSettings.ModeZoom[VM]);
 
   UpdateViewModeButtons;
-  FToolbar.Visible := FSettings.ShowToolbar
-    and not (FQuickViewMode and FSettings.QVHideToolbar);
-  FStatusBar.Visible := FSettings.ShowStatusBar
-    and not (FQuickViewMode and FSettings.QVHideStatusBar);
+  FToolbar.Visible := FSettings.ShowToolbar and not(FQuickViewMode and FSettings.QVHideToolbar);
+  FStatusBar.Visible := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
   FFrameView.ShowTimecode := FSettings.ShowTimecode;
   FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
   FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
@@ -840,10 +818,11 @@ begin
   FFrameView.ZoomFactor := 1.0;
   FFrameView.ViewMode := AMode;
 
-  { Apply the zoom mode stored in the popup, or force Fit for modes without submodes }
+  {Apply the zoom mode stored in the popup, or force Fit for modes without submodes}
   if FModePopups[AMode] <> nil then
   begin
-    var I: Integer;
+    var
+      I: Integer;
     for I := 0 to FModePopups[AMode].Items.Count - 1 do
       if FModePopups[AMode].Items[I].Checked then
       begin
@@ -857,7 +836,7 @@ begin
   UpdateViewModeButtons;
   UpdateFrameViewSize;
 
-  { Persist user preference }
+  {Persist user preference}
   FSettings.ViewMode := AMode;
   FSettings.ZoomMode := FFrameView.ZoomMode;
   FSettings.Save;
@@ -871,25 +850,20 @@ begin
   if NewF = 0 then
     Exit;
 
-  NormX := NormalizeViewportCenter(
-    FScrollBox.HorzScrollBar.Position, FScrollBox.ClientWidth, FFrameView.Width);
-  NormY := NormalizeViewportCenter(
-    FScrollBox.VertScrollBar.Position, FScrollBox.ClientHeight, FFrameView.Height);
+  NormX := NormalizeViewportCenter(FScrollBox.HorzScrollBar.Position, FScrollBox.ClientWidth, FFrameView.Width);
+  NormY := NormalizeViewportCenter(FScrollBox.VertScrollBar.Position, FScrollBox.ClientHeight, FFrameView.Height);
 
-  SendMessage(FScrollBox.Handle, WM_SETREDRAW, WPARAM(False), 0);
+  SendMessage(FScrollBox.Handle, WM_SETREDRAW, wParam(False), 0);
   FUpdatingLayout := True;
   try
     FFrameView.ZoomFactor := NewF;
     UpdateFrameViewSize;
-    FScrollBox.HorzScrollBar.Position :=
-      DenormalizeViewportCenter(NormX, FFrameView.Width, FScrollBox.ClientWidth);
-    FScrollBox.VertScrollBar.Position :=
-      DenormalizeViewportCenter(NormY, FFrameView.Height, FScrollBox.ClientHeight);
+    FScrollBox.HorzScrollBar.Position := DenormalizeViewportCenter(NormX, FFrameView.Width, FScrollBox.ClientWidth);
+    FScrollBox.VertScrollBar.Position := DenormalizeViewportCenter(NormY, FFrameView.Height, FScrollBox.ClientHeight);
   finally
     FUpdatingLayout := False;
-    SendMessage(FScrollBox.Handle, WM_SETREDRAW, WPARAM(True), 0);
-    RedrawWindow(FScrollBox.Handle, nil, 0,
-      RDW_ERASE or RDW_FRAME or RDW_INVALIDATE or RDW_ALLCHILDREN);
+    SendMessage(FScrollBox.Handle, WM_SETREDRAW, wParam(True), 0);
+    RedrawWindow(FScrollBox.Handle, nil, 0, RDW_ERASE or RDW_FRAME or RDW_INVALIDATE or RDW_ALLCHILDREN);
   end;
 end;
 
@@ -943,7 +917,6 @@ begin
   FSettings.Save;
 end;
 
-
 procedure TPluginForm.LoadFile(const AFileName: string);
 var
   FFmpeg: TFFmpegExe;
@@ -956,7 +929,7 @@ begin
   FExtractCtrl.Stop;
   FExtractCtrl.DrainPendingFrameMessages;
   FFrameView.ClearCells;
-  FVideoInfo := Default(TVideoInfo);
+  FVideoInfo := Default (TVideoInfo);
 
   if FFFmpegPath = '' then
   begin
@@ -964,7 +937,7 @@ begin
     Exit;
   end;
 
-  { Try cached probe first; fall back to ffmpeg on miss }
+  {Try cached probe first; fall back to ffmpeg on miss}
   if not FProbeCache.TryGet(FFileName, FVideoInfo) then
   begin
     FFmpeg := TFFmpegExe.Create(FFFmpegPath);
@@ -986,15 +959,13 @@ begin
     Exit;
   end;
 
-  { Set actual dimensions and aspect ratio from video metadata }
+  {Set actual dimensions and aspect ratio from video metadata}
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
   begin
     FFrameView.NativeW := FVideoInfo.Width;
     FFrameView.NativeH := FVideoInfo.Height;
     FFrameView.AspectRatio := FVideoInfo.Height / FVideoInfo.Width;
-  end
-  else
-  begin
+  end else begin
     FFrameView.NativeW := 0;
     FFrameView.NativeH := 0;
     FFrameView.AspectRatio := DEF_ASPECT_RATIO;
@@ -1007,8 +978,7 @@ end;
 
 procedure TPluginForm.SetupPlaceholders;
 begin
-  FOffsets := CalculateFrameOffsets(FVideoInfo.Duration,
-    FUpDown.Position, FSettings.SkipEdgesPercent);
+  FOffsets := CalculateFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent);
 
   FFrameView.SetCellCount(Length(FOffsets), FOffsets);
   UpdateFrameViewSize;
@@ -1028,20 +998,16 @@ begin
   ShowProgress('Extracting...');
   FAnimTimer.Enabled := True;
 
-  { Zero-init so any future TExtractionOptions fields default to 0 }
-  Options := Default(TExtractionOptions);
+  {Zero-init so any future TExtractionOptions fields default to 0}
+  Options := Default (TExtractionOptions);
   Options.UseBmpPipe := FSettings.UseBmpPipe;
   if FSettings.ScaledExtraction then
-    Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth,
-      FScrollBox.ClientHeight, Length(FOffsets), FFrameView.AspectRatio,
-      FVideoInfo.Width, FVideoInfo.Height,
-      FSettings.MinFrameSide, FSettings.MaxFrameSide);
+    Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, Length(FOffsets), FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide);
   Options.HwAccel := FSettings.HwAccel;
   Options.UseKeyframes := FSettings.UseKeyframes;
 
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
-  FExtractCtrl.Start(Extractor, FFileName, FOffsets,
-    FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
+  FExtractCtrl.Start(Extractor, FFileName, FOffsets, FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
@@ -1069,8 +1035,7 @@ procedure TPluginForm.HideProgress;
 begin
   FProgressBar.Visible := False;
   FProgressVisible := False;
-  FStatusBar.Visible := FSettings.ShowStatusBar
-    and not (FQuickViewMode and FSettings.QVHideStatusBar);
+  FStatusBar.Visible := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
 end;
 
 procedure TPluginForm.FinalizeLoadTime;
@@ -1078,8 +1043,10 @@ var
   ElapsedMs: UInt64;
   H, M, S, Ms: Integer;
 begin
-  if FLoadStartTick = 0 then Exit;
-  if FLoadTimeStr <> '' then Exit; { already finalized }
+  if FLoadStartTick = 0 then
+    Exit;
+  if FLoadTimeStr <> '' then
+    Exit; {already finalized}
 
   ElapsedMs := GetTickCount64 - FLoadStartTick;
   H := ElapsedMs div 3600000;
@@ -1101,7 +1068,8 @@ procedure TPluginForm.RepositionProgressBar;
 var
   Margin, BarWidth: Integer;
 begin
-  if not FProgressVisible then Exit;
+  if not FProgressVisible then
+    Exit;
   Margin := (FStatusBar.ClientHeight - PROGRESSBAR_H) div 2;
   BarWidth := FStatusBar.ClientWidth - SBP_TOTAL_RIGHT - 2 * Margin;
   if BarWidth < PROGRESSBAR_MIN_W then
@@ -1117,8 +1085,7 @@ begin
     FinalizeLoadTime;
     HideProgress;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
-  end
-  else if (FExtractCtrl.FramesLoaded > 0) and FProgressVisible then
+  end else if (FExtractCtrl.FramesLoaded > 0) and FProgressVisible then
   begin
     FProgressBar.Style := pbstNormal;
     FProgressBar.Max := FExtractCtrl.TotalFrames;
@@ -1133,22 +1100,20 @@ end;
 
 procedure TPluginForm.WMExtractionDone(var Message: TMessage);
 begin
-  FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d',
-    [FExtractCtrl.FramesLoaded, FExtractCtrl.TotalFrames]));
-  { Safety net: process any frames that arrived after the last notification }
+  FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FExtractCtrl.FramesLoaded, FExtractCtrl.TotalFrames]));
+  {Safety net: process any frames that arrived after the last notification}
   FExtractCtrl.ProcessPendingFrames;
   FinalizeLoadTime;
   HideProgress;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
-  FormLog(Format('  hasPlaceholders=%s timerEnabled=%s',
-    [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));
+  FormLog(Format('  hasPlaceholders=%s timerEnabled=%s', [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));
 end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 begin
   FKeyConsumed := False;
 
-  { Ctrl+Up/Down: adjust frame count }
+  {Ctrl+Up/Down: adjust frame count}
   if (ssCtrl in Shift) and (Key in [VK_UP, VK_DOWN]) then
   begin
     if Key = VK_UP then
@@ -1160,9 +1125,8 @@ begin
     Exit;
   end;
 
-  { Ctrl+Left/Right: navigate frames in single mode }
-  if (Shift = [ssCtrl]) and (Key in [VK_LEFT, VK_RIGHT]) and
-     (FFrameView.ViewMode = vmSingle) then
+  {Ctrl+Left/Right: navigate frames in single mode}
+  if (Shift = [ssCtrl]) and (Key in [VK_LEFT, VK_RIGHT]) and (FFrameView.ViewMode = vmSingle) then
   begin
     if Key = VK_LEFT then
       FFrameView.NavigateFrame(-1)
@@ -1173,7 +1137,7 @@ begin
     Exit;
   end;
 
-  { Bare Left/Right/PageUp/PageDown: navigate between files }
+  {Bare Left/Right/PageUp/PageDown: navigate between files}
   if (Shift = []) and (Key in [VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT]) then
   begin
     if Key in [VK_LEFT, VK_PRIOR] then
@@ -1202,13 +1166,11 @@ begin
         begin
           FExporter.SaveAllFrames(FFileName);
           Key := 0;
-        end
-        else if [ssShift, ssAlt] * Shift = [ssShift] then
+        end else if [ssShift, ssAlt] * Shift = [ssShift] then
         begin
           FExporter.SaveCombinedFrame(FFileName);
           Key := 0;
-        end
-        else if [ssShift, ssAlt] * Shift = [] then
+        end else if [ssShift, ssAlt] * Shift = [] then
         begin
           FContextCellIndex := -1;
           FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
@@ -1216,7 +1178,7 @@ begin
         end;
       end;
     Ord('A'):
-      if (ssCtrl in Shift) and not (ssShift in Shift) and not (ssAlt in Shift) then
+      if (ssCtrl in Shift) and not(ssShift in Shift) and not(ssAlt in Shift) then
       begin
         FFrameView.SelectAll;
         Key := 0;
@@ -1254,7 +1216,7 @@ begin
     VK_TAB:
       if Shift - [ssShift] = [] then
       begin
-        SelectNext(ActiveControl, not (ssShift in Shift), True);
+        SelectNext(ActiveControl, not(ssShift in Shift), True);
         Key := 0;
       end;
     VK_ESCAPE:
@@ -1282,7 +1244,7 @@ begin
         ResetZoom;
         Key := 0;
       end;
-    Ord('1')..Ord('5'), VK_NUMPAD1..VK_NUMPAD5:
+    Ord('1') .. Ord('5'), VK_NUMPAD1 .. VK_NUMPAD5:
       if ssCtrl in Shift then
       begin
         SwitchOrCycleMode(Key);
@@ -1309,7 +1271,7 @@ begin
       if Shift = [] then
       begin
         FToolbar.Visible := not FToolbar.Visible;
-        { Reclaim focus so TC's subclass sees keystrokes again }
+        {Reclaim focus so TC's subclass sees keystrokes again}
         if not FToolbar.Visible then
           Winapi.Windows.SetFocus(Handle);
         if not FQuickViewMode then
@@ -1319,7 +1281,7 @@ begin
         end;
         Key := 0;
       end;
-    VK_OEM_3: { ~ / ` key }
+    VK_OEM_3: {~ / ` key}
       if (Shift = []) and FBtnHamburger.Visible then
       begin
         OnHamburgerClick(FBtnHamburger);
@@ -1327,26 +1289,23 @@ begin
       end;
   end;
 
-  { When the frame count edit has Win32 focus and the key was not consumed by
-    a hotkey above, only allow digit-editing and modifier keys through.
-    Non-digit keys reclaim form focus so TC's subclass sees subsequent
-    keystrokes. The current keystroke is consumed (not re-posted) to avoid
-    corrupting keyboard state with unmatched WM_KEYDOWN messages. }
+  {When the frame count edit has Win32 focus and the key was not consumed by
+   a hotkey above, only allow digit-editing and modifier keys through.
+   Non-digit keys reclaim form focus so TC's subclass sees subsequent
+   keystrokes. The current keystroke is consumed (not re-posted) to avoid
+   corrupting keyboard state with unmatched WM_KEYDOWN messages.}
   if (Key <> 0) and (GetFocus = FEditFrameCount.Handle) then
     case Key of
-      Ord('0')..Ord('9'), VK_NUMPAD0..VK_NUMPAD9,
-      VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END,
-      VK_UP, VK_DOWN,
-      VK_SHIFT, VK_CONTROL, VK_MENU:
-        ; { Allow through to the edit / UpDown / modifier state }
+      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9, VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_SHIFT, VK_CONTROL, VK_MENU:
+        ; {Allow through to the edit / UpDown / modifier state}
       VK_RETURN:
         begin
           Winapi.Windows.SetFocus(Handle);
           Key := 0;
         end;
-    else
-      Winapi.Windows.SetFocus(Handle);
-      Key := 0;
+      else
+        Winapi.Windows.SetFocus(Handle);
+        Key := 0;
     end;
 
   if Key = 0 then
@@ -1360,9 +1319,9 @@ begin
     Key := #0;
     FKeyConsumed := False;
   end
-  { Suppress non-digit chars that slip through OnKeyDown (e.g. Shift+digit
-    produces '!' etc.). Prevents the NumbersOnly balloon on the edit. }
-  else if (GetFocus = FEditFrameCount.Handle) and not CharInSet(Key, ['0'..'9', #8]) then
+  {Suppress non-digit chars that slip through OnKeyDown (e.g. Shift+digit
+   produces '!' etc.). Prevents the NumbersOnly balloon on the edit.}
+  else if (GetFocus = FEditFrameCount.Handle) and not CharInSet(Key, ['0' .. '9', #8]) then
     Key := #0;
 end;
 
@@ -1380,18 +1339,18 @@ begin
         PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
         Message.Result := 1;
       end;
-  else
-    inherited;
+    else
+      inherited;
   end;
 end;
 
 procedure TPluginForm.WMSetFocus(var Message: TWMSetFocus);
 begin
-  { Do NOT call inherited. VCL's default WMSetFocus redirects focus to
-    ActiveControl (a child). TC subclasses this window to catch N/P and
-    other Lister hotkeys; that subclass only sees WM_KEYDOWN when THIS
-    window has Win32 focus, not a child. Skipping inherited keeps focus
-    on the form handle so TC's hotkey interception works. }
+  {Do NOT call inherited. VCL's default WMSetFocus redirects focus to
+   ActiveControl (a child). TC subclasses this window to catch N/P and
+   other Lister hotkeys; that subclass only sees WM_KEYDOWN when THIS
+   window has Win32 focus, not a child. Skipping inherited keeps focus
+   on the form handle so TC's hotkey interception works.}
 end;
 
 procedure TPluginForm.ShowError(const AMessage: string);
@@ -1418,7 +1377,7 @@ var
 begin
   Zoomed := not SameValue(FFrameView.ZoomFactor, 1.0, ZOOM_EPSILON);
 
-  { Configure scrollbox FIRST so ClientWidth/ClientHeight reflect scrollbar state }
+  {Configure scrollbox FIRST so ClientWidth/ClientHeight reflect scrollbar state}
   case FFrameView.ViewMode of
     vmScroll:
       begin
@@ -1442,36 +1401,34 @@ begin
       end;
   end;
 
-  { Read viewport after scrollbar config }
+  {Read viewport after scrollbar config}
   VW := FScrollBox.ClientWidth;
   VH := FScrollBox.ClientHeight;
   FFrameView.SetViewport(VW, VH);
 
-  { Calculate column count for grid mode (use frozen base when zoomed) }
+  {Calculate column count for grid mode (use frozen base when zoomed)}
   if FFrameView.ViewMode = vmGrid then
   begin
     case FFrameView.ZoomMode of
       zmFitWindow:
-        FFrameView.ColumnCount := FFrameView.CalcFitColumns(
-          FFrameView.BaseW, FFrameView.BaseH);
+        FFrameView.ColumnCount := FFrameView.CalcFitColumns(FFrameView.BaseW, FFrameView.BaseH);
       zmFitIfLarger:
         begin
-          FitCols := FFrameView.CalcFitColumns(
-            FFrameView.BaseW, FFrameView.BaseH);
+          FitCols := FFrameView.CalcFitColumns(FFrameView.BaseW, FFrameView.BaseH);
           DefCols := FFrameView.DefaultColumnCount;
           FFrameView.ColumnCount := Max(FitCols, DefCols);
         end;
-    else
-      FFrameView.ColumnCount := 0;
+      else
+        FFrameView.ColumnCount := 0;
     end;
   end
   else
     FFrameView.ColumnCount := 0;
 
-  { RecalcSize sets Width/Height for all modes.
-    Do NOT reset Left/Top here: the scrollbox manages child positioning
-    via its scroll offset. Resetting Left=0 while Position>0 creates an
-    inconsistency that breaks subsequent ScrollBy delta calculations. }
+  {RecalcSize sets Width/Height for all modes.
+   Do NOT reset Left/Top here: the scrollbox manages child positioning
+   via its scroll offset. Resetting Left=0 while Position>0 creates an
+   inconsistency that breaks subsequent ScrollBy delta calculations.}
   FFrameView.RecalcSize;
   FFrameView.Invalidate;
 end;
@@ -1493,10 +1450,10 @@ procedure TPluginForm.SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
 var
   I: Integer;
 begin
-  if FModePopups[AMode] = nil then Exit;
+  if FModePopups[AMode] = nil then
+    Exit;
   for I := 0 to FModePopups[AMode].Items.Count - 1 do
-    FModePopups[AMode].Items[I].Checked :=
-      TZoomMode(FModePopups[AMode].Items[I].Tag) = AZoom;
+    FModePopups[AMode].Items[I].Checked := TZoomMode(FModePopups[AMode].Items[I].Tag) = AZoom;
 end;
 
 procedure TPluginForm.UpdateTimecodeButton;
@@ -1516,16 +1473,26 @@ end;
 procedure TPluginForm.DispatchCommand(ATag: Integer);
 begin
   case ATag of
-    CM_SAVE_FRAME:    FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
-    CM_SAVE_SELECTED: FExporter.SaveSelectedFrames(FFileName);
-    CM_SAVE_COMBINED: FExporter.SaveCombinedFrame(FFileName);
-    CM_SAVE_ALL:      FExporter.SaveAllFrames(FFileName);
-    CM_COPY_FRAME:    FExporter.CopyFrameToClipboard(FContextCellIndex);
-    CM_COPY_ALL:      FExporter.CopyAllToClipboard;
-    CM_SELECT_ALL:    FFrameView.SelectAll;
-    CM_DESELECT_ALL:  FFrameView.DeselectAll;
-    CM_REFRESH:       RefreshExtraction;
-    CM_SETTINGS:      ShowSettings;
+    CM_SAVE_FRAME:
+      FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
+    CM_SAVE_SELECTED:
+      FExporter.SaveSelectedFrames(FFileName);
+    CM_SAVE_COMBINED:
+      FExporter.SaveCombinedFrame(FFileName);
+    CM_SAVE_ALL:
+      FExporter.SaveAllFrames(FFileName);
+    CM_COPY_FRAME:
+      FExporter.CopyFrameToClipboard(FContextCellIndex);
+    CM_COPY_ALL:
+      FExporter.CopyAllToClipboard;
+    CM_SELECT_ALL:
+      FFrameView.SelectAll;
+    CM_DESELECT_ALL:
+      FFrameView.DeselectAll;
+    CM_REFRESH:
+      RefreshExtraction;
+    CM_SETTINGS:
+      ShowSettings;
   end;
 end;
 
@@ -1542,8 +1509,10 @@ begin
   HasFrames := Assigned(FExtractCtrl) and (FExtractCtrl.FramesLoaded > 0);
   for I := 0 to High(FToolbarButtons) do
     case FToolbarButtons[I].Tag of
-      CM_SETTINGS: FToolbarButtons[I].Enabled := True;
-      else         FToolbarButtons[I].Enabled := HasFrames;
+      CM_SETTINGS:
+        FToolbarButtons[I].Enabled := True;
+      else
+        FToolbarButtons[I].Enabled := HasFrames;
     end;
 end;
 
@@ -1558,7 +1527,7 @@ var
   I: Integer;
 begin
   MI := Sender as TMenuItem;
-  { Uncheck all siblings, check this one }
+  {Uncheck all siblings, check this one}
   for I := 0 to MI.Parent.Count - 1 do
     MI.Parent.Items[I].Checked := False;
   MI.Checked := True;
@@ -1566,7 +1535,7 @@ begin
   FFrameView.ZoomMode := TZoomMode(MI.Tag);
   UpdateFrameViewSize;
 
-  { Persist user preference }
+  {Persist user preference}
   FSettings.ZoomMode := FFrameView.ZoomMode;
   FSettings.Save;
 end;
@@ -1583,7 +1552,7 @@ begin
       end;
     WM_PLUGIN_FKEY:
       begin
-        Key := Message.WParam;
+        Key := Message.wParam;
         OnFormKeyDown(Self, Key, []);
         Exit;
       end;
@@ -1591,11 +1560,11 @@ begin
   inherited;
   if csDestroying in ComponentState then
     Exit;
-  { When any child control is clicked, reclaim focus for the form handle.
-    TC subclasses this window to catch Lister hotkeys (N/P etc.); that
-    subclass only sees WM_KEYDOWN when this window has Win32 focus. }
+  {When any child control is clicked, reclaim focus for the form handle.
+   TC subclasses this window to catch Lister hotkeys (N/P etc.); that
+   subclass only sees WM_KEYDOWN when this window has Win32 focus.}
   if Message.Msg = WM_PARENTNOTIFY then
-    case LOWORD(Message.WParam) of
+    case LOWORD(Message.wParam) of
       WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN:
         Winapi.Windows.SetFocus(Handle);
     end;
@@ -1607,18 +1576,17 @@ begin
   Realign;
   LayoutToolbar;
   RepositionProgressBar;
-  { VCL fires Resize during window creation, before CreateForPlugin finishes
-    constructing sub-controls, so FFrameView may not exist yet }
+  {VCL fires Resize during window creation, before CreateForPlugin finishes
+   constructing sub-controls, so FFrameView may not exist yet}
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
 
-function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
-  MousePos: TPoint): Boolean;
+function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
 var
   Msg: TWMMouseWheel;
 begin
-  { Ctrl+Wheel: continuous zoom }
+  {Ctrl+Wheel: continuous zoom}
   if ssCtrl in Shift then
   begin
     if WheelDelta > 0 then
@@ -1629,14 +1597,14 @@ begin
     Exit;
   end;
 
-  { Forward to TFrameView so wheel logic lives in one place (WMMouseWheel).
-    Guards needed: VCL fires DoMouseWheel before constructor finishes. }
+  {Forward to TFrameView so wheel logic lives in one place (WMMouseWheel).
+   Guards needed: VCL fires DoMouseWheel before constructor finishes.}
   if Assigned(FFrameView) and Assigned(FScrollBox) and FScrollBox.Visible then
   begin
     ZeroMemory(@Msg, SizeOf(Msg));
     Msg.Msg := WM_MOUSEWHEEL;
     Msg.WheelDelta := WheelDelta;
-    FFrameView.Perform(WM_MOUSEWHEEL, TMessage(Msg).WParam, TMessage(Msg).LParam);
+    FFrameView.Perform(WM_MOUSEWHEEL, TMessage(Msg).wParam, TMessage(Msg).lParam);
     Result := True;
   end
   else
@@ -1645,7 +1613,7 @@ end;
 
 procedure TPluginForm.OnScrollBoxResize(Sender: TObject);
 begin
-  { Same VCL lifecycle guard as Resize: FFrameView may not exist yet }
+  {Same VCL lifecycle guard as Resize: FFrameView may not exist yet}
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
@@ -1659,21 +1627,25 @@ var
 begin
   HasFrames := FFrameView.CellCount > 0;
 
-  { Hit-test: which cell was right-clicked? }
+  {Hit-test: which cell was right-clicked?}
   Pt := FFrameView.ScreenToClient(FContextMenu.PopupPoint);
   FContextCellIndex := FFrameView.CellIndexAt(Pt);
-  HasClickedFrame := (FContextCellIndex >= 0)
-    and (FFrameView.CellState(FContextCellIndex) = fcsLoaded);
+  HasClickedFrame := (FContextCellIndex >= 0) and (FFrameView.CellState(FContextCellIndex) = fcsLoaded);
 
   for I := 0 to FContextMenu.Items.Count - 1 do
   begin
     MI := FContextMenu.Items[I];
     case MI.Tag of
-      CM_SAVE_FRAME:    MI.Enabled := HasClickedFrame;
-      CM_SAVE_COMBINED: MI.Enabled := HasFrames;
-      CM_SAVE_ALL:      MI.Enabled := HasFrames;
-      CM_COPY_FRAME:    MI.Enabled := HasClickedFrame;
-      CM_COPY_ALL:      MI.Enabled := HasFrames;
+      CM_SAVE_FRAME:
+        MI.Enabled := HasClickedFrame;
+      CM_SAVE_COMBINED:
+        MI.Enabled := HasFrames;
+      CM_SAVE_ALL:
+        MI.Enabled := HasFrames;
+      CM_COPY_FRAME:
+        MI.Enabled := HasClickedFrame;
+      CM_COPY_ALL:
+        MI.Enabled := HasFrames;
       CM_SAVE_SELECTED:
         begin
           SelCount := FFrameView.SelectedCount;
@@ -1681,10 +1653,14 @@ begin
           if MI.Visible then
             MI.Caption := Format('Save selected (%d)...', [SelCount]);
         end;
-      CM_SELECT_ALL:    MI.Enabled := HasFrames;
-      CM_DESELECT_ALL:  MI.Enabled := FFrameView.SelectedCount > 0;
-      CM_REFRESH:       MI.Enabled := HasFrames;
-      CM_SETTINGS:      ; { always enabled }
+      CM_SELECT_ALL:
+        MI.Enabled := HasFrames;
+      CM_DESELECT_ALL:
+        MI.Enabled := FFrameView.SelectedCount > 0;
+      CM_REFRESH:
+        MI.Enabled := HasFrames;
+      CM_SETTINGS:
+        ; {always enabled}
     end;
   end;
 end;
@@ -1696,20 +1672,21 @@ end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
 begin
-  { Drain any frames that arrived since the last notification.
-    Covers the case where PostMessage notifications miss the HWND. }
+  {Drain any frames that arrived since the last notification.
+   Covers the case where PostMessage notifications miss the HWND.}
   if Assigned(FExtractCtrl) then
     FExtractCtrl.ProcessPendingFrames;
-  { Timer fires during construction; FFrameView may not be ready yet }
+  {Timer fires during construction; FFrameView may not be ready yet}
   if Assigned(FFrameView) and FFrameView.Visible then
     FFrameView.AdvanceAnimation;
 end;
 
 procedure TPluginForm.OnFrameCountChange(Sender: TObject);
 begin
-  { VCL re-fires OnChange when a hidden TUpDown+TEdit pair becomes visible
-    (handle recreation re-sends the position). Ignore if value unchanged. }
-  if FUpDown.Position = FSettings.FramesCount then Exit;
+  {VCL re-fires OnChange when a hidden TUpDown+TEdit pair becomes visible
+   (handle recreation re-sends the position). Ignore if value unchanged.}
+  if FUpDown.Position = FSettings.FramesCount then
+    Exit;
 
   FSettings.FramesCount := FUpDown.Position;
   FSettings.Save;
@@ -1732,13 +1709,12 @@ begin
 
   Changes := DetectSettingsChanges(Snap, FSettings);
 
-  { Recreate cache if cache settings changed }
+  {Recreate cache if cache settings changed}
   if scCacheChanged in Changes then
-    FExtractCtrl.RecreateCache(FSettings.CacheEnabled,
-      FSettings.CacheFolder, FSettings.CacheMaxSizeMB);
+    FExtractCtrl.RecreateCache(FSettings.CacheEnabled, FSettings.CacheFolder, FSettings.CacheMaxSizeMB);
 
-  { FFmpeg path changed: update and reload from scratch (LoadFile re-probes
-    the video, which is needed when ffmpeg was previously missing) }
+  {FFmpeg path changed: update and reload from scratch (LoadFile re-probes
+   the video, which is needed when ffmpeg was previously missing)}
   if (scFFmpegPathChanged in Changes) and (FSettings.FFmpegExePath <> '') then
   begin
     FFFmpegPath := ExpandEnvVars(FSettings.FFmpegExePath);
@@ -1746,9 +1722,8 @@ begin
     Exit;
   end;
 
-  { Re-extract if skip edges, scaled extraction, or keyframes settings changed }
-  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged,
-    scUseKeyframesChanged]) <> [] then
+  {Re-extract if skip edges, scaled extraction, or keyframes settings changed}
+  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged]) <> [] then
     RefreshExtraction;
 end;
 
@@ -1765,7 +1740,8 @@ end;
 
 procedure TPluginForm.RefreshExtraction;
 begin
-  if not FVideoInfo.IsValid then Exit;
+  if not FVideoInfo.IsValid then
+    Exit;
   FExtractCtrl.Stop;
   FExtractCtrl.DrainPendingFrameMessages;
   FFrameView.ClearCells;

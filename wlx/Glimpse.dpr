@@ -1,9 +1,9 @@
 library Glimpse;
 
 {$IFDEF WIN64}
-  {$E wlx64}
+{$E wlx64}
 {$ELSE}
-  {$E wlx}
+{$E wlx}
 {$ENDIF}
 
 uses
@@ -57,4 +57,5 @@ exports
   ListGetPreviewBitmapW;
 
 begin
+
 end.

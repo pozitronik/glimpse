@@ -1,4 +1,4 @@
-{ ffmpeg.exe backend: process execution, video probing, and frame extraction. }
+{ffmpeg.exe backend: process execution, video probing, and frame extraction.}
 unit uFFmpegExe;
 
 interface
@@ -9,18 +9,18 @@ uses
 
 type
   TVideoInfo = record
-    Duration: Double;      { seconds; -1 if unknown }
+    Duration: Double; {seconds; -1 if unknown}
     Width: Integer;
     Height: Integer;
     VideoCodec: string;
-    VideoBitrateKbps: Integer;  { 0 if unknown }
-    Fps: Double;                { 0 if unknown }
-    Bitrate: Integer;           { overall bitrate in kb/s; 0 if unknown }
-    AudioCodec: string;         { empty if no audio }
-    AudioSampleRate: Integer;   { Hz; 0 if unknown }
-    AudioChannels: string;      { 'mono', 'stereo', '5.1', etc. }
-    AudioBitrateKbps: Integer;  { 0 if unknown }
-    IsValid: Boolean;           { True if at least duration was parsed }
+    VideoBitrateKbps: Integer; {0 if unknown}
+    Fps: Double; {0 if unknown}
+    Bitrate: Integer; {overall bitrate in kb/s; 0 if unknown}
+    AudioCodec: string; {empty if no audio}
+    AudioSampleRate: Integer; {Hz; 0 if unknown}
+    AudioChannels: string; {'mono', 'stereo', '5.1', etc.}
+    AudioBitrateKbps: Integer; {0 if unknown}
+    IsValid: Boolean; {True if at least duration was parsed}
     ErrorMessage: string;
   end;
 
@@ -30,65 +30,64 @@ type
   public
     constructor Create(const AExePath: string);
 
-    { Probes a video file for metadata (duration, resolution, codec). }
+    {Probes a video file for metadata (duration, resolution, codec).}
     function ProbeVideo(const AFileName: string): TVideoInfo;
 
-    { Extracts a single frame at the given time offset.
-      AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
-      AHwAccel=True adds -hwaccel auto for GPU-accelerated decoding.
-      AUseKeyframes=True adds -noaccurate_seek to grab the nearest keyframe (faster).
-      ATimeoutMs caps how long the ffmpeg call may run; default 30s matches the
-      generic RunProcess default. Use a shorter value (e.g. for thumbnail panels)
-      to avoid stalling on broken files.
-      Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap. }
-    function ExtractFrame(const AFileName: string; ATimeOffset: Double;
-      const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000): TBitmap;
+    {Extracts a single frame at the given time offset.
+     AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
+     AHwAccel=True adds -hwaccel auto for GPU-accelerated decoding.
+     AUseKeyframes=True adds -noaccurate_seek to grab the nearest keyframe (faster).
+     ATimeoutMs caps how long the ffmpeg call may run; default 30s matches the
+     generic RunProcess default. Use a shorter value (e.g. for thumbnail panels)
+     to avoid stalling on broken files.
+     Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap.}
+    function ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000): TBitmap;
 
     property ExePath: string read FExePath;
   end;
 
-{ Parsing functions exposed for unit testing }
+  {Parsing functions exposed for unit testing}
 
-{ Parses duration from ffmpeg stderr output. Returns seconds, or -1 if not found. }
+  {Parses duration from ffmpeg stderr output. Returns seconds, or -1 if not found.}
 function ParseDuration(const AText: string): Double;
 
-{ Parses video resolution from ffmpeg stderr output. }
+{Parses video resolution from ffmpeg stderr output.}
 function ParseResolution(const AText: string; out AWidth, AHeight: Integer): Boolean;
 
-{ Parses video codec name from ffmpeg stderr output. }
+{Parses video codec name from ffmpeg stderr output.}
 function ParseVideoCodec(const AText: string): string;
 
-{ Parses overall bitrate from ffmpeg stderr Duration line. Returns kb/s, or 0. }
+{Parses overall bitrate from ffmpeg stderr Duration line. Returns kb/s, or 0.}
 function ParseBitrate(const AText: string): Integer;
 
-{ Parses video framerate from ffmpeg stderr Video stream line. Returns fps, or 0. }
+{Parses video framerate from ffmpeg stderr Video stream line. Returns fps, or 0.}
 function ParseFps(const AText: string): Double;
 
-{ Parses video stream bitrate from ffmpeg stderr. Returns kb/s, or 0. }
+{Parses video stream bitrate from ffmpeg stderr. Returns kb/s, or 0.}
 function ParseVideoBitrate(const AText: string): Integer;
 
-{ Parses audio codec from ffmpeg stderr Audio stream line. }
+{Parses audio codec from ffmpeg stderr Audio stream line.}
 function ParseAudioCodec(const AText: string): string;
 
-{ Parses audio sample rate from ffmpeg stderr. Returns Hz, or 0. }
+{Parses audio sample rate from ffmpeg stderr. Returns Hz, or 0.}
 function ParseAudioSampleRate(const AText: string): Integer;
 
-{ Parses audio channel layout from ffmpeg stderr (mono, stereo, 5.1, etc.). }
+{Parses audio channel layout from ffmpeg stderr (mono, stereo, 5.1, etc.).}
 function ParseAudioChannels(const AText: string): string;
 
-{ Parses audio bitrate from ffmpeg stderr Audio stream line. Returns kb/s, or 0. }
+{Parses audio bitrate from ffmpeg stderr Audio stream line. Returns kb/s, or 0.}
 function ParseAudioBitrate(const AText: string): Integer;
 
-{ Extracts the first line containing APrefix from ffmpeg output. }
+{Extracts the first line containing APrefix from ffmpeg output.}
 function ExtractStreamLine(const AText, APrefix: string): string;
 
-{ Parses version string from `ffmpeg -version` output.
-  Expects first line like "ffmpeg version 6.1.1 ...".
-  Returns version string (e.g. "6.1.1") or empty if not recognized. }
+{Parses version string from `ffmpeg -version` output.
+ Expects first line like "ffmpeg version 6.1.1 ...".
+ Returns version string (e.g. "6.1.1") or empty if not recognized.}
 function ParseFFmpegVersion(const AText: string): string;
 
-{ Runs `ffmpeg -version` and returns the version string.
-  Returns empty string if the executable is not a valid ffmpeg. }
+{Runs `ffmpeg -version` and returns the version string.
+ Returns empty string if the executable is not a valid ffmpeg.}
 function ValidateFFmpeg(const AExePath: string): string;
 
 implementation
@@ -96,9 +95,9 @@ implementation
 uses
   System.Math, uBitmapSaver, uRunProcess;
 
-{ Decodes bytes as UTF-8, replacing invalid sequences instead of raising.
-  ffmpeg may embed legacy-encoded metadata (e.g. CP1251 titles) that is
-  not valid UTF-8; strict decoding would raise EEncodingError. }
+{Decodes bytes as UTF-8, replacing invalid sequences instead of raising.
+ ffmpeg may embed legacy-encoded metadata (e.g. CP1251 titles) that is
+ not valid UTF-8; strict decoding would raise EEncodingError.}
 function LenientUTF8Decode(const ABytes: TBytes): string;
 var
   Enc: TEncoding;
@@ -113,7 +112,7 @@ begin
   end;
 end;
 
-{ Parsing }
+{Parsing}
 
 function ParseDuration(const AText: string): Double;
 var
@@ -132,11 +131,11 @@ begin
     Exit;
   P := P + Length('Duration:');
 
-  { Skip whitespace }
+  {Skip whitespace}
   while (P <= Length(AText)) and (AText[P] = ' ') do
     Inc(P);
 
-  { Read until comma, newline, or end }
+  {Read until comma, newline, or end}
   TimeStr := '';
   while (P <= Length(AText)) and not CharInSet(AText[P], [',', #13, #10]) do
   begin
@@ -148,7 +147,7 @@ begin
   if (TimeStr = '') or SameText(TimeStr, 'N/A') then
     Exit;
 
-  { Expected: HH:MM:SS.ff }
+  {Expected: HH:MM:SS.ff}
   Parts := TimeStr.Split([':']);
   if Length(Parts) <> 3 then
     Exit;
@@ -166,9 +165,7 @@ begin
     if (FracStr = '') or (S < 0) then
       Exit;
     Frac := StrToIntDef(FracStr, 0) / Power(10, Length(FracStr));
-  end
-  else
-  begin
+  end else begin
     S := StrToIntDef(Parts[2], -1);
     Frac := 0;
   end;
@@ -192,32 +189,29 @@ begin
   if VideoPos = 0 then
     Exit;
 
-  { Scan for NNNxNNN pattern after "Video:" }
+  {Scan for NNNxNNN pattern after "Video:"}
   P := VideoPos + 6;
   while P < Length(AText) do
   begin
-    if (AText[P] = 'x') and
-       CharInSet(AText[P - 1], ['0'..'9']) and
-       CharInSet(AText[P + 1], ['0'..'9']) then
+    if (AText[P] = 'x') and CharInSet(AText[P - 1], ['0' .. '9']) and CharInSet(AText[P + 1], ['0' .. '9']) then
     begin
-      { Walk backwards for width digits }
+      {Walk backwards for width digits}
       I := P - 1;
-      while (I > VideoPos) and CharInSet(AText[I], ['0'..'9']) do
+      while (I > VideoPos) and CharInSet(AText[I], ['0' .. '9']) do
         Dec(I);
       WidthStr := Copy(AText, I + 1, P - I - 1);
 
-      { Walk forwards for height digits }
+      {Walk forwards for height digits}
       I := P + 1;
-      while (I <= Length(AText)) and CharInSet(AText[I], ['0'..'9']) do
+      while (I <= Length(AText)) and CharInSet(AText[I], ['0' .. '9']) do
         Inc(I);
       HeightStr := Copy(AText, P + 1, I - P - 1);
 
       AWidth := StrToIntDef(WidthStr, 0);
       AHeight := StrToIntDef(HeightStr, 0);
 
-      { Require at least 2-digit width and height to avoid false matches like "0x1A" }
-      if (Length(WidthStr) >= 2) and (Length(HeightStr) >= 2) and
-         (AWidth > 0) and (AHeight > 0) then
+      {Require at least 2-digit width and height to avoid false matches like "0x1A"}
+      if (Length(WidthStr) >= 2) and (Length(HeightStr) >= 2) and (AWidth > 0) and (AHeight > 0) then
       begin
         Result := True;
         Exit;
@@ -238,13 +232,13 @@ begin
     Exit;
   P := P + Length('Video:');
 
-  { Skip whitespace }
+  {Skip whitespace}
   while (P <= Length(AText)) and (AText[P] = ' ') do
     Inc(P);
 
-  { Read word characters }
+  {Read word characters}
   Start := P;
-  while (P <= Length(AText)) and CharInSet(AText[P], ['a'..'z', 'A'..'Z', '0'..'9', '_']) do
+  while (P <= Length(AText)) and CharInSet(AText[P], ['a' .. 'z', 'A' .. 'Z', '0' .. '9', '_']) do
     Inc(P);
 
   if P > Start then
@@ -257,13 +251,16 @@ var
   NumStr: string;
 begin
   Result := 0;
-  { Look for "bitrate:" on the Duration line (before any Stream lines) }
+  {Look for "bitrate:" on the Duration line (before any Stream lines)}
   P := Pos('bitrate:', AText);
-  if P = 0 then Exit;
+  if P = 0 then
+    Exit;
   P := P + Length('bitrate:');
-  while (P <= Length(AText)) and (AText[P] = ' ') do Inc(P);
+  while (P <= Length(AText)) and (AText[P] = ' ') do
+    Inc(P);
   Start := P;
-  while (P <= Length(AText)) and CharInSet(AText[P], ['0'..'9']) do Inc(P);
+  while (P <= Length(AText)) and CharInSet(AText[P], ['0' .. '9']) do
+    Inc(P);
   if P > Start then
   begin
     NumStr := Copy(AText, Start, P - Start);
@@ -271,39 +268,41 @@ begin
   end;
 end;
 
-{ Extracts the first line containing APrefix from multi-line ffmpeg output }
+{Extracts the first line containing APrefix from multi-line ffmpeg output}
 function ExtractStreamLine(const AText, APrefix: string): string;
 var
   P, LineEnd: Integer;
 begin
   Result := '';
   P := Pos(APrefix, AText);
-  if P = 0 then Exit;
+  if P = 0 then
+    Exit;
   LineEnd := P;
   while (LineEnd <= Length(AText)) and not CharInSet(AText[LineEnd], [#13, #10]) do
     Inc(LineEnd);
   Result := Copy(AText, P, LineEnd - P);
 end;
 
-{ Scans backward from position P through characters in ADigitChars,
-  returning the extracted number string. P is unchanged. }
-function ScanNumberBefore(const ALine: string; P: Integer;
-  const ADigitChars: TSysCharSet): string;
+{Scans backward from position P through characters in ADigitChars,
+ returning the extracted number string. P is unchanged.}
+function ScanNumberBefore(const ALine: string; P: Integer; const ADigitChars: TSysCharSet): string;
 var
   Start: Integer;
 begin
   Result := '';
   Start := P;
-  while (Start > 0) and CharInSet(ALine[Start], ADigitChars) do Dec(Start);
+  while (Start > 0) and CharInSet(ALine[Start], ADigitChars) do
+    Dec(Start);
   Inc(Start);
   if Start <= P then
     Result := Copy(ALine, Start, P - Start + 1);
 end;
 
-{ Skips whitespace backward from position P, returns updated position }
+{Skips whitespace backward from position P, returns updated position}
 function SkipSpacesBack(const ALine: string; P: Integer): Integer;
 begin
-  while (P > 0) and (ALine[P] = ' ') do Dec(P);
+  while (P > 0) and (ALine[P] = ' ') do
+    Dec(P);
   Result := P;
 end;
 
@@ -314,30 +313,32 @@ var
 begin
   Result := 0;
   Line := ExtractStreamLine(AText, 'Video:');
-  if Line = '' then Exit;
+  if Line = '' then
+    Exit;
   P := Pos(' fps', Line);
-  if P < 2 then Exit;
+  if P < 2 then
+    Exit;
   P := SkipSpacesBack(Line, P - 1);
-  NumStr := ScanNumberBefore(Line, P, ['0'..'9', '.']);
+  NumStr := ScanNumberBefore(Line, P, ['0' .. '9', '.']);
   if NumStr <> '' then
     Result := StrToFloatDef(NumStr, 0, TFormatSettings.Invariant);
 end;
 
-{ Parses bitrate (kb/s) from a single stream line }
+{Parses bitrate (kb/s) from a single stream line}
 function ParseStreamBitrate(const ALine: string): Integer;
 var
   P: Integer;
   NumStr: string;
 begin
   Result := 0;
-  { Find last occurrence of "kb/s" on the line }
+  {Find last occurrence of "kb/s" on the line}
   P := Length(ALine);
   while P > 4 do
   begin
     if (ALine[P] = 's') and (Copy(ALine, P - 3, 4) = 'kb/s') then
     begin
       P := SkipSpacesBack(ALine, P - 4);
-      NumStr := ScanNumberBefore(ALine, P, ['0'..'9']);
+      NumStr := ScanNumberBefore(ALine, P, ['0' .. '9']);
       if NumStr <> '' then
         Result := StrToIntDef(NumStr, 0);
       Exit;
@@ -357,11 +358,13 @@ var
 begin
   Result := '';
   P := Pos('Audio:', AText);
-  if P = 0 then Exit;
+  if P = 0 then
+    Exit;
   P := P + Length('Audio:');
-  while (P <= Length(AText)) and (AText[P] = ' ') do Inc(P);
+  while (P <= Length(AText)) and (AText[P] = ' ') do
+    Inc(P);
   Start := P;
-  while (P <= Length(AText)) and CharInSet(AText[P], ['a'..'z', 'A'..'Z', '0'..'9', '_']) do
+  while (P <= Length(AText)) and CharInSet(AText[P], ['a' .. 'z', 'A' .. 'Z', '0' .. '9', '_']) do
     Inc(P);
   if P > Start then
     Result := Copy(AText, Start, P - Start);
@@ -374,10 +377,12 @@ var
 begin
   Result := 0;
   Line := ExtractStreamLine(AText, 'Audio:');
-  if Line = '' then Exit;
+  if Line = '' then
+    Exit;
   P := Pos(' Hz', Line);
-  if P < 2 then Exit;
-  NumStr := ScanNumberBefore(Line, P - 1, ['0'..'9']);
+  if P < 2 then
+    Exit;
+  NumStr := ScanNumberBefore(Line, P - 1, ['0' .. '9']);
   if NumStr <> '' then
     Result := StrToIntDef(NumStr, 0);
 end;
@@ -391,16 +396,15 @@ var
 begin
   Result := '';
   Line := ExtractStreamLine(AText, 'Audio:');
-  if Line = '' then Exit;
-  { Audio line format: "Audio: codec (profile) (fourcc), rate Hz, channels, fmt, bitrate"
-    Channel layout is a comma-separated field: mono, stereo, 5.1, 7.1, etc. }
+  if Line = '' then
+    Exit;
+  {Audio line format: "Audio: codec (profile) (fourcc), rate Hz, channels, fmt, bitrate"
+   Channel layout is a comma-separated field: mono, stereo, 5.1, 7.1, etc.}
   Parts := Line.Split([',']);
   for I := 0 to High(Parts) do
   begin
     S := Parts[I].Trim.ToLower;
-    if (S = 'mono') or (S = 'stereo') or (S = '5.1') or (S = '7.1')
-      or (S = '5.1(side)') or (S = '7.1(side)') or (S = '4.0') or (S = '2.1')
-      or (S = '6.1') or (S = '5.0') or (S = 'quad') then
+    if (S = 'mono') or (S = 'stereo') or (S = '5.1') or (S = '7.1') or (S = '5.1(side)') or (S = '7.1(side)') or (S = '4.0') or (S = '2.1') or (S = '6.1') or (S = '5.0') or (S = 'quad') then
     begin
       Result := Parts[I].Trim;
       Exit;
@@ -422,7 +426,7 @@ begin
   if AText = '' then
     Exit;
 
-  { Take first line only }
+  {Take first line only}
   P := Pos(#10, AText);
   if P > 0 then
     Line := Copy(AText, 1, P - 1)
@@ -434,7 +438,7 @@ begin
   if not Line.StartsWith(Prefix, True) then
     Exit;
 
-  { Extract version token (everything up to the next space or dash) }
+  {Extract version token (everything up to the next space or dash)}
   P := Length(Prefix) + 1;
   Start := P;
   while (P <= Length(Line)) and not CharInSet(Line[P], [' ', '-']) do
@@ -463,7 +467,7 @@ begin
   Result := ParseFFmpegVersion(Output);
 end;
 
-{ TFFmpegExe }
+{TFFmpegExe}
 
 constructor TFFmpegExe.Create(const AExePath: string);
 begin
@@ -477,11 +481,11 @@ var
   StdOut, StdErr: TBytes;
   StdErrStr: string;
 begin
-  Result := Default(TVideoInfo);
+  Result := Default (TVideoInfo);
   Result.Duration := -1;
 
   CmdLine := Format('"%s" -nostdin -hide_banner -i "%s"', [FExePath, AFileName]);
-  { Exit code 1 is expected: "no output file specified" }
+  {Exit code 1 is expected: "no output file specified"}
   RunProcess(CmdLine, StdOut, StdErr, 10000);
 
   if Length(StdErr) = 0 then
@@ -507,8 +511,7 @@ begin
     Result.ErrorMessage := 'Could not parse video metadata';
 end;
 
-function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
-  const AOptions: TExtractionOptions; ATimeoutMs: DWORD): TBitmap;
+function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD): TBitmap;
 var
   CmdLine, Codec, ScaleFilter, HwAccelFlag, KeyframeFlag: string;
   StdOut, StdErr: TBytes;
@@ -522,12 +525,10 @@ begin
   else
     Codec := '-q:v 2 -f image2pipe -vcodec png';
 
-  { Square box: ffmpeg's force_original_aspect_ratio=decrease fits the longer
-    dimension to MaxSide regardless of orientation. }
+  {Square box: ffmpeg's force_original_aspect_ratio=decrease fits the longer
+   dimension to MaxSide regardless of orientation.}
   if AOptions.MaxSide > 0 then
-    ScaleFilter := Format(
-      '-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ',
-      [AOptions.MaxSide, AOptions.MaxSide])
+    ScaleFilter := Format('-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ', [AOptions.MaxSide, AOptions.MaxSide])
   else
     ScaleFilter := '';
 
@@ -541,11 +542,7 @@ begin
   else
     KeyframeFlag := '';
 
-  CmdLine := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' +
-    '-frames:v 1 %s%s pipe:1',
-    [FExePath, KeyframeFlag,
-     Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
-     HwAccelFlag, AFileName, ScaleFilter, Codec]);
+  CmdLine := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' + '-frames:v 1 %s%s pipe:1', [FExePath, KeyframeFlag, Format('%.3f', [ATimeOffset], TFormatSettings.Invariant), HwAccelFlag, AFileName, ScaleFilter, Codec]);
 
   ExitCode := RunProcess(CmdLine, StdOut, StdErr, ATimeoutMs);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then

@@ -1,5 +1,5 @@
-{ Configuration dialog for the WCX plugin.
-  Shown via ConfigurePacker when the user clicks Configure in TC. }
+{Configuration dialog for the WCX plugin.
+ Shown via ConfigurePacker when the user clicks Configure in TC.}
 unit uWcxSettingsDlg;
 
 interface
@@ -96,9 +96,8 @@ type
     constructor CreateWithOwner(AOwnerWnd: HWND);
   end;
 
-{ Shows the WCX settings dialog. Returns True if the user clicked OK. }
-function ShowWcxSettingsDialog(AParentWnd: HWND;
-  ASettings: TWcxSettings): Boolean;
+  {Shows the WCX settings dialog. Returns True if the user clicked OK.}
+function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings): Boolean;
 
 implementation
 
@@ -219,8 +218,7 @@ begin
   LblMaxThreads.Enabled := OnePerFrame;
   EdtMaxThreads.Enabled := OnePerFrame;
   UdMaxThreads.Enabled := OnePerFrame;
-  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame,
-    UdMaxThreads.Position, CPUCount);
+  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame, UdMaxThreads.Position, CPUCount);
 end;
 
 procedure TWcxSettingsForm.UpdateFFmpegInfo;
@@ -292,9 +290,7 @@ begin
     begin
       if ValidateFFmpeg(Dlg.FileName) = '' then
       begin
-        MessageBox(Handle,
-          PChar('The selected file is not a valid ffmpeg executable.'),
-          'Glimpse', MB_OK or MB_ICONWARNING);
+        MessageBox(Handle, PChar('The selected file is not a valid ffmpeg executable.'), 'Glimpse', MB_OK or MB_ICONWARNING);
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
@@ -329,10 +325,9 @@ begin
     Params.WndParent := FOwnerWnd;
 end;
 
-{ Public API }
+{Public API}
 
-function ShowWcxSettingsDialog(AParentWnd: HWND;
-  ASettings: TWcxSettings): Boolean;
+function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings): Boolean;
 var
   Dlg: TWcxSettingsForm;
 begin

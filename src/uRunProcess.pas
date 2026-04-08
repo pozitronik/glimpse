@@ -1,5 +1,5 @@
-{ General-purpose Windows process execution with stdout/stderr capture.
-  No application-specific logic. }
+{General-purpose Windows process execution with stdout/stderr capture.
+ No application-specific logic.}
 unit uRunProcess;
 
 interface
@@ -7,10 +7,9 @@ interface
 uses
   System.SysUtils, Winapi.Windows;
 
-{ Runs a process with redirected stdout/stderr, captures both outputs.
-  Returns the process exit code, or -1 on launch failure or timeout. }
-function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
-  ATimeoutMs: DWORD = 30000): Integer;
+{Runs a process with redirected stdout/stderr, captures both outputs.
+ Returns the process exit code, or -1 on launch failure or timeout.}
+function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000): Integer;
 
 implementation
 
@@ -19,7 +18,7 @@ uses
 
 function ReadPipeToEnd(APipe: THandle): TBytes;
 var
-  Buffer: array[0..4095] of Byte;
+  Buffer: array [0 .. 4095] of Byte;
   BytesRead: DWORD;
   Stream: TBytesStream;
 begin
@@ -38,8 +37,7 @@ begin
   end;
 end;
 
-function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
-  ATimeoutMs: DWORD = 30000): Integer;
+function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000): Integer;
 var
   SA: TSecurityAttributes;
   SI: TStartupInfo;
@@ -68,7 +66,7 @@ begin
     CloseHandle(StdOutWrite);
     Exit;
   end;
-  { Empty stdin so child does not attempt interactive reads }
+  {Empty stdin so child does not attempt interactive reads}
   if not CreatePipe(StdInRead, StdInWrite, @SA, 1) then
   begin
     CloseHandle(StdOutRead);
@@ -79,7 +77,7 @@ begin
   end;
   CloseHandle(StdInWrite);
 
-  { Parent-side read handles must not be inherited }
+  {Parent-side read handles must not be inherited}
   SetHandleInformation(StdOutRead, HANDLE_FLAG_INHERIT, 0);
   SetHandleInformation(StdErrRead, HANDLE_FLAG_INHERIT, 0);
 
@@ -96,8 +94,7 @@ begin
   CmdLine := ACommandLine;
   UniqueString(CmdLine);
 
-  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True,
-    CREATE_NO_WINDOW, nil, nil, SI, PI) then
+  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True, CREATE_NO_WINDOW, nil, nil, SI, PI) then
   begin
     CloseHandle(StdOutRead);
     CloseHandle(StdOutWrite);
@@ -107,22 +104,21 @@ begin
     Exit;
   end;
 
-  { Child now owns the write ends; close them in parent }
+  {Child now owns the write ends; close them in parent}
   CloseHandle(StdOutWrite);
   CloseHandle(StdErrWrite);
   CloseHandle(StdInRead);
 
-  { Read stderr on a background thread to prevent pipe deadlock }
+  {Read stderr on a background thread to prevent pipe deadlock}
   StdErrThread := TThread.CreateAnonymousThread(
     procedure
     begin
       CapturedStdErr := ReadPipeToEnd(StdErrRead);
-    end
-  );
+    end);
   StdErrThread.FreeOnTerminate := False;
   StdErrThread.Start;
 
-  { Read stdout on the calling thread }
+  {Read stdout on the calling thread}
   AStdOut := ReadPipeToEnd(StdOutRead);
 
   StdErrThread.WaitFor;
@@ -133,9 +129,7 @@ begin
   begin
     GetExitCodeProcess(PI.hProcess, ExitCode);
     Result := Integer(ExitCode);
-  end
-  else
-  begin
+  end else begin
     TerminateProcess(PI.hProcess, 1);
     Result := -1;
   end;

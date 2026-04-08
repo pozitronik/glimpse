@@ -1,5 +1,5 @@
-{ WCX plugin exported functions.
-  Presents a video file as a virtual archive containing frame images. }
+{WCX plugin exported functions.
+ Presents a video file as a virtual archive containing frame images.}
 unit uWcxExports;
 
 interface
@@ -7,38 +7,35 @@ interface
 uses
   Winapi.Windows, uWcxAPI;
 
-{ Opens archive (video file) for listing or extraction }
+{Opens archive (video file) for listing or extraction}
 function OpenArchive(var ArchiveData: TOpenArchiveData): THandle; stdcall;
 function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): THandle; stdcall;
 
-{ Reads next file header from archive }
+{Reads next file header from archive}
 function ReadHeader(hArcData: THandle; var HeaderData: THeaderData): Integer; stdcall;
 function ReadHeaderExW(hArcData: THandle; var HeaderData: THeaderDataExW): Integer; stdcall;
 
-{ Processes (extracts/skips) the current file }
-function ProcessFile(hArcData: THandle; Operation: Integer;
-  DestPath, DestName: PAnsiChar): Integer; stdcall;
-function ProcessFileW(hArcData: THandle; Operation: Integer;
-  DestPath, DestName: PWideChar): Integer; stdcall;
+{Processes (extracts/skips) the current file}
+function ProcessFile(hArcData: THandle; Operation: Integer; DestPath, DestName: PAnsiChar): Integer; stdcall;
+function ProcessFileW(hArcData: THandle; Operation: Integer; DestPath, DestName: PWideChar): Integer; stdcall;
 
-{ Closes archive handle }
+{Closes archive handle}
 function CloseArchive(hArcData: THandle): Integer; stdcall;
 
-{ Callback setters }
+{Callback setters}
 procedure SetChangeVolProc(hArcData: THandle; pChangeVolProc: TChangeVolProc); stdcall;
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 
-{ Reports plugin capabilities }
+{Reports plugin capabilities}
 function GetPackerCaps: Integer; stdcall;
 
-{ Receives default INI path from TC }
+{Receives default INI path from TC}
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
 
-{ Stub: packing not supported, exists only to make Configure button accessible }
-function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar;
-  Flags: Integer): Integer; stdcall;
+{Stub: packing not supported, exists only to make Configure button accessible}
+function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar; Flags: Integer): Integer; stdcall;
 
-{ Shows configuration dialog }
+{Shows configuration dialog}
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 
 implementation
@@ -51,7 +48,7 @@ uses
   uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize;
 
 type
-  { State for one open archive (video file) }
+  {State for one open archive (video file)}
   TArchiveHandle = class
     FileName: string;
     Settings: TWcxSettings;
@@ -61,14 +58,14 @@ type
     CurrentIndex: Integer;
     OpenMode: Integer;
     FileTime: Integer;
-    { Populated from module-level cache when ShowFileSizes is enabled }
+    {Populated from module-level cache when ShowFileSizes is enabled}
     TempPaths: TArray<string>;
     EntrySizes: TArray<Int64>;
   end;
 
 var
   GIniPath: string;
-  { Module-level cache for pre-extracted frames (survives across OpenArchive calls) }
+  {Module-level cache for pre-extracted frames (survives across OpenArchive calls)}
   GCachedVideoFile: string;
   GCachedTempDir: string;
   GCachedTempPaths: TArray<string>;
@@ -79,15 +76,14 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
-{ Builds extraction options from WCX settings.
-  AMaxSide = 0 means no scale limit (combined-mode caller relies on this:
-  the assembled grid is shrunk separately after rendering). For
-  separate-frame mode, pass H.Settings.FrameMaxSide so ffmpeg's scale
-  filter fits the longer dimension to the cap. }
-function BuildExtractionOptions(ASettings: TWcxSettings;
-  AMaxSide: Integer = 0): TExtractionOptions;
+{Builds extraction options from WCX settings.
+ AMaxSide = 0 means no scale limit (combined-mode caller relies on this:
+ the assembled grid is shrunk separately after rendering). For
+ separate-frame mode, pass H.Settings.FrameMaxSide so ffmpeg's scale
+ filter fits the longer dimension to the cap.}
+function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
 begin
-  Result := Default(TExtractionOptions);
+  Result := Default (TExtractionOptions);
   Result.UseBmpPipe := ASettings.UseBmpPipe;
   Result.HwAccel := ASettings.HwAccel;
   Result.UseKeyframes := ASettings.UseKeyframes;
@@ -117,14 +113,12 @@ begin
   if H.Settings.OutputMode = womCombined then
     Result := GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
   else
-    Result := GenerateFrameFileName(H.FileName, H.CurrentIndex,
-      H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
+    Result := GenerateFrameFileName(H.FileName, H.CurrentIndex, H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
 end;
 
-{ Extracts all frames, renders a combined grid with optional banner.
-  Caller owns the returned bitmap (nil on failure). }
-function RenderCombinedBitmap(H: TArchiveHandle;
-  const AExtractor: IFrameExtractor): TBitmap;
+{Extracts all frames, renders a combined grid with optional banner.
+ Caller owns the returned bitmap (nil on failure).}
+function RenderCombinedBitmap(H: TArchiveHandle; const AExtractor: IFrameExtractor): TBitmap;
 var
   Frames: TArray<TBitmap>;
   Resized, WithBanner: TBitmap;
@@ -133,16 +127,12 @@ begin
   SetLength(Frames, Length(H.Offsets));
   try
     for I := 0 to Length(H.Offsets) - 1 do
-      Frames[I] := AExtractor.ExtractFrame(H.FileName,
-        H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
+      Frames[I] := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
 
-    Result := RenderCombinedImage(Frames, H.Offsets,
-      H.Settings.CombinedColumns, H.Settings.CellGap,
-      H.Settings.Background, H.Settings.ShowTimestamp,
-      H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+    Result := RenderCombinedImage(Frames, H.Offsets, H.Settings.CombinedColumns, H.Settings.CellGap, H.Settings.Background, H.Settings.ShowTimestamp, H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
 
-    { Apply combined size limit BEFORE the banner so the banner stays
-      at full width and is not counted toward the limit }
+    {Apply combined size limit BEFORE the banner so the banner stays
+     at full width and is not counted toward the limit}
     if Result <> nil then
     begin
       Resized := DownscaleBitmapToFit(Result, H.Settings.CombinedMaxSide);
@@ -155,8 +145,7 @@ begin
 
     if (Result <> nil) and H.Settings.ShowBanner then
     begin
-      WithBanner := PrependBanner(Result,
-        FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)));
+      WithBanner := PrependBanner(Result, FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)));
       Result.Free;
       Result := WithBanner;
     end;
@@ -166,20 +155,18 @@ begin
   end;
 end;
 
-{ Extracts all frames, renders a combined image, and saves to cache }
-procedure ExtractCombinedToCache(H: TArchiveHandle;
-  const AExtractor: IFrameExtractor);
+{Extracts all frames, renders a combined image, and saves to cache}
+procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor);
 var
   Combined: TBitmap;
   TempPath: string;
 begin
   Combined := RenderCombinedBitmap(H, AExtractor);
-  if Combined = nil then Exit;
+  if Combined = nil then
+    Exit;
   try
-    TempPath := TPath.Combine(GCachedTempDir,
-      GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
-    SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat,
-      H.Settings.JpegQuality, H.Settings.PngCompression);
+    TempPath := TPath.Combine(GCachedTempDir, GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
+    SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
     GCachedTempPaths[0] := TempPath;
     GCachedEntrySizes[0] := TFile.GetSize(TempPath);
   finally
@@ -187,9 +174,8 @@ begin
   end;
 end;
 
-{ Extracts individual frames and saves each to cache }
-procedure ExtractSeparateToCache(H: TArchiveHandle;
-  const AExtractor: IFrameExtractor);
+{Extracts individual frames and saves each to cache}
+procedure ExtractSeparateToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor);
 var
   Bmp: TBitmap;
   TempPath: string;
@@ -199,15 +185,12 @@ begin
   Options := BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide);
   for I := 0 to Length(H.Offsets) - 1 do
   begin
-    Bmp := AExtractor.ExtractFrame(H.FileName,
-      H.Offsets[I].TimeOffset, Options);
-    if Bmp = nil then Continue;
+    Bmp := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, Options);
+    if Bmp = nil then
+      Continue;
     try
-      TempPath := TPath.Combine(GCachedTempDir,
-        GenerateFrameFileName(H.FileName, I,
-          H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
-      SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat,
-        H.Settings.JpegQuality, H.Settings.PngCompression);
+      TempPath := TPath.Combine(GCachedTempDir, GenerateFrameFileName(H.FileName, I, H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
+      SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
       GCachedTempPaths[I] := TempPath;
       GCachedEntrySizes[I] := TFile.GetSize(TempPath);
     finally
@@ -216,16 +199,15 @@ begin
   end;
 end;
 
-{ Pre-extracts all frames to a module-level temp cache, or reuses
-  an existing cache if the same video was already extracted. }
+{Pre-extracts all frames to a module-level temp cache, or reuses
+ an existing cache if the same video was already extracted.}
 procedure PreExtractFrames(H: TArchiveHandle);
 var
   Extractor: IFrameExtractor;
   EntryCount: Integer;
 begin
-  { Reuse cached extraction if available for the same video }
-  if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '')
-    and TDirectory.Exists(GCachedTempDir) then
+  {Reuse cached extraction if available for the same video}
+  if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
   begin
     H.TempPaths := GCachedTempPaths;
     H.EntrySizes := GCachedEntrySizes;
@@ -233,10 +215,9 @@ begin
     Exit;
   end;
 
-  { Different video or no cache: invalidate old cache and extract fresh }
+  {Different video or no cache: invalidate old cache and extract fresh}
   InvalidateFrameCache;
-  GCachedTempDir := TPath.Combine(TPath.GetTempPath,
-    'glimpse_wcx_' + TPath.GetGUIDFileName(False));
+  GCachedTempDir := TPath.Combine(TPath.GetTempPath, 'glimpse_wcx_' + TPath.GetGUIDFileName(False));
   TDirectory.CreateDirectory(GCachedTempDir);
   GCachedVideoFile := H.FileName;
 
@@ -255,8 +236,7 @@ begin
   WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, GCachedTempDir]));
 end;
 
-function DoOpenArchive(const AFileName: string; AOpenMode: Integer;
-  out AOpenResult: Integer): THandle;
+function DoOpenArchive(const AFileName: string; AOpenMode: Integer; out AOpenResult: Integer): THandle;
 var
   H: TArchiveHandle;
   FFmpeg: TFFmpegExe;
@@ -273,8 +253,7 @@ begin
     H.Settings := TWcxSettings.Create(GIniPath);
     H.Settings.Load;
 
-    H.FFmpegPath := FindFFmpegExe(ExtractFilePath(GIniPath),
-      ExpandEnvVars(H.Settings.FFmpegExePath));
+    H.FFmpegPath := FindFFmpegExe(ExtractFilePath(GIniPath), ExpandEnvVars(H.Settings.FFmpegExePath));
 
     if H.FFmpegPath = '' then
     begin
@@ -283,8 +262,9 @@ begin
       Exit;
     end;
 
-    { Try cached probe first; fall back to ffmpeg on miss }
-    var ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
+    {Try cached probe first; fall back to ffmpeg on miss}
+    var
+    ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
     try
       if not ProbeC.TryGet(AFileName, H.VideoInfo) then
       begin
@@ -307,8 +287,7 @@ begin
       Exit;
     end;
 
-    H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration,
-      H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
+    H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
     H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
 
     if H.Settings.ShowFileSizes then
@@ -324,14 +303,12 @@ end;
 
 function OpenArchive(var ArchiveData: TOpenArchiveData): THandle; stdcall;
 begin
-  Result := DoOpenArchive(string(AnsiString(ArchiveData.ArcName)),
-    ArchiveData.OpenMode, ArchiveData.OpenResult);
+  Result := DoOpenArchive(string(AnsiString(ArchiveData.ArcName)), ArchiveData.OpenMode, ArchiveData.OpenResult);
 end;
 
 function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): THandle; stdcall;
 begin
-  Result := DoOpenArchive(ArchiveData.ArcName,
-    ArchiveData.OpenMode, ArchiveData.OpenResult);
+  Result := DoOpenArchive(ArchiveData.ArcName, ArchiveData.OpenMode, ArchiveData.OpenResult);
 end;
 
 function ReadHeader(hArcData: THandle; var HeaderData: THeaderData): Integer; stdcall;
@@ -346,8 +323,7 @@ begin
   Name := AnsiString(GetEntryName(H));
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
-  System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name),
-    SizeOf(HeaderData.FileName) - 1);
+  System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
   if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
     HeaderData.UnpSize := H.EntrySizes[H.CurrentIndex];
   HeaderData.FileTime := H.FileTime;
@@ -382,8 +358,7 @@ begin
   Result := E_SUCCESS;
 end;
 
-function DoExtractSeparate(H: TArchiveHandle;
-  const ADestPath, ADestName: string): Integer;
+function DoExtractSeparate(H: TArchiveHandle; const ADestPath, ADestName: string): Integer;
 var
   Extractor: IFrameExtractor;
   Bmp: TBitmap;
@@ -395,35 +370,28 @@ begin
   if ADestName <> '' then
     FullPath := ADestName
   else if ADestPath <> '' then
-    FullPath := IncludeTrailingPathDelimiter(ADestPath) +
-      GenerateFrameFileName(H.FileName, H.CurrentIndex,
-        H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat)
+    FullPath := IncludeTrailingPathDelimiter(ADestPath) + GenerateFrameFileName(H.FileName, H.CurrentIndex, H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat)
   else
     Exit(E_ECREATE);
 
   WcxLog(Format('Extract frame %d -> %s', [H.CurrentIndex, FullPath]));
 
-  { Use pre-extracted file when available }
-  if (H.TempPaths <> nil) and (H.CurrentIndex < Length(H.TempPaths))
-    and (H.TempPaths[H.CurrentIndex] <> '')
-    and TFile.Exists(H.TempPaths[H.CurrentIndex]) then
-  try
-    TFile.Copy(H.TempPaths[H.CurrentIndex], FullPath, True);
-    Exit(E_SUCCESS);
-  except
-    Exit(E_EWRITE);
-  end;
+  {Use pre-extracted file when available}
+  if (H.TempPaths <> nil) and (H.CurrentIndex < Length(H.TempPaths)) and (H.TempPaths[H.CurrentIndex] <> '') and TFile.Exists(H.TempPaths[H.CurrentIndex]) then
+    try
+      TFile.Copy(H.TempPaths[H.CurrentIndex], FullPath, True);
+      Exit(E_SUCCESS);
+    except
+      Exit(E_EWRITE);
+    end;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
-    Bmp := Extractor.ExtractFrame(H.FileName,
-      H.Offsets[H.CurrentIndex].TimeOffset,
-      BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide));
+    Bmp := Extractor.ExtractFrame(H.FileName, H.Offsets[H.CurrentIndex].TimeOffset, BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide));
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try
-      SaveBitmapToFile(Bmp, FullPath, H.Settings.SaveFormat,
-        H.Settings.JpegQuality, H.Settings.PngCompression);
+      SaveBitmapToFile(Bmp, FullPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
     finally
       Bmp.Free;
     end;
@@ -433,8 +401,7 @@ begin
   Result := E_SUCCESS;
 end;
 
-function DoExtractCombined(H: TArchiveHandle;
-  const ADestPath, ADestName: string): Integer;
+function DoExtractCombined(H: TArchiveHandle; const ADestPath, ADestName: string): Integer;
 var
   Extractor: IFrameExtractor;
   Combined: TBitmap;
@@ -443,23 +410,20 @@ begin
   if ADestName <> '' then
     FullPath := ADestName
   else if ADestPath <> '' then
-    FullPath := IncludeTrailingPathDelimiter(ADestPath) +
-      GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
+    FullPath := IncludeTrailingPathDelimiter(ADestPath) + GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
   else
     Exit(E_ECREATE);
 
-  WcxLog(Format('Extract combined (%d frames) -> %s',
-    [Length(H.Offsets), FullPath]));
+  WcxLog(Format('Extract combined (%d frames) -> %s', [Length(H.Offsets), FullPath]));
 
-  { Use pre-extracted file when available }
-  if (H.TempPaths <> nil) and (Length(H.TempPaths) > 0)
-    and (H.TempPaths[0] <> '') and TFile.Exists(H.TempPaths[0]) then
-  try
-    TFile.Copy(H.TempPaths[0], FullPath, True);
-    Exit(E_SUCCESS);
-  except
-    Exit(E_EWRITE);
-  end;
+  {Use pre-extracted file when available}
+  if (H.TempPaths <> nil) and (Length(H.TempPaths) > 0) and (H.TempPaths[0] <> '') and TFile.Exists(H.TempPaths[0]) then
+    try
+      TFile.Copy(H.TempPaths[0], FullPath, True);
+      Exit(E_SUCCESS);
+    except
+      Exit(E_EWRITE);
+    end;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
@@ -467,8 +431,7 @@ begin
     if Combined = nil then
       Exit(E_BAD_DATA);
     try
-      SaveBitmapToFile(Combined, FullPath, H.Settings.SaveFormat,
-        H.Settings.JpegQuality, H.Settings.PngCompression);
+      SaveBitmapToFile(Combined, FullPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
     finally
       Combined.Free;
     end;
@@ -478,8 +441,7 @@ begin
   end;
 end;
 
-function DoProcessFile(hArcData: THandle; Operation: Integer;
-  const ADestPath, ADestName: string): Integer;
+function DoProcessFile(hArcData: THandle; Operation: Integer; const ADestPath, ADestName: string): Integer;
 var
   H: TArchiveHandle;
 begin
@@ -518,23 +480,33 @@ begin
   Result := E_SUCCESS;
 end;
 
-function ProcessFile(hArcData: THandle; Operation: Integer;
-  DestPath, DestName: PAnsiChar): Integer; stdcall;
+function ProcessFile(hArcData: THandle; Operation: Integer; DestPath, DestName: PAnsiChar): Integer; stdcall;
 var
   SPath, SName: string;
 begin
-  if DestPath <> nil then SPath := string(AnsiString(DestPath)) else SPath := '';
-  if DestName <> nil then SName := string(AnsiString(DestName)) else SName := '';
+  if DestPath <> nil then
+    SPath := string(AnsiString(DestPath))
+  else
+    SPath := '';
+  if DestName <> nil then
+    SName := string(AnsiString(DestName))
+  else
+    SName := '';
   Result := DoProcessFile(hArcData, Operation, SPath, SName);
 end;
 
-function ProcessFileW(hArcData: THandle; Operation: Integer;
-  DestPath, DestName: PWideChar): Integer; stdcall;
+function ProcessFileW(hArcData: THandle; Operation: Integer; DestPath, DestName: PWideChar): Integer; stdcall;
 var
   SPath, SName: string;
 begin
-  if DestPath <> nil then SPath := DestPath else SPath := '';
-  if DestName <> nil then SName := DestName else SName := '';
+  if DestPath <> nil then
+    SPath := DestPath
+  else
+    SPath := '';
+  if DestName <> nil then
+    SName := DestName
+  else
+    SName := '';
   Result := DoProcessFile(hArcData, Operation, SPath, SName);
 end;
 
@@ -551,20 +523,19 @@ end;
 
 procedure SetChangeVolProc(hArcData: THandle; pChangeVolProc: TChangeVolProc); stdcall;
 begin
-  { Not used: video files are single-volume }
+  {Not used: video files are single-volume}
 end;
 
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 begin
-  { Callback stored but not invoked: extraction is synchronous per-frame }
+  {Callback stored but not invoked: extraction is synchronous per-frame}
 end;
 
 function GetPackerCaps: Integer; stdcall;
 begin
-  { PK_CAPS_NEW is a stub to make the Pack dialog (and its Configure button)
-    accessible; PackFiles always returns E_NOT_SUPPORTED }
-  Result := PK_CAPS_NEW or PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT
-    or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
+  {PK_CAPS_NEW is a stub to make the Pack dialog (and its Configure button)
+   accessible; PackFiles always returns E_NOT_SUPPORTED}
+  Result := PK_CAPS_NEW or PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
 end;
 
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
@@ -576,8 +547,7 @@ begin
   end;
 end;
 
-function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar;
-  Flags: Integer): Integer; stdcall;
+function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar; Flags: Integer): Integer; stdcall;
 begin
   Result := E_NOT_SUPPORTED;
 end;
@@ -600,11 +570,13 @@ begin
 end;
 
 initialization
-  { Fallback: INI next to the DLL, in case SetDefaultParams is not called
-    before ConfigurePacker or OpenArchive }
-  GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
+
+{Fallback: INI next to the DLL, in case SetDefaultParams is not called
+ before ConfigurePacker or OpenArchive}
+GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 
 finalization
-  InvalidateFrameCache;
+
+InvalidateFrameCache;
 
 end.

@@ -1,5 +1,5 @@
-{ Bitmap saving to PNG and JPEG files.
-  Near-pure: depends on VCL imaging classes but has no form or settings dependency. }
+{Bitmap saving to PNG and JPEG files.
+ Near-pure: depends on VCL imaging classes but has no form or settings dependency.}
 unit uBitmapSaver;
 
 interface
@@ -10,16 +10,15 @@ uses
 type
   TSaveFormat = (sfPNG, sfJPEG);
 
-{ Returns the file extension for a save format, including the dot. }
+  {Returns the file extension for a save format, including the dot.}
 function SaveFormatExtension(AFormat: TSaveFormat): string;
 
-{ Saves a bitmap to a file in the specified format.
-  AJpegQuality: 1..100, APngCompression: 0..9. }
-procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
-  AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+{Saves a bitmap to a file in the specified format.
+ AJpegQuality: 1..100, APngCompression: 0..9.}
+procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 
-{ Converts raw PNG bytes to a TBitmap (pf24bit).
-  Caller owns the returned bitmap. Raises on invalid data. }
+{Converts raw PNG bytes to a TBitmap (pf24bit).
+ Caller owns the returned bitmap. Raises on invalid data.}
 function PngBytesToBitmap(const AData: TBytes): TBitmap;
 
 implementation
@@ -30,14 +29,14 @@ uses
 function SaveFormatExtension(AFormat: TSaveFormat): string;
 begin
   case AFormat of
-    sfJPEG: Result := '.jpg';
-  else
-    Result := '.png';
+    sfJPEG:
+      Result := '.jpg';
+    else
+      Result := '.png';
   end;
 end;
 
-procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string;
-  AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 var
   Png: TPngImage;
   Jpg: TJPEGImage;
@@ -83,7 +82,7 @@ begin
       Result := TBitmap.Create;
       try
         Result.Assign(Png);
-        Result.PixelFormat := pf24bit; { Force DIB for thread-safe rendering }
+        Result.PixelFormat := pf24bit; {Force DIB for thread-safe rendering}
       except
         FreeAndNil(Result);
         raise;

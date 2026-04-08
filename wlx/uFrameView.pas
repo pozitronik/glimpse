@@ -1,5 +1,5 @@
-{ Custom control that renders video frame cells in various layout modes:
-  grid, scroll, filmstrip, single frame, and smart grid. }
+{Custom control that renders video frame cells in various layout modes:
+ grid, scroll, filmstrip, single frame, and smart grid.}
 unit uFrameView;
 
 interface
@@ -23,7 +23,7 @@ type
 
   TCtrlWheelEvent = procedure(Sender: TObject; AWheelDelta: Integer) of object;
 
-  { Custom control that renders frame cells in various layout modes. }
+  {Custom control that renders frame cells in various layout modes.}
   TFrameView = class(TCustomControl)
   strict private
     FCells: TArray<TFrameCell>;
@@ -40,7 +40,7 @@ type
     FNativeH: Integer;
     FViewportW: Integer;
     FViewportH: Integer;
-    FBaseViewportW: Integer;  { frozen viewport for layout when zoomed }
+    FBaseViewportW: Integer; {frozen viewport for layout when zoomed}
     FBaseViewportH: Integer;
     FZoomFactor: Double;
     FShowTimecode: Boolean;
@@ -48,8 +48,8 @@ type
     FTimecodeBackAlpha: Byte;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
-    FBlendBmp: TBitmap;          { reusable 1x1 bitmap for alpha-blended timecode background }
-    FBlendBmpColor: TColor;      { cached color to avoid redundant Pixels[] writes }
+    FBlendBmp: TBitmap; {reusable 1x1 bitmap for alpha-blended timecode background}
+    FBlendBmpColor: TColor; {cached color to avoid redundant Pixels[] writes}
     FOnCtrlWheel: TCtrlWheelEvent;
     FLayout: TViewModeLayout;
     function GetBaseW: Integer;
@@ -69,8 +69,7 @@ type
     procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
   protected
     procedure Paint; override;
-    procedure MouseDown(Button: TMouseButton; Shift: TShiftState;
-      X, Y: Integer); override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -125,28 +124,28 @@ uses
   uZoomController;
 
 const
-  CELL_GAP       = 4;
-  TIMECODE_H     = 20;
+  CELL_GAP = 4;
+  TIMECODE_H = 20;
 
-  { Painting colors }
-  CLR_CELL_BG         = TColor($002D2D2D); { dark gray cell/placeholder background }
-  CLR_ARC             = TColor($00707070); { loading spinner arc }
-  CLR_TIMECODE_OVERLAY = TColor($00CCCCCC); { timecode text over smart grid cells }
-  CLR_TIMECODE_PENDING = TColor($00555555); { timecode text for placeholders }
-  CLR_ERROR_TEXT       = TColor($004040FF); { error cell label }
-  CLR_SELECTION        = TColor($00F7C34F); { #4FC3F7 light blue selection border }
-  SELECTION_BORDER_W   = 2;
+  {Painting colors}
+  CLR_CELL_BG = TColor($002D2D2D); {dark gray cell/placeholder background}
+  CLR_ARC = TColor($00707070); {loading spinner arc}
+  CLR_TIMECODE_OVERLAY = TColor($00CCCCCC); {timecode text over smart grid cells}
+  CLR_TIMECODE_PENDING = TColor($00555555); {timecode text for placeholders}
+  CLR_ERROR_TEXT = TColor($004040FF); {error cell label}
+  CLR_SELECTION = TColor($00F7C34F); {#4FC3F7 light blue selection border}
+  SELECTION_BORDER_W = 2;
 
-  { Painting fonts and sizes }
-  FONT_NAME         = 'Segoe UI';
-  FONT_TIMECODE     = 8;
-  FONT_ERROR        = 9;
-  TIMECODE_PADDING  = 8;  { horizontal padding inside timecode label }
-  ARC_PEN_WIDTH     = 3;
-  ARC_RADIUS_DIV    = 8;  { spinner radius = min(cell dim) div this }
-  MIN_ARC_RADIUS    = 5;  { skip spinner if cell too small }
-  ARC_ANGLE_STEP    = 45.0; { spinner rotation angle per animation tick }
-  ANIM_STEP_COUNT   = Round(360.0 / ARC_ANGLE_STEP);
+  {Painting fonts and sizes}
+  FONT_NAME = 'Segoe UI';
+  FONT_TIMECODE = 8;
+  FONT_ERROR = 9;
+  TIMECODE_PADDING = 8; {horizontal padding inside timecode label}
+  ARC_PEN_WIDTH = 3;
+  ARC_RADIUS_DIV = 8; {spinner radius = min(cell dim) div this}
+  MIN_ARC_RADIUS = 5; {skip spinner if cell too small}
+  ARC_ANGLE_STEP = 45.0; {spinner rotation angle per animation tick}
+  ANIM_STEP_COUNT = Round(360.0 / ARC_ANGLE_STEP);
 
 constructor TFrameView.Create(AOwner: TComponent);
 begin
@@ -174,7 +173,7 @@ begin
   FZoomFactor := 1.0;
   FBlendBmp := TBitmap.Create;
   FBlendBmp.SetSize(1, 1);
-  FBlendBmpColor := TColor(-1); { force first-use update }
+  FBlendBmpColor := TColor(-1); {force first-use update}
   FLayout := CreateViewModeLayout(vmGrid);
 end;
 
@@ -193,7 +192,7 @@ end;
 
 procedure TFrameView.WMMouseWheel(var Message: TWMMouseWheel);
 begin
-  { Ctrl+Wheel: delegate to owner for zoom }
+  {Ctrl+Wheel: delegate to owner for zoom}
   if (Message.Keys and MK_CONTROL) <> 0 then
   begin
     if Assigned(FOnCtrlWheel) then
@@ -215,8 +214,7 @@ begin
       begin
         if Parent is TScrollBox then
         begin
-          TScrollBox(Parent).HorzScrollBar.Position :=
-            TScrollBox(Parent).HorzScrollBar.Position - Message.WheelDelta;
+          TScrollBox(Parent).HorzScrollBar.Position := TScrollBox(Parent).HorzScrollBar.Position - Message.WheelDelta;
           Message.Result := 1;
         end
         else
@@ -226,8 +224,7 @@ begin
       begin
         if Parent is TScrollBox then
         begin
-          TScrollBox(Parent).VertScrollBar.Position :=
-            TScrollBox(Parent).VertScrollBar.Position - Message.WheelDelta;
+          TScrollBox(Parent).VertScrollBar.Position := TScrollBox(Parent).VertScrollBar.Position - Message.WheelDelta;
           Message.Result := 1;
         end
         else
@@ -240,8 +237,8 @@ procedure TFrameView.SetViewport(AW, AH: Integer);
 begin
   FViewportW := AW;
   FViewportH := AH;
-  { Freeze base viewport when at zoom=1.0; keep frozen while zoomed so
-    cell sizes stay constant across window resizes }
+  {Freeze base viewport when at zoom=1.0; keep frozen while zoomed so
+   cell sizes stay constant across window resizes}
   if SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
   begin
     FBaseViewportW := AW;
@@ -286,7 +283,8 @@ end;
 
 procedure TFrameView.SetViewMode(AValue: TViewMode);
 begin
-  if FViewMode = AValue then Exit;
+  if FViewMode = AValue then
+    Exit;
   FViewMode := AValue;
   FreeAndNil(FLayout);
   FLayout := CreateViewModeLayout(AValue);
@@ -331,8 +329,7 @@ begin
   Canvas.Font.Name := FTimestampFontName;
   Canvas.Font.Size := FTimestampFontSize;
   TW := Canvas.TextWidth(FCells[AIndex].Timecode) + TIMECODE_PADDING;
-  Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H,
-    ACellRect.Left + TW, ACellRect.Bottom);
+  Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H, ACellRect.Left + TW, ACellRect.Bottom);
 end;
 
 procedure TFrameView.Paint;
@@ -347,12 +344,10 @@ begin
   begin
     if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < Length(FCells)) then
       PaintCell(FCurrentFrameIndex);
-  end
-  else
-  begin
-    { Skip cells that are entirely outside the clip region. In scroll/filmstrip
-      modes only a few cells are visible at a time, so this avoids GDI overhead
-      for up to 99 off-screen cells. }
+  end else begin
+    {Skip cells that are entirely outside the clip region. In scroll/filmstrip
+     modes only a few cells are visible at a time, so this avoids GDI overhead
+     for up to 99 off-screen cells.}
     Clip := Canvas.ClipRect;
     for I := 0 to High(FCells) do
       if IntersectRect(Dummy, GetCellRect(I), Clip) then
@@ -366,13 +361,15 @@ var
 begin
   R := GetCellRect(AIndex);
   case FCells[AIndex].State of
-    fcsPlaceholder: PaintPlaceholder(R);
+    fcsPlaceholder:
+      PaintPlaceholder(R);
     fcsLoaded:
       if FViewMode = vmSmartGrid then
         PaintCropToFill(AIndex, R)
       else
         PaintLoadedFrame(AIndex, R);
-    fcsError: PaintErrorCell(R);
+    fcsError:
+      PaintErrorCell(R);
   end;
   PaintTimecode(AIndex, R);
   if FCells[AIndex].Selected then
@@ -407,17 +404,16 @@ begin
     PaintPlaceholder(ARect);
     Exit;
   end;
-  { Scale to fit cell, maintaining aspect ratio }
-  Scale := Min(ARect.Width / Max(1, Bmp.Width),
-               ARect.Height / Max(1, Bmp.Height));
+  {Scale to fit cell, maintaining aspect ratio}
+  Scale := Min(ARect.Width / Max(1, Bmp.Width), ARect.Height / Max(1, Bmp.Height));
   DW := Round(Bmp.Width * Scale);
   DH := Round(Bmp.Height * Scale);
-  DstR.Left   := ARect.Left + (ARect.Width - DW) div 2;
-  DstR.Top    := ARect.Top + (ARect.Height - DH) div 2;
-  DstR.Right  := DstR.Left + DW;
+  DstR.Left := ARect.Left + (ARect.Width - DW) div 2;
+  DstR.Top := ARect.Top + (ARect.Height - DH) div 2;
+  DstR.Right := DstR.Left + DW;
   DstR.Bottom := DstR.Top + DH;
 
-  { Fill letterbox area }
+  {Fill letterbox area}
   Canvas.Brush.Color := CLR_CELL_BG;
   Canvas.FillRect(ARect);
   Canvas.StretchDraw(DstR, Bmp);
@@ -436,18 +432,17 @@ begin
     PaintPlaceholder(ARect);
     Exit;
   end;
-  { Scale so smaller dimension fills the cell, crop the excess }
-  Scale := Max(ARect.Width / Max(1, Bmp.Width),
-               ARect.Height / Max(1, Bmp.Height));
+  {Scale so smaller dimension fills the cell, crop the excess}
+  Scale := Max(ARect.Width / Max(1, Bmp.Width), ARect.Height / Max(1, Bmp.Height));
   SrcW := Min(Bmp.Width, Round(ARect.Width / Scale));
   SrcH := Min(Bmp.Height, Round(ARect.Height / Scale));
-  SrcR.Left   := (Bmp.Width - SrcW) div 2;
-  SrcR.Top    := (Bmp.Height - SrcH) div 2;
-  SrcR.Right  := SrcR.Left + SrcW;
+  SrcR.Left := (Bmp.Width - SrcW) div 2;
+  SrcR.Top := (Bmp.Height - SrcH) div 2;
+  SrcR.Right := SrcR.Left + SrcW;
   SrcR.Bottom := SrcR.Top + SrcH;
 
-  { HALFTONE averages source pixels properly; default BLACKONWHITE ANDs
-    channel values independently, corrupting colors when downscaling }
+  {HALFTONE averages source pixels properly; default BLACKONWHITE ANDs
+   channel values independently, corrupting colors when downscaling}
   SetStretchBltMode(Canvas.Handle, HALFTONE);
   SetBrushOrgEx(Canvas.Handle, 0, 0, nil);
   Canvas.CopyRect(ARect, Bmp.Canvas, SrcR);
@@ -465,7 +460,8 @@ begin
   CX := (ARect.Left + ARect.Right) div 2;
   CY := (ARect.Top + ARect.Bottom) div 2;
   Radius := Min(ARect.Width, ARect.Height) div ARC_RADIUS_DIV;
-  if Radius < MIN_ARC_RADIUS then Exit;
+  if Radius < MIN_ARC_RADIUS then
+    Exit;
 
   StartAngle := FAnimStep * ARC_ANGLE_STEP;
   Canvas.Pen.Color := CLR_ARC;
@@ -486,7 +482,8 @@ end;
 
 procedure TFrameView.SetShowTimecode(AValue: Boolean);
 begin
-  if FShowTimecode = AValue then Exit;
+  if FShowTimecode = AValue then
+    Exit;
   FShowTimecode := AValue;
 end;
 
@@ -495,13 +492,15 @@ var
   R: TRect;
   BF: TBlendFunction;
 begin
-  if not FShowTimecode then Exit;
-  if FCells[AIndex].Timecode = '' then Exit;
+  if not FShowTimecode then
+    Exit;
+  if FCells[AIndex].Timecode = '' then
+    Exit;
   R := TimecodeRectFromCell(ACellRect, AIndex);
   Canvas.Font.Name := FTimestampFontName;
   Canvas.Font.Size := FTimestampFontSize;
 
-  { Alpha-blended background for readability }
+  {Alpha-blended background for readability}
   if FTimecodeBackAlpha > 0 then
   begin
     if FTimecodeBackAlpha = 255 then
@@ -509,9 +508,7 @@ begin
       Canvas.Brush.Color := FTimecodeBackColor;
       Canvas.Brush.Style := bsSolid;
       Canvas.FillRect(R);
-    end
-    else
-    begin
+    end else begin
       if FBlendBmpColor <> FTimecodeBackColor then
       begin
         FBlendBmp.Canvas.Pixels[0, 0] := FTimecodeBackColor;
@@ -521,8 +518,7 @@ begin
       BF.BlendFlags := 0;
       BF.SourceConstantAlpha := FTimecodeBackAlpha;
       BF.AlphaFormat := 0;
-      Winapi.Windows.AlphaBlend(Canvas.Handle, R.Left, R.Top, R.Width, R.Height,
-        FBlendBmp.Canvas.Handle, 0, 0, 1, 1, BF);
+      Winapi.Windows.AlphaBlend(Canvas.Handle, R.Left, R.Top, R.Width, R.Height, FBlendBmp.Canvas.Handle, 0, 0, 1, 1, BF);
     end;
   end;
 
@@ -532,8 +528,7 @@ begin
     Canvas.Font.Color := CLR_TIMECODE_PENDING;
 
   Canvas.Brush.Style := bsClear;
-  DrawText(Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, R,
-    DT_CENTER or DT_VCENTER or DT_SINGLELINE);
+  DrawText(Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
 end;
 
 procedure TFrameView.PaintErrorCell(const ARect: TRect);
@@ -564,9 +559,7 @@ begin
     begin
       FCells[I].Timecode := FormatTimecode(AOffsets[I].TimeOffset);
       FCells[I].TimeOffset := AOffsets[I].TimeOffset;
-    end
-    else
-    begin
+    end else begin
       FCells[I].Timecode := '';
       FCells[I].TimeOffset := 0;
     end;
@@ -581,9 +574,9 @@ var
 begin
   if (AIndex >= 0) and (AIndex < Length(FCells)) then
   begin
-    { Copy pixel data via raw memory, bypassing GDI entirely.
-      Canvas.Draw on a bitmap created by another thread intermittently
-      fails because the GDI DC handle is not reliably usable cross-thread. }
+    {Copy pixel data via raw memory, bypassing GDI entirely.
+     Canvas.Draw on a bitmap created by another thread intermittently
+     fails because the GDI DC handle is not reliably usable cross-thread.}
     Copy := TBitmap.Create;
     Copy.PixelFormat := pf24bit;
     Copy.SetSize(ABitmap.Width, ABitmap.Height);
@@ -646,15 +639,16 @@ begin
     Exit;
   end;
   Sz := FLayout.RecalcSize(BuildLayoutContext);
-  Width := Sz.cx;
-  Height := Sz.cy;
+  Width := Sz.CX;
+  Height := Sz.CY;
 end;
 
 procedure TFrameView.NavigateFrame(ADelta: Integer);
 var
   NewIdx: Integer;
 begin
-  if Length(FCells) = 0 then Exit;
+  if Length(FCells) = 0 then
+    Exit;
   NewIdx := FCurrentFrameIndex + ADelta;
   if NewIdx < 0 then
     NewIdx := 0
@@ -739,8 +733,7 @@ begin
       Inc(Result);
 end;
 
-procedure TFrameView.MouseDown(Button: TMouseButton; Shift: TShiftState;
-  X, Y: Integer);
+procedure TFrameView.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
   Idx: Integer;
 begin

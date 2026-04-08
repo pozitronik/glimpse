@@ -1,5 +1,5 @@
-{ WCX plugin settings backed by an INI file.
-  Separate from WLX settings to allow independent configuration. }
+{WCX plugin settings backed by an INI file.
+ Separate from WLX settings to allow independent configuration.}
 unit uWcxSettings;
 
 interface
@@ -14,10 +14,10 @@ type
   TWcxSettings = class
   strict private
     FIniPath: string;
-    { [ffmpeg] }
+    {[ffmpeg]}
     FFFmpegMode: TFFmpegMode;
     FFFmpegExePath: string;
-    { [extraction] }
+    {[extraction]}
     FFramesCount: Integer;
     FSkipEdgesPercent: Integer;
     FMaxWorkers: Integer;
@@ -25,12 +25,12 @@ type
     FUseBmpPipe: Boolean;
     FHwAccel: Boolean;
     FUseKeyframes: Boolean;
-    { [output] }
+    {[output]}
     FOutputMode: TWcxOutputMode;
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
     FPngCompression: Integer;
-    { [combined] }
+    {[combined]}
     FCombinedColumns: Integer;
     FShowTimestamp: Boolean;
     FBackground: TColor;
@@ -38,12 +38,12 @@ type
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FShowBanner: Boolean;
-    { [output] }
+    {[output]}
     FShowFileSizes: Boolean;
-    { Output size cap in pixels, 0 = no limit. The cap applies to whichever
-      side is longer, so it works regardless of orientation. The frame cap
-      drives ffmpeg's scale filter for separate-mode extraction; the combined
-      cap triggers a post-render HALFTONE downscale of the assembled grid. }
+    {Output size cap in pixels, 0 = no limit. The cap applies to whichever
+     side is longer, so it works regardless of orientation. The frame cap
+     drives ffmpeg's scale filter for separate-mode extraction; the combined
+     cap triggers a post-render HALFTONE downscale of the assembled grid.}
     FFrameMaxSide: Integer;
     FCombinedMaxSide: Integer;
   public
@@ -78,27 +78,27 @@ type
   end;
 
 const
-  { WCX-specific defaults (shared defaults are in uDefaults) }
-  WCX_DEF_OUTPUT_MODE     = womSeparate;
-  WCX_DEF_COMBINED_COLS   = 0;   { 0 = auto }
-  WCX_DEF_SHOW_TIMESTAMP  = True;
-  WCX_DEF_BACKGROUND      = TColor($001E1E1E);
-  WCX_DEF_CELL_GAP        = 2;
-  WCX_DEF_TIMESTAMP_FONT  = 'Consolas';
+  {WCX-specific defaults (shared defaults are in uDefaults)}
+  WCX_DEF_OUTPUT_MODE = womSeparate;
+  WCX_DEF_COMBINED_COLS = 0; {0 = auto}
+  WCX_DEF_SHOW_TIMESTAMP = True;
+  WCX_DEF_BACKGROUND = TColor($001E1E1E);
+  WCX_DEF_CELL_GAP = 2;
+  WCX_DEF_TIMESTAMP_FONT = 'Consolas';
   WCX_DEF_TIMESTAMP_FONT_SIZE = 9;
-  WCX_DEF_SHOW_BANNER     = False;
+  WCX_DEF_SHOW_BANNER = False;
   WCX_DEF_SHOW_FILE_SIZES = False;
-  WCX_DEF_FRAME_MAX_SIDE    = 0;  { 0 = no limit }
+  WCX_DEF_FRAME_MAX_SIDE = 0; {0 = no limit}
   WCX_DEF_COMBINED_MAX_SIDE = 0;
-  WCX_MIN_OUTPUT_SIDE       = 0;
-  WCX_MAX_OUTPUT_SIDE       = MAX_FRAME_SIDE;  { 8K }
+  WCX_MIN_OUTPUT_SIDE = 0;
+  WCX_MAX_OUTPUT_SIDE = MAX_FRAME_SIDE; {8K}
 
 implementation
 
 uses
   uPathExpand, uColorConv;
 
-{ TWcxSettings }
+{TWcxSettings}
 
 constructor TWcxSettings.Create(const AIniPath: string);
 begin
@@ -133,18 +133,15 @@ procedure TWcxSettings.Load;
 var
   Ini: TIniFile;
 begin
-  if not FileExists(FIniPath) then Exit;
+  if not FileExists(FIniPath) then
+    Exit;
   Ini := TIniFile.Create(FIniPath);
   try
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', '');
-    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount',
-      DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
-    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges',
-      DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
-    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers',
-      DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
-    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads',
-      DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
+    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
+    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
+    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
+    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads', DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
     FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
     FHwAccel := Ini.ReadBool('extraction', 'HwAccel', DEF_HW_ACCEL);
     FUseKeyframes := Ini.ReadBool('extraction', 'UseKeyframes', DEF_USE_KEYFRAMES);
@@ -157,31 +154,23 @@ begin
       FSaveFormat := sfJPEG
     else
       FSaveFormat := sfPNG;
-    FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality',
-      DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-    FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression',
-      DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+    FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality', DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+    FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
 
-    FCombinedColumns := EnsureRange(
-      Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
+    FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
     FShowTimestamp := Ini.ReadBool('combined', 'ShowTimestamp', WCX_DEF_SHOW_TIMESTAMP);
-    FBackground := HexToColor(
-      Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
-    FCellGap := EnsureRange(
-      Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), 0, 20);
+    FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
+    FCellGap := EnsureRange(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), 0, 20);
     FTimestampFontName := Ini.ReadString('combined', 'TimestampFont', WCX_DEF_TIMESTAMP_FONT);
     if FTimestampFontName.Trim = '' then
       FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
-    FTimestampFontSize := EnsureRange(Ini.ReadInteger('combined', 'TimestampFontSize',
-      WCX_DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+    FTimestampFontSize := EnsureRange(Ini.ReadInteger('combined', 'TimestampFontSize', WCX_DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
     FShowBanner := Ini.ReadBool('combined', 'ShowBanner', WCX_DEF_SHOW_BANNER);
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
 
-    FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide',
-      WCX_DEF_FRAME_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
-    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide',
-      WCX_DEF_COMBINED_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+    FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide', WCX_DEF_FRAME_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', WCX_DEF_COMBINED_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
   finally
     Ini.Free;
   end;
@@ -191,7 +180,8 @@ procedure TWcxSettings.Save;
 var
   Ini: TIniFile;
 begin
-  if FIniPath = '' then Exit;
+  if FIniPath = '' then
+    Exit;
   Ini := TIniFile.Create(FIniPath);
   try
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);

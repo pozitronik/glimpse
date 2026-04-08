@@ -1,6 +1,6 @@
-{ Thread-safe debug logging to file.
-  Logging is active when GDebugLogPath is non-empty; set automatically
-  in debug builds, can be enabled manually in release builds. }
+{Thread-safe debug logging to file.
+ Logging is active when GDebugLogPath is non-empty; set automatically
+ in debug builds, can be enabled manually in release builds.}
 unit uDebugLog;
 
 interface
@@ -8,8 +8,8 @@ interface
 var
   GDebugLogPath: string;
 
-{ Thread-safe debug logging to file. Tag identifies the subsystem.
-  No-op when GDebugLogPath is empty. }
+  {Thread-safe debug logging to file. Tag identifies the subsystem.
+   No-op when GDebugLogPath is empty.}
 procedure DebugLog(const ATag, AMsg: string);
 
 implementation
@@ -26,7 +26,8 @@ procedure DebugLog(const ATag, AMsg: string);
 var
   F: TextFile;
 begin
-  if GDebugLogPath = '' then Exit;
+  if GDebugLogPath = '' then
+    Exit;
   LogLock.Enter;
   try
     try
@@ -36,13 +37,12 @@ begin
       else
         Rewrite(F);
       try
-        WriteLn(F, Format('%s  [tid=%d] [%s] %s',
-          [FormatDateTime('hh:nn:ss.zzz', Now), GetCurrentThreadId, ATag, AMsg]));
+        WriteLn(F, Format('%s  [tid=%d] [%s] %s', [FormatDateTime('hh:nn:ss.zzz', Now), GetCurrentThreadId, ATag, AMsg]));
       finally
         CloseFile(F);
       end;
     except
-      { Logging must never crash the plugin }
+      {Logging must never crash the plugin}
     end;
   finally
     LogLock.Leave;
@@ -50,9 +50,11 @@ begin
 end;
 
 initialization
-  LogLock := TCriticalSection.Create;
+
+LogLock := TCriticalSection.Create;
 
 finalization
-  FreeAndNil(LogLock);
+
+FreeAndNil(LogLock);
 
 end.

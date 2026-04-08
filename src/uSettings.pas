@@ -1,5 +1,5 @@
-{ Plugin settings manager backed by an INI file.
-  Handles defaults, validation, type-safe access, and persistence. }
+{Plugin settings manager backed by an INI file.
+ Handles defaults, validation, type-safe access, and persistence.}
 unit uSettings;
 
 interface
@@ -12,11 +12,11 @@ type
   TPluginSettings = class
   strict private
     FIniPath: string;
-    { [ffmpeg] }
+    {[ffmpeg]}
     FFFmpegMode: TFFmpegMode;
     FFFmpegExePath: string;
     FFFmpegAutoDownloaded: Boolean;
-    { [extraction] }
+    {[extraction]}
     FFramesCount: Integer;
     FSkipEdgesPercent: Integer;
     FMaxWorkers: Integer;
@@ -27,9 +27,9 @@ type
     FScaledExtraction: Boolean;
     FMinFrameSide: Integer;
     FMaxFrameSide: Integer;
-    { [view] }
+    {[view]}
     FViewMode: TViewMode;
-    FModeZoom: array[TViewMode] of TZoomMode;
+    FModeZoom: array [TViewMode] of TZoomMode;
     FBackground: TColor;
     FShowTimecode: Boolean;
     FShowToolbar: Boolean;
@@ -38,27 +38,27 @@ type
     FTimecodeBackAlpha: Byte;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
-    { [extensions] }
+    {[extensions]}
     FExtensionList: string;
-    { [save] }
+    {[save]}
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
     FPngCompression: Integer;
     FSaveFolder: string;
     FShowBanner: Boolean;
-    { [cache] }
+    {[cache]}
     FCacheEnabled: Boolean;
     FCacheFolder: string;
     FCacheMaxSizeMB: Integer;
-    { [quickview] }
+    {[quickview]}
     FQVDisableNavigation: Boolean;
     FQVHideToolbar: Boolean;
     FQVHideStatusBar: Boolean;
-    { [thumbnails] }
+    {[thumbnails]}
     FThumbnailsEnabled: Boolean;
     FThumbnailMode: TThumbnailMode;
-    FThumbnailPosition: Integer;     { 0..100 percent }
-    FThumbnailGridFrames: Integer;   { count for grid mode }
+    FThumbnailPosition: Integer; {0..100 percent}
+    FThumbnailGridFrames: Integer; {count for grid mode}
 
     class function StrToFFmpegMode(const AValue: string): TFFmpegMode; static;
     class function FFmpegModeToStr(AMode: TFFmpegMode): string; static;
@@ -77,21 +77,21 @@ type
   public
     constructor Create(const AIniPath: string);
 
-    { Loads all settings from the INI file. Missing or invalid values get defaults. }
+    {Loads all settings from the INI file. Missing or invalid values get defaults.}
     procedure Load;
-    { Writes all current settings to the INI file. }
+    {Writes all current settings to the INI file.}
     procedure Save;
-    { Resets all fields to default values without touching the file. }
+    {Resets all fields to default values without touching the file.}
     procedure ResetDefaults;
 
     property IniPath: string read FIniPath;
 
-    { [ffmpeg] }
+    {[ffmpeg]}
     property FFmpegMode: TFFmpegMode read FFFmpegMode write FFFmpegMode;
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
     property FFmpegAutoDownloaded: Boolean read FFFmpegAutoDownloaded write FFFmpegAutoDownloaded;
 
-    { [extraction] }
+    {[extraction]}
     property FramesCount: Integer read FFramesCount write FFramesCount;
     property SkipEdgesPercent: Integer read FSkipEdgesPercent write FSkipEdgesPercent;
     property MaxWorkers: Integer read FMaxWorkers write FMaxWorkers;
@@ -103,11 +103,11 @@ type
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;
 
-    { [view] }
+    {[view]}
     property ViewMode: TViewMode read FViewMode write FViewMode;
-    { Per-mode zoom: FModeZoom[AMode] }
+    {Per-mode zoom: FModeZoom[AMode]}
     property ModeZoom[AMode: TViewMode]: TZoomMode read GetModeZoom write SetModeZoom;
-    { Convenience: reads/writes FModeZoom[FViewMode] }
+    {Convenience: reads/writes FModeZoom[FViewMode]}
     property ZoomMode: TZoomMode read GetActiveZoom write SetActiveZoom;
     property Background: TColor read FBackground write FBackground;
     property ShowTimecode: Boolean read FShowTimecode write FShowTimecode;
@@ -118,27 +118,27 @@ type
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
 
-    { [extensions] }
+    {[extensions]}
     property ExtensionList: string read FExtensionList write FExtensionList;
 
-    { [save] }
+    {[save]}
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
     property ShowBanner: Boolean read FShowBanner write FShowBanner;
 
-    { [cache] }
+    {[cache]}
     property CacheEnabled: Boolean read FCacheEnabled write FCacheEnabled;
     property CacheFolder: string read FCacheFolder write FCacheFolder;
     property CacheMaxSizeMB: Integer read FCacheMaxSizeMB write FCacheMaxSizeMB;
 
-    { [quickview] }
+    {[quickview]}
     property QVDisableNavigation: Boolean read FQVDisableNavigation write FQVDisableNavigation;
     property QVHideToolbar: Boolean read FQVHideToolbar write FQVHideToolbar;
     property QVHideStatusBar: Boolean read FQVHideStatusBar write FQVHideStatusBar;
 
-    { [thumbnails] }
+    {[thumbnails]}
     property ThumbnailsEnabled: Boolean read FThumbnailsEnabled write FThumbnailsEnabled;
     property ThumbnailMode: TThumbnailMode read FThumbnailMode write FThumbnailMode;
     property ThumbnailPosition: Integer read FThumbnailPosition write FThumbnailPosition;
@@ -146,37 +146,37 @@ type
   end;
 
 const
-  { WLX-specific defaults }
-  DEF_FFMPEG_MODE        = fmAuto;
-  DEF_FFMPEG_EXE_PATH    = '';
-  DEF_FFMPEG_AUTO_DL     = False;
-  DEF_VIEW_MODE          = vmGrid;
-  DEF_ZOOM_MODE          = zmFitWindow;
-  DEF_BACKGROUND         = TColor($001E1E1E);
-  DEF_SHOW_TIMECODE      = True;
-  DEF_SHOW_TOOLBAR       = True;
-  DEF_SHOW_STATUS_BAR    = True;
-  DEF_TC_BACK_COLOR      = TColor($002D2D2D);
-  DEF_TC_BACK_ALPHA      = 180;
-  DEF_TIMESTAMP_FONT     = 'Segoe UI';
+  {WLX-specific defaults}
+  DEF_FFMPEG_MODE = fmAuto;
+  DEF_FFMPEG_EXE_PATH = '';
+  DEF_FFMPEG_AUTO_DL = False;
+  DEF_VIEW_MODE = vmGrid;
+  DEF_ZOOM_MODE = zmFitWindow;
+  DEF_BACKGROUND = TColor($001E1E1E);
+  DEF_SHOW_TIMECODE = True;
+  DEF_SHOW_TOOLBAR = True;
+  DEF_SHOW_STATUS_BAR = True;
+  DEF_TC_BACK_COLOR = TColor($002D2D2D);
+  DEF_TC_BACK_ALPHA = 180;
+  DEF_TIMESTAMP_FONT = 'Segoe UI';
   DEF_TIMESTAMP_FONT_SIZE = 8;
-  DEF_SAVE_FOLDER        = '';
-  DEF_SHOW_BANNER        = False;
-  DEF_CACHE_ENABLED      = True;
-  DEF_CACHE_FOLDER       = '';
-  DEF_CACHE_MAX_SIZE_MB  = 500;
-  DEF_QV_DISABLE_NAV     = True;
-  DEF_QV_HIDE_TOOLBAR    = True;
-  DEF_QV_HIDE_STATUSBAR  = True;
+  DEF_SAVE_FOLDER = '';
+  DEF_SHOW_BANNER = False;
+  DEF_CACHE_ENABLED = True;
+  DEF_CACHE_FOLDER = '';
+  DEF_CACHE_MAX_SIZE_MB = 500;
+  DEF_QV_DISABLE_NAV = True;
+  DEF_QV_HIDE_TOOLBAR = True;
+  DEF_QV_HIDE_STATUSBAR = True;
 
-  { Alias: uSettings historically used _PERCENT suffix }
+  {Alias: uSettings historically used _PERCENT suffix}
   DEF_SKIP_EDGES_PERCENT = DEF_SKIP_EDGES;
 
-{ Returns the default cache folder path used when CacheFolder setting is empty. }
+  {Returns the default cache folder path used when CacheFolder setting is empty.}
 function DefaultCacheFolder: string;
 
-{ Returns the effective cache folder: the configured value (with env vars expanded),
-  or the default if empty. }
+{Returns the effective cache folder: the configured value (with env vars expanded),
+ or the default if empty.}
 function EffectiveCacheFolder(const ACacheFolder: string): string;
 
 implementation
@@ -197,7 +197,7 @@ begin
     Result := DefaultCacheFolder;
 end;
 
-{ TPluginSettings }
+{TPluginSettings}
 
 constructor TPluginSettings.Create(const AIniPath: string);
 begin
@@ -264,48 +264,37 @@ begin
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', DEF_FFMPEG_EXE_PATH);
     FFFmpegAutoDownloaded := Ini.ReadBool('ffmpeg', 'AutoDownloaded', DEF_FFMPEG_AUTO_DL);
 
-    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount',
-      DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
-    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges',
-      DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
-    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers',
-      DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
-    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads',
-      DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
+    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
+    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
+    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
+    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads', DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
     FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
     FHwAccel := Ini.ReadBool('extraction', 'HwAccel', DEF_HW_ACCEL);
     FUseKeyframes := Ini.ReadBool('extraction', 'UseKeyframes', DEF_USE_KEYFRAMES);
     FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
-    FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide',
-      DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
-    FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide',
-      DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
+    FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide', DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
+    FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide', DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
-      FModeZoom[VM] := StrToZoomMode(Ini.ReadString(
-        'view.' + ViewModeToStr(VM), 'ZoomMode', ''));
+      FModeZoom[VM] := StrToZoomMode(Ini.ReadString('view.' + ViewModeToStr(VM), 'ZoomMode', ''));
     FBackground := HexToColor(Ini.ReadString('view', 'Background', ''), DEF_BACKGROUND);
     FShowTimecode := Ini.ReadBool('view', 'ShowTimecode', DEF_SHOW_TIMECODE);
     FShowToolbar := Ini.ReadBool('view', 'ShowToolbar', DEF_SHOW_TOOLBAR);
     FShowStatusBar := Ini.ReadBool('view', 'ShowStatusBar', DEF_SHOW_STATUS_BAR);
-    HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''),
-      DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
+    HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''), DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
     FTimestampFontName := Ini.ReadString('view', 'TimestampFont', DEF_TIMESTAMP_FONT);
     if FTimestampFontName.Trim = '' then
       FTimestampFontName := DEF_TIMESTAMP_FONT;
-    FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize',
-      DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+    FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize', DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
       FExtensionList := DEF_EXTENSION_LIST;
 
     FSaveFormat := StrToSaveFormat(Ini.ReadString('save', 'Format', ''));
-    FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality',
-      DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-    FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression',
-      DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+    FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality', DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+    FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
     FShowBanner := Ini.ReadBool('save', 'ShowBanner', DEF_SHOW_BANNER);
 
@@ -319,10 +308,8 @@ begin
 
     FThumbnailsEnabled := Ini.ReadBool('thumbnails', 'Enabled', DEF_THUMBNAILS_ENABLED);
     FThumbnailMode := StrToThumbnailMode(Ini.ReadString('thumbnails', 'Mode', ''));
-    FThumbnailPosition := EnsureRange(Ini.ReadInteger('thumbnails', 'Position',
-      DEF_THUMBNAIL_POSITION), MIN_THUMBNAIL_POSITION, MAX_THUMBNAIL_POSITION);
-    FThumbnailGridFrames := EnsureRange(Ini.ReadInteger('thumbnails', 'GridFrames',
-      DEF_THUMBNAIL_GRID_FRAMES), MIN_THUMBNAIL_GRID_FRAMES, MAX_THUMBNAIL_GRID_FRAMES);
+    FThumbnailPosition := EnsureRange(Ini.ReadInteger('thumbnails', 'Position', DEF_THUMBNAIL_POSITION), MIN_THUMBNAIL_POSITION, MAX_THUMBNAIL_POSITION);
+    FThumbnailGridFrames := EnsureRange(Ini.ReadInteger('thumbnails', 'GridFrames', DEF_THUMBNAIL_GRID_FRAMES), MIN_THUMBNAIL_GRID_FRAMES, MAX_THUMBNAIL_GRID_FRAMES);
   finally
     Ini.Free;
   end;
@@ -353,14 +340,12 @@ begin
 
     Ini.WriteString('view', 'Mode', ViewModeToStr(FViewMode));
     for var VM := Low(TViewMode) to High(TViewMode) do
-      Ini.WriteString('view.' + ViewModeToStr(VM), 'ZoomMode',
-        ZoomModeToStr(FModeZoom[VM]));
+      Ini.WriteString('view.' + ViewModeToStr(VM), 'ZoomMode', ZoomModeToStr(FModeZoom[VM]));
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
     Ini.WriteBool('view', 'ShowTimecode', FShowTimecode);
     Ini.WriteBool('view', 'ShowToolbar', FShowToolbar);
     Ini.WriteBool('view', 'ShowStatusBar', FShowStatusBar);
-    Ini.WriteString('view', 'TimecodeBackground',
-      ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
+    Ini.WriteString('view', 'TimecodeBackground', ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
     Ini.WriteString('view', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('view', 'TimestampFontSize', FTimestampFontSize);
 
@@ -400,9 +385,10 @@ end;
 class function TPluginSettings.FFmpegModeToStr(AMode: TFFmpegMode): string;
 begin
   case AMode of
-    fmExe: Result := 'exe';
-  else
-    Result := 'auto';
+    fmExe:
+      Result := 'exe';
+    else
+      Result := 'auto';
   end;
 end;
 
@@ -423,12 +409,16 @@ end;
 class function TPluginSettings.ViewModeToStr(AMode: TViewMode): string;
 begin
   case AMode of
-    vmScroll:    Result := 'scroll';
-    vmSmartGrid: Result := 'smartgrid';
-    vmFilmstrip: Result := 'filmstrip';
-    vmSingle:    Result := 'single';
-  else
-    Result := 'grid';
+    vmScroll:
+      Result := 'scroll';
+    vmSmartGrid:
+      Result := 'smartgrid';
+    vmFilmstrip:
+      Result := 'filmstrip';
+    vmSingle:
+      Result := 'single';
+    else
+      Result := 'grid';
   end;
 end;
 
@@ -445,10 +435,12 @@ end;
 class function TPluginSettings.ZoomModeToStr(AMode: TZoomMode): string;
 begin
   case AMode of
-    zmFitIfLarger: Result := 'fitlarger';
-    zmActual: Result := 'actual';
-  else
-    Result := 'fit';
+    zmFitIfLarger:
+      Result := 'fitlarger';
+    zmActual:
+      Result := 'actual';
+    else
+      Result := 'fit';
   end;
 end;
 
@@ -463,9 +455,10 @@ end;
 class function TPluginSettings.SaveFormatToStr(AFormat: TSaveFormat): string;
 begin
   case AFormat of
-    sfJPEG: Result := 'JPEG';
-  else
-    Result := 'PNG';
+    sfJPEG:
+      Result := 'JPEG';
+    else
+      Result := 'PNG';
   end;
 end;
 
@@ -480,9 +473,10 @@ end;
 class function TPluginSettings.ThumbnailModeToStr(AMode: TThumbnailMode): string;
 begin
   case AMode of
-    tnmGrid: Result := 'grid';
-  else
-    Result := 'single';
+    tnmGrid:
+      Result := 'grid';
+    else
+      Result := 'single';
   end;
 end;
 

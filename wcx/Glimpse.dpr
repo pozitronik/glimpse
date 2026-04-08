@@ -1,9 +1,9 @@
 library Glimpse;
 
 {$IFDEF WIN64}
-  {$E wcx64}
+{$E wcx64}
 {$ELSE}
-  {$E wcx}
+{$E wcx}
 {$ENDIF}
 
 uses
@@ -49,4 +49,5 @@ exports
   ConfigurePacker;
 
 begin
+
 end.

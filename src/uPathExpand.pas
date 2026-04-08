@@ -1,12 +1,12 @@
-{ Environment variable expansion for file paths.
-  Wraps the Windows ExpandEnvironmentStrings API so callers don't need
-  Winapi.Windows in their uses clause. }
+{Environment variable expansion for file paths.
+ Wraps the Windows ExpandEnvironmentStrings API so callers don't need
+ Winapi.Windows in their uses clause.}
 unit uPathExpand;
 
 interface
 
-{ Expands environment variables (%TEMP%, %commander_path%, etc.) in a path.
-  Returns the input unchanged if it contains no variables or is empty. }
+{Expands environment variables (%TEMP%, %commander_path%, etc.) in a path.
+ Returns the input unchanged if it contains no variables or is empty.}
 function ExpandEnvVars(const APath: string): string;
 
 implementation

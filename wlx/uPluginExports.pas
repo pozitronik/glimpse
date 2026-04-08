@@ -1,5 +1,5 @@
-{ WLX plugin API exported functions.
-  These are called by Total Commander to interact with the plugin. }
+{WLX plugin API exported functions.
+ These are called by Total Commander to interact with the plugin.}
 unit uPluginExports;
 
 interface
@@ -31,10 +31,10 @@ var
   GSettings: TPluginSettings;
   GPluginDir: string;
   GFFmpegPath: string;
-  { Long-lived frame cache for the thumbnail path. Created in
-    ListSetDefaultParams; TNullFrameCache when caching is off. The TC
-    thumbnail worker calls DoGetPreviewBitmap from background threads, so
-    this must outlive any single call. }
+  {Long-lived frame cache for the thumbnail path. Created in
+   ListSetDefaultParams; TNullFrameCache when caching is off. The TC
+   thumbnail worker calls DoGetPreviewBitmap from background threads, so
+   this must outlive any single call.}
   GThumbnailCache: IFrameCache;
 
 procedure Log(const AMsg: string);
@@ -42,7 +42,7 @@ begin
   DebugLog('Plugin', AMsg);
 end;
 
-{ Resolves a TC-provided window handle to our plugin form, or nil. }
+{Resolves a TC-provided window handle to our plugin form, or nil.}
 function FindPluginForm(ListWin: HWND): TPluginForm;
 var
   Ctrl: TWinControl;
@@ -54,7 +54,7 @@ begin
     Result := nil;
 end;
 
-{ Internal handler shared by ListLoad and ListLoadW. }
+{Internal handler shared by ListLoad and ListLoadW.}
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
 var
   Form: TPluginForm;
@@ -66,15 +66,12 @@ begin
     Form := TPluginForm.CreateForPlugin(ParentWin, AFileName, GSettings, GFFmpegPath);
     Form.ApplyListerParams(ShowFlags);
     Result := Form.Handle;
-    Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s',
-      [IntToHex(Result), BoolToStr(IsWindow(Result), True),
-       BoolToStr(IsWindowVisible(Result), True), IntToHex(GetParent(Result))]));
+    Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s', [IntToHex(Result), BoolToStr(IsWindow(Result), True), BoolToStr(IsWindowVisible(Result), True), IntToHex(GetParent(Result))]));
   except
     on E: Exception do
     begin
       Log(Format('DoListLoad: EXCEPTION %s: %s', [E.ClassName, E.Message]));
-      MessageBox(ParentWin, PChar(Format('Glimpse: %s', [E.Message])),
-        'Glimpse', MB_OK or MB_ICONERROR);
+      MessageBox(ParentWin, PChar(Format('Glimpse: %s', [E.Message])), 'Glimpse', MB_OK or MB_ICONERROR);
     end;
   end;
 end;
@@ -91,7 +88,7 @@ begin
   Result := DoListLoad(ParentWin, string(FileToLoad), ShowFlags);
 end;
 
-{ Reuses an existing plugin window for a new file (smoother navigation). }
+{Reuses an existing plugin window for a new file (smoother navigation).}
 function DoListLoadNext(ParentWin: HWND; ListWin: HWND; const AFileName: string; ShowFlags: Integer): Integer;
 var
   Form: TPluginForm;
@@ -156,7 +153,7 @@ begin
     Builder := Builder + 'EXT="' + Extensions[I] + '"';
   end;
 
-  { MULTIMEDIA keyword tells TC to override its built-in media viewer }
+  {MULTIMEDIA keyword tells TC to override its built-in media viewer}
   Builder := 'MULTIMEDIA & (' + Builder + ')';
   DS := AnsiString(Builder);
   if MaxLen > 0 then
@@ -188,30 +185,29 @@ begin
           Form.ApplyListerParams(Parameter);
         Result := LISTPLUGIN_OK;
       end;
-  else
-    Result := LISTPLUGIN_ERROR;
+    else
+      Result := LISTPLUGIN_ERROR;
   end;
 end;
 
 procedure ListSetDefaultParams(dps: PListDefaultParamStruct); stdcall;
 var
-  ModulePath: array[0..MAX_PATH] of Char;
+  ModulePath: array [0 .. MAX_PATH] of Char;
   NewSettings: TPluginSettings;
 begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
-  {$IFDEF DEBUG}
+{$IFDEF DEBUG}
   uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
-  { Start fresh log each session }
+  {Start fresh log each session}
   if FileExists(uDebugLog.GDebugLogPath) then
     DeleteFile(uDebugLog.GDebugLogPath);
-  {$ENDIF}
-
+{$ENDIF}
   Log('ListSetDefaultParams');
   Log(Format('  PluginDir=%s', [GPluginDir]));
   Log(Format('  DLL HInstance=$%s', [IntToHex(HInstance)]));
 
-  { Swap: GSettings is never nil (created at initialization with defaults) }
+  {Swap: GSettings is never nil (created at initialization with defaults)}
   NewSettings := TPluginSettings.Create(GPluginDir + 'Glimpse.ini');
   NewSettings.Load;
   GSettings.Free;
@@ -220,17 +216,18 @@ begin
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
 
-  { Run cache eviction once per session.
-    Evict enumerates files and exits early if within budget, so no pre-check needed.
-    Wrapped in try/except: invalid or inaccessible cache folder must not crash TC. }
+  {Run cache eviction once per session.
+   Evict enumerates files and exits early if within budget, so no pre-check needed.
+   Wrapped in try/except: invalid or inaccessible cache folder must not crash TC.}
   if GSettings.CacheEnabled then
   begin
-    var CacheDir := EffectiveCacheFolder(GSettings.CacheFolder);
+    var
+    CacheDir := EffectiveCacheFolder(GSettings.CacheFolder);
     try
       CreateCacheManager(CacheDir, GSettings.CacheMaxSizeMB).Evict;
       Log(Format('  CacheDir=%s', [CacheDir]));
-      { Long-lived thumbnail cache: same directory + budget as the main
-        cache so the two paths share evicted entries }
+      {Long-lived thumbnail cache: same directory + budget as the main
+       cache so the two paths share evicted entries}
       GThumbnailCache := TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB);
     except
       on E: Exception do
@@ -244,9 +241,9 @@ begin
     GThumbnailCache := TNullFrameCache.Create;
 end;
 
-{ Returns a preview bitmap for the TC thumbnail panel.
-  Runs synchronously on TC's worker thread. Failures are swallowed
-  (returning 0) so TC falls back to its default icon. }
+{Returns a preview bitmap for the TC thumbnail panel.
+ Runs synchronously on TC's worker thread. Failures are swallowed
+ (returning 0) so TC falls back to its default icon.}
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 var
   FFmpeg: TFFmpegExe;
@@ -263,17 +260,16 @@ begin
   try
     FFmpeg := TFFmpegExe.Create(GFFmpegPath);
     try
-      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height,
-        GSettings, GThumbnailCache);
+      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height, GSettings, GThumbnailCache);
       if Bmp <> nil then
-      try
-        { TC takes ownership of the returned HBITMAP; ReleaseHandle
-          detaches it from the TBitmap so destruction below doesn't
-          free it out from under TC. }
-        Result := Bmp.ReleaseHandle;
-      finally
-        Bmp.Free;
-      end;
+        try
+          {TC takes ownership of the returned HBITMAP; ReleaseHandle
+           detaches it from the TBitmap so destruction below doesn't
+           free it out from under TC.}
+          Result := Bmp.ReleaseHandle;
+        finally
+          Bmp.Free;
+        end;
     finally
       FFmpeg.Free;
     end;
@@ -297,11 +293,13 @@ begin
 end;
 
 initialization
-  GSettings := TPluginSettings.Create('');
+
+GSettings := TPluginSettings.Create('');
 
 finalization
-  Log('finalization');
-  GThumbnailCache := nil;
-  FreeAndNil(GSettings);
+
+Log('finalization');
+GThumbnailCache := nil;
+FreeAndNil(GSettings);
 
 end.

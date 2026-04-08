@@ -1,5 +1,5 @@
-{ Worker chunk planning and settings change detection.
-  Pure computation: no threading, no UI, no I/O. }
+{Worker chunk planning and settings change detection.
+ Pure computation: no threading, no UI, no I/O.}
 unit uExtractionPlanner;
 
 interface
@@ -9,12 +9,11 @@ uses
 
 type
   TWorkerChunk = record
-    Start: Integer;  { zero-based index into offset array }
-    Len: Integer;    { number of frames in this chunk }
+    Start: Integer; {zero-based index into offset array}
+    Len: Integer; {number of frames in this chunk}
   end;
 
-  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged,
-    scScaledExtractionChanged, scUseKeyframesChanged);
+  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged);
   TSettingsChanges = set of TSettingsChange;
 
   TSettingsSnapshot = record
@@ -29,28 +28,26 @@ type
     UseKeyframes: Boolean;
   end;
 
-{ Splits FrameCount frames into chunks for parallel extraction.
-  MaxWorkers=0 means one worker per frame.
-  MaxThreads caps the actual thread count (-1 = no limit, 0 = CPU core count).
-  Result is never empty when FrameCount > 0. }
+  {Splits FrameCount frames into chunks for parallel extraction.
+   MaxWorkers=0 means one worker per frame.
+   MaxThreads caps the actual thread count (-1 = no limit, 0 = CPU core count).
+   Result is never empty when FrameCount > 0.}
 function PlanWorkerChunks(FrameCount, MaxWorkers, MaxThreads: Integer): TArray<TWorkerChunk>;
 
-{ Captures the settings fields relevant to change detection. }
+{Captures the settings fields relevant to change detection.}
 function TakeSettingsSnapshot(ASettings: TPluginSettings): TSettingsSnapshot;
 
-{ Compares current settings against a previous snapshot.
-  Returns the set of changes that require action. }
-function DetectSettingsChanges(const AOld: TSettingsSnapshot;
-  ASettings: TPluginSettings): TSettingsChanges;
+{Compares current settings against a previous snapshot.
+ Returns the set of changes that require action.}
+function DetectSettingsChanges(const AOld: TSettingsSnapshot; ASettings: TPluginSettings): TSettingsChanges;
 
-{ Calculates the extraction max side (bigger dimension) for scaled extraction.
-  Returns 0 when scaling is not needed (video already fits, or feature disabled).
-  AViewportW/H: available display area; AFrameCount: number of frames;
-  AAspectRatio: height/width ratio of the video;
-  ANativeW/H: native video dimensions;
-  AMinSide/AMaxSide: user-configured boundaries for the bigger side. }
-function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer;
-  AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
+{Calculates the extraction max side (bigger dimension) for scaled extraction.
+ Returns 0 when scaling is not needed (video already fits, or feature disabled).
+ AViewportW/H: available display area; AFrameCount: number of frames;
+ AAspectRatio: height/width ratio of the video;
+ ANativeW/H: native video dimensions;
+ AMinSide/AMaxSide: user-configured boundaries for the bigger side.}
+function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer; AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
 
 implementation
 
@@ -72,7 +69,7 @@ begin
   else
     WorkerCount := Min(MaxWorkers, FrameCount);
 
-  { Apply thread cap: -1 = no limit, 0 = CPU core count, >0 = explicit }
+  {Apply thread cap: -1 = no limit, 0 = CPU core count, >0 = explicit}
   if MaxThreads >= 0 then
   begin
     if MaxThreads > 0 then
@@ -98,8 +95,7 @@ begin
   end;
 end;
 
-function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer;
-  AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
+function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer; AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
 var
   AreaPerFrame, FrameW, FrameH: Double;
   BiggerSide, NativeBigger: Integer;
@@ -110,20 +106,20 @@ begin
   if AAspectRatio <= 0 then
     AAspectRatio := 9.0 / 16.0;
 
-  { Area available per frame, then derive dimensions preserving aspect ratio }
+  {Area available per frame, then derive dimensions preserving aspect ratio}
   AreaPerFrame := (Int64(AViewportW) * AViewportH) / AFrameCount;
-  { AspectRatio = H/W, so W = sqrt(Area / AR), H = sqrt(Area * AR) }
+  {AspectRatio = H/W, so W = sqrt(Area / AR), H = sqrt(Area * AR)}
   FrameW := Sqrt(AreaPerFrame / AAspectRatio);
   FrameH := FrameW * AAspectRatio;
   BiggerSide := Round(Max(FrameW, FrameH));
 
-  { Clamp to user-configured boundaries }
+  {Clamp to user-configured boundaries}
   BiggerSide := EnsureRange(BiggerSide, AMinSide, AMaxSide);
 
-  { Round up to nearest bucket for cache key stability }
+  {Round up to nearest bucket for cache key stability}
   BiggerSide := ((BiggerSide + SCALE_BUCKET - 1) div SCALE_BUCKET) * SCALE_BUCKET;
 
-  { No point scaling if video is already small enough }
+  {No point scaling if video is already small enough}
   NativeBigger := Max(ANativeW, ANativeH);
   if (NativeBigger > 0) and (NativeBigger <= BiggerSide) then
     Exit(0);
@@ -144,26 +140,20 @@ begin
   Result.UseKeyframes := ASettings.UseKeyframes;
 end;
 
-function DetectSettingsChanges(const AOld: TSettingsSnapshot;
-  ASettings: TPluginSettings): TSettingsChanges;
+function DetectSettingsChanges(const AOld: TSettingsSnapshot; ASettings: TPluginSettings): TSettingsChanges;
 begin
   Result := [];
 
-  if (ASettings.CacheEnabled <> AOld.CacheEnabled)
-    or (ASettings.CacheFolder <> AOld.CacheFolder)
-    or (ASettings.CacheMaxSizeMB <> AOld.CacheMaxSizeMB) then
+  if (ASettings.CacheEnabled <> AOld.CacheEnabled) or (ASettings.CacheFolder <> AOld.CacheFolder) or (ASettings.CacheMaxSizeMB <> AOld.CacheMaxSizeMB) then
     Include(Result, scCacheChanged);
 
-  if (ASettings.FFmpegExePath <> AOld.FFmpegExePath)
-    and (ASettings.FFmpegExePath <> '') then
+  if (ASettings.FFmpegExePath <> AOld.FFmpegExePath) and (ASettings.FFmpegExePath <> '') then
     Include(Result, scFFmpegPathChanged);
 
   if ASettings.SkipEdgesPercent <> AOld.SkipEdgesPercent then
     Include(Result, scSkipEdgesChanged);
 
-  if (ASettings.ScaledExtraction <> AOld.ScaledExtraction)
-    or (ASettings.MinFrameSide <> AOld.MinFrameSide)
-    or (ASettings.MaxFrameSide <> AOld.MaxFrameSide) then
+  if (ASettings.ScaledExtraction <> AOld.ScaledExtraction) or (ASettings.MinFrameSide <> AOld.MinFrameSide) or (ASettings.MaxFrameSide <> AOld.MaxFrameSide) then
     Include(Result, scScaledExtractionChanged);
 
   if ASettings.UseKeyframes <> AOld.UseKeyframes then

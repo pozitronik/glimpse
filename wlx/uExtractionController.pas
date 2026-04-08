@@ -1,5 +1,5 @@
-{ Extraction worker lifecycle and pending frame queue management.
-  Extracted from TPluginForm to isolate thread coordination from UI. }
+{Extraction worker lifecycle and pending frame queue management.
+ Extracted from TPluginForm to isolate thread coordination from UI.}
 unit uExtractionController;
 
 interface
@@ -12,10 +12,10 @@ uses
   uExtractionPlanner, uTypes;
 
 type
-  { Callback: frame arrived from worker thread (ABitmap = nil signals error) }
+  {Callback: frame arrived from worker thread (ABitmap = nil signals error)}
   TFrameDeliveryEvent = procedure(AIndex: Integer; ABitmap: TBitmap) of object;
 
-  { Manages extraction worker threads, pending frame queue, and cache. }
+  {Manages extraction worker threads, pending frame queue, and cache.}
   TExtractionController = class
   strict private
     FWorkerThreads: TArray<TExtractionThread>;
@@ -31,24 +31,18 @@ type
   public
     constructor Create(AFormHandle: HWND; const ACache: IFrameCache);
     destructor Destroy; override;
-    procedure Start(const AExtractor: IFrameExtractor;
-      const AFileName: string; const AOffsets: TFrameOffsetArray;
-      AMaxWorkers, AMaxThreads: Integer;
-      const AOptions: TExtractionOptions;
-      const ACacheOverride: IFrameCache = nil);
+    procedure Start(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; AMaxWorkers, AMaxThreads: Integer; const AOptions: TExtractionOptions; const ACacheOverride: IFrameCache = nil);
     procedure Stop;
-    { Drains the pending queue and delivers frames via OnFrameDelivered. }
+    {Drains the pending queue and delivers frames via OnFrameDelivered.}
     procedure ProcessPendingFrames;
-    { Frees undelivered bitmaps and discards stale Win32 notifications. }
+    {Frees undelivered bitmaps and discards stale Win32 notifications.}
     procedure DrainPendingFrameMessages;
-    { Replaces the active cache instance. }
-    procedure RecreateCache(AEnabled: Boolean; const ACacheFolder: string;
-      AMaxSizeMB: Integer);
+    {Replaces the active cache instance.}
+    procedure RecreateCache(AEnabled: Boolean; const ACacheFolder: string; AMaxSizeMB: Integer);
     property FramesLoaded: Integer read FFramesLoaded;
     property TotalFrames: Integer read FTotalFrames;
     property Cache: IFrameCache read FCache;
-    property OnFrameDelivered: TFrameDeliveryEvent
-      read FOnFrameDelivered write FOnFrameDelivered;
+    property OnFrameDelivered: TFrameDeliveryEvent read FOnFrameDelivered write FOnFrameDelivered;
     property OnProgress: TNotifyEvent read FOnProgress write FOnProgress;
   end;
 
@@ -62,10 +56,9 @@ begin
   DebugLog('ExtCtrl', AMsg);
 end;
 
-{ TExtractionController }
+{TExtractionController}
 
-constructor TExtractionController.Create(AFormHandle: HWND;
-  const ACache: IFrameCache);
+constructor TExtractionController.Create(AFormHandle: HWND; const ACache: IFrameCache);
 begin
   inherited Create;
   FFormHandle := AFormHandle;
@@ -84,11 +77,7 @@ begin
   inherited;
 end;
 
-procedure TExtractionController.Start(const AExtractor: IFrameExtractor;
-  const AFileName: string; const AOffsets: TFrameOffsetArray;
-  AMaxWorkers, AMaxThreads: Integer;
-  const AOptions: TExtractionOptions;
-  const ACacheOverride: IFrameCache);
+procedure TExtractionController.Start(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; AMaxWorkers, AMaxThreads: Integer; const AOptions: TExtractionOptions; const ACacheOverride: IFrameCache);
 var
   ThreadCache: IFrameCache;
   Chunks: TArray<TWorkerChunk>;
@@ -111,12 +100,10 @@ begin
   for W := 0 to High(Chunks) do
   begin
     Chunk := Copy(AOffsets, Chunks[W].Start, Chunks[W].Len);
-    FWorkerThreads[W] := TExtractionThread.Create(AExtractor, AFileName,
-      Chunk, FFormHandle, FPendingFrames, FPendingLock, ThreadCache,
-      @FActiveWorkerCount, AOptions);
+    FWorkerThreads[W] := TExtractionThread.Create(AExtractor, AFileName, Chunk, FFormHandle, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount, AOptions);
   end;
 
-  { Start all threads after creation to minimize scheduling skew }
+  {Start all threads after creation to minimize scheduling skew}
   for W := 0 to High(Chunks) do
     FWorkerThreads[W].Start;
 end;
@@ -158,10 +145,7 @@ begin
   for I := 0 to High(Snapshot) do
   begin
     if Snapshot[I].Bitmap <> nil then
-      CtrlLog(Format('  Frame[%d] bmp=%dx%d empty=%s',
-        [Snapshot[I].Index, Snapshot[I].Bitmap.Width,
-         Snapshot[I].Bitmap.Height,
-         BoolToStr(Snapshot[I].Bitmap.Empty, True)]))
+      CtrlLog(Format('  Frame[%d] bmp=%dx%d empty=%s', [Snapshot[I].Index, Snapshot[I].Bitmap.Width, Snapshot[I].Bitmap.Height, BoolToStr(Snapshot[I].Bitmap.Empty, True)]))
     else
       CtrlLog(Format('  FrameError[%d]', [Snapshot[I].Index]));
 
@@ -189,20 +173,15 @@ begin
   end;
   if FFormHandle <> 0 then
   begin
-    while PeekMessage(Msg, FFormHandle, WM_FRAME_READY, WM_FRAME_READY,
-      PM_REMOVE) do
-      ; { notifications carry no payload }
-    PeekMessage(Msg, FFormHandle, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE,
-      PM_REMOVE);
+    while PeekMessage(Msg, FFormHandle, WM_FRAME_READY, WM_FRAME_READY, PM_REMOVE) do; {notifications carry no payload}
+    PeekMessage(Msg, FFormHandle, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE);
   end;
 end;
 
-procedure TExtractionController.RecreateCache(AEnabled: Boolean;
-  const ACacheFolder: string; AMaxSizeMB: Integer);
+procedure TExtractionController.RecreateCache(AEnabled: Boolean; const ACacheFolder: string; AMaxSizeMB: Integer);
 begin
   if AEnabled then
-    FCache := TFrameCache.Create(
-      EffectiveCacheFolder(ACacheFolder), AMaxSizeMB)
+    FCache := TFrameCache.Create(EffectiveCacheFolder(ACacheFolder), AMaxSizeMB)
   else
     FCache := TNullFrameCache.Create;
 end;
