@@ -51,7 +51,10 @@ type
     [Test] procedure PrependBanner_NilSource_ReturnsEmptyBitmap;
     [Test] procedure PrependBanner_NarrowImage_SmallBanner;
     [Test] procedure PrependBanner_WideImage_LargerBanner;
-    [Test] procedure PrependBanner_LongLine_Truncated;
+    [Test] procedure PrependBanner_LongLine_PreservesWidth;
+    [Test] procedure PrependBanner_LongMultiWordLine_GrowsBannerHeight;
+    [Test] procedure PrependBanner_PathologicalSingleToken_HeightStaysBounded;
+    [Test] procedure PrependBanner_LongLineDoesNotTruncateToEllipsis;
     { FormatBannerLines edge cases }
     [Test] procedure BannerLines_AllEmpty_StillThreeLines;
     [Test] procedure BannerLines_ZeroDuration_OmitsDuration;
@@ -704,12 +707,12 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_LongLine_Truncated;
+procedure TTestCombinedImage.PrependBanner_LongLine_PreservesWidth;
 var
   Src, R: TBitmap;
   LongText: string;
 begin
-  { A very long line on a narrow image must not overflow }
+  { A very long line on a narrow image must never widen the result }
   Src := MakeFrame(200, 100, Integer(clBlack));
   try
     LongText := StringOfChar('W', 500);
@@ -718,6 +721,115 @@ begin
       Assert.AreEqual(200, R.Width, 'Width must match source, not expand');
     finally
       R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_LongMultiWordLine_GrowsBannerHeight;
+var
+  Src, RShort, RLong: TBitmap;
+  ShortH, LongH, I: Integer;
+  LongLine: string;
+begin
+  { A long multi-word line that exceeds the line width even at min font
+    must wrap onto multiple sub-lines, producing a taller banner. }
+  Src := MakeFrame(400, 100, Integer(clBlack));
+  try
+    { Build a long line of plausible-width words; 80 short words guarantees
+      overflow even at minimum font on a 400px-wide line. }
+    LongLine := '';
+    for I := 0 to 79 do
+    begin
+      if LongLine <> '' then
+        LongLine := LongLine + ' ';
+      LongLine := LongLine + 'word' + IntToStr(I);
+    end;
+
+    RShort := PrependBanner(Src, ['short']);
+    RLong := PrependBanner(Src, [LongLine]);
+    try
+      ShortH := RShort.Height - 100;
+      LongH := RLong.Height - 100;
+      Assert.IsTrue(LongH > ShortH,
+        Format('Wrapped banner (%d) must be taller than single-line banner (%d)',
+          [LongH, ShortH]));
+      Assert.AreEqual(400, RLong.Width, 'Wrapped banner must not widen image');
+    finally
+      RShort.Free;
+      RLong.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_PathologicalSingleToken_HeightStaysBounded;
+var
+  Src, RNormal, RPath: TBitmap;
+  NormalH, PathH: Integer;
+  Token: string;
+begin
+  { A single 500-char token has no whitespace to wrap on; the wrap helper
+    must fall back to ellipsis truncation, leaving the banner height close
+    to the unwrapped baseline rather than blowing up. }
+  Src := MakeFrame(200, 100, Integer(clBlack));
+  try
+    Token := StringOfChar('W', 500);
+    RNormal := PrependBanner(Src, ['short']);
+    RPath := PrependBanner(Src, [Token]);
+    try
+      NormalH := RNormal.Height - 100;
+      PathH := RPath.Height - 100;
+      Assert.AreEqual(200, RPath.Width, 'Width must not expand');
+      Assert.IsTrue(PathH > 0, 'Banner must have height');
+      { The pathological single-token case should produce roughly the same
+        height as a one-line banner (1 line, possibly 2 due to ellipsis path
+        being created on a fresh "Current" line); 3x baseline is a generous
+        upper bound that catches a runaway wrap. }
+      Assert.IsTrue(PathH <= NormalH * 3,
+        Format('Single-token banner height %d should not exceed 3x baseline %d',
+          [PathH, NormalH]));
+    finally
+      RNormal.Free;
+      RPath.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.PrependBanner_LongLineDoesNotTruncateToEllipsis;
+var
+  Src, RShort, RLong: TBitmap;
+  ShortH, LongH, I: Integer;
+  LongLine: string;
+begin
+  { Regression for the truncation behavior at "realistic" widths: a 1024px
+    image with a long-but-spaced line must wrap, not silently lose text. }
+  Src := MakeFrame(1024, 200, Integer(clBlack));
+  try
+    LongLine := '';
+    for I := 0 to 59 do
+    begin
+      if LongLine <> '' then
+        LongLine := LongLine + ' ';
+      LongLine := LongLine + 'segment' + IntToStr(I);
+    end;
+
+    RShort := PrependBanner(Src, ['short line']);
+    RLong := PrependBanner(Src, [LongLine]);
+    try
+      ShortH := RShort.Height - 200;
+      LongH := RLong.Height - 200;
+      Assert.IsTrue(LongH > ShortH,
+        Format('At 1024px, the long line must wrap or shrink-grow the banner '
+          + '(short=%d, long=%d)', [ShortH, LongH]));
+      Assert.AreEqual(1024, RLong.Width);
+    finally
+      RShort.Free;
+      RLong.Free;
     end;
   finally
     Src.Free;

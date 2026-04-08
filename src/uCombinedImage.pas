@@ -173,12 +173,96 @@ begin
   Result := Copy(AText, 1, Len) + BANNER_ELLIPSIS;
 end;
 
+{ Word-wraps AText into lines that each fit within AMaxW at the canvas's
+  current font. Splits on whitespace and rejoins with single spaces, so the
+  decorative double-spaces around '|' separators collapse on wrapped lines
+  (an acceptable cost for keeping all text visible). A single token wider
+  than AMaxW is character-truncated with ellipsis. }
+function WrapTextToLines(ACanvas: TCanvas; const AText: string;
+  AMaxW: Integer): TArray<string>;
+var
+  Words: TArray<string>;
+  Current, Test: string;
+  I: Integer;
+begin
+  if ACanvas.TextWidth(AText) <= AMaxW then
+  begin
+    SetLength(Result, 1);
+    Result[0] := AText;
+    Exit;
+  end;
+
+  Words := AText.Split([' ', #9], TStringSplitOptions.ExcludeEmpty);
+  if Length(Words) = 0 then
+  begin
+    SetLength(Result, 1);
+    Result[0] := AText;
+    Exit;
+  end;
+
+  SetLength(Result, 0);
+  Current := '';
+  for I := 0 to High(Words) do
+  begin
+    if Current = '' then
+      Test := Words[I]
+    else
+      Test := Current + ' ' + Words[I];
+
+    if ACanvas.TextWidth(Test) <= AMaxW then
+      Current := Test
+    else
+    begin
+      { Flush the in-progress line if any, then place this word on a new line }
+      if Current <> '' then
+        Result := Result + [Current];
+
+      if ACanvas.TextWidth(Words[I]) <= AMaxW then
+        Current := Words[I]
+      else
+      begin
+        { Pathological: a single token wider than the line - truncate it }
+        Result := Result + [TruncateToFit(ACanvas, Words[I], AMaxW)];
+        Current := '';
+      end;
+    end;
+  end;
+
+  if Current <> '' then
+    Result := Result + [Current];
+end;
+
+{ Returns the largest font size in [BANNER_FONT_MIN, AInitial] at which every
+  line in ALines fits within AMaxW. Returns BANNER_FONT_MIN when no size in
+  the range fits - the caller should then wrap overflowing lines. }
+function FindFittingBannerFontSize(ACanvas: TCanvas;
+  const ALines: TArray<string>; AInitial, AMaxW: Integer): Integer;
+var
+  Size, I: Integer;
+  Fits: Boolean;
+begin
+  for Size := AInitial downto BANNER_FONT_MIN do
+  begin
+    ACanvas.Font.Size := Size;
+    Fits := True;
+    for I := 0 to High(ALines) do
+      if ACanvas.TextWidth(ALines[I]) > AMaxW then
+      begin
+        Fits := False;
+        Break;
+      end;
+    if Fits then
+      Exit(Size);
+  end;
+  Result := BANNER_FONT_MIN;
+end;
+
 function PrependBanner(ASrc: TBitmap;
   const ALines: TArray<string>): TBitmap;
 var
-  FontSize, LineH, BannerH, MaxTextW, I: Integer;
+  InitialSize, FontSize, LineH, BannerH, MaxTextW, I: Integer;
   TempBmp: TBitmap;
-  Line: string;
+  Wrapped, RenderLines: TArray<string>;
 begin
   if (Length(ALines) = 0) or (ASrc = nil) then
   begin
@@ -189,21 +273,40 @@ begin
     Exit;
   end;
 
-  { Auto-scale font size from image width }
-  FontSize := EnsureRange(ASrc.Width div BANNER_FONT_RATIO,
+  { Initial size from the historical width-based ratio. The shrink loop
+    below may pick something smaller if the actual text doesn't fit. }
+  InitialSize := EnsureRange(ASrc.Width div BANNER_FONT_RATIO,
     BANNER_FONT_MIN, BANNER_FONT_MAX);
   MaxTextW := ASrc.Width - 2 * BANNER_PADDING_H;
 
-  { Measure banner height using a temporary bitmap }
+  { Measure on a temp bitmap so the result canvas isn't dirtied with
+    intermediate font states during the shrink probe. }
   TempBmp := TBitmap.Create;
   try
     TempBmp.Canvas.Font.Name := BANNER_FONT_NAME;
+
+    { Globally pick the largest font size where every original line fits.
+      If even the minimum doesn't fit, the offending lines get word-wrapped
+      below at that minimum size. }
+    FontSize := FindFittingBannerFontSize(TempBmp.Canvas, ALines,
+      InitialSize, MaxTextW);
     TempBmp.Canvas.Font.Size := FontSize;
+
+    { Build the final render list: pass each line through the wrapper,
+      which is a no-op for lines that already fit. }
+    RenderLines := [];
+    for I := 0 to High(ALines) do
+    begin
+      Wrapped := WrapTextToLines(TempBmp.Canvas, ALines[I], MaxTextW);
+      RenderLines := RenderLines + Wrapped;
+    end;
+
     LineH := TempBmp.Canvas.TextHeight('Wg');
   finally
     TempBmp.Free;
   end;
-  BannerH := BANNER_PADDING_V + Length(ALines) * (LineH + BANNER_LINE_GAP)
+
+  BannerH := BANNER_PADDING_V + Length(RenderLines) * (LineH + BANNER_LINE_GAP)
     - BANNER_LINE_GAP + BANNER_PADDING_V;
 
   Result := TBitmap.Create;
@@ -214,17 +317,14 @@ begin
   Result.Canvas.Brush.Color := BANNER_BG_COLOR;
   Result.Canvas.FillRect(Rect(0, 0, Result.Width, BannerH));
 
-  { Draw text lines, truncating if needed }
+  { Draw text lines (already fitted by shrink + wrap; no truncation pass) }
   Result.Canvas.Font.Name := BANNER_FONT_NAME;
   Result.Canvas.Font.Size := FontSize;
   Result.Canvas.Font.Color := BANNER_TEXT_COLOR;
   Result.Canvas.Brush.Style := bsClear;
-  for I := 0 to Length(ALines) - 1 do
-  begin
-    Line := TruncateToFit(Result.Canvas, ALines[I], MaxTextW);
+  for I := 0 to High(RenderLines) do
     Result.Canvas.TextOut(BANNER_PADDING_H,
-      BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), Line);
-  end;
+      BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), RenderLines[I]);
 
   { Draw source image below banner }
   Result.Canvas.Draw(0, BannerH, ASrc);
