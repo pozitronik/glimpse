@@ -13,7 +13,8 @@ uses
 
 type
   TWcxSettingsForm = class(TForm)
-    GbxGeneral: TGroupBox;
+    PageControl: TPageControl;
+    TshGeneral: TTabSheet;
     LblFrameCount: TLabel;
     EdtFrameCount: TEdit;
     UdFrameCount: TUpDown;
@@ -36,7 +37,7 @@ type
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
     LblFFmpegInfo: TLabel;
-    GbxOutput: TGroupBox;
+    TshOutput: TTabSheet;
     LblOutputMode: TLabel;
     CbxOutputMode: TComboBox;
     LblFormat: TLabel;
@@ -48,7 +49,7 @@ type
     EdtPngCompression: TEdit;
     UdPngCompression: TUpDown;
     ChkShowFileSizes: TCheckBox;
-    GbxCombined: TGroupBox;
+    TshCombined: TTabSheet;
     LblColumns: TLabel;
     EdtColumns: TEdit;
     UdColumns: TUpDown;
@@ -65,13 +66,15 @@ type
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
     ChkShowBanner: TCheckBox;
-    GbxSizeLimit: TGroupBox;
+    TshLimits: TTabSheet;
+    LblLimitsHint: TLabel;
     LblFrameMax: TLabel;
     LblCombinedMax: TLabel;
     EdtFrameMax: TEdit;
     UdFrameMax: TUpDown;
     EdtCombinedMax: TEdit;
     UdCombinedMax: TUpDown;
+    PnlButtons: TPanel;
     BtnDefaults: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
@@ -193,15 +196,19 @@ var
   IsCombined: Boolean;
 begin
   IsCombined := CbxOutputMode.ItemIndex = 1;
-  GbxCombined.Enabled := IsCombined;
+  LblColumns.Enabled := IsCombined;
   EdtColumns.Enabled := IsCombined;
   UdColumns.Enabled := IsCombined;
+  LblCellGap.Enabled := IsCombined;
   EdtCellGap.Enabled := IsCombined;
   UdCellGap.Enabled := IsCombined;
+  LblBackground.Enabled := IsCombined;
   PnlBackground.Enabled := IsCombined;
   BtnBackground.Enabled := IsCombined;
   ChkTimestamp.Enabled := IsCombined;
+  LblTimestampFont.Enabled := IsCombined;
   EdtTimestampFont.Enabled := IsCombined;
+  LblTimestampFontSize.Enabled := IsCombined;
   EdtTimestampFontSize.Enabled := IsCombined;
   UdTimestampFontSize.Enabled := IsCombined;
   ChkShowBanner.Enabled := IsCombined;
