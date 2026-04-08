@@ -19,7 +19,10 @@ Provides an instant visual summary of a video's content without opening a media 
 - Optional disk cache for instant re-preview
 - Parallel frame extraction with configurable worker count and thread limit
 - BMP pipe mode for faster frame extraction (configurable in settings)
+- Hardware-accelerated decoding (GPU) with silent fallback to software
 - Scaled extraction: automatically downscale frames to display size, reducing memory usage and improving speed for high-resolution video
+- TC panel thumbnails: provides small previews for video files in Total Commander's file panel (single frame or grid)
+- Quick View customization: separate toolbar/status bar/navigation behavior when opened in TC's Quick View panel (Ctrl+Q)
 - Navigate between video files in the current directory without leaving the preview
 - Collapsible toolbar with hamburger overflow menu for narrow windows
 - Environment variable expansion in all configured paths (e.g. `%USERPROFILE%`)
@@ -54,7 +57,7 @@ Provides an instant visual summary of a video's content without opening a media 
 
 ### Configuration
 
-All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu.
+All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into six tabs: **General**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**.
 
 #### General
 
@@ -102,6 +105,27 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Folder            | %TEMP%\Glimpse\cache | Directory for cached frame files. Supports environment variables                                |
 | Max size          | 500 MB               | Maximum total size of the cache directory. Oldest entries are evicted when the limit is reached |
 
+#### Thumbnails
+
+Controls the small preview icons that Total Commander shows for video files in its file panel (when thumbnail view is enabled in TC).
+
+| Setting                        | Default | Description                                                                                                            |
+|--------------------------------|---------|------------------------------------------------------------------------------------------------------------------------|
+| Enable thumbnails for TC panel | On      | Provides thumbnails to TC via the WLX `ListGetPreviewBitmap` API. Disable to let TC fall back to its built-in handler  |
+| Mode                           | Single  | `Single frame` extracts one representative frame; `Grid` produces a small composite of multiple frames                 |
+| Position                       | 50%     | (Single mode) Position of the captured frame within the video duration (0% = first frame, 100% = last frame)           |
+| Grid frames                    | 4       | (Grid mode) Number of frames laid out in the composite thumbnail (2-16)                                                |
+
+#### Quick View
+
+These settings only apply when the plugin is opened in TC's Quick View panel (Ctrl+Q), allowing a more compact layout that doesn't compete with the file panel for keyboard focus.
+
+| Setting                          | Default | Description                                                                                                                  |
+|----------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------|
+| Disable internal file navigation | On      | Prevents the arrow keys from advancing to neighbor video files, leaving them to TC's file panel where they're usually wanted |
+| Hide toolbar                     | On      | Hides the toolbar in Quick View mode regardless of the Appearance setting                                                    |
+| Hide status bar                  | On      | Hides the status bar in Quick View mode regardless of the Appearance setting                                                 |
+
 ## WCX Plugin (Packer)
 
 Presents a video file as a virtual archive containing frame images. Opening a video in TC shows files like `video_frame_001_00m05s.png` that can be copied, viewed, or batch-extracted using standard TC operations.
@@ -114,7 +138,7 @@ Presents a video file as a virtual archive containing frame images. Opening a vi
 
 ### Configuration
 
-Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing.
+Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into four tabs: **General**, **Output**, **Combined**, **Size limit**.
 
 #### General
 
@@ -140,7 +164,7 @@ Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin u
 | PNG compression | 6               | Compression level for PNG output (0-9)                                                                       |
 | Show file sizes | Off             | Displays actual file sizes in the archive listing. Requires extracting all frames when entering the archive  |
 
-#### Combined image
+#### Combined
 
 These settings only apply when output mode is set to "Combined image":
 
@@ -148,10 +172,19 @@ These settings only apply when output mode is set to "Combined image":
 |--------------------------|---------------|--------------------------------------------------------------------------|
 | Columns                  | 0 (auto)      | Number of columns in the grid. 0 = automatic layout based on frame count |
 | Cell gap (px)            | 2             | Spacing in pixels between frames in the grid                             |
-| Background               | Black         | Background color visible in cell gaps and margins                        |
+| Background               | Dark grey     | Background color visible in cell gaps and margins                        |
 | Show timestamps          | On            | Overlays timecode labels on each frame                                   |
-| Timestamp font           | Segoe UI, 8pt | Font face and size for timecode labels                                   |
+| Timestamp font           | Consolas, 9pt | Font face and size for timecode labels                                   |
 | Include file info banner | Off           | Adds a header with video file name, resolution, and duration             |
+
+#### Size limit
+
+Caps the longer side of extracted output in pixels (the cap applies to whichever side is longer, regardless of orientation). Useful for keeping batch-extracted thumbnails compact.
+
+| Setting                     | Default      | Description                                                                                                                |
+|-----------------------------|--------------|----------------------------------------------------------------------------------------------------------------------------|
+| Separate frames longer side | 0 (no limit) | When `Separate frames` mode is active, ffmpeg downscales each frame so its longer side does not exceed this many pixels    |
+| Combined image longer side  | 0 (no limit) | When `Combined image` mode is active, the assembled grid is downscaled so its longer side does not exceed this many pixels |
 
 ## Installation
 
