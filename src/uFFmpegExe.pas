@@ -40,8 +40,10 @@ type
      ATimeoutMs caps how long the ffmpeg call may run; default 30s matches the
      generic RunProcess default. Use a shorter value (e.g. for thumbnail panels)
      to avoid stalling on broken files.
+     ACancelHandle is an optional Win32 waitable handle (typically TEvent.Handle).
+     When signaled during the call, RunProcess terminates the ffmpeg child process.
      Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap.}
-    function ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000): TBitmap;
+    function ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): TBitmap;
 
     property ExePath: string read FExePath;
   end;
@@ -511,7 +513,7 @@ begin
     Result.ErrorMessage := 'Could not parse video metadata';
 end;
 
-function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD): TBitmap;
+function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD; ACancelHandle: THandle): TBitmap;
 var
   CmdLine, Codec, ScaleFilter, HwAccelFlag, KeyframeFlag: string;
   StdOut, StdErr: TBytes;
@@ -544,7 +546,7 @@ begin
 
   CmdLine := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' + '-frames:v 1 %s%s pipe:1', [FExePath, KeyframeFlag, Format('%.3f', [ATimeOffset], TFormatSettings.Invariant), HwAccelFlag, AFileName, ScaleFilter, Codec]);
 
-  ExitCode := RunProcess(CmdLine, StdOut, StdErr, ATimeoutMs);
+  ExitCode := RunProcess(CmdLine, StdOut, StdErr, ATimeoutMs, ACancelHandle);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then
     Exit;
 

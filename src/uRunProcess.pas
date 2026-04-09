@@ -8,8 +8,11 @@ uses
   System.SysUtils, Winapi.Windows;
 
 {Runs a process with redirected stdout/stderr, captures both outputs.
- Returns the process exit code, or -1 on launch failure or timeout.}
-function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000): Integer;
+ Returns the process exit code, or -1 on launch failure, timeout, or cancellation.
+ ACancelHandle is an optional Win32 waitable handle (typically TEvent.Handle). When
+ signaled mid-run, a watcher thread terminates the child process, which cascades
+ through pipe closure and unblocks the otherwise-blocking ReadFile calls.}
+function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): Integer;
 
 implementation
 
@@ -37,7 +40,7 @@ begin
   end;
 end;
 
-function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000): Integer;
+function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): Integer;
 var
   SA: TSecurityAttributes;
   SI: TStartupInfo;
@@ -49,6 +52,8 @@ var
   StdErrThread: TThread;
   CapturedStdErr: TBytes;
   ExitCode: DWORD;
+  CancelWatcher: TThread;
+  ProcessHandleRef: THandle;
 begin
   Result := -1;
   AStdOut := nil;
@@ -118,6 +123,28 @@ begin
   StdErrThread.FreeOnTerminate := False;
   StdErrThread.Start;
 
+  {When a cancel handle is supplied, a watcher thread waits on both the cancel
+   event and the process handle. If the caller signals cancellation before the
+   child exits naturally, the watcher kills the child; pipe closure then
+   cascades through the blocking ReadPipeToEnd calls below.}
+  CancelWatcher := nil;
+  if ACancelHandle <> 0 then
+  begin
+    ProcessHandleRef := PI.hProcess;
+    CancelWatcher := TThread.CreateAnonymousThread(
+      procedure
+      var
+        Handles: array[0..1] of THandle;
+      begin
+        Handles[0] := ACancelHandle;
+        Handles[1] := ProcessHandleRef;
+        if WaitForMultipleObjects(2, @Handles[0], False, INFINITE) = WAIT_OBJECT_0 then
+          TerminateProcess(ProcessHandleRef, 1);
+      end);
+    CancelWatcher.FreeOnTerminate := False;
+    CancelWatcher.Start;
+  end;
+
   {Read stdout on the calling thread}
   AStdOut := ReadPipeToEnd(StdOutRead);
 
@@ -128,10 +155,25 @@ begin
   if WaitForSingleObject(PI.hProcess, ATimeoutMs) = WAIT_OBJECT_0 then
   begin
     GetExitCodeProcess(PI.hProcess, ExitCode);
-    Result := Integer(ExitCode);
+    {Cancellation path kills the child with exit code 1; surface it as -1 so
+     callers can distinguish a real "-1 from child" (not meaningful under Win32
+     ExitProcess) from a cancelled run.}
+    if (ACancelHandle <> 0) and (WaitForSingleObject(ACancelHandle, 0) = WAIT_OBJECT_0) then
+      Result := -1
+    else
+      Result := Integer(ExitCode);
   end else begin
     TerminateProcess(PI.hProcess, 1);
     Result := -1;
+  end;
+
+  {Join the watcher before closing the process handle to guarantee the watcher
+   is no longer referencing it. If the child finished naturally, the watcher
+   has already woken up from its wait and exited without action.}
+  if Assigned(CancelWatcher) then
+  begin
+    CancelWatcher.WaitFor;
+    CancelWatcher.Free;
   end;
 
   CloseHandle(StdOutRead);

@@ -22,12 +22,17 @@ type
       applies after pipes are drained. A long-running child that writes
       continuously will block ReadPipeToEnd indefinitely. }
     [Test] procedure BinaryOutput_PreservedExactly;
+    { Cancellation contract: an optional cancel handle unblocks a long-running
+      child by killing it, which cascades through pipe closure. }
+    [Test] procedure CancelHandle_DefaultZeroPreservesBehavior;
+    [Test] procedure CancelHandle_NotSignaledRunsToCompletion;
+    [Test] procedure CancelHandle_SignaledTerminatesLongRunningChild;
   end;
 
 implementation
 
 uses
-  System.SysUtils, Winapi.Windows, uRunProcess;
+  System.SysUtils, System.Classes, System.SyncObjs, Winapi.Windows, uRunProcess;
 
 procedure TTestRunProcess.CapturesStdOut;
 var
@@ -138,6 +143,84 @@ begin
       Break;
     end;
   Assert.IsTrue(AllPresent, 'Raw bytes should contain CR+LF');
+end;
+
+procedure TTestRunProcess.CancelHandle_DefaultZeroPreservesBehavior;
+var
+  StdOut, StdErr: TBytes;
+  Code: Integer;
+  Output: string;
+begin
+  { Passing 0 (default) for ACancelHandle must be indistinguishable from
+    omitting the parameter entirely - no watcher thread, no behavior change. }
+  Code := RunProcess('cmd.exe /c echo hello', StdOut, StdErr, 30000, 0);
+  Assert.AreEqual(0, Code, 'Exit code');
+  Output := TEncoding.Default.GetString(StdOut).Trim;
+  Assert.AreEqual('hello', Output, 'StdOut content');
+end;
+
+procedure TTestRunProcess.CancelHandle_NotSignaledRunsToCompletion;
+var
+  StdOut, StdErr: TBytes;
+  Code: Integer;
+  Output: string;
+  CancelEvent: TEvent;
+begin
+  { A real cancel handle that is never signaled must not disturb normal flow:
+    the child runs to completion, the watcher wakes up on the process-exit
+    signal, and it exits without killing anything. }
+  CancelEvent := TEvent.Create(nil, True, False, '');
+  try
+    Code := RunProcess('cmd.exe /c echo hello', StdOut, StdErr, 30000,
+      CancelEvent.Handle);
+    Assert.AreEqual(0, Code, 'Exit code');
+    Output := TEncoding.Default.GetString(StdOut).Trim;
+    Assert.AreEqual('hello', Output, 'StdOut content');
+  finally
+    CancelEvent.Free;
+  end;
+end;
+
+procedure TTestRunProcess.CancelHandle_SignaledTerminatesLongRunningChild;
+var
+  StdOut, StdErr: TBytes;
+  Code: Integer;
+  CancelEvent: TEvent;
+  Signaler: TThread;
+  StartTick, Elapsed: Cardinal;
+  LocalEvent: TEvent;
+begin
+  { Signal cancel mid-run on a 30-second sleep. The watcher must kill the
+    child quickly and let RunProcess return -1 in well under the child's
+    natural duration. 5-second tolerance accounts for PowerShell startup
+    (up to ~2s on cold runs) plus cancel propagation. }
+  CancelEvent := TEvent.Create(nil, True, False, '');
+  try
+    LocalEvent := CancelEvent;
+    Signaler := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Sleep(300);
+        LocalEvent.SetEvent;
+      end);
+    Signaler.FreeOnTerminate := False;
+    Signaler.Start;
+    try
+      StartTick := GetTickCount;
+      Code := RunProcess(
+        'powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"',
+        StdOut, StdErr, 60000, CancelEvent.Handle);
+      Elapsed := GetTickCount - StartTick;
+    finally
+      Signaler.WaitFor;
+      Signaler.Free;
+    end;
+    Assert.AreEqual(-1, Code, 'Cancelled process should return -1');
+    Assert.IsTrue(Elapsed < 5000,
+      Format('Cancel should complete within 5s; elapsed=%dms', [Elapsed]));
+  finally
+    CancelEvent.Free;
+  end;
 end;
 
 end.

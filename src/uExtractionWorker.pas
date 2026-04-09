@@ -35,14 +35,19 @@ type
     FCache: IFrameCache;
     FActiveWorkerCount: PInteger; { shared counter; last thread posts WM_EXTRACTION_DONE }
     FOptions: TExtractionOptions;
+    { Signaled from TerminatedSet so a blocking ffmpeg call inside RunProcess
+      can be unblocked mid-run instead of waiting for the child to exit. }
+    FCancelEvent: TEvent;
   protected
     procedure Execute; override;
+    procedure TerminatedSet; override;
   public
     constructor Create(const AExtractor: IFrameExtractor; const AFileName: string;
       const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND;
       AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection;
       const ACache: IFrameCache; AActiveWorkerCount: PInteger;
       const AOptions: TExtractionOptions);
+    destructor Destroy; override;
   end;
 
 implementation
@@ -73,6 +78,22 @@ begin
   FCache := ACache;
   FActiveWorkerCount := AActiveWorkerCount;
   FOptions := AOptions;
+  { Manual-reset so a late check (after the first cancel) still sees it set }
+  FCancelEvent := TEvent.Create(nil, True, False, '');
+end;
+
+destructor TExtractionThread.Destroy;
+begin
+  { inherited Destroy triggers Terminate+WaitFor which runs TerminatedSet and
+    joins Execute; only after that is it safe to free the event. }
+  inherited;
+  FCancelEvent.Free;
+end;
+
+procedure TExtractionThread.TerminatedSet;
+begin
+  inherited;
+  FCancelEvent.SetEvent;
 end;
 
 procedure TExtractionThread.Execute;
@@ -107,7 +128,7 @@ begin
         if Bmp = nil then
         begin
           Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset,
-            FOptions);
+            FOptions, FCancelEvent.Handle);
           if Bmp <> nil then
           begin
             Source := 'extract';
