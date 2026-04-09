@@ -65,6 +65,7 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Timecode bg      | Dark grey     | Background color of the timecode overlay on each frame                         |
 | Timecode opacity | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque) |
 | Timestamp font   | Segoe UI, 8pt | Font face and size for timecode labels on frames                               |
+| Cell gap (px)    | 0             | Spacing in pixels between frame cells in the viewer (0-20)                     |
 | Show toolbar     | On            | Display the toolbar at the top of the lister window (F4 to toggle)             |
 | Show status bar  | On            | Display the status bar at the bottom of the lister window (F3 to toggle)       |
 

@@ -59,6 +59,9 @@ type
     LblTimestampFontSize: TLabel;
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
+    LblCellGap: TLabel;
+    EdtCellGap: TEdit;
+    UdCellGap: TUpDown;
     ChkShowToolbar: TCheckBox;
     ChkShowStatusBar: TCheckBox;
     TshSave: TTabSheet;
@@ -186,6 +189,7 @@ begin
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
+  UdCellGap.Position := ASettings.CellGap;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
 
@@ -247,6 +251,7 @@ begin
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
+  ASettings.CellGap := UdCellGap.Position;
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
 

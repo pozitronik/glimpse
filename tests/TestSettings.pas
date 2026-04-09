@@ -80,6 +80,14 @@ type
     [Test]
     procedure TestTimestampFontEmptyFallback;
     [Test]
+    procedure TestCellGapDefault;
+    [Test]
+    procedure TestCellGapRoundTrip;
+    [Test]
+    procedure TestCellGapClampedHigh;
+    [Test]
+    procedure TestCellGapClampedLow;
+    [Test]
     procedure TestShowBannerDefault;
     [Test]
     procedure TestShowBannerRoundTrip;
@@ -968,6 +976,89 @@ begin
     S.Load;
     Assert.AreEqual(DEF_TIMESTAMP_FONT, S.TimestampFontName,
       'Empty/whitespace font name should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(DEF_CELL_GAP, S.CellGap);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cellgap.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CellGap := 12;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(12, S2.CellGap);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapClampedHigh;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cellgap_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CellGap', 999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_CELL_GAP, S.CellGap,
+      'CellGap above maximum should be clamped');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapClampedLow;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cellgap_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CellGap', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_CELL_GAP, S.CellGap,
+      'Negative CellGap should be clamped to 0');
   finally
     S.Free;
   end;

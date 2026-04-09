@@ -57,6 +57,7 @@ type
     function BuildLayoutContext: TViewLayoutContext;
     function TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
     procedure SetViewMode(AValue: TViewMode);
+    procedure SetCellGap(AValue: Integer);
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
@@ -110,6 +111,7 @@ type
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
+    property CellGap: Integer read FCellGap write SetCellGap;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
     property PopupMenu;
     property BaseW: Integer read GetBaseW;
@@ -124,7 +126,6 @@ uses
   uZoomController;
 
 const
-  CELL_GAP = 4;
   TIMECODE_H = 20;
 
   {Painting colors}
@@ -151,7 +152,7 @@ constructor TFrameView.Create(AOwner: TComponent);
 begin
   inherited;
   DoubleBuffered := True;
-  FCellGap := CELL_GAP;
+  FCellGap := DEF_CELL_GAP;
   FShowTimecode := True;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
@@ -485,6 +486,17 @@ begin
   if FShowTimecode = AValue then
     Exit;
   FShowTimecode := AValue;
+end;
+
+procedure TFrameView.SetCellGap(AValue: Integer);
+begin
+  if FCellGap = AValue then
+    Exit;
+  FCellGap := AValue;
+  {Cell gap affects component size in every layout mode; recalc so the
+   scrollbox picks up the new dimensions and triggers a repaint.}
+  RecalcSize;
+  Invalidate;
 end;
 
 procedure TFrameView.PaintTimecode(AIndex: Integer; const ACellRect: TRect);

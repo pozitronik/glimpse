@@ -807,6 +807,7 @@ begin
   FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
   FFrameView.TimestampFontName := FSettings.TimestampFontName;
   FFrameView.TimestampFontSize := FSettings.TimestampFontSize;
+  FFrameView.CellGap := FSettings.CellGap;
   UpdateTimecodeButton;
   FFrameView.BackColor := FSettings.Background;
   FScrollBox.Color := FSettings.Background;

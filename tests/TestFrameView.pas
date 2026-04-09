@@ -176,6 +176,10 @@ begin
   Result.Top := 0;
   Result.Width := AWidth;
   Result.ViewMode := AMode;
+  {Layout-arithmetic tests were written against a non-zero gap of 4;
+   the production default is 0 now, so force the legacy value here so
+   the existing assertions keep exercising gap-aware math.}
+  Result.CellGap := 4;
 end;
 
 procedure FreeTestFrameView(AView: TFrameView);

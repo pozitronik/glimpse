@@ -32,6 +32,10 @@ const
   MIN_TIMESTAMP_FONT_SIZE = 6;
   MAX_TIMESTAMP_FONT_SIZE = 72;
 
+  {Cell gap range (shared by both plugins: WLX viewer and WCX combined image)}
+  MIN_CELL_GAP = 0;
+  MAX_CELL_GAP = 20;
+
   {Clamping ranges}
   MIN_FRAMES_COUNT = 1;
   MAX_FRAMES_COUNT = 99;

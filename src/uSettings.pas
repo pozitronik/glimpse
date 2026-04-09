@@ -38,6 +38,7 @@ type
     FTimecodeBackAlpha: Byte;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
+    FCellGap: Integer;
     {[extensions]}
     FExtensionList: string;
     {[save]}
@@ -117,6 +118,7 @@ type
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
+    property CellGap: Integer read FCellGap write FCellGap;
 
     {[extensions]}
     property ExtensionList: string read FExtensionList write FExtensionList;
@@ -160,6 +162,7 @@ const
   DEF_TC_BACK_ALPHA = 180;
   DEF_TIMESTAMP_FONT = 'Segoe UI';
   DEF_TIMESTAMP_FONT_SIZE = 8;
+  DEF_CELL_GAP = 0;
   DEF_SAVE_FOLDER = '';
   DEF_SHOW_BANNER = False;
   DEF_CACHE_ENABLED = True;
@@ -232,6 +235,7 @@ begin
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
   FTimestampFontName := DEF_TIMESTAMP_FONT;
   FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
+  FCellGap := DEF_CELL_GAP;
   FExtensionList := DEF_EXTENSION_LIST;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
@@ -287,6 +291,7 @@ begin
     if FTimestampFontName.Trim = '' then
       FTimestampFontName := DEF_TIMESTAMP_FONT;
     FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize', DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+    FCellGap := EnsureRange(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
@@ -348,6 +353,7 @@ begin
     Ini.WriteString('view', 'TimecodeBackground', ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
     Ini.WriteString('view', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('view', 'TimestampFontSize', FTimestampFontSize);
+    Ini.WriteInteger('view', 'CellGap', FCellGap);
 
     Ini.WriteString('extensions', 'List', FExtensionList);
 

@@ -6,6 +6,7 @@ object SettingsForm: TSettingsForm
   Caption = 'Glimpse Settings'
   ClientHeight = 410
   ClientWidth = 460
+  Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -12
@@ -23,6 +24,9 @@ object SettingsForm: TSettingsForm
     TabOrder = 0
     object TshGeneral: TTabSheet
       Caption = 'General'
+      DesignSize = (
+        452
+        340)
       object LblSkipEdges: TLabel
         Left = 12
         Top = 24
@@ -56,7 +60,11 @@ object SettingsForm: TSettingsForm
         Top = 82
         Width = 3
         Height = 15
+        Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
         ParentFont = False
       end
       object LblMinFrameSide: TLabel
@@ -92,7 +100,11 @@ object SettingsForm: TSettingsForm
         Top = 306
         Width = 3
         Height = 15
+        Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
         ParentFont = False
       end
       object EdtSkipEdges: TEdit
@@ -301,7 +313,11 @@ object SettingsForm: TSettingsForm
         Width = 166
         Height = 15
         Caption = '(0 = transparent, 255 = opaque)'
+        Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
         ParentFont = False
       end
       object LblTimestampFont: TLabel
@@ -317,6 +333,13 @@ object SettingsForm: TSettingsForm
         Width = 23
         Height = 15
         Caption = 'Size:'
+      end
+      object LblCellGap: TLabel
+        Left = 277
+        Top = 53
+        Width = 69
+        Height = 15
+        Caption = 'Cell gap (px):'
       end
       object PnlBackground: TPanel
         Left = 130
@@ -421,10 +444,32 @@ object SettingsForm: TSettingsForm
         Caption = 'Show status bar (F3 to toggle)'
         TabOrder = 10
       end
+      object EdtCellGap: TEdit
+        Left = 350
+        Top = 49
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 11
+        Text = '0'
+      end
+      object UdCellGap: TUpDown
+        Left = 395
+        Top = 49
+        Width = 17
+        Height = 23
+        Associate = EdtCellGap
+        Max = 20
+        TabOrder = 12
+        Thousands = False
+      end
     end
     object TshSave: TTabSheet
       Caption = 'Save'
       ImageIndex = 2
+      DesignSize = (
+        452
+        340)
       object LblSaveFormat: TLabel
         Left = 12
         Top = 24
@@ -535,6 +580,9 @@ object SettingsForm: TSettingsForm
     object TshCache: TTabSheet
       Caption = 'Cache'
       ImageIndex = 3
+      DesignSize = (
+        452
+        340)
       object LblCacheFolder: TLabel
         Left = 12
         Top = 53
@@ -547,7 +595,11 @@ object SettingsForm: TSettingsForm
         Top = 82
         Width = 3
         Height = 15
+        Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
         ParentFont = False
       end
       object LblCacheMaxSize: TLabel
@@ -569,7 +621,11 @@ object SettingsForm: TSettingsForm
         Top = 111
         Width = 3
         Height = 15
+        Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
         ParentFont = False
       end
       object ChkCacheEnabled: TCheckBox
@@ -763,11 +819,15 @@ object SettingsForm: TSettingsForm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 1
+    DesignSize = (
+      460
+      40)
     object BtnDefaults: TButton
       Left = 8
       Top = 6
       Width = 100
       Height = 28
+      Anchors = [akLeft, akBottom]
       Caption = 'Reset Defaults'
       TabOrder = 0
       OnClick = BtnDefaultsClick
@@ -777,7 +837,7 @@ object SettingsForm: TSettingsForm
       Top = 6
       Width = 75
       Height = 28
-      Anchors = [akTop, akRight]
+      Anchors = [akRight, akBottom]
       Caption = 'OK'
       Default = True
       ModalResult = 1
@@ -788,7 +848,7 @@ object SettingsForm: TSettingsForm
       Top = 6
       Width = 75
       Height = 28
-      Anchors = [akTop, akRight]
+      Anchors = [akRight, akBottom]
       Cancel = True
       Caption = 'Cancel'
       ModalResult = 2
