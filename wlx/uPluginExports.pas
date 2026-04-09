@@ -24,8 +24,8 @@ implementation
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
   Vcl.Graphics,
-  uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uCache, uDebugLog,
-  uThumbnailRender;
+  uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uCache, uProbeCache,
+  uDebugLog, uThumbnailRender;
 
 var
   GSettings: TPluginSettings;
@@ -36,6 +36,10 @@ var
    thumbnail worker calls DoGetPreviewBitmap from background threads, so
    this must outlive any single call.}
   GThumbnailCache: IFrameCache;
+  {Long-lived probe cache shared by every thumbnail preview call. Folder
+   scrolling hits the same videos repeatedly; without a shared cache each
+   call re-spawns ffmpeg just to read duration/resolution.}
+  GProbeCache: TProbeCache;
 
 procedure Log(const AMsg: string);
 begin
@@ -216,6 +220,11 @@ begin
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
 
+  {Probe cache is always enabled (no user-facing toggle); create once here
+   so repeat thumbnail calls share probe results across the TC session.}
+  if GProbeCache = nil then
+    GProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
+
   {Run cache eviction once per session.
    Evict enumerates files and exits early if within budget, so no pre-check needed.
    Wrapped in try/except: invalid or inaccessible cache folder must not crash TC.}
@@ -256,11 +265,14 @@ begin
     Exit;
   if GThumbnailCache = nil then
     Exit;
+  if GProbeCache = nil then
+    Exit;
 
   try
     FFmpeg := TFFmpegExe.Create(GFFmpegPath);
     try
-      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height, GSettings, GThumbnailCache);
+      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height, GSettings,
+        GThumbnailCache, GProbeCache);
       if Bmp <> nil then
         try
           {TC takes ownership of the returned HBITMAP; ReleaseHandle
@@ -300,6 +312,7 @@ finalization
 
 Log('finalization');
 GThumbnailCache := nil;
+FreeAndNil(GProbeCache);
 FreeAndNil(GSettings);
 
 end.

@@ -39,6 +39,7 @@ type
     [Test] procedure RenderThumbnail_NilFFmpeg_ReturnsNil;
     [Test] procedure RenderThumbnail_NilSettings_ReturnsNil;
     [Test] procedure RenderThumbnail_NilCache_ReturnsNil;
+    [Test] procedure RenderThumbnail_NilProbeCache_ReturnsNil;
     [Test] procedure RenderThumbnail_Disabled_ReturnsNil;
     [Test] procedure RenderThumbnail_ZeroWidth_ReturnsNil;
     [Test] procedure RenderThumbnail_ZeroHeight_ReturnsNil;
@@ -50,8 +51,16 @@ implementation
 uses
   System.SysUtils, System.IOUtils,
   Vcl.Graphics,
-  uTypes, uSettings, uDefaults, uFFmpegExe, uCache, uFrameOffsets,
+  uTypes, uSettings, uDefaults, uFFmpegExe, uProbeCache, uCache, uFrameOffsets,
   uThumbnailRender;
+
+function MakeTempProbeCache: TProbeCache;
+begin
+  { Per-test probe cache in a throwaway temp dir so tests remain isolated.
+    TDirectory is not created here; TProbeCache only writes on Put(). }
+  Result := TProbeCache.Create(TPath.Combine(TPath.GetTempPath,
+    'glimpse_thumb_probe_' + IntToStr(Random(MaxInt))));
+end;
 
 { -------- CalcThumbnailOffsets — single mode -------- }
 
@@ -230,12 +239,15 @@ procedure TTestThumbnailRender.RenderThumbnail_NilFFmpeg_ReturnsNil;
 var
   S: TPluginSettings;
   Cache: IFrameCache;
+  Probe: TProbeCache;
 begin
   S := TPluginSettings.Create('');
+  Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(nil, 'x.mp4', 256, 256, S, Cache));
+    Assert.IsNull(RenderThumbnail(nil, 'x.mp4', 256, 256, S, Cache, Probe));
   finally
+    Probe.Free;
     S.Free;
   end;
 end;
@@ -244,12 +256,15 @@ procedure TTestThumbnailRender.RenderThumbnail_NilSettings_ReturnsNil;
 var
   Cache: IFrameCache;
   Ff: TFFmpegExe;
+  Probe: TProbeCache;
 begin
   Cache := TNullFrameCache.Create;
   Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Probe := MakeTempProbeCache;
   try
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, nil, Cache));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, nil, Cache, Probe));
   finally
+    Probe.Free;
     Ff.Free;
   end;
 end;
@@ -258,11 +273,33 @@ procedure TTestThumbnailRender.RenderThumbnail_NilCache_ReturnsNil;
 var
   S: TPluginSettings;
   Ff: TFFmpegExe;
+  Probe: TProbeCache;
 begin
   S := TPluginSettings.Create('');
   Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Probe := MakeTempProbeCache;
   try
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, nil));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, nil, Probe));
+  finally
+    Probe.Free;
+    Ff.Free;
+    S.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.RenderThumbnail_NilProbeCache_ReturnsNil;
+var
+  S: TPluginSettings;
+  Cache: IFrameCache;
+  Ff: TFFmpegExe;
+begin
+  { Probe cache is required — without it the pipeline cannot resolve video
+    metadata and must fail fast, consistent with the other nil guards. }
+  S := TPluginSettings.Create('');
+  Ff := TFFmpegExe.Create('ffmpeg.exe');
+  try
+    Cache := TNullFrameCache.Create;
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, Cache, nil));
   finally
     Ff.Free;
     S.Free;
@@ -274,14 +311,17 @@ var
   S: TPluginSettings;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
+  Probe: TProbeCache;
 begin
   S := TPluginSettings.Create('');
   Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Probe := MakeTempProbeCache;
   try
     S.ThumbnailsEnabled := False;
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, Cache));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, Cache, Probe));
   finally
+    Probe.Free;
     Ff.Free;
     S.Free;
   end;
@@ -292,13 +332,16 @@ var
   S: TPluginSettings;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
+  Probe: TProbeCache;
 begin
   S := TPluginSettings.Create('');
   Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 0, 256, S, Cache));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 0, 256, S, Cache, Probe));
   finally
+    Probe.Free;
     Ff.Free;
     S.Free;
   end;
@@ -309,13 +352,16 @@ var
   S: TPluginSettings;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
+  Probe: TProbeCache;
 begin
   S := TPluginSettings.Create('');
   Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 0, S, Cache));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 0, S, Cache, Probe));
   finally
+    Probe.Free;
     Ff.Free;
     S.Free;
   end;
@@ -326,16 +372,19 @@ var
   S: TPluginSettings;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
+  Probe: TProbeCache;
 begin
   { Probe will fail (or yield IsValid=False) on a bogus ffmpeg path; the
     function must return nil rather than raise. This is the closest we
     can get to integration testing without shipping a sample video. }
   S := TPluginSettings.Create('');
   Ff := TFFmpegExe.Create('Z:\nonexistent\ffmpeg.exe');
+  Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'Z:\nonexistent.mp4', 256, 256, S, Cache));
+    Assert.IsNull(RenderThumbnail(Ff, 'Z:\nonexistent.mp4', 256, 256, S, Cache, Probe));
   finally
+    Probe.Free;
     Ff.Free;
     S.Free;
   end;

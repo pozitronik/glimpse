@@ -8,7 +8,7 @@ interface
 
 uses
   Winapi.Windows, Vcl.Graphics,
-  uTypes, uSettings, uFFmpegExe, uCache, uFrameOffsets;
+  uTypes, uSettings, uFFmpegExe, uProbeCache, uCache, uFrameOffsets;
 
 { Computes the time offsets to extract for a thumbnail.
   Single mode: one offset at APositionPercent% of duration.
@@ -25,10 +25,13 @@ function PickThumbnailExtractionMaxSide(AReqWidth, AReqHeight: Integer): Integer
 { Renders a thumbnail bitmap for the given video file.
   Returns nil if disabled, on probe failure, or on extraction failure.
   Caller owns the returned bitmap.
-  ACache may be a TNullFrameCache if caching is off; never pass nil. }
+  ACache may be a TNullFrameCache if caching is off; never pass nil.
+  AProbeCache consolidates probe results across the thumbnail panel and the
+  lister form so folder scrolling does not re-spawn ffmpeg for files already
+  probed once; never pass nil. }
 function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string;
   AReqWidth, AReqHeight: Integer; const ASettings: TPluginSettings;
-  const ACache: IFrameCache): TBitmap;
+  const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
 
 implementation
 
@@ -128,7 +131,7 @@ end;
 
 function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string;
   AReqWidth, AReqHeight: Integer; const ASettings: TPluginSettings;
-  const ACache: IFrameCache): TBitmap;
+  const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
 var
   Info: TVideoInfo;
   Offsets: TFrameOffsetArray;
@@ -137,7 +140,7 @@ var
   I: Integer;
 begin
   Result := nil;
-  if (AFFmpeg = nil) or (ASettings = nil) or (ACache = nil) then
+  if (AFFmpeg = nil) or (ASettings = nil) or (ACache = nil) or (AProbeCache = nil) then
     Exit;
   if not ASettings.ThumbnailsEnabled then
     Exit;
@@ -147,7 +150,7 @@ begin
   { Single try/except wraps the whole pipeline so any failure releases
     in-progress bitmaps. Thumbnail errors must never propagate to TC. }
   try
-    Info := AFFmpeg.ProbeVideo(AFileName);
+    Info := AProbeCache.TryGetOrProbe(AFileName, AFFmpeg.ExePath);
     if not Info.IsValid then
       Exit;
 
