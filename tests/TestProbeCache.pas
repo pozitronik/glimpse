@@ -23,6 +23,8 @@ type
     [Test] procedure TestShardedDirectory;
     [Test] procedure TestDefaultProbeCacheDir;
     [Test] procedure TestFloatLocaleIndependence;
+    [Test] procedure TestTryGetOrProbeHitsCache;
+    [Test] procedure TestTryGetOrProbeMissReturnsInvalidAndSkipsCache;
   end;
 
 implementation
@@ -259,6 +261,67 @@ begin
   Dir := DefaultProbeCacheDir;
   Assert.IsTrue(Dir.Contains('Glimpse'));
   Assert.IsTrue(Dir.Contains('probes'));
+end;
+
+procedure TTestProbeCache.TestTryGetOrProbeHitsCache;
+var
+  Cache: TProbeCache;
+  Info, Retrieved: TVideoInfo;
+  TmpFile: string;
+begin
+  { Pre-populate the cache so TryGetOrProbe returns without invoking ffmpeg.
+    Passing a bogus ffmpeg path proves the hit path never reaches the subprocess. }
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_hit.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      Info := Default(TVideoInfo);
+      Info.Duration := 42.5;
+      Info.Width := 1280;
+      Info.Height := 720;
+      Info.IsValid := True;
+      Cache.Put(TmpFile, Info);
+
+      Retrieved := Cache.TryGetOrProbe(TmpFile, '__no_such_ffmpeg__.exe');
+
+      Assert.IsTrue(Retrieved.IsValid, 'Cached entry must be returned');
+      Assert.AreEqual(Double(42.5), Retrieved.Duration, 0.001);
+      Assert.AreEqual(1280, Retrieved.Width);
+      Assert.AreEqual(720, Retrieved.Height);
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestProbeCache.TestTryGetOrProbeMissReturnsInvalidAndSkipsCache;
+var
+  Cache: TProbeCache;
+  Retrieved, Check: TVideoInfo;
+  TmpFile: string;
+begin
+  { Cache miss + bogus ffmpeg path: ProbeVideo should yield an invalid result,
+    and Put() must refuse to persist it (Put is a no-op for invalid entries).
+    The next TryGet must still miss. }
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_miss_probe.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      Retrieved := Cache.TryGetOrProbe(TmpFile, '__no_such_ffmpeg__.exe');
+      Assert.IsFalse(Retrieved.IsValid, 'Invalid probe result expected');
+
+      Assert.IsFalse(Cache.TryGet(TmpFile, Check),
+        'Invalid result must not have been cached');
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
+  end;
 end;
 
 procedure TTestProbeCache.TestFloatLocaleIndependence;

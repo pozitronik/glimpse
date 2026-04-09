@@ -23,6 +23,9 @@ type
     function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
     {Stores a successful probe result for AFilePath. Only caches valid results.}
     procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
+    {Convenience: cache look-up, fall back to ffmpeg probe on miss, repopulate.
+     Consolidates the cache-then-probe policy so WLX/WCX/thumbnail paths share it.}
+    function TryGetOrProbe(const AFilePath, AFFmpegPath: string): TVideoInfo;
   end;
 
   {Default probe cache directory, separate from the frame cache.}
@@ -108,6 +111,22 @@ begin
   finally
     Lines.Free;
   end;
+end;
+
+function TProbeCache.TryGetOrProbe(const AFilePath, AFFmpegPath: string): TVideoInfo;
+var
+  FFmpeg: TFFmpegExe;
+begin
+  if TryGet(AFilePath, Result) then
+    Exit;
+  FFmpeg := TFFmpegExe.Create(AFFmpegPath);
+  try
+    Result := FFmpeg.ProbeVideo(AFilePath);
+  finally
+    FFmpeg.Free;
+  end;
+  {Put is a no-op for invalid results, so we can call it unconditionally}
+  Put(AFilePath, Result);
 end;
 
 procedure TProbeCache.Put(const AFilePath: string; const AInfo: TVideoInfo);

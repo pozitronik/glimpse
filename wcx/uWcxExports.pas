@@ -239,7 +239,7 @@ end;
 function DoOpenArchive(const AFileName: string; AOpenMode: Integer; out AOpenResult: Integer): THandle;
 var
   H: TArchiveHandle;
-  FFmpeg: TFFmpegExe;
+  ProbeC: TProbeCache;
 begin
   Result := 0;
   AOpenResult := E_SUCCESS;
@@ -262,20 +262,9 @@ begin
       Exit;
     end;
 
-    {Try cached probe first; fall back to ffmpeg on miss}
-    var
     ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
     try
-      if not ProbeC.TryGet(AFileName, H.VideoInfo) then
-      begin
-        FFmpeg := TFFmpegExe.Create(H.FFmpegPath);
-        try
-          H.VideoInfo := FFmpeg.ProbeVideo(AFileName);
-        finally
-          FFmpeg.Free;
-        end;
-        ProbeC.Put(AFileName, H.VideoInfo);
-      end;
+      H.VideoInfo := ProbeC.TryGetOrProbe(AFileName, H.FFmpegPath);
     finally
       ProbeC.Free;
     end;

@@ -918,8 +918,6 @@ begin
 end;
 
 procedure TPluginForm.LoadFile(const AFileName: string);
-var
-  FFmpeg: TFFmpegExe;
 begin
   FormLog(Format('LoadFile: %s', [AFileName]));
   FLoadStartTick := GetTickCount64;
@@ -937,17 +935,7 @@ begin
     Exit;
   end;
 
-  {Try cached probe first; fall back to ffmpeg on miss}
-  if not FProbeCache.TryGet(FFileName, FVideoInfo) then
-  begin
-    FFmpeg := TFFmpegExe.Create(FFFmpegPath);
-    try
-      FVideoInfo := FFmpeg.ProbeVideo(FFileName);
-    finally
-      FFmpeg.Free;
-    end;
-    FProbeCache.Put(FFileName, FVideoInfo);
-  end;
+  FVideoInfo := FProbeCache.TryGetOrProbe(FFileName, FFFmpegPath);
 
   FExporter.UpdateBannerInfo(BuildBannerInfo(FFileName, FVideoInfo));
 
