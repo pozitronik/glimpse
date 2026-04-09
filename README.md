@@ -8,25 +8,6 @@ A pair of Total Commander plugins for working with video frames. The **WLX** (Li
 
 Provides an instant visual summary of a video's content without opening a media player.
 
-### Features
-
-- Fast, non-blocking preview: placeholders appear immediately, frames load in background
-- Five view modes: smart grid, grid, scroll, filmstrip, single frame
-- Configurable number of frames (1-99)
-- Frame selection (Ctrl+Click to toggle, Ctrl+A to select all) with save and clipboard support
-- Save frames as PNG or JPEG with configurable quality
-- Zoom controls: fit window, fit if larger, actual size, manual zoom
-- Optional disk cache for instant re-preview
-- Parallel frame extraction with configurable worker count and thread limit
-- BMP pipe mode for faster frame extraction (configurable in settings)
-- Hardware-accelerated decoding (GPU) with silent fallback to software
-- Scaled extraction: automatically downscale frames to display size, reducing memory usage and improving speed for high-resolution video
-- TC panel thumbnails: provides small previews for video files in Total Commander's file panel (single frame or grid)
-- Quick View customization: separate toolbar/status bar/navigation behavior when opened in TC's Quick View panel (Ctrl+Q)
-- Navigate between video files in the current directory without leaving the preview
-- Collapsible toolbar with hamburger overflow menu for narrow windows
-- Environment variable expansion in all configured paths (e.g. `%USERPROFILE%`)
-
 ### Keyboard Shortcuts
 
 | Key             | Action                                                                                            |

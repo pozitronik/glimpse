@@ -669,7 +669,7 @@ object SettingsForm: TSettingsForm
         Top = 24
         Width = 412
         Height = 17
-        Caption = 'Enable thumbnails for TC panels'
+        Caption = 'Enable thumbnails for TC panel'
         TabOrder = 0
         OnClick = ChkThumbnailsEnabledClick
       end
