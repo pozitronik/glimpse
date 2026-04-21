@@ -398,8 +398,9 @@ end;
 
 procedure TSmartGridLayout.CalcRows(const ACtx: TViewLayoutContext);
 var
-  N, R, BestR, Base, Extra, I: Integer;
+  N, R, BestR, Base, Extra, I, CellsInRow: Integer;
   BestScore, Score, DisplayedAR, OrigAR: Double;
+  CellH, CellW: Double;
   Rows: TArray<TSmartRow>;
 begin
   N := ACtx.CellCount;
@@ -416,19 +417,24 @@ begin
   BestR := 1;
   BestScore := MaxDouble;
 
-  {Try each possible row count and find the one with least cropping}
+  {Try each possible row count and find the one with least cropping.
+   Cell dimensions include gap subtraction so the scoring reflects how the
+   cells will actually render -- otherwise gap>0 would bias the score
+   toward row counts that cram more cells per row than they can fit cleanly.}
   for R := 1 to N do
   begin
-    {Score: sum of per-row aspect ratio deviation}
     Score := 0;
     Base := N div R;
     Extra := N mod R;
+    CellH := Max(1.0, (ACtx.BaseH - (R - 1) * ACtx.CellGap) / R);
     for I := 0 to R - 1 do
     begin
       if I < Extra then
-        DisplayedAR := (ACtx.BaseH / R) / (ACtx.BaseW / (Base + 1))
+        CellsInRow := Base + 1
       else
-        DisplayedAR := (ACtx.BaseH / R) / (ACtx.BaseW / Max(1, Base));
+        CellsInRow := Max(1, Base);
+      CellW := Max(1.0, (ACtx.BaseW - (CellsInRow - 1) * ACtx.CellGap) / CellsInRow);
+      DisplayedAR := CellH / CellW;
       Score := Score + Abs(DisplayedAR - OrigAR);
     end;
 
@@ -456,13 +462,14 @@ end;
 
 function TSmartGridLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
-  RowIdx, CellInRow, RowTop, RowH, CellW, PrevCount: Integer;
+  RowIdx, CellInRow, RowTop, RowH, CellW, PrevCount, Gap: Integer;
   OffX, OffY: Integer;
 begin
   if Length(FSmartRows) = 0 then
     Exit(Rect(0, 0, 1, 1));
 
-  RowH := ACtx.BaseH div Length(FSmartRows);
+  Gap := ACtx.CellGap;
+  RowH := Max(1, (ACtx.BaseH - (Length(FSmartRows) - 1) * Gap) div Length(FSmartRows));
 
   {Find which row this index belongs to}
   PrevCount := 0;
@@ -471,11 +478,13 @@ begin
     if AIndex < PrevCount + FSmartRows[RowIdx].Count then
     begin
       CellInRow := AIndex - PrevCount;
-      CellW := ACtx.BaseW div Max(1, FSmartRows[RowIdx].Count);
-      RowTop := RowIdx * RowH;
+      CellW := Max(1, (ACtx.BaseW - (FSmartRows[RowIdx].Count - 1) * Gap) div Max(1, FSmartRows[RowIdx].Count));
+      RowTop := RowIdx * (RowH + Gap);
 
-      {Last row/cell fills remaining space to avoid rounding gaps}
-      Result.Left := CellInRow * CellW;
+      {Last row/cell fills remaining space to absorb rounding remainder.
+       Gaps sit between cells only, so the last cell's right edge is BaseW
+       and the last row's bottom edge is BaseH -- no gap trails after them}
+      Result.Left := CellInRow * (CellW + Gap);
       if CellInRow = FSmartRows[RowIdx].Count - 1 then
         Result.Right := ACtx.BaseW
       else

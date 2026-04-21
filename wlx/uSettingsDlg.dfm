@@ -310,9 +310,9 @@ object SettingsForm: TSettingsForm
       object LblTCAlpha: TLabel
         Left = 12
         Top = 82
-        Width = 98
+        Width = 75
         Height = 15
-        Caption = 'Timecode opacity:'
+        Caption = 'Bg opacity:'
       end
       object LblTCAlphaHint: TLabel
         Left = 198
@@ -327,16 +327,23 @@ object SettingsForm: TSettingsForm
         Font.Style = []
         ParentFont = False
       end
-      object LblTimestampFont: TLabel
+      object LblTCTextAlpha: TLabel
         Left = 12
         Top = 111
+        Width = 78
+        Height = 15
+        Caption = 'Text opacity:'
+      end
+      object LblTimestampFont: TLabel
+        Left = 12
+        Top = 140
         Width = 88
         Height = 15
         Caption = 'Timestamp font:'
       end
       object LblTimestampFontSize: TLabel
         Left = 320
-        Top = 111
+        Top = 140
         Width = 23
         Height = 15
         Caption = 'Size:'
@@ -350,14 +357,14 @@ object SettingsForm: TSettingsForm
       end
       object LblBorder: TLabel
         Left = 12
-        Top = 144
+        Top = 173
         Width = 69
         Height = 15
         Caption = 'Border (px):'
       end
       object LblTimestampCorner: TLabel
         Left = 230
-        Top = 144
+        Top = 173
         Width = 101
         Height = 15
         Caption = 'Timestamp corner:'
@@ -421,49 +428,69 @@ object SettingsForm: TSettingsForm
         TabOrder = 5
         Thousands = False
       end
-      object EdtTimestampFont: TEdit
+      object EdtTCTextAlpha: TEdit
         Left = 130
-        Top = 107
-        Width = 180
-        Height = 23
-        TabOrder = 6
-      end
-      object EdtTimestampFontSize: TEdit
-        Left = 350
         Top = 107
         Width = 45
         Height = 23
         NumbersOnly = True
+        TabOrder = 6
+        Text = '255'
+      end
+      object UdTCTextAlpha: TUpDown
+        Left = 175
+        Top = 107
+        Width = 17
+        Height = 23
+        Associate = EdtTCTextAlpha
+        Max = 255
+        Position = 255
         TabOrder = 7
+        Thousands = False
+      end
+      object EdtTimestampFont: TEdit
+        Left = 130
+        Top = 136
+        Width = 180
+        Height = 23
+        TabOrder = 8
+      end
+      object EdtTimestampFontSize: TEdit
+        Left = 350
+        Top = 136
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 9
         Text = '6'
       end
       object UdTimestampFontSize: TUpDown
         Left = 395
-        Top = 107
+        Top = 136
         Width = 17
         Height = 23
         Associate = EdtTimestampFontSize
         Min = 6
         Max = 72
         Position = 6
-        TabOrder = 8
+        TabOrder = 10
         Thousands = False
       end
       object ChkShowToolbar: TCheckBox
         Left = 12
-        Top = 173
+        Top = 202
         Width = 200
         Height = 17
         Caption = 'Show toolbar (F4 to toggle)'
-        TabOrder = 9
+        TabOrder = 11
       end
       object ChkShowStatusBar: TCheckBox
         Left = 230
-        Top = 173
+        Top = 202
         Width = 200
         Height = 17
         Caption = 'Show status bar (F3 to toggle)'
-        TabOrder = 10
+        TabOrder = 12
       end
       object EdtCellGap: TEdit
         Left = 350
@@ -471,7 +498,7 @@ object SettingsForm: TSettingsForm
         Width = 45
         Height = 23
         NumbersOnly = True
-        TabOrder = 11
+        TabOrder = 13
         Text = '0'
       end
       object UdCellGap: TUpDown
@@ -481,35 +508,35 @@ object SettingsForm: TSettingsForm
         Height = 23
         Associate = EdtCellGap
         Max = 20
-        TabOrder = 12
+        TabOrder = 14
         Thousands = False
       end
       object EdtBorder: TEdit
         Left = 130
-        Top = 140
+        Top = 169
         Width = 45
         Height = 23
         NumbersOnly = True
-        TabOrder = 13
+        TabOrder = 15
         Text = '0'
       end
       object UdBorder: TUpDown
         Left = 175
-        Top = 140
+        Top = 169
         Width = 17
         Height = 23
         Associate = EdtBorder
         Max = 200
-        TabOrder = 14
+        TabOrder = 16
         Thousands = False
       end
       object CbxTimestampCorner: TComboBox
         Left = 340
-        Top = 140
+        Top = 169
         Width = 105
         Height = 23
         Style = csDropDownList
-        TabOrder = 15
+        TabOrder = 17
         Items.Strings = (
           'Top left'
           'Top right'

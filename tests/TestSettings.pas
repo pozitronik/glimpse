@@ -72,6 +72,14 @@ type
     [Test]
     procedure TestTimecodeBackColorAlphaEdgeCases;
     [Test]
+    procedure TestTimestampTextAlphaDefault;
+    [Test]
+    procedure TestTimestampTextAlphaRoundTrip;
+    [Test]
+    procedure TestTimestampTextAlphaClampedHigh;
+    [Test]
+    procedure TestTimestampTextAlphaClampedLow;
+    [Test]
     procedure TestTimestampFontDefaults;
     [Test]
     procedure TestTimestampFontRoundTrip;
@@ -218,6 +226,7 @@ begin
     S1.ShowStatusBar := False;
     S1.TimecodeBackColor := TColor($0055AA00);
     S1.TimecodeBackAlpha := 200;
+    S1.TimestampTextAlpha := 128;
     S1.ExtensionList := 'mp4,mkv,avi';
     S1.SaveFormat := sfJPEG;
     S1.JpegQuality := 75;
@@ -251,6 +260,7 @@ begin
     Assert.IsFalse(S2.ShowStatusBar);
     Assert.AreEqual(Integer(TColor($0055AA00)), Integer(S2.TimecodeBackColor));
     Assert.AreEqual(200, Integer(S2.TimecodeBackAlpha));
+    Assert.AreEqual(128, Integer(S2.TimestampTextAlpha));
     Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);
     Assert.AreEqual(Ord(sfJPEG), Ord(S2.SaveFormat));
     Assert.AreEqual(75, S2.JpegQuality);
@@ -888,6 +898,85 @@ begin
       'Empty string should fall back to default color');
     Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
       'Empty string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
+      'Fresh settings should carry the text alpha default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.TimestampTextAlpha := 64;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(64, Integer(S2.TimestampTextAlpha),
+      'Text alpha should survive save/load round trip');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampTextAlpha', 999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(MAX_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
+      'Out-of-range high value should clamp to MAX_TIMESTAMP_TEXT_ALPHA');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampTextAlpha', -10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(MIN_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
+      'Negative value should clamp to MIN_TIMESTAMP_TEXT_ALPHA');
   finally
     S.Free;
   end;

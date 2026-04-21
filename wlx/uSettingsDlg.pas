@@ -55,6 +55,9 @@ type
     EdtTCAlpha: TEdit;
     UdTCAlpha: TUpDown;
     LblTCAlphaHint: TLabel;
+    LblTCTextAlpha: TLabel;
+    EdtTCTextAlpha: TEdit;
+    UdTCTextAlpha: TUpDown;
     LblTimestampFont: TLabel;
     EdtTimestampFont: TEdit;
     LblTimestampFontSize: TLabel;
@@ -199,6 +202,7 @@ begin
   PnlBackground.Color := ASettings.Background;
   PnlTCBack.Color := ASettings.TimecodeBackColor;
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
+  UdTCTextAlpha.Position := ASettings.TimestampTextAlpha;
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   UdCellGap.Position := ASettings.CellGap;
@@ -263,6 +267,7 @@ begin
   ASettings.Background := PnlBackground.Color;
   ASettings.TimecodeBackColor := PnlTCBack.Color;
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
+  ASettings.TimestampTextAlpha := UdTCTextAlpha.Position;
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.CellGap := UdCellGap.Position;

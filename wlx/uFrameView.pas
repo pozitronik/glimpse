@@ -48,10 +48,12 @@ type
     FShowTimecode: Boolean;
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
+    FTimestampTextAlpha: Byte;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FBlendBmp: TBitmap; {reusable 1x1 bitmap for alpha-blended timecode background}
     FBlendBmpColor: TColor; {cached color to avoid redundant Pixels[] writes}
+    FTextBlendBmp: TBitmap; {offscreen bitmap for alpha-blended timecode text; resized on demand}
     FOnCtrlWheel: TCtrlWheelEvent;
     FLayout: TViewModeLayout;
     function GetBaseW: Integer;
@@ -62,6 +64,12 @@ type
     procedure SetCellGap(AValue: Integer);
     procedure SetCellMargin(AValue: Integer);
     procedure SetTimestampCorner(AValue: TTimestampCorner);
+    procedure SetBackColor(AValue: TColor);
+    procedure SetTimecodeBackColor(AValue: TColor);
+    procedure SetTimecodeBackAlpha(AValue: Byte);
+    procedure SetTimestampTextAlpha(AValue: Byte);
+    procedure SetTimestampFontName(const AValue: string);
+    procedure SetTimestampFontSize(AValue: Integer);
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
@@ -107,14 +115,15 @@ type
     property AspectRatio: Double read FAspectRatio write FAspectRatio;
     property NativeW: Integer read FNativeW write FNativeW;
     property NativeH: Integer read FNativeH write FNativeH;
-    property BackColor: TColor read FBackColor write FBackColor;
+    property BackColor: TColor read FBackColor write SetBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
     property ZoomFactor: Double read FZoomFactor write FZoomFactor;
     property ShowTimecode: Boolean read FShowTimecode write SetShowTimecode;
-    property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
-    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
-    property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
-    property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
+    property TimecodeBackColor: TColor read FTimecodeBackColor write SetTimecodeBackColor;
+    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write SetTimecodeBackAlpha;
+    property TimestampTextAlpha: Byte read FTimestampTextAlpha write SetTimestampTextAlpha;
+    property TimestampFontName: string read FTimestampFontName write SetTimestampFontName;
+    property TimestampFontSize: Integer read FTimestampFontSize write SetTimestampFontSize;
     property CellGap: Integer read FCellGap write SetCellGap;
     property CellMargin: Integer read FCellMargin write SetCellMargin;
     property TimestampCorner: TTimestampCorner read FTimestampCorner write SetTimestampCorner;
@@ -164,6 +173,7 @@ begin
   FShowTimecode := True;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
+  FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
   FTimestampFontName := DEF_TIMESTAMP_FONT;
   FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
   FBackColor := DEF_BACKGROUND;
@@ -183,6 +193,8 @@ begin
   FBlendBmp := TBitmap.Create;
   FBlendBmp.SetSize(1, 1);
   FBlendBmpColor := TColor(-1); {force first-use update}
+  FTextBlendBmp := TBitmap.Create;
+  FTextBlendBmp.PixelFormat := pf24bit;
   FLayout := CreateViewModeLayout(vmGrid);
 end;
 
@@ -191,6 +203,7 @@ begin
   ClearCells;
   FLayout.Free;
   FBlendBmp.Free;
+  FTextBlendBmp.Free;
   inherited;
 end;
 
@@ -512,6 +525,57 @@ begin
   if FShowTimecode = AValue then
     Exit;
   FShowTimecode := AValue;
+  Invalidate;
+end;
+
+procedure TFrameView.SetBackColor(AValue: TColor);
+begin
+  if FBackColor = AValue then
+    Exit;
+  FBackColor := AValue;
+  Invalidate;
+end;
+
+procedure TFrameView.SetTimecodeBackColor(AValue: TColor);
+begin
+  if FTimecodeBackColor = AValue then
+    Exit;
+  FTimecodeBackColor := AValue;
+  {Reset cached blend color so AlphaBlend picks up the new hue next paint}
+  FBlendBmpColor := TColor(-1);
+  Invalidate;
+end;
+
+procedure TFrameView.SetTimecodeBackAlpha(AValue: Byte);
+begin
+  if FTimecodeBackAlpha = AValue then
+    Exit;
+  FTimecodeBackAlpha := AValue;
+  Invalidate;
+end;
+
+procedure TFrameView.SetTimestampTextAlpha(AValue: Byte);
+begin
+  if FTimestampTextAlpha = AValue then
+    Exit;
+  FTimestampTextAlpha := AValue;
+  Invalidate;
+end;
+
+procedure TFrameView.SetTimestampFontName(const AValue: string);
+begin
+  if FTimestampFontName = AValue then
+    Exit;
+  FTimestampFontName := AValue;
+  Invalidate;
+end;
+
+procedure TFrameView.SetTimestampFontSize(AValue: Integer);
+begin
+  if FTimestampFontSize = AValue then
+    Exit;
+  FTimestampFontSize := AValue;
+  Invalidate;
 end;
 
 procedure TFrameView.SetCellGap(AValue: Integer);
@@ -546,13 +610,17 @@ end;
 
 procedure TFrameView.PaintTimecode(AIndex: Integer; const ACellRect: TRect);
 var
-  R: TRect;
+  R, LocalR: TRect;
   BF: TBlendFunction;
+  TextColor: TColor;
 begin
   if not FShowTimecode then
     Exit;
   if FCells[AIndex].Timecode = '' then
     Exit;
+  if FTimestampTextAlpha = 0 then
+    Exit;
+
   R := TimecodeRectFromCell(ACellRect, AIndex);
   Canvas.Font.Name := FTimestampFontName;
   Canvas.Font.Size := FTimestampFontSize;
@@ -580,12 +648,39 @@ begin
   end;
 
   if FCells[AIndex].State = fcsLoaded then
-    Canvas.Font.Color := CLR_TIMECODE_OVERLAY
+    TextColor := CLR_TIMECODE_OVERLAY
   else
-    Canvas.Font.Color := CLR_TIMECODE_PENDING;
+    TextColor := CLR_TIMECODE_PENDING;
 
-  Canvas.Brush.Style := bsClear;
-  DrawText(Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
+  if FTimestampTextAlpha = 255 then
+  begin
+    {Fast path: opaque text straight onto canvas}
+    Canvas.Font.Color := TextColor;
+    Canvas.Brush.Style := bsClear;
+    DrawText(Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
+    Exit;
+  end;
+
+  {Partial text opacity: blit the target region onto an offscreen bitmap,
+   DrawText onto it, then AlphaBlend it back with SourceConstantAlpha. This
+   blends the text correctly over the (already-painted) frame pixels.}
+  if (FTextBlendBmp.Width < R.Width) or (FTextBlendBmp.Height < R.Height) then
+    FTextBlendBmp.SetSize(Max(R.Width, FTextBlendBmp.Width), Max(R.Height, FTextBlendBmp.Height));
+
+  BitBlt(FTextBlendBmp.Canvas.Handle, 0, 0, R.Width, R.Height, Canvas.Handle, R.Left, R.Top, SRCCOPY);
+
+  FTextBlendBmp.Canvas.Font.Name := FTimestampFontName;
+  FTextBlendBmp.Canvas.Font.Size := FTimestampFontSize;
+  FTextBlendBmp.Canvas.Font.Color := TextColor;
+  FTextBlendBmp.Canvas.Brush.Style := bsClear;
+  LocalR := Rect(0, 0, R.Width, R.Height);
+  DrawText(FTextBlendBmp.Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, LocalR, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
+
+  BF.BlendOp := AC_SRC_OVER;
+  BF.BlendFlags := 0;
+  BF.SourceConstantAlpha := FTimestampTextAlpha;
+  BF.AlphaFormat := 0;
+  Winapi.Windows.AlphaBlend(Canvas.Handle, R.Left, R.Top, R.Width, R.Height, FTextBlendBmp.Canvas.Handle, 0, 0, R.Width, R.Height, BF);
 end;
 
 procedure TFrameView.PaintErrorCell(const ARect: TRect);

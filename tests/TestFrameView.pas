@@ -75,6 +75,8 @@ type
     [Test] procedure TestSmartGridTwoFrames;
     [Test] procedure TestSmartGridThreeFrames;
     [Test] procedure TestSmartGridLargeCount;
+    [Test] procedure TestSmartGridRespectsCellGap;
+    [Test] procedure TestSmartGridGapBetweenRowsMatchesSetting;
   end;
 
   [TestFixture]
@@ -1187,6 +1189,55 @@ begin
       Assert.IsTrue(R.Bottom <= 768,
         Format('Cell %d bottom edge should be within viewport', [I]));
     end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridRespectsCellGap;
+var
+  V: TFrameView;
+  R0, R1: TRect;
+begin
+  {Regression: smart grid used to ignore CellGap entirely, packing cells
+   edge-to-edge. With a gap configured, adjacent cells in the same row must
+   now have at least that much horizontal space between them}
+  V := CreateTestFrameView(1024, vmSmartGrid);
+  try
+    V.CellGap := 12;
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(1024, 768);
+    V.RecalcSize;
+    {For 4 cells, smart grid typically picks 2x2. Cells 0 and 1 are in
+     the same row; the gap between them is R1.Left - R0.Right}
+    R0 := V.GetCellRect(0);
+    R1 := V.GetCellRect(1);
+    Assert.IsTrue(R1.Left - R0.Right >= 12,
+      Format('Smart grid must leave >= 12px between cells 0 and 1, got %d',
+        [R1.Left - R0.Right]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSmartGrid.TestSmartGridGapBetweenRowsMatchesSetting;
+var
+  V: TFrameView;
+  R0, R2: TRect;
+begin
+  {For 4 cells arranged 2x2, the vertical distance between the top of the
+   second row and the bottom of the first row should be >= CellGap}
+  V := CreateTestFrameView(1024, vmSmartGrid);
+  try
+    V.CellGap := 10;
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(1024, 768);
+    V.RecalcSize;
+    R0 := V.GetCellRect(0);
+    R2 := V.GetCellRect(2);
+    Assert.IsTrue(R2.Top - R0.Bottom >= 10,
+      Format('Smart grid must leave >= 10px between rows, got %d',
+        [R2.Top - R0.Bottom]));
   finally
     FreeTestFrameView(V);
   end;

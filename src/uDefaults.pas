@@ -32,6 +32,11 @@ const
   MIN_TIMESTAMP_FONT_SIZE = 6;
   MAX_TIMESTAMP_FONT_SIZE = 72;
 
+  {Timestamp text opacity (0 = invisible, 255 = fully opaque). Shared by both plugins.}
+  DEF_TIMESTAMP_TEXT_ALPHA = 255;
+  MIN_TIMESTAMP_TEXT_ALPHA = 0;
+  MAX_TIMESTAMP_TEXT_ALPHA = 255;
+
   {Cell gap range (shared by both plugins: WLX viewer and WCX combined image)}
   MIN_CELL_GAP = 0;
   MAX_CELL_GAP = 20;
