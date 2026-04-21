@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 410
+  ClientHeight = 440
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 370
+    Height = 400
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -348,6 +348,20 @@ object SettingsForm: TSettingsForm
         Height = 15
         Caption = 'Cell gap (px):'
       end
+      object LblBorder: TLabel
+        Left = 12
+        Top = 144
+        Width = 69
+        Height = 15
+        Caption = 'Border (px):'
+      end
+      object LblTimestampCorner: TLabel
+        Left = 230
+        Top = 144
+        Width = 101
+        Height = 15
+        Caption = 'Timestamp corner:'
+      end
       object PnlBackground: TPanel
         Left = 130
         Top = 20
@@ -437,7 +451,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkShowToolbar: TCheckBox
         Left = 12
-        Top = 140
+        Top = 173
         Width = 200
         Height = 17
         Caption = 'Show toolbar (F4 to toggle)'
@@ -445,7 +459,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkShowStatusBar: TCheckBox
         Left = 230
-        Top = 140
+        Top = 173
         Width = 200
         Height = 17
         Caption = 'Show status bar (F3 to toggle)'
@@ -469,6 +483,38 @@ object SettingsForm: TSettingsForm
         Max = 20
         TabOrder = 12
         Thousands = False
+      end
+      object EdtBorder: TEdit
+        Left = 130
+        Top = 140
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 13
+        Text = '0'
+      end
+      object UdBorder: TUpDown
+        Left = 175
+        Top = 140
+        Width = 17
+        Height = 23
+        Associate = EdtBorder
+        Max = 200
+        TabOrder = 14
+        Thousands = False
+      end
+      object CbxTimestampCorner: TComboBox
+        Left = 340
+        Top = 140
+        Width = 105
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 15
+        Items.Strings = (
+          'Top left'
+          'Top right'
+          'Bottom left'
+          'Bottom right')
       end
     end
     object TshSave: TTabSheet
@@ -820,7 +866,7 @@ object SettingsForm: TSettingsForm
   end
   object PnlButtons: TPanel
     Left = 0
-    Top = 370
+    Top = 400
     Width = 460
     Height = 40
     Align = alBottom
@@ -839,6 +885,16 @@ object SettingsForm: TSettingsForm
       TabOrder = 0
       OnClick = BtnDefaultsClick
     end
+    object BtnApply: TButton
+      Left = 215
+      Top = 6
+      Width = 75
+      Height = 28
+      Anchors = [akRight, akBottom]
+      Caption = 'Apply'
+      TabOrder = 1
+      OnClick = BtnApplyClick
+    end
     object BtnOK: TButton
       Left = 296
       Top = 6
@@ -848,7 +904,7 @@ object SettingsForm: TSettingsForm
       Caption = 'OK'
       Default = True
       ModalResult = 1
-      TabOrder = 1
+      TabOrder = 2
     end
     object BtnCancel: TButton
       Left = 377
@@ -859,7 +915,7 @@ object SettingsForm: TSettingsForm
       Cancel = True
       Caption = 'Cancel'
       ModalResult = 2
-      TabOrder = 2
+      TabOrder = 3
     end
   end
   object ColorDlg: TColorDialog

@@ -20,6 +20,10 @@ type
     [Test] procedure TestRecalcSizeScrollMode;
     [Test] procedure TestCellRectsNoOverlap;
     [Test] procedure TestCellRectsWithinBounds;
+    [Test] procedure TestCellMarginShiftsFirstCell;
+    [Test] procedure TestCellMarginGrowsControl;
+    [Test] procedure TestCellMarginDefaultIsZero;
+    [Test] procedure TestCellMarginNoOverlap;
   end;
 
   [TestFixture]
@@ -399,6 +403,131 @@ begin
       Assert.IsTrue(R.Right <= V.Width, Format('Cell %d Right > Width', [I]));
       Assert.IsTrue(R.Bottom <= V.Height, Format('Cell %d Bottom > Height', [I]));
     end;
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewLayout.TestCellMarginShiftsFirstCell;
+var
+  V: TFrameView;
+  Margin: Integer;
+  R0Margin, R0Base: TRect;
+begin
+  {The first cell must be shifted by (Margin, Margin) relative to its
+   position without a margin. Tested as a delta rather than an absolute
+   position so the assertion is independent of how the grid layout
+   centers content or reserves padding for cell gaps}
+  Margin := 20;
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.RecalcSize;
+    R0Base := V.GetCellRect(0);
+
+    V.CellMargin := Margin;
+    V.RecalcSize;
+    R0Margin := V.GetCellRect(0);
+
+    {With margin, the viewport shrinks by 2*Margin so cell size may change
+     and the base-position offset from gap/centering may shift. Verify the
+     first cell is at least Margin pixels inside the origin, which is the
+     invariant that protects against the margin overlapping the cell}
+    Assert.IsTrue(R0Margin.Left >= Margin,
+      Format('First cell Left (%d) must be >= margin (%d)', [R0Margin.Left, Margin]));
+    Assert.IsTrue(R0Margin.Top >= Margin,
+      Format('First cell Top (%d) must be >= margin (%d)', [R0Margin.Top, Margin]));
+    {And the shift must be at least Margin relative to no-margin baseline}
+    Assert.IsTrue(R0Margin.Left - R0Base.Left >= Margin - 1,
+      Format('Margin must push first cell by at least Margin (got %d)',
+        [R0Margin.Left - R0Base.Left]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewLayout.TestCellMarginGrowsControl;
+var
+  V: TFrameView;
+  HNoMargin, HWithMargin: Integer;
+  Margin: Integer;
+begin
+  {Setting CellMargin must grow the control by 2*Margin vertically so the
+   margin is real empty space, not a crop of the grid}
+  Margin := 15;
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.CellMargin := 0;
+    V.RecalcSize;
+    HNoMargin := V.Height;
+
+    V.CellMargin := Margin;
+    V.RecalcSize;
+    HWithMargin := V.Height;
+
+    Assert.AreEqual(HNoMargin + 2 * Margin, HWithMargin,
+      'Margin must add 2*Margin to total height');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewLayout.TestCellMarginDefaultIsZero;
+var
+  V: TFrameView;
+  R0NoMargin, R0Default: TRect;
+  HNoMargin, HDefault: Integer;
+begin
+  {Regression guard: a newly constructed TFrameView must behave as if
+   CellMargin=0 (no extra border, cell starts at 0,0)}
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.RecalcSize;
+    R0Default := V.GetCellRect(0);
+    HDefault := V.Height;
+
+    V.CellMargin := 0;
+    V.RecalcSize;
+    R0NoMargin := V.GetCellRect(0);
+    HNoMargin := V.Height;
+
+    Assert.AreEqual(R0NoMargin.Left, R0Default.Left,
+      'Default cell origin must match explicit margin=0');
+    Assert.AreEqual(R0NoMargin.Top, R0Default.Top,
+      'Default cell origin must match explicit margin=0');
+    Assert.AreEqual(HNoMargin, HDefault,
+      'Default height must match explicit margin=0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewLayout.TestCellMarginNoOverlap;
+var
+  V: TFrameView;
+  I, J: Integer;
+  R1, R2: TRect;
+begin
+  {Regression: even with a large margin the cells themselves must not
+   overlap each other. If the layout code forgot to subtract margin from
+   the viewport before the fit math, cells could grow to overlap}
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.CellMargin := 30;
+    V.SetCellCount(9, MakeOffsets(9));
+    V.RecalcSize;
+    for I := 0 to 7 do
+      for J := I + 1 to 8 do
+      begin
+        R1 := V.GetCellRect(I);
+        R2 := V.GetCellRect(J);
+        Assert.IsFalse(
+          (R1.Left < R2.Right) and (R1.Right > R2.Left) and
+          (R1.Top < R2.Bottom) and (R1.Bottom > R2.Top),
+          Format('Cells %d and %d overlap with non-zero margin', [I, J]));
+      end;
   finally
     FreeTestFrameView(V);
   end;

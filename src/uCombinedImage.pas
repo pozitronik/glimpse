@@ -5,7 +5,7 @@ unit uCombinedImage;
 interface
 
 uses
-  System.UITypes, Vcl.Graphics, uFrameOffsets, uFFmpegExe;
+  System.UITypes, Vcl.Graphics, uFrameOffsets, uFFmpegExe, uTypes;
 
 type
   {Video metadata for the info banner. Populated by the caller from
@@ -48,8 +48,10 @@ function PrependBanner(ASrc: TBitmap; const ALines: TArray<string>): TBitmap;
  @param AShowTimestamp Whether to overlay timecodes on each cell
  @param AFontName Font face for timestamp text
  @param AFontSize Font size in points for timestamp text
+ @param ABorder Outer margin (pixels) painted with ABackground around the whole grid
+ @param ATimestampCorner Corner where the timecode overlay is drawn on each cell
  @return Combined bitmap, or nil if AFrames is empty. Caller owns result.}
-function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer): TBitmap;
+function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer; ABorder: Integer = 0; ATimestampCorner: TTimestampCorner = tcBottomLeft): TBitmap;
 
 implementation
 
@@ -321,16 +323,23 @@ begin
   Result.Canvas.Draw(0, BannerH, ASrc);
 end;
 
-function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer): TBitmap;
+function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer; ABorder: Integer; ATimestampCorner: TTimestampCorner): TBitmap;
+const
+  TC_MARGIN = 4; {distance from the cell edge to the timecode bounding box}
 var
   Cols, Rows, CellW, CellH, I, Row, Col, X, Y: Integer;
   FrameCount: Integer;
   Tc: string;
-  TH: Integer;
+  TW, TH, TX, TY: Integer;
+  Border: Integer;
 begin
   FrameCount := Length(AFrames);
   if FrameCount = 0 then
     Exit(nil);
+
+  Border := ABorder;
+  if Border < 0 then
+    Border := 0;
 
   Cols := ACols;
   if Cols <= 0 then
@@ -352,7 +361,7 @@ begin
 
   Result := TBitmap.Create;
   Result.PixelFormat := pf24bit;
-  Result.SetSize(Cols * CellW + Max(Cols - 1, 0) * AGap, Rows * CellH + Max(Rows - 1, 0) * AGap);
+  Result.SetSize(Cols * CellW + Max(Cols - 1, 0) * AGap + 2 * Border, Rows * CellH + Max(Rows - 1, 0) * AGap + 2 * Border);
   Result.Canvas.Brush.Color := ABackground;
   Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
 
@@ -362,8 +371,8 @@ begin
       Continue;
     Row := I div Cols;
     Col := I mod Cols;
-    X := Col * (CellW + AGap);
-    Y := Row * (CellH + AGap);
+    X := Border + Col * (CellW + AGap);
+    Y := Border + Row * (CellH + AGap);
     Result.Canvas.Draw(X, Y, AFrames[I]);
 
     if AShowTimestamp and (I < Length(AOffsets)) then
@@ -372,14 +381,37 @@ begin
       Result.Canvas.Font.Name := AFontName;
       Result.Canvas.Font.Size := AFontSize;
       Result.Canvas.Font.Style := [fsBold];
+      TW := Result.Canvas.TextWidth(Tc);
       TH := Result.Canvas.TextHeight(Tc);
-      {Shadow for readability}
-      Result.Canvas.Font.Color := clBlack;
+      case ATimestampCorner of
+        tcTopLeft:
+          begin
+            TX := X + TC_MARGIN;
+            TY := Y + TC_MARGIN;
+          end;
+        tcTopRight:
+          begin
+            TX := X + CellW - TW - TC_MARGIN;
+            TY := Y + TC_MARGIN;
+          end;
+        tcBottomRight:
+          begin
+            TX := X + CellW - TW - TC_MARGIN;
+            TY := Y + CellH - TH - TC_MARGIN;
+          end;
+        else {tcBottomLeft}
+          begin
+            TX := X + TC_MARGIN;
+            TY := Y + CellH - TH - TC_MARGIN;
+          end;
+      end;
+      {Shadow for readability (1-pixel offset to the lower-right of the foreground text)}
       Result.Canvas.Brush.Style := bsClear;
-      Result.Canvas.TextOut(X + 5, Y + CellH - TH - 4, Tc);
+      Result.Canvas.Font.Color := clBlack;
+      Result.Canvas.TextOut(TX + 1, TY + 1, Tc);
       {Foreground text}
       Result.Canvas.Font.Color := clWhite;
-      Result.Canvas.TextOut(X + 4, Y + CellH - TH - 5, Tc);
+      Result.Canvas.TextOut(TX, TY, Tc);
     end;
   end;
 end;

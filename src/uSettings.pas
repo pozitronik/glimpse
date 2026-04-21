@@ -39,6 +39,8 @@ type
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FCellGap: Integer;
+    FCombinedBorder: Integer;
+    FTimestampCorner: TTimestampCorner;
     {[extensions]}
     FExtensionList: string;
     {[save]}
@@ -71,6 +73,8 @@ type
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
     class function StrToThumbnailMode(const AValue: string): TThumbnailMode; static;
     class function ThumbnailModeToStr(AMode: TThumbnailMode): string; static;
+    class function StrToTimestampCorner(const AValue: string): TTimestampCorner; static;
+    class function TimestampCornerToStr(ACorner: TTimestampCorner): string; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
     function GetActiveZoom: TZoomMode;
@@ -119,6 +123,8 @@ type
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property CellGap: Integer read FCellGap write FCellGap;
+    property CombinedBorder: Integer read FCombinedBorder write FCombinedBorder;
+    property TimestampCorner: TTimestampCorner read FTimestampCorner write FTimestampCorner;
 
     {[extensions]}
     property ExtensionList: string read FExtensionList write FExtensionList;
@@ -236,6 +242,8 @@ begin
   FTimestampFontName := DEF_TIMESTAMP_FONT;
   FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
   FCellGap := DEF_CELL_GAP;
+  FCombinedBorder := DEF_COMBINED_BORDER;
+  FTimestampCorner := DEF_TIMESTAMP_CORNER;
   FExtensionList := DEF_EXTENSION_LIST;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
@@ -292,6 +300,8 @@ begin
       FTimestampFontName := DEF_TIMESTAMP_FONT;
     FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize', DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
     FCellGap := EnsureRange(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
+    FCombinedBorder := EnsureRange(Ini.ReadInteger('view', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
+    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('view', 'TimestampCorner', ''));
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
@@ -354,6 +364,8 @@ begin
     Ini.WriteString('view', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('view', 'TimestampFontSize', FTimestampFontSize);
     Ini.WriteInteger('view', 'CellGap', FCellGap);
+    Ini.WriteInteger('view', 'CombinedBorder', FCombinedBorder);
+    Ini.WriteString('view', 'TimestampCorner', TimestampCornerToStr(FTimestampCorner));
 
     Ini.WriteString('extensions', 'List', FExtensionList);
 
@@ -483,6 +495,34 @@ begin
       Result := 'grid';
     else
       Result := 'single';
+  end;
+end;
+
+class function TPluginSettings.StrToTimestampCorner(const AValue: string): TTimestampCorner;
+begin
+  if SameText(AValue, 'topleft') then
+    Result := tcTopLeft
+  else if SameText(AValue, 'topright') then
+    Result := tcTopRight
+  else if SameText(AValue, 'bottomright') then
+    Result := tcBottomRight
+  else if SameText(AValue, 'bottomleft') then
+    Result := tcBottomLeft
+  else
+    Result := DEF_TIMESTAMP_CORNER;
+end;
+
+class function TPluginSettings.TimestampCornerToStr(ACorner: TTimestampCorner): string;
+begin
+  case ACorner of
+    tcTopLeft:
+      Result := 'topleft';
+    tcTopRight:
+      Result := 'topright';
+    tcBottomRight:
+      Result := 'bottomright';
+    else
+      Result := 'bottomleft';
   end;
 end;
 

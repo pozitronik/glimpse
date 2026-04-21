@@ -68,6 +68,11 @@ type
     FLoadStartTick: UInt64;
     {Formatted load time string, populated when extraction completes}
     FLoadTimeStr: string;
+    {Rolling snapshot used by ShowSettings to detect what changed since the
+     previous Apply/OK commit, so Apply can be pressed repeatedly and only
+     trigger the side-effects (cache recreate, re-extract) that apply to the
+     delta, not to the full original-to-current diff}
+    FSettingsSnap: TSettingsSnapshot;
 
     procedure CreateToolbar;
     procedure LayoutToolbar;
@@ -101,6 +106,8 @@ type
     procedure ResetZoom;
     procedure SwitchOrCycleMode(AKey: Word);
     procedure ShowSettings;
+    procedure CommitSettingsChanges;
+    procedure OnSettingsApply(Sender: TObject);
     procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
@@ -808,6 +815,8 @@ begin
   FFrameView.TimestampFontName := FSettings.TimestampFontName;
   FFrameView.TimestampFontSize := FSettings.TimestampFontSize;
   FFrameView.CellGap := FSettings.CellGap;
+  FFrameView.CellMargin := FSettings.CombinedBorder;
+  FFrameView.TimestampCorner := FSettings.TimestampCorner;
   UpdateTimecodeButton;
   FFrameView.BackColor := FSettings.Background;
   FScrollBox.Color := FSettings.Background;
@@ -1683,20 +1692,19 @@ begin
   RefreshExtraction;
 end;
 
-procedure TPluginForm.ShowSettings;
+procedure TPluginForm.CommitSettingsChanges;
 var
-  Snap: TSettingsSnapshot;
   Changes: TSettingsChanges;
 begin
-  Snap := TakeSettingsSnapshot(FSettings);
-
-  if not ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath) then
-    Exit;
-
   FSettings.Save;
   ApplySettings;
 
-  Changes := DetectSettingsChanges(Snap, FSettings);
+  Changes := DetectSettingsChanges(FSettingsSnap, FSettings);
+
+  {Refresh the rolling snapshot so the next Apply/OK only sees the delta
+   since this commit. Done before the conditional side-effects below so
+   the snapshot is stable even on the early-exit path}
+  FSettingsSnap := TakeSettingsSnapshot(FSettings);
 
   {Recreate cache if cache settings changed}
   if scCacheChanged in Changes then
@@ -1714,6 +1722,21 @@ begin
   {Re-extract if skip edges, scaled extraction, or keyframes settings changed}
   if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged]) <> [] then
     RefreshExtraction;
+end;
+
+procedure TPluginForm.OnSettingsApply(Sender: TObject);
+begin
+  CommitSettingsChanges;
+end;
+
+procedure TPluginForm.ShowSettings;
+begin
+  FSettingsSnap := TakeSettingsSnapshot(FSettings);
+
+  if not ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath, OnSettingsApply) then
+    Exit;
+
+  CommitSettingsChanges;
 end;
 
 procedure TPluginForm.NavigateToAdjacentFile(ADelta: Integer);

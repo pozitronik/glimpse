@@ -38,6 +38,16 @@ type
     { Timestamp overlay (no crash, correct pixel format) }
     [Test] procedure TimestampEnabled_DoesNotCrash;
     [Test] procedure TimestampDisabled_NoTextDrawn;
+    { Outer border (margin around the whole grid) }
+    [Test] procedure Border_AddsPixelsOnAllSides;
+    [Test] procedure Border_NegativeClampedToZero;
+    [Test] procedure Border_DefaultIsZero;
+    [Test] procedure Border_FillsMarginAreaWithBackground;
+    [Test] procedure Border_ShiftsCellOrigin;
+    { Timestamp corner placement }
+    [Test] procedure TimestampCorner_TopLeft_LeavesBottomRightClean;
+    [Test] procedure TimestampCorner_BottomRight_LeavesTopLeftClean;
+    [Test] procedure TimestampCorner_DefaultIsBottomLeft;
     { Large grid }
     [Test] procedure NineFrames_AutoCols_Produces3x3;
     { FormatBannerLines }
@@ -79,7 +89,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
-  uFrameOffsets, uFFmpegExe, uCombinedImage;
+  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage;
 
 { Helper }
 
@@ -1136,6 +1146,240 @@ begin
   Assert.AreEqual(0, Banner.AudioSampleRate);
   Assert.AreEqual('', Banner.AudioChannels);
   Assert.AreEqual(0, Banner.AudioBitrateKbps);
+end;
+
+{ Outer border }
+
+procedure TTestCombinedImage.Border_AddsPixelsOnAllSides;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+begin
+  { 2x1 grid of 50x40 frames with border=8: the total canvas should grow
+    by 2*Border in each dimension (16 px added symmetrically) }
+  SetLength(Frames, 2);
+  Frames[0] := MakeFrame(50, 40, 0);
+  Frames[1] := MakeFrame(50, 40, 0);
+  SetLength(Offsets, 2);
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, 8);
+    Assert.IsNotNull(R);
+    try
+      Assert.AreEqual(2 * 50 + 2 * 8, R.Width, '2 cols * 50 + 2*border');
+      Assert.AreEqual(40 + 2 * 8, R.Height, '1 row * 40 + 2*border');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+    Frames[1].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.Border_NegativeClampedToZero;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+begin
+  { A negative border must be treated as zero so the caller cannot
+    accidentally shrink the grid below its natural geometry }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(100, 80, 0);
+  SetLength(Offsets, 1);
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, -50);
+    Assert.IsNotNull(R);
+    try
+      Assert.AreEqual(100, R.Width, 'Negative border clamps to zero');
+      Assert.AreEqual(80, R.Height, 'Negative border clamps to zero');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.Border_DefaultIsZero;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R1, R2: TBitmap;
+begin
+  { Back-compat guarantee: callers that do not pass ABorder must get the
+    same result as explicitly passing 0 }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(100, 80, 0);
+  SetLength(Offsets, 1);
+  try
+    R1 := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+    R2 := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, 0);
+    try
+      Assert.AreEqual(R2.Width, R1.Width, 'Default border must equal explicit 0');
+      Assert.AreEqual(R2.Height, R1.Height, 'Default border must equal explicit 0');
+    finally
+      R1.Free;
+      R2.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.Border_FillsMarginAreaWithBackground;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+  BgColor: TColor;
+begin
+  { Pixel inside the outer border (outside all cells) must be the
+    background color: the margin is part of the canvas, not transparent }
+  BgColor := TColor($0000FF00);
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(60, 40, Integer(clRed));
+  SetLength(Offsets, 1);
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, BgColor, False, 'Consolas', 9, 10);
+    Assert.IsNotNull(R);
+    try
+      { Corner of the output should be background, not frame color }
+      Assert.AreEqual(Integer(BgColor), Integer(R.Canvas.Pixels[2, 2]),
+        'Top-left margin pixel must be background');
+      Assert.AreEqual(Integer(BgColor), Integer(R.Canvas.Pixels[R.Width - 3, R.Height - 3]),
+        'Bottom-right margin pixel must be background');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.Border_ShiftsCellOrigin;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+  Border: Integer;
+begin
+  { The first cell must be drawn at (Border, Border), not at (0, 0):
+    the pixel at (Border, Border) must be the frame color }
+  Border := 12;
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(60, 40, Integer(clRed));
+  SetLength(Offsets, 1);
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, Border);
+    Assert.IsNotNull(R);
+    try
+      Assert.AreEqual(Integer(clRed), Integer(R.Canvas.Pixels[Border + 5, Border + 5]),
+        'Frame content must start at (Border, Border)');
+      { Pixel just inside the margin (before cell) must be background }
+      Assert.AreEqual(Integer(clBlack), Integer(R.Canvas.Pixels[Border - 2, Border - 2]),
+        'Pixel inside margin before cell must be background');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+{ Timestamp corner placement }
+
+procedure TTestCombinedImage.TimestampCorner_TopLeft_LeavesBottomRightClean;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+begin
+  { With timestamp in the top-left corner, the bottom-right of the cell
+    must be untouched (original frame color). This proves the corner
+    parameter actually routes the placement, not just the fallback }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(200, 150, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 65.5;
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0, tcTopLeft);
+    Assert.IsNotNull(R);
+    try
+      { Bottom-right corner of the only cell: frame is 200x150, cell is at (0,0) }
+      Assert.AreEqual(Integer(clRed), Integer(R.Canvas.Pixels[195, 145]),
+        'Bottom-right of cell must remain frame color when timestamp is top-left');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.TimestampCorner_BottomRight_LeavesTopLeftClean;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+begin
+  { Symmetric to the previous test: timestamp in bottom-right, so the
+    top-left of the cell must stay frame color }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(200, 150, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 65.5;
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0, tcBottomRight);
+    Assert.IsNotNull(R);
+    try
+      Assert.AreEqual(Integer(clRed), Integer(R.Canvas.Pixels[5, 5]),
+        'Top-left of cell must remain frame color when timestamp is bottom-right');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.TimestampCorner_DefaultIsBottomLeft;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RDefault, RExplicit: TBitmap;
+  X, Y: Integer;
+  Equal: Boolean;
+begin
+  { Back-compat guarantee: omitting the corner parameter must produce the
+    same pixels as passing tcBottomLeft explicitly }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(200, 150, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 65.5;
+  try
+    RDefault := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12);
+    RExplicit := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0, tcBottomLeft);
+    try
+      Assert.AreEqual(RExplicit.Width, RDefault.Width);
+      Assert.AreEqual(RExplicit.Height, RDefault.Height);
+      Equal := True;
+      for Y := 0 to RDefault.Height - 1 do
+        for X := 0 to RDefault.Width - 1 do
+          if RDefault.Canvas.Pixels[X, Y] <> RExplicit.Canvas.Pixels[X, Y] then
+          begin
+            Equal := False;
+            Break;
+          end;
+      Assert.IsTrue(Equal, 'Default corner must render identically to tcBottomLeft');
+    finally
+      RDefault.Free;
+      RExplicit.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
 end;
 
 end.

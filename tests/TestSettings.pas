@@ -88,6 +88,20 @@ type
     [Test]
     procedure TestCellGapClampedLow;
     [Test]
+    procedure TestCombinedBorderDefault;
+    [Test]
+    procedure TestCombinedBorderRoundTrip;
+    [Test]
+    procedure TestCombinedBorderClampedHigh;
+    [Test]
+    procedure TestCombinedBorderClampedLow;
+    [Test]
+    procedure TestTimestampCornerDefault;
+    [Test]
+    procedure TestTimestampCornerRoundTripAllValues;
+    [Test]
+    procedure TestTimestampCornerUnknownFallsBackToDefault;
+    [Test]
     procedure TestShowBannerDefault;
     [Test]
     procedure TestShowBannerRoundTrip;
@@ -1059,6 +1073,157 @@ begin
     S.Load;
     Assert.AreEqual(MIN_CELL_GAP, S.CellGap,
       'Negative CellGap should be clamped to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(DEF_COMBINED_BORDER, S.CombinedBorder);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CombinedBorder := 42;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(42, S2.CombinedBorder);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderClampedHigh;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CombinedBorder', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_COMBINED_BORDER, S.CombinedBorder,
+      'CombinedBorder above maximum should be clamped');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderClampedLow;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CombinedBorder', -100);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_COMBINED_BORDER, S.CombinedBorder,
+      'Negative CombinedBorder should be clamped to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampCornerDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Ord(DEF_TIMESTAMP_CORNER), Ord(S.TimestampCorner));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampCornerRoundTripAllValues;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+  Corner: TTimestampCorner;
+begin
+  {Every enum value must survive an INI round-trip; covers all four string
+   codes written by TimestampCornerToStr and parsed by StrToTimestampCorner}
+  for Corner := Low(TTimestampCorner) to High(TTimestampCorner) do
+  begin
+    IniPath := TPath.Combine(FTempDir, Format('corner_%d.ini', [Ord(Corner)]));
+    S1 := TPluginSettings.Create(IniPath);
+    try
+      S1.TimestampCorner := Corner;
+      S1.Save;
+    finally
+      S1.Free;
+    end;
+
+    S2 := TPluginSettings.Create(IniPath);
+    try
+      S2.Load;
+      Assert.AreEqual(Ord(Corner), Ord(S2.TimestampCorner),
+        Format('Corner %d did not round-trip', [Ord(Corner)]));
+    finally
+      S2.Free;
+    end;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampCornerUnknownFallsBackToDefault;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  {Unknown string in INI must fall back to the default rather than throw
+   or produce an undefined enum value}
+  IniPath := TPath.Combine(FTempDir, 'corner_bad.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('view', 'TimestampCorner', 'nonsense');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(DEF_TIMESTAMP_CORNER), Ord(S.TimestampCorner),
+      'Unknown corner string should fall back to default');
   finally
     S.Free;
   end;

@@ -63,6 +63,11 @@ type
     LblCellGap: TLabel;
     EdtCellGap: TEdit;
     UdCellGap: TUpDown;
+    LblBorder: TLabel;
+    EdtBorder: TEdit;
+    UdBorder: TUpDown;
+    LblTimestampCorner: TLabel;
+    CbxTimestampCorner: TComboBox;
     ChkShowToolbar: TCheckBox;
     ChkShowStatusBar: TCheckBox;
     TshSave: TTabSheet;
@@ -107,6 +112,7 @@ type
     ChkQVHideStatusBar: TCheckBox;
     PnlButtons: TPanel;
     BtnDefaults: TButton;
+    BtnApply: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
     ColorDlg: TColorDialog;
@@ -126,9 +132,12 @@ type
     procedure BtnDefaultsClick(Sender: TObject);
     procedure ChkThumbnailsEnabledClick(Sender: TObject);
     procedure CbxThumbnailModeChange(Sender: TObject);
+    procedure BtnApplyClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
     FResolvedFFmpegPath: string;
+    FSettings: TPluginSettings;
+    FOnApply: TNotifyEvent;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
     procedure UpdateMaxWorkersControls;
@@ -150,9 +159,11 @@ type
   {Shows the settings dialog.
    AResolvedFFmpegPath is the currently active ffmpeg path (may differ from settings
    when auto-detected). Shown as informational text when the explicit path is empty.
-   Returns True if the user pressed OK (ASettings is updated).
-   Returns False if dismissed (ASettings unchanged).}
-function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
+   AOnApply is invoked whenever the user presses the Apply button, after the dialog
+   has pushed current control values into ASettings. Pass nil to disable live-apply.
+   Returns True if the user pressed OK (ASettings is updated on top of any prior Apply).
+   Returns False if dismissed. NOTE: an earlier Apply is not rolled back on Cancel.}
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TNotifyEvent = nil): Boolean;
 
 implementation
 
@@ -191,6 +202,8 @@ begin
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   UdCellGap.Position := ASettings.CellGap;
+  UdBorder.Position := ASettings.CombinedBorder;
+  CbxTimestampCorner.ItemIndex := Ord(ASettings.TimestampCorner);
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
 
@@ -253,6 +266,8 @@ begin
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.CellGap := UdCellGap.Position;
+  ASettings.CombinedBorder := UdBorder.Position;
+  ASettings.TimestampCorner := TTimestampCorner(CbxTimestampCorner.ItemIndex);
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
 
@@ -422,6 +437,18 @@ begin
   UpdateThumbnailControls;
 end;
 
+procedure TSettingsForm.BtnApplyClick(Sender: TObject);
+begin
+  {Apply commits current control values to the live settings immediately,
+   allowing the host view to act as a preview. The dialog stays open so
+   the user can continue adjusting. Cancel afterwards cannot roll back.}
+  if FSettings = nil then
+    Exit;
+  ControlsToSettings(FSettings);
+  if Assigned(FOnApply) then
+    FOnApply(Self);
+end;
+
 procedure TSettingsForm.UpdateMaxWorkersControls;
 var
   OnePerFrame: Boolean;
@@ -575,7 +602,7 @@ begin
     Params.WndParent := FOwnerWnd;
 end;
 
-function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string): Boolean;
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TNotifyEvent): Boolean;
 var
   Form: TSettingsForm;
 begin
@@ -583,6 +610,8 @@ begin
   Form := TSettingsForm.CreateWithOwner(AParentWnd);
   try
     Form.FResolvedFFmpegPath := AResolvedFFmpegPath;
+    Form.FSettings := ASettings;
+    Form.FOnApply := AOnApply;
     Form.SettingsToControls(ASettings);
     if Form.ShowModal = mrOK then
     begin

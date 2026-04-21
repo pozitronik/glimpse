@@ -36,6 +36,14 @@ const
   MIN_CELL_GAP = 0;
   MAX_CELL_GAP = 20;
 
+  {Outer border (margin) around the whole grid. Shared by WLX live view and combined image.}
+  DEF_COMBINED_BORDER = 0;
+  MIN_COMBINED_BORDER = 0;
+  MAX_COMBINED_BORDER = 200;
+
+  {Default timestamp corner for both WLX cells and combined image cells.}
+  DEF_TIMESTAMP_CORNER = tcBottomLeft;
+
   {Clamping ranges}
   MIN_FRAMES_COUNT = 1;
   MAX_FRAMES_COUNT = 99;

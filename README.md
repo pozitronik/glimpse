@@ -38,7 +38,7 @@ Provides an instant visual summary of a video's content without opening a media 
 
 ### Configuration
 
-All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into six tabs: **General**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**.
+All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into six tabs: **General**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
 
 #### General
 
@@ -59,15 +59,17 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 
 #### Appearance
 
-| Setting          | Default       | Description                                                                    |
-|------------------|---------------|--------------------------------------------------------------------------------|
-| Background       | Dark grey     | Background color behind the frame grid                                         |
-| Timecode bg      | Dark grey     | Background color of the timecode overlay on each frame                         |
-| Timecode opacity | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque) |
-| Timestamp font   | Segoe UI, 8pt | Font face and size for timecode labels on frames                               |
-| Cell gap (px)    | 0             | Spacing in pixels between frame cells in the viewer (0-20)                     |
-| Show toolbar     | On            | Display the toolbar at the top of the lister window (F4 to toggle)             |
-| Show status bar  | On            | Display the status bar at the bottom of the lister window (F3 to toggle)       |
+| Setting           | Default       | Description                                                                    |
+|-------------------|---------------|--------------------------------------------------------------------------------|
+| Background        | Dark grey     | Background color behind the frame grid                                         |
+| Timecode bg       | Dark grey     | Background color of the timecode overlay on each frame                         |
+| Timecode opacity  | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque) |
+| Timestamp font    | Segoe UI, 8pt | Font face and size for timecode labels on frames                               |
+| Cell gap (px)     | 0             | Spacing in pixels between frame cells in the viewer (0-20)                     |
+| Border (px)       | 0             | Outer margin around the grid, shared by the viewer and the combined image (0-200) |
+| Timestamp corner  | Bottom left   | Corner of each cell where the timecode label is drawn                          |
+| Show toolbar      | On            | Display the toolbar at the top of the lister window (F4 to toggle)             |
+| Show status bar   | On            | Display the status bar at the bottom of the lister window (F3 to toggle)       |
 
 #### Save
 

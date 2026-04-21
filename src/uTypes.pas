@@ -11,6 +11,8 @@ type
   {Thumbnail rendering mode for TC panel previews. Single = one frame at
    a configurable position; Grid = mini multi-frame composite.}
   TThumbnailMode = (tnmSingle, tnmGrid);
+  {Timestamp overlay corner on each frame cell (WLX live view and combined image).}
+  TTimestampCorner = (tcTopLeft, tcTopRight, tcBottomLeft, tcBottomRight);
 
   {Bundles extraction parameters that travel together through the
    extraction pipeline (controller -> worker -> extractor).}

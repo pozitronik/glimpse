@@ -8,7 +8,7 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  uTypes, uSettings, uFrameOffsets, uViewModeLayout;
+  uTypes, uSettings, uDefaults, uFrameOffsets, uViewModeLayout;
 
 type
   TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);
@@ -33,6 +33,8 @@ type
     FBackColor: TColor;
     FAnimStep: Integer;
     FCellGap: Integer;
+    FCellMargin: Integer;
+    FTimestampCorner: TTimestampCorner;
     FColumnCount: Integer;
     FCurrentFrameIndex: Integer;
     FAspectRatio: Double;
@@ -58,6 +60,8 @@ type
     function TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
     procedure SetViewMode(AValue: TViewMode);
     procedure SetCellGap(AValue: Integer);
+    procedure SetCellMargin(AValue: Integer);
+    procedure SetTimestampCorner(AValue: TTimestampCorner);
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
@@ -112,6 +116,8 @@ type
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property CellGap: Integer read FCellGap write SetCellGap;
+    property CellMargin: Integer read FCellMargin write SetCellMargin;
+    property TimestampCorner: TTimestampCorner read FTimestampCorner write SetTimestampCorner;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
     property PopupMenu;
     property BaseW: Integer read GetBaseW;
@@ -153,6 +159,8 @@ begin
   inherited;
   DoubleBuffered := True;
   FCellGap := DEF_CELL_GAP;
+  FCellMargin := DEF_COMBINED_BORDER;
+  FTimestampCorner := DEF_TIMESTAMP_CORNER;
   FShowTimecode := True;
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
@@ -264,9 +272,16 @@ begin
 end;
 
 function TFrameView.BuildLayoutContext: TViewLayoutContext;
+var
+  Margin2: Integer;
 begin
-  Result.BaseW := BaseW;
-  Result.BaseH := BaseH;
+  {Margin acts as an outer frame: layouts are given a viewport shrunk by the
+   margin on every side. Cells are then shifted by +margin when drawn, and
+   the control grows by 2*margin in RecalcSize. Keeps all layout math
+   unchanged while the margin logic lives at the TFrameView boundary.}
+  Margin2 := 2 * FCellMargin;
+  Result.BaseW := Max(1, BaseW - Margin2);
+  Result.BaseH := Max(1, BaseH - Margin2);
   Result.CellCount := Length(FCells);
   Result.CellGap := FCellGap;
   Result.AspectRatio := FAspectRatio;
@@ -274,11 +289,11 @@ begin
   Result.NativeH := FNativeH;
   Result.ZoomMode := FZoomMode;
   Result.ZoomFactor := FZoomFactor;
-  Result.ClientWidth := ClientWidth;
-  Result.ClientHeight := ClientHeight;
+  Result.ClientWidth := Max(1, ClientWidth - Margin2);
+  Result.ClientHeight := Max(1, ClientHeight - Margin2);
   Result.CurrentFrameIndex := FCurrentFrameIndex;
-  Result.ViewportW := FViewportW;
-  Result.ViewportH := FViewportH;
+  Result.ViewportW := Max(1, FViewportW - Margin2);
+  Result.ViewportH := Max(1, FViewportH - Margin2);
   Result.ColumnCount := FColumnCount;
 end;
 
@@ -321,6 +336,8 @@ end;
 function TFrameView.GetCellRect(AIndex: Integer): TRect;
 begin
   Result := FLayout.GetCellRect(AIndex, BuildLayoutContext);
+  if FCellMargin <> 0 then
+    Result.Offset(FCellMargin, FCellMargin);
 end;
 
 function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
@@ -330,7 +347,16 @@ begin
   Canvas.Font.Name := FTimestampFontName;
   Canvas.Font.Size := FTimestampFontSize;
   TW := Canvas.TextWidth(FCells[AIndex].Timecode) + TIMECODE_PADDING;
-  Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H, ACellRect.Left + TW, ACellRect.Bottom);
+  case FTimestampCorner of
+    tcTopLeft:
+      Result := Rect(ACellRect.Left, ACellRect.Top, ACellRect.Left + TW, ACellRect.Top + TIMECODE_H);
+    tcTopRight:
+      Result := Rect(ACellRect.Right - TW, ACellRect.Top, ACellRect.Right, ACellRect.Top + TIMECODE_H);
+    tcBottomRight:
+      Result := Rect(ACellRect.Right - TW, ACellRect.Bottom - TIMECODE_H, ACellRect.Right, ACellRect.Bottom);
+    else {tcBottomLeft}
+      Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H, ACellRect.Left + TW, ACellRect.Bottom);
+  end;
 end;
 
 procedure TFrameView.Paint;
@@ -499,6 +525,25 @@ begin
   Invalidate;
 end;
 
+procedure TFrameView.SetCellMargin(AValue: Integer);
+begin
+  if AValue < 0 then
+    AValue := 0;
+  if FCellMargin = AValue then
+    Exit;
+  FCellMargin := AValue;
+  RecalcSize;
+  Invalidate;
+end;
+
+procedure TFrameView.SetTimestampCorner(AValue: TTimestampCorner);
+begin
+  if FTimestampCorner = AValue then
+    Exit;
+  FTimestampCorner := AValue;
+  Invalidate;
+end;
+
 procedure TFrameView.PaintTimecode(AIndex: Integer; const ACellRect: TRect);
 var
   R: TRect;
@@ -651,8 +696,8 @@ begin
     Exit;
   end;
   Sz := FLayout.RecalcSize(BuildLayoutContext);
-  Width := Sz.CX;
-  Height := Sz.CY;
+  Width := Sz.CX + 2 * FCellMargin;
+  Height := Sz.CY + 2 * FCellMargin;
 end;
 
 procedure TFrameView.NavigateFrame(ADelta: Integer);
@@ -704,8 +749,16 @@ begin
 end;
 
 function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
+var
+  P: TPoint;
 begin
-  Result := FLayout.CellIndexAt(APoint, BuildLayoutContext);
+  P := APoint;
+  if FCellMargin <> 0 then
+  begin
+    P.X := P.X - FCellMargin;
+    P.Y := P.Y - FCellMargin;
+  end;
+  Result := FLayout.CellIndexAt(P, BuildLayoutContext);
 end;
 
 procedure TFrameView.ToggleSelection(AIndex: Integer);
