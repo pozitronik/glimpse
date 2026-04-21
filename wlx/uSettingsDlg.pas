@@ -31,12 +31,13 @@ type
     ChkHwAccel: TCheckBox;
     ChkUseKeyframes: TCheckBox;
     ChkScaledExtraction: TCheckBox;
-    LblMinFrameSide: TLabel;
+    LblScaleTarget: TLabel;
     EdtMinFrameSide: TEdit;
     UdMinFrameSide: TUpDown;
-    LblMaxFrameSide: TLabel;
+    LblScaleSep: TLabel;
     EdtMaxFrameSide: TEdit;
     UdMaxFrameSide: TUpDown;
+    LblScaleUnit: TLabel;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -468,12 +469,13 @@ var
   Enabled: Boolean;
 begin
   Enabled := ChkScaledExtraction.Checked;
-  LblMinFrameSide.Enabled := Enabled;
+  LblScaleTarget.Enabled := Enabled;
   EdtMinFrameSide.Enabled := Enabled;
   UdMinFrameSide.Enabled := Enabled;
-  LblMaxFrameSide.Enabled := Enabled;
+  LblScaleSep.Enabled := Enabled;
   EdtMaxFrameSide.Enabled := Enabled;
   UdMaxFrameSide.Enabled := Enabled;
+  LblScaleUnit.Enabled := Enabled;
 end;
 
 procedure TSettingsForm.UpdateThumbnailControls;

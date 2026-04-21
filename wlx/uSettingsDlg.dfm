@@ -67,19 +67,26 @@ object SettingsForm: TSettingsForm
         Font.Style = []
         ParentFont = False
       end
-      object LblMinFrameSide: TLabel
+      object LblScaleTarget: TLabel
         Left = 32
-        Top = 227
-        Width = 71
-        Height = 15
-        Caption = 'Min side (px):'
-      end
-      object LblMaxFrameSide: TLabel
-        Left = 230
         Top = 227
         Width = 72
         Height = 15
-        Caption = 'Max side (px):'
+        Caption = 'Scale target:'
+      end
+      object LblScaleSep: TLabel
+        Left = 193
+        Top = 227
+        Width = 6
+        Height = 15
+        Caption = '-'
+      end
+      object LblScaleUnit: TLabel
+        Left = 291
+        Top = 227
+        Width = 92
+        Height = 15
+        Caption = 'px (bigger side)'
       end
       object LblExtensions: TLabel
         Left = 12
@@ -206,12 +213,12 @@ object SettingsForm: TSettingsForm
         Top = 198
         Width = 424
         Height = 17
-        Caption = 'Scale frames to display size (faster for high-res video)'
+        Caption = 'Extract frames at display size (faster for high-res video)'
         TabOrder = 10
         OnClick = ChkScaledExtractionClick
       end
       object EdtMinFrameSide: TEdit
-        Left = 130
+        Left = 115
         Top = 223
         Width = 55
         Height = 23
@@ -220,7 +227,7 @@ object SettingsForm: TSettingsForm
         Text = '32'
       end
       object UdMinFrameSide: TUpDown
-        Left = 185
+        Left = 170
         Top = 223
         Width = 17
         Height = 23
@@ -233,7 +240,7 @@ object SettingsForm: TSettingsForm
         Thousands = False
       end
       object EdtMaxFrameSide: TEdit
-        Left = 320
+        Left = 213
         Top = 223
         Width = 55
         Height = 23
@@ -242,7 +249,7 @@ object SettingsForm: TSettingsForm
         Text = '32'
       end
       object UdMaxFrameSide: TUpDown
-        Left = 375
+        Left = 268
         Top = 223
         Width = 17
         Height = 23
