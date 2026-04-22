@@ -370,6 +370,26 @@ begin
   Result := E_SUCCESS;
 end;
 
+{Tries to satisfy an extract request from the pre-extracted temp file pool
+ populated by PreExtractFrames. Returns True when a cached source existed
+ and a copy to ADestPath was attempted; AResult then carries E_SUCCESS or
+ E_EWRITE. Returns False when no cached source was available, leaving the
+ caller to fall through to the ffmpeg extraction path.}
+function TryCopyCachedFrame(const ATempPaths: TArray<string>; AIndex: Integer;
+  const ADestPath: string; out AResult: Integer): Boolean;
+begin
+  if (ATempPaths = nil) or (AIndex < 0) or (AIndex >= Length(ATempPaths))
+     or (ATempPaths[AIndex] = '') or (not TFile.Exists(ATempPaths[AIndex])) then
+    Exit(False);
+  Result := True;
+  try
+    TFile.Copy(ATempPaths[AIndex], ADestPath, True);
+    AResult := E_SUCCESS;
+  except
+    AResult := E_EWRITE;
+  end;
+end;
+
 function DoExtractSeparate(H: TArchiveHandle; const ADestPath, ADestName: string): Integer;
 var
   Extractor: IFrameExtractor;
@@ -388,14 +408,8 @@ begin
 
   WcxLog(Format('Extract frame %d -> %s', [H.CurrentIndex, FullPath]));
 
-  {Use pre-extracted file when available}
-  if (H.TempPaths <> nil) and (H.CurrentIndex < Length(H.TempPaths)) and (H.TempPaths[H.CurrentIndex] <> '') and TFile.Exists(H.TempPaths[H.CurrentIndex]) then
-    try
-      TFile.Copy(H.TempPaths[H.CurrentIndex], FullPath, True);
-      Exit(E_SUCCESS);
-    except
-      Exit(E_EWRITE);
-    end;
+  if TryCopyCachedFrame(H.TempPaths, H.CurrentIndex, FullPath, Result) then
+    Exit;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
@@ -428,14 +442,8 @@ begin
 
   WcxLog(Format('Extract combined (%d frames) -> %s', [Length(H.Offsets), FullPath]));
 
-  {Use pre-extracted file when available}
-  if (H.TempPaths <> nil) and (Length(H.TempPaths) > 0) and (H.TempPaths[0] <> '') and TFile.Exists(H.TempPaths[0]) then
-    try
-      TFile.Copy(H.TempPaths[0], FullPath, True);
-      Exit(E_SUCCESS);
-    except
-      Exit(E_EWRITE);
-    end;
+  if TryCopyCachedFrame(H.TempPaths, 0, FullPath, Result) then
+    Exit;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
