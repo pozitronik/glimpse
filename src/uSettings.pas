@@ -55,6 +55,7 @@ type
     FBannerTextColor: TColor;
     FBannerFontName: string;
     FBannerFontSize: Integer;
+    FBannerFontAutoSize: Boolean;
     FBannerPosition: TBannerPosition;
     {[cache]}
     FCacheEnabled: Boolean;
@@ -150,6 +151,7 @@ type
     property BannerTextColor: TColor read FBannerTextColor write FBannerTextColor;
     property BannerFontName: string read FBannerFontName write FBannerFontName;
     property BannerFontSize: Integer read FBannerFontSize write FBannerFontSize;
+    property BannerFontAutoSize: Boolean read FBannerFontAutoSize write FBannerFontAutoSize;
     property BannerPosition: TBannerPosition read FBannerPosition write FBannerPosition;
 
     {[cache]}
@@ -270,6 +272,7 @@ begin
   FBannerTextColor := DEF_BANNER_TEXT_COLOR;
   FBannerFontName := DEF_BANNER_FONT_NAME;
   FBannerFontSize := DEF_BANNER_FONT_SIZE;
+  FBannerFontAutoSize := DEF_BANNER_FONT_AUTO_SIZE;
   FBannerPosition := DEF_BANNER_POSITION;
   FCacheEnabled := DEF_CACHE_ENABLED;
   FCacheFolder := DEF_CACHE_FOLDER;
@@ -341,6 +344,7 @@ begin
     if FBannerFontName.Trim = '' then
       FBannerFontName := DEF_BANNER_FONT_NAME;
     FBannerFontSize := EnsureRange(Ini.ReadInteger('save', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
+    FBannerFontAutoSize := Ini.ReadBool('save', 'BannerFontAutoSize', DEF_BANNER_FONT_AUTO_SIZE);
     FBannerPosition := StrToBannerPosition(Ini.ReadString('save', 'BannerPosition', ''));
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
@@ -410,6 +414,7 @@ begin
     Ini.WriteString('save', 'BannerTextColor', ColorToHex(FBannerTextColor));
     Ini.WriteString('save', 'BannerFont', FBannerFontName);
     Ini.WriteInteger('save', 'BannerFontSize', FBannerFontSize);
+    Ini.WriteBool('save', 'BannerFontAutoSize', FBannerFontAutoSize);
     Ini.WriteString('save', 'BannerPosition', BannerPositionToStr(FBannerPosition));
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);

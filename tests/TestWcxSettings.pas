@@ -728,6 +728,8 @@ begin
       'BannerFontName default');
     Assert.AreEqual(DEF_BANNER_FONT_SIZE, S.BannerFontSize,
       'BannerFontSize default');
+    Assert.AreEqual(DEF_BANNER_FONT_AUTO_SIZE, S.BannerFontAutoSize,
+      'BannerFontAutoSize default');
     Assert.AreEqual(Ord(DEF_BANNER_POSITION), Ord(S.BannerPosition),
       'BannerPosition default');
   finally
@@ -746,7 +748,8 @@ begin
     S1.BannerBackground := TColor($00112233);
     S1.BannerTextColor := TColor($00AABBCC);
     S1.BannerFontName := 'Verdana';
-    S1.BannerFontSize := 10;
+    S1.BannerFontSize := 14;
+    S1.BannerFontAutoSize := False;
     S1.BannerPosition := bpBottom;
     S1.Save;
   finally
@@ -761,7 +764,8 @@ begin
     Assert.AreEqual(Integer(TColor($00AABBCC)), Integer(S2.BannerTextColor),
       'BannerTextColor round-trip');
     Assert.AreEqual('Verdana', S2.BannerFontName, 'BannerFontName round-trip');
-    Assert.AreEqual(10, S2.BannerFontSize, 'BannerFontSize round-trip');
+    Assert.AreEqual(14, S2.BannerFontSize, 'BannerFontSize round-trip');
+    Assert.IsFalse(S2.BannerFontAutoSize, 'BannerFontAutoSize round-trip');
     Assert.AreEqual(Ord(bpBottom), Ord(S2.BannerPosition), 'BannerPosition round-trip');
   finally
     S2.Free;

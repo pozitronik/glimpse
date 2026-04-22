@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 440
+  ClientHeight = 470
   ClientWidth = 460
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -17,7 +17,7 @@ object WcxSettingsForm: TWcxSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 400
+    Height = 430
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -388,13 +388,6 @@ object WcxSettingsForm: TWcxSettingsForm
         Height = 15
         Caption = 'Timestamp font:'
       end
-      object LblTimestampFontSize: TLabel
-        Left = 335
-        Top = 198
-        Width = 27
-        Height = 15
-        Caption = 'Size:'
-      end
       object EdtColumns: TEdit
         Left = 150
         Top = 20
@@ -575,39 +568,20 @@ object WcxSettingsForm: TWcxSettingsForm
       object EdtTimestampFont: TEdit
         Left = 150
         Top = 194
-        Width = 150
+        Width = 255
         Height = 23
+        ReadOnly = True
+        TabStop = False
         TabOrder = 18
       end
       object BtnTimestampFont: TButton
-        Left = 303
+        Left = 408
         Top = 194
         Width = 25
         Height = 23
         Caption = '...'
-        TabOrder = 30
-        OnClick = BtnTimestampFontClick
-      end
-      object EdtTimestampFontSize: TEdit
-        Left = 370
-        Top = 194
-        Width = 45
-        Height = 23
-        NumbersOnly = True
         TabOrder = 19
-        Text = '6'
-      end
-      object UdTimestampFontSize: TUpDown
-        Left = 415
-        Top = 194
-        Width = 17
-        Height = 23
-        Associate = EdtTimestampFontSize
-        Min = 6
-        Max = 72
-        Position = 6
-        TabOrder = 20
-        Thousands = False
+        OnClick = BtnTimestampFontClick
       end
       object ChkShowBanner: TCheckBox
         Left = 12
@@ -684,58 +658,40 @@ object WcxSettingsForm: TWcxSettingsForm
       object EdtBannerFont: TEdit
         Left = 150
         Top = 310
-        Width = 150
+        Width = 255
         Height = 23
+        ReadOnly = True
+        TabStop = False
         TabOrder = 26
       end
       object BtnBannerFont: TButton
-        Left = 303
+        Left = 408
         Top = 310
         Width = 25
         Height = 23
         Caption = '...'
-        TabOrder = 31
+        TabOrder = 27
         OnClick = BtnBannerFontClick
       end
-      object LblBannerFontSize: TLabel
-        Left = 335
-        Top = 314
-        Width = 27
-        Height = 15
-        Caption = 'Size:'
-      end
-      object EdtBannerFontSize: TEdit
-        Left = 370
-        Top = 310
-        Width = 45
-        Height = 23
-        Hint = '0 = auto-size from image width'
-        NumbersOnly = True
-        ParentShowHint = False
-        ShowHint = True
-        TabOrder = 27
-        Text = '0'
-      end
-      object UdBannerFontSize: TUpDown
-        Left = 415
-        Top = 310
-        Width = 17
-        Height = 23
-        Associate = EdtBannerFontSize
-        Max = 16
+      object ChkBannerAutoSize: TCheckBox
+        Left = 150
+        Top = 339
+        Width = 283
+        Height = 17
+        Caption = 'Auto-size banner font to image width'
         TabOrder = 28
-        Thousands = False
+        OnClick = ChkBannerAutoSizeClick
       end
       object LblBannerPosition: TLabel
         Left = 12
-        Top = 343
+        Top = 372
         Width = 95
         Height = 15
         Caption = 'Banner position:'
       end
       object CbxBannerPosition: TComboBox
         Left = 150
-        Top = 339
+        Top = 368
         Width = 105
         Height = 23
         Style = csDropDownList
@@ -815,7 +771,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object PnlButtons: TPanel
     Left = 0
-    Top = 400
+    Top = 430
     Width = 460
     Height = 40
     Align = alBottom

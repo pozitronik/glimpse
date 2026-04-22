@@ -150,6 +150,7 @@ begin
       BannerStyle.TextColor := H.Settings.BannerTextColor;
       BannerStyle.FontName := H.Settings.BannerFontName;
       BannerStyle.FontSize := H.Settings.BannerFontSize;
+      BannerStyle.AutoSize := H.Settings.BannerFontAutoSize;
       BannerStyle.Position := H.Settings.BannerPosition;
       WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)), BannerStyle);
       Result.Free;

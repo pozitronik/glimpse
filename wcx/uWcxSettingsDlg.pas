@@ -79,9 +79,6 @@ type
     LblTimestampFont: TLabel;
     EdtTimestampFont: TEdit;
     BtnTimestampFont: TButton;
-    LblTimestampFontSize: TLabel;
-    EdtTimestampFontSize: TEdit;
-    UdTimestampFontSize: TUpDown;
     ChkShowBanner: TCheckBox;
     LblBannerBackground: TLabel;
     PnlBannerBackground: TPanel;
@@ -92,9 +89,7 @@ type
     LblBannerFont: TLabel;
     EdtBannerFont: TEdit;
     BtnBannerFont: TButton;
-    LblBannerFontSize: TLabel;
-    EdtBannerFontSize: TEdit;
-    UdBannerFontSize: TUpDown;
+    ChkBannerAutoSize: TCheckBox;
     LblBannerPosition: TLabel;
     CbxBannerPosition: TComboBox;
     FontDlg: TFontDialog;
@@ -122,18 +117,26 @@ type
     procedure PnlBannerBackgroundClick(Sender: TObject);
     procedure PnlBannerTextColorClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
+    procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
     procedure BtnBannerFontClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
+    FTimestampFontName: string;
+    FTimestampFontSize: Integer;
+    FBannerFontName: string;
+    FBannerFontSize: Integer;
     procedure SettingsToControls(ASettings: TWcxSettings);
     procedure ControlsToSettings(ASettings: TWcxSettings);
     procedure UpdateCombinedState;
     procedure UpdateMaxWorkersControls;
     procedure UpdateFFmpegInfo;
+    procedure UpdateTimestampFontDisplay;
+    procedure UpdateBannerFontDisplay;
     procedure PickColor(APanel: TPanel);
-    procedure PickFont(AEdit: TEdit);
+    procedure PickTimestampFont;
+    procedure PickBannerFont;
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -148,6 +151,7 @@ implementation
 {$R *.dfm}
 
 uses
+  System.Math,
   uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic,
   uDefaults, uTypes;
 
@@ -197,13 +201,16 @@ begin
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
   PnlTCTextColor.Color := ASettings.TimestampTextColor;
   UdTCTextAlpha.Position := ASettings.TimestampTextAlpha;
-  EdtTimestampFont.Text := ASettings.TimestampFontName;
-  UdTimestampFontSize.Position := ASettings.TimestampFontSize;
+  FTimestampFontName := ASettings.TimestampFontName;
+  FTimestampFontSize := ASettings.TimestampFontSize;
+  UpdateTimestampFontDisplay;
   ChkShowBanner.Checked := ASettings.ShowBanner;
   PnlBannerBackground.Color := ASettings.BannerBackground;
   PnlBannerTextColor.Color := ASettings.BannerTextColor;
-  EdtBannerFont.Text := ASettings.BannerFontName;
-  UdBannerFontSize.Position := ASettings.BannerFontSize;
+  FBannerFontName := ASettings.BannerFontName;
+  FBannerFontSize := ASettings.BannerFontSize;
+  ChkBannerAutoSize.Checked := ASettings.BannerFontAutoSize;
+  UpdateBannerFontDisplay;
   CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
 
   UdFrameMax.Position := ASettings.FrameMaxSide;
@@ -249,13 +256,14 @@ begin
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
   ASettings.TimestampTextColor := PnlTCTextColor.Color;
   ASettings.TimestampTextAlpha := UdTCTextAlpha.Position;
-  ASettings.TimestampFontName := EdtTimestampFont.Text;
-  ASettings.TimestampFontSize := UdTimestampFontSize.Position;
+  ASettings.TimestampFontName := FTimestampFontName;
+  ASettings.TimestampFontSize := FTimestampFontSize;
   ASettings.ShowBanner := ChkShowBanner.Checked;
   ASettings.BannerBackground := PnlBannerBackground.Color;
   ASettings.BannerTextColor := PnlBannerTextColor.Color;
-  ASettings.BannerFontName := EdtBannerFont.Text;
-  ASettings.BannerFontSize := UdBannerFontSize.Position;
+  ASettings.BannerFontName := FBannerFontName;
+  ASettings.BannerFontSize := FBannerFontSize;
+  ASettings.BannerFontAutoSize := ChkBannerAutoSize.Checked;
   ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
 
   ASettings.FrameMaxSide := UdFrameMax.Position;
@@ -296,9 +304,6 @@ begin
   LblTimestampFont.Enabled := IsCombined;
   EdtTimestampFont.Enabled := IsCombined;
   BtnTimestampFont.Enabled := IsCombined;
-  LblTimestampFontSize.Enabled := IsCombined;
-  EdtTimestampFontSize.Enabled := IsCombined;
-  UdTimestampFontSize.Enabled := IsCombined;
   ChkShowBanner.Enabled := IsCombined;
 
   BannerOn := IsCombined and ChkShowBanner.Checked;
@@ -311,9 +316,7 @@ begin
   LblBannerFont.Enabled := BannerOn;
   EdtBannerFont.Enabled := BannerOn;
   BtnBannerFont.Enabled := BannerOn;
-  LblBannerFontSize.Enabled := BannerOn;
-  EdtBannerFontSize.Enabled := BannerOn;
-  UdBannerFontSize.Enabled := BannerOn;
+  ChkBannerAutoSize.Enabled := BannerOn;
   LblBannerPosition.Enabled := BannerOn;
   CbxBannerPosition.Enabled := BannerOn;
 end;
@@ -387,26 +390,62 @@ begin
     APanel.Color := ColorDlg.Color;
 end;
 
-{ TFontDialog rejects Size=0, so seed with a non-zero value when the edit
-  is empty or the associated spinner holds the banner auto-sentinel. }
-procedure TWcxSettingsForm.PickFont(AEdit: TEdit);
+procedure TWcxSettingsForm.UpdateTimestampFontDisplay;
 begin
-  if AEdit.Text <> '' then
-    FontDlg.Font.Name := AEdit.Text;
-  if FontDlg.Font.Size <= 0 then
-    FontDlg.Font.Size := 10;
+  EdtTimestampFont.Text := Format('%s, %d pt', [FTimestampFontName, FTimestampFontSize]);
+end;
+
+procedure TWcxSettingsForm.UpdateBannerFontDisplay;
+begin
+  if ChkBannerAutoSize.Checked then
+    EdtBannerFont.Text := Format('%s, auto', [FBannerFontName])
+  else
+    EdtBannerFont.Text := Format('%s, %d pt', [FBannerFontName, FBannerFontSize]);
+end;
+
+procedure TWcxSettingsForm.PickTimestampFont;
+begin
+  FontDlg.Font.Name := FTimestampFontName;
+  FontDlg.Font.Size := FTimestampFontSize;
   if FontDlg.Execute then
-    AEdit.Text := FontDlg.Font.Name;
+  begin
+    FTimestampFontName := FontDlg.Font.Name;
+    FTimestampFontSize := EnsureRange(FontDlg.Font.Size, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+    UpdateTimestampFontDisplay;
+  end;
+end;
+
+procedure TWcxSettingsForm.PickBannerFont;
+begin
+  FontDlg.Font.Name := FBannerFontName;
+  {Auto mode has no stored size, so seed the dialog with the default.}
+  if ChkBannerAutoSize.Checked then
+    FontDlg.Font.Size := DEF_BANNER_FONT_SIZE
+  else
+    FontDlg.Font.Size := FBannerFontSize;
+  if FontDlg.Execute then
+  begin
+    FBannerFontName := FontDlg.Font.Name;
+    FBannerFontSize := EnsureRange(FontDlg.Font.Size, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
+    {User picked a specific size; that signals intent to drop auto-sizing.}
+    ChkBannerAutoSize.Checked := False;
+    UpdateBannerFontDisplay;
+  end;
 end;
 
 procedure TWcxSettingsForm.BtnTimestampFontClick(Sender: TObject);
 begin
-  PickFont(EdtTimestampFont);
+  PickTimestampFont;
 end;
 
 procedure TWcxSettingsForm.BtnBannerFontClick(Sender: TObject);
 begin
-  PickFont(EdtBannerFont);
+  PickBannerFont;
+end;
+
+procedure TWcxSettingsForm.ChkBannerAutoSizeClick(Sender: TObject);
+begin
+  UpdateBannerFontDisplay;
 end;
 
 procedure TWcxSettingsForm.PnlBackgroundClick(Sender: TObject);

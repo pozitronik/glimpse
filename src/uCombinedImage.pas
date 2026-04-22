@@ -24,15 +24,16 @@ type
     AudioBitrateKbps: Integer;
   end;
 
-  {Visual style and placement for the info banner. FontSize = 0 selects the
-   historical width-based auto-scaling heuristic; any positive value is used
-   as a fixed point size and the renderer will wrap overflowing lines rather
-   than shrink below that size.}
+  {Visual style and placement for the info banner. When AutoSize is True the
+   renderer picks a font size using the historical width-based heuristic and
+   shrinks to fit; when False it uses FontSize as a fixed point size and wraps
+   overflowing lines instead of shrinking.}
   TBannerStyle = record
     Background: TColor;
     TextColor: TColor;
     FontName: string;
     FontSize: Integer;
+    AutoSize: Boolean;
     Position: TBannerPosition;
   end;
 
@@ -281,6 +282,7 @@ begin
   Result.TextColor := DEF_BANNER_TEXT_COLOR;
   Result.FontName := DEF_BANNER_FONT_NAME;
   Result.FontSize := DEF_BANNER_FONT_SIZE;
+  Result.AutoSize := DEF_BANNER_FONT_AUTO_SIZE;
   Result.Position := DEF_BANNER_POSITION;
 end;
 
@@ -311,7 +313,7 @@ begin
   try
     TempBmp.Canvas.Font.Name := FontName;
 
-    if AStyle.FontSize <= 0 then
+    if AStyle.AutoSize then
       {Auto mode: historical width-based ratio, then shrink until every
        line fits (or bottom out at BANNER_FONT_MIN and rely on wrapping).}
       FontSize := FindFittingBannerFontSize(TempBmp.Canvas, ALines, EnsureRange(ASrc.Width div BANNER_FONT_RATIO, BANNER_FONT_MIN, BANNER_FONT_MAX), MaxTextW)

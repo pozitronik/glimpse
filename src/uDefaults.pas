@@ -59,14 +59,16 @@ const
   DEF_TIMESTAMP_CORNER = tcBottomLeft;
 
   {Info banner defaults (shared by WLX exports and WCX combined output).
-   Font size 0 = auto (image-width-based heuristic); otherwise fixed point size.}
+   Auto-size uses the image-width-based heuristic; when off, BannerFontSize
+   drives the banner text size in points.}
   DEF_BANNER_BACKGROUND = TColor($00282828);
   DEF_BANNER_TEXT_COLOR = TColor($00E0E0E0);
   DEF_BANNER_FONT_NAME = 'Segoe UI';
-  DEF_BANNER_FONT_SIZE = 0;
+  DEF_BANNER_FONT_SIZE = 10;
+  DEF_BANNER_FONT_AUTO_SIZE = True;
   DEF_BANNER_POSITION = bpTop;
-  MIN_BANNER_FONT_SIZE = 0;
-  MAX_BANNER_FONT_SIZE = 16;
+  MIN_BANNER_FONT_SIZE = 6;
+  MAX_BANNER_FONT_SIZE = 72;
 
   {Clamping ranges}
   MIN_FRAMES_COUNT = 1;

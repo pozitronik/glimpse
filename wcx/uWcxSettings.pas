@@ -48,6 +48,7 @@ type
     FBannerTextColor: TColor;
     FBannerFontName: string;
     FBannerFontSize: Integer;
+    FBannerFontAutoSize: Boolean;
     FBannerPosition: TBannerPosition;
     {[output]}
     FShowFileSizes: Boolean;
@@ -98,6 +99,7 @@ type
     property BannerTextColor: TColor read FBannerTextColor write FBannerTextColor;
     property BannerFontName: string read FBannerFontName write FBannerFontName;
     property BannerFontSize: Integer read FBannerFontSize write FBannerFontSize;
+    property BannerFontAutoSize: Boolean read FBannerFontAutoSize write FBannerFontAutoSize;
     property BannerPosition: TBannerPosition read FBannerPosition write FBannerPosition;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
     property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
@@ -213,6 +215,7 @@ begin
   FBannerTextColor := DEF_BANNER_TEXT_COLOR;
   FBannerFontName := DEF_BANNER_FONT_NAME;
   FBannerFontSize := DEF_BANNER_FONT_SIZE;
+  FBannerFontAutoSize := DEF_BANNER_FONT_AUTO_SIZE;
   FBannerPosition := DEF_BANNER_POSITION;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
   FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
@@ -267,6 +270,7 @@ begin
     if FBannerFontName.Trim = '' then
       FBannerFontName := DEF_BANNER_FONT_NAME;
     FBannerFontSize := EnsureRange(Ini.ReadInteger('combined', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
+    FBannerFontAutoSize := Ini.ReadBool('combined', 'BannerFontAutoSize', DEF_BANNER_FONT_AUTO_SIZE);
     FBannerPosition := StrToBannerPosition(Ini.ReadString('combined', 'BannerPosition', ''));
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
@@ -322,6 +326,7 @@ begin
     Ini.WriteString('combined', 'BannerTextColor', ColorToHex(FBannerTextColor));
     Ini.WriteString('combined', 'BannerFont', FBannerFontName);
     Ini.WriteInteger('combined', 'BannerFontSize', FBannerFontSize);
+    Ini.WriteBool('combined', 'BannerFontAutoSize', FBannerFontAutoSize);
     Ini.WriteString('combined', 'BannerPosition', BannerPositionToStr(FBannerPosition));
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);

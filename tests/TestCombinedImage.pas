@@ -897,6 +897,7 @@ begin
     RAuto := AttachBanner(Src, ['One line'], DefaultBannerStyle);
 
     Style := DefaultBannerStyle;
+    Style.AutoSize := False;
     Style.FontSize := 6;
     RFixed := AttachBanner(Src, ['One line'], Style);
     try

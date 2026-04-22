@@ -82,6 +82,7 @@ begin
     Style.TextColor := FSettings.BannerTextColor;
     Style.FontName := FSettings.BannerFontName;
     Style.FontSize := FSettings.BannerFontSize;
+    Style.AutoSize := FSettings.BannerFontAutoSize;
     Style.Position := FSettings.BannerPosition;
     Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo), Style);
     ABmp.Free;

@@ -352,13 +352,6 @@ object SettingsForm: TSettingsForm
         Height = 15
         Caption = 'Timestamp font:'
       end
-      object LblTimestampFontSize: TLabel
-        Left = 335
-        Top = 169
-        Width = 27
-        Height = 15
-        Caption = 'Size:'
-      end
       object PnlBackground: TPanel
         Left = 150
         Top = 20
@@ -520,39 +513,20 @@ object SettingsForm: TSettingsForm
       object EdtTimestampFont: TEdit
         Left = 150
         Top = 165
-        Width = 150
+        Width = 255
         Height = 23
+        ReadOnly = True
+        TabStop = False
         TabOrder = 16
       end
       object BtnTimestampFont: TButton
-        Left = 303
+        Left = 408
         Top = 165
         Width = 25
         Height = 23
         Caption = '...'
-        TabOrder = 30
-        OnClick = BtnTimestampFontClick
-      end
-      object EdtTimestampFontSize: TEdit
-        Left = 370
-        Top = 165
-        Width = 45
-        Height = 23
-        NumbersOnly = True
         TabOrder = 17
-        Text = '6'
-      end
-      object UdTimestampFontSize: TUpDown
-        Left = 415
-        Top = 165
-        Width = 17
-        Height = 23
-        Associate = EdtTimestampFontSize
-        Min = 6
-        Max = 72
-        Position = 6
-        TabOrder = 18
-        Thousands = False
+        OnClick = BtnTimestampFontClick
       end
       object ChkShowToolbar: TCheckBox
         Left = 12
@@ -750,58 +724,40 @@ object SettingsForm: TSettingsForm
       object EdtBannerFont: TEdit
         Left = 130
         Top = 227
-        Width = 158
+        Width = 265
         Height = 23
+        ReadOnly = True
+        TabStop = False
         TabOrder = 12
       end
       object BtnBannerFont: TButton
-        Left = 291
+        Left = 398
         Top = 227
         Width = 25
         Height = 23
         Caption = '...'
-        TabOrder = 31
+        TabOrder = 13
         OnClick = BtnBannerFontClick
       end
-      object LblBannerFontSize: TLabel
-        Left = 321
-        Top = 231
-        Width = 27
-        Height = 15
-        Caption = 'Size:'
-      end
-      object EdtBannerFontSize: TEdit
-        Left = 356
-        Top = 227
-        Width = 45
-        Height = 23
-        Hint = '0 = auto-size from image width'
-        NumbersOnly = True
-        ParentShowHint = False
-        ShowHint = True
-        TabOrder = 13
-        Text = '0'
-      end
-      object UdBannerFontSize: TUpDown
-        Left = 401
-        Top = 227
-        Width = 17
-        Height = 23
-        Associate = EdtBannerFontSize
-        Max = 16
+      object ChkBannerAutoSize: TCheckBox
+        Left = 130
+        Top = 258
+        Width = 293
+        Height = 17
+        Caption = 'Auto-size banner font to image width'
         TabOrder = 14
-        Thousands = False
+        OnClick = ChkBannerAutoSizeClick
       end
       object LblBannerPosition: TLabel
         Left = 12
-        Top = 260
+        Top = 289
         Width = 95
         Height = 15
         Caption = 'Banner position:'
       end
       object CbxBannerPosition: TComboBox
         Left = 130
-        Top = 256
+        Top = 285
         Width = 105
         Height = 23
         Style = csDropDownList
