@@ -575,9 +575,18 @@ object WcxSettingsForm: TWcxSettingsForm
       object EdtTimestampFont: TEdit
         Left = 150
         Top = 194
-        Width = 180
+        Width = 150
         Height = 23
         TabOrder = 18
+      end
+      object BtnTimestampFont: TButton
+        Left = 303
+        Top = 194
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 30
+        OnClick = BtnTimestampFontClick
       end
       object EdtTimestampFontSize: TEdit
         Left = 370
@@ -679,19 +688,31 @@ object WcxSettingsForm: TWcxSettingsForm
         Height = 23
         TabOrder = 26
       end
+      object BtnBannerFont: TButton
+        Left = 303
+        Top = 310
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 31
+        OnClick = BtnBannerFontClick
+      end
       object LblBannerFontSize: TLabel
-        Left = 310
+        Left = 335
         Top = 314
-        Width = 55
+        Width = 27
         Height = 15
-        Caption = 'Size (0=auto):'
+        Caption = 'Size:'
       end
       object EdtBannerFontSize: TEdit
         Left = 370
         Top = 310
         Width = 45
         Height = 23
+        Hint = '0 = auto-size from image width'
         NumbersOnly = True
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 27
         Text = '0'
       end
@@ -836,5 +857,15 @@ object WcxSettingsForm: TWcxSettingsForm
     Options = [cdFullOpen]
     Left = 408
     Top = 8
+  end
+  object FontDlg: TFontDialog
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = []
+    Options = [fdEffects, fdForceFontExist]
+    Left = 408
+    Top = 48
   end
 end

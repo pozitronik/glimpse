@@ -62,6 +62,7 @@ type
     BtnTCTextColor: TButton;
     LblTimestampFont: TLabel;
     EdtTimestampFont: TEdit;
+    BtnTimestampFont: TButton;
     LblTimestampFontSize: TLabel;
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
@@ -96,6 +97,7 @@ type
     BtnBannerTextColor: TButton;
     LblBannerFont: TLabel;
     EdtBannerFont: TEdit;
+    BtnBannerFont: TButton;
     LblBannerFontSize: TLabel;
     EdtBannerFontSize: TEdit;
     UdBannerFontSize: TUpDown;
@@ -134,12 +136,15 @@ type
     BtnOK: TButton;
     BtnCancel: TButton;
     ColorDlg: TColorDialog;
+    FontDlg: TFontDialog;
     procedure PnlBackgroundClick(Sender: TObject);
     procedure PnlTCBackClick(Sender: TObject);
     procedure PnlTCTextColorClick(Sender: TObject);
     procedure PnlBannerBackgroundClick(Sender: TObject);
     procedure PnlBannerTextColorClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
+    procedure BtnTimestampFontClick(Sender: TObject);
+    procedure BtnBannerFontClick(Sender: TObject);
     procedure CbxSaveFormatChange(Sender: TObject);
     procedure BtnSaveFolderClick(Sender: TObject);
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
@@ -172,6 +177,7 @@ type
     procedure UpdateCacheFolderInfo;
     procedure UpdateCacheSizeInfo;
     procedure PickColor(APanel: TPanel);
+    procedure PickFont(AEdit: TEdit);
     procedure BrowseFolder(AEdit: TEdit);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
@@ -344,6 +350,28 @@ begin
   ColorDlg.Color := APanel.Color;
   if ColorDlg.Execute then
     APanel.Color := ColorDlg.Color;
+end;
+
+{ TFontDialog rejects Size=0, so seed with a non-zero value when the edit
+  is empty or the associated spinner holds the banner auto-sentinel. }
+procedure TSettingsForm.PickFont(AEdit: TEdit);
+begin
+  if AEdit.Text <> '' then
+    FontDlg.Font.Name := AEdit.Text;
+  if FontDlg.Font.Size <= 0 then
+    FontDlg.Font.Size := 10;
+  if FontDlg.Execute then
+    AEdit.Text := FontDlg.Font.Name;
+end;
+
+procedure TSettingsForm.BtnTimestampFontClick(Sender: TObject);
+begin
+  PickFont(EdtTimestampFont);
+end;
+
+procedure TSettingsForm.BtnBannerFontClick(Sender: TObject);
+begin
+  PickFont(EdtBannerFont);
 end;
 
 procedure TSettingsForm.PnlBackgroundClick(Sender: TObject);
@@ -559,6 +587,7 @@ begin
   BtnBannerTextColor.Enabled := Enabled;
   LblBannerFont.Enabled := Enabled;
   EdtBannerFont.Enabled := Enabled;
+  BtnBannerFont.Enabled := Enabled;
   LblBannerFontSize.Enabled := Enabled;
   EdtBannerFontSize.Enabled := Enabled;
   UdBannerFontSize.Enabled := Enabled;

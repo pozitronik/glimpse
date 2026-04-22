@@ -520,9 +520,18 @@ object SettingsForm: TSettingsForm
       object EdtTimestampFont: TEdit
         Left = 150
         Top = 165
-        Width = 180
+        Width = 150
         Height = 23
         TabOrder = 16
+      end
+      object BtnTimestampFont: TButton
+        Left = 303
+        Top = 165
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 30
+        OnClick = BtnTimestampFontClick
       end
       object EdtTimestampFontSize: TEdit
         Left = 370
@@ -741,28 +750,40 @@ object SettingsForm: TSettingsForm
       object EdtBannerFont: TEdit
         Left = 130
         Top = 227
-        Width = 150
+        Width = 158
         Height = 23
         TabOrder = 12
       end
+      object BtnBannerFont: TButton
+        Left = 291
+        Top = 227
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 31
+        OnClick = BtnBannerFontClick
+      end
       object LblBannerFontSize: TLabel
-        Left = 290
+        Left = 321
         Top = 231
-        Width = 90
+        Width = 27
         Height = 15
-        Caption = 'Size (0=auto):'
+        Caption = 'Size:'
       end
       object EdtBannerFontSize: TEdit
-        Left = 385
+        Left = 356
         Top = 227
         Width = 45
         Height = 23
+        Hint = '0 = auto-size from image width'
         NumbersOnly = True
+        ParentShowHint = False
+        ShowHint = True
         TabOrder = 13
         Text = '0'
       end
       object UdBannerFontSize: TUpDown
-        Left = 430
+        Left = 401
         Top = 227
         Width = 17
         Height = 23
@@ -1082,5 +1103,15 @@ object SettingsForm: TSettingsForm
     Options = [cdFullOpen]
     Left = 408
     Top = 8
+  end
+  object FontDlg: TFontDialog
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = []
+    Options = [fdEffects, fdForceFontExist]
+    Left = 408
+    Top = 48
   end
 end

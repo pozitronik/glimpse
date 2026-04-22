@@ -78,6 +78,7 @@ type
     UdTCTextAlpha: TUpDown;
     LblTimestampFont: TLabel;
     EdtTimestampFont: TEdit;
+    BtnTimestampFont: TButton;
     LblTimestampFontSize: TLabel;
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
@@ -90,11 +91,13 @@ type
     BtnBannerTextColor: TButton;
     LblBannerFont: TLabel;
     EdtBannerFont: TEdit;
+    BtnBannerFont: TButton;
     LblBannerFontSize: TLabel;
     EdtBannerFontSize: TEdit;
     UdBannerFontSize: TUpDown;
     LblBannerPosition: TLabel;
     CbxBannerPosition: TComboBox;
+    FontDlg: TFontDialog;
     TshLimits: TTabSheet;
     LblLimitsHint: TLabel;
     LblFrameMax: TLabel;
@@ -119,6 +122,8 @@ type
     procedure PnlBannerBackgroundClick(Sender: TObject);
     procedure PnlBannerTextColorClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
+    procedure BtnTimestampFontClick(Sender: TObject);
+    procedure BtnBannerFontClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
@@ -128,6 +133,7 @@ type
     procedure UpdateMaxWorkersControls;
     procedure UpdateFFmpegInfo;
     procedure PickColor(APanel: TPanel);
+    procedure PickFont(AEdit: TEdit);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -289,6 +295,7 @@ begin
   UdTCTextAlpha.Enabled := IsCombined;
   LblTimestampFont.Enabled := IsCombined;
   EdtTimestampFont.Enabled := IsCombined;
+  BtnTimestampFont.Enabled := IsCombined;
   LblTimestampFontSize.Enabled := IsCombined;
   EdtTimestampFontSize.Enabled := IsCombined;
   UdTimestampFontSize.Enabled := IsCombined;
@@ -303,6 +310,7 @@ begin
   BtnBannerTextColor.Enabled := BannerOn;
   LblBannerFont.Enabled := BannerOn;
   EdtBannerFont.Enabled := BannerOn;
+  BtnBannerFont.Enabled := BannerOn;
   LblBannerFontSize.Enabled := BannerOn;
   EdtBannerFontSize.Enabled := BannerOn;
   UdBannerFontSize.Enabled := BannerOn;
@@ -377,6 +385,28 @@ begin
   ColorDlg.Color := APanel.Color;
   if ColorDlg.Execute then
     APanel.Color := ColorDlg.Color;
+end;
+
+{ TFontDialog rejects Size=0, so seed with a non-zero value when the edit
+  is empty or the associated spinner holds the banner auto-sentinel. }
+procedure TWcxSettingsForm.PickFont(AEdit: TEdit);
+begin
+  if AEdit.Text <> '' then
+    FontDlg.Font.Name := AEdit.Text;
+  if FontDlg.Font.Size <= 0 then
+    FontDlg.Font.Size := 10;
+  if FontDlg.Execute then
+    AEdit.Text := FontDlg.Font.Name;
+end;
+
+procedure TWcxSettingsForm.BtnTimestampFontClick(Sender: TObject);
+begin
+  PickFont(EdtTimestampFont);
+end;
+
+procedure TWcxSettingsForm.BtnBannerFontClick(Sender: TObject);
+begin
+  PickFont(EdtBannerFont);
 end;
 
 procedure TWcxSettingsForm.PnlBackgroundClick(Sender: TObject);
