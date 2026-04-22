@@ -813,6 +813,7 @@ begin
   FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
   FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
   FFrameView.TimestampTextAlpha := FSettings.TimestampTextAlpha;
+  FFrameView.TimestampTextColor := FSettings.TimestampTextColor;
   FFrameView.TimestampFontName := FSettings.TimestampFontName;
   FFrameView.TimestampFontSize := FSettings.TimestampFontSize;
   FFrameView.CellGap := FSettings.CellGap;

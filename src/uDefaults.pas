@@ -5,6 +5,7 @@ unit uDefaults;
 interface
 
 uses
+  System.UITypes,
   uBitmapSaver, uTypes;
 
 const
@@ -36,6 +37,10 @@ const
   DEF_TIMESTAMP_TEXT_ALPHA = 255;
   MIN_TIMESTAMP_TEXT_ALPHA = 0;
   MAX_TIMESTAMP_TEXT_ALPHA = 255;
+
+  {Timestamp text color on loaded cells (pending cells are auto-dimmed at render time).
+   Matches the historical CLR_TIMECODE_OVERLAY shade so legacy configs look identical.}
+  DEF_TIMESTAMP_TEXT_COLOR = TColor($00CCCCCC);
 
   {Cell gap range (shared by both plugins: WLX viewer and WCX combined image)}
   MIN_CELL_GAP = 0;

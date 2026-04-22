@@ -334,6 +334,13 @@ object SettingsForm: TSettingsForm
         Height = 15
         Caption = 'Text opacity:'
       end
+      object LblTCTextColor: TLabel
+        Left = 230
+        Top = 111
+        Width = 63
+        Height = 15
+        Caption = 'Text color:'
+      end
       object LblTimestampFont: TLabel
         Left = 12
         Top = 140
@@ -448,6 +455,26 @@ object SettingsForm: TSettingsForm
         TabOrder = 7
         Thousands = False
       end
+      object PnlTCTextColor: TPanel
+        Left = 310
+        Top = 107
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 18
+        OnClick = PnlTCTextColorClick
+      end
+      object BtnTCTextColor: TButton
+        Left = 394
+        Top = 107
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 19
+        OnClick = PnlTCTextColorClick
+      end
       object EdtTimestampFont: TEdit
         Left = 130
         Top = 136
@@ -538,6 +565,7 @@ object SettingsForm: TSettingsForm
         Style = csDropDownList
         TabOrder = 17
         Items.Strings = (
+          'None'
           'Top left'
           'Top right'
           'Bottom left'

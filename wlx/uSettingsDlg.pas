@@ -58,6 +58,9 @@ type
     LblTCTextAlpha: TLabel;
     EdtTCTextAlpha: TEdit;
     UdTCTextAlpha: TUpDown;
+    LblTCTextColor: TLabel;
+    PnlTCTextColor: TPanel;
+    BtnTCTextColor: TButton;
     LblTimestampFont: TLabel;
     EdtTimestampFont: TEdit;
     LblTimestampFontSize: TLabel;
@@ -121,6 +124,7 @@ type
     ColorDlg: TColorDialog;
     procedure PnlBackgroundClick(Sender: TObject);
     procedure PnlTCBackClick(Sender: TObject);
+    procedure PnlTCTextColorClick(Sender: TObject);
     procedure CbxSaveFormatChange(Sender: TObject);
     procedure BtnSaveFolderClick(Sender: TObject);
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
@@ -203,6 +207,7 @@ begin
   PnlTCBack.Color := ASettings.TimecodeBackColor;
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
   UdTCTextAlpha.Position := ASettings.TimestampTextAlpha;
+  PnlTCTextColor.Color := ASettings.TimestampTextColor;
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   UdCellGap.Position := ASettings.CellGap;
@@ -268,6 +273,7 @@ begin
   ASettings.TimecodeBackColor := PnlTCBack.Color;
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
   ASettings.TimestampTextAlpha := UdTCTextAlpha.Position;
+  ASettings.TimestampTextColor := PnlTCTextColor.Color;
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.CellGap := UdCellGap.Position;
@@ -311,6 +317,11 @@ end;
 procedure TSettingsForm.PnlTCBackClick(Sender: TObject);
 begin
   PickColor(PnlTCBack);
+end;
+
+procedure TSettingsForm.PnlTCTextColorClick(Sender: TObject);
+begin
+  PickColor(PnlTCTextColor);
 end;
 
 procedure TSettingsForm.BrowseFolder(AEdit: TEdit);

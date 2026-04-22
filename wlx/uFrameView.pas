@@ -49,6 +49,7 @@ type
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
     FTimestampTextAlpha: Byte;
+    FTimestampTextColor: TColor;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FBlendBmp: TBitmap; {reusable 1x1 bitmap for alpha-blended timecode background}
@@ -68,6 +69,7 @@ type
     procedure SetTimecodeBackColor(AValue: TColor);
     procedure SetTimecodeBackAlpha(AValue: Byte);
     procedure SetTimestampTextAlpha(AValue: Byte);
+    procedure SetTimestampTextColor(AValue: TColor);
     procedure SetTimestampFontName(const AValue: string);
     procedure SetTimestampFontSize(AValue: Integer);
     procedure PaintCell(AIndex: Integer);
@@ -122,6 +124,7 @@ type
     property TimecodeBackColor: TColor read FTimecodeBackColor write SetTimecodeBackColor;
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write SetTimecodeBackAlpha;
     property TimestampTextAlpha: Byte read FTimestampTextAlpha write SetTimestampTextAlpha;
+    property TimestampTextColor: TColor read FTimestampTextColor write SetTimestampTextColor;
     property TimestampFontName: string read FTimestampFontName write SetTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write SetTimestampFontSize;
     property CellGap: Integer read FCellGap write SetCellGap;
@@ -146,8 +149,6 @@ const
   {Painting colors}
   CLR_CELL_BG = TColor($002D2D2D); {dark gray cell/placeholder background}
   CLR_ARC = TColor($00707070); {loading spinner arc}
-  CLR_TIMECODE_OVERLAY = TColor($00CCCCCC); {timecode text over smart grid cells}
-  CLR_TIMECODE_PENDING = TColor($00555555); {timecode text for placeholders}
   CLR_ERROR_TEXT = TColor($004040FF); {error cell label}
   CLR_SELECTION = TColor($00F7C34F); {#4FC3F7 light blue selection border}
   SELECTION_BORDER_W = 2;
@@ -174,6 +175,7 @@ begin
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
   FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
+  FTimestampTextColor := DEF_TIMESTAMP_TEXT_COLOR;
   FTimestampFontName := DEF_TIMESTAMP_FONT;
   FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
   FBackColor := DEF_BACKGROUND;
@@ -562,6 +564,14 @@ begin
   Invalidate;
 end;
 
+procedure TFrameView.SetTimestampTextColor(AValue: TColor);
+begin
+  if FTimestampTextColor = AValue then
+    Exit;
+  FTimestampTextColor := AValue;
+  Invalidate;
+end;
+
 procedure TFrameView.SetTimestampFontName(const AValue: string);
 begin
   if FTimestampFontName = AValue then
@@ -616,16 +626,17 @@ var
 begin
   if not FShowTimecode then
     Exit;
-  if FCells[AIndex].Timecode = '' then
+  if FTimestampCorner = tcNone then
     Exit;
-  if FTimestampTextAlpha = 0 then
+  if FCells[AIndex].Timecode = '' then
     Exit;
 
   R := TimecodeRectFromCell(ACellRect, AIndex);
   Canvas.Font.Name := FTimestampFontName;
   Canvas.Font.Size := FTimestampFontSize;
 
-  {Alpha-blended background for readability}
+  {Alpha-blended background for readability. Drawn independently of text alpha
+   so users can disable text entirely while keeping a visible background.}
   if FTimecodeBackAlpha > 0 then
   begin
     if FTimecodeBackAlpha = 255 then
@@ -647,10 +658,18 @@ begin
     end;
   end;
 
+  if FTimestampTextAlpha = 0 then
+    Exit;
+
+  {Pending cells use the same hue at half luminance: the user's color choice
+   still reads through, and the existing load-fade cue is preserved without
+   a second configurable field.}
   if FCells[AIndex].State = fcsLoaded then
-    TextColor := CLR_TIMECODE_OVERLAY
+    TextColor := FTimestampTextColor
   else
-    TextColor := CLR_TIMECODE_PENDING;
+    TextColor := RGB(GetRValue(FTimestampTextColor) shr 1,
+                     GetGValue(FTimestampTextColor) shr 1,
+                     GetBValue(FTimestampTextColor) shr 1);
 
   if FTimestampTextAlpha = 255 then
   begin

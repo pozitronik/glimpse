@@ -37,6 +37,7 @@ type
     FTimecodeBackColor: TColor;
     FTimecodeBackAlpha: Byte;
     FTimestampTextAlpha: Byte;
+    FTimestampTextColor: TColor;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FCellGap: Integer;
@@ -122,6 +123,7 @@ type
     property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
     property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
     property TimestampTextAlpha: Byte read FTimestampTextAlpha write FTimestampTextAlpha;
+    property TimestampTextColor: TColor read FTimestampTextColor write FTimestampTextColor;
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property CellGap: Integer read FCellGap write FCellGap;
@@ -242,6 +244,7 @@ begin
   FTimecodeBackColor := DEF_TC_BACK_COLOR;
   FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
   FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
+  FTimestampTextColor := DEF_TIMESTAMP_TEXT_COLOR;
   FTimestampFontName := DEF_TIMESTAMP_FONT;
   FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
   FCellGap := DEF_CELL_GAP;
@@ -299,6 +302,7 @@ begin
     FShowStatusBar := Ini.ReadBool('view', 'ShowStatusBar', DEF_SHOW_STATUS_BAR);
     HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''), DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
     FTimestampTextAlpha := EnsureRange(Ini.ReadInteger('view', 'TimestampTextAlpha', DEF_TIMESTAMP_TEXT_ALPHA), MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
+    FTimestampTextColor := HexToColor(Ini.ReadString('view', 'TimestampTextColor', ''), DEF_TIMESTAMP_TEXT_COLOR);
     FTimestampFontName := Ini.ReadString('view', 'TimestampFont', DEF_TIMESTAMP_FONT);
     if FTimestampFontName.Trim = '' then
       FTimestampFontName := DEF_TIMESTAMP_FONT;
@@ -366,6 +370,7 @@ begin
     Ini.WriteBool('view', 'ShowStatusBar', FShowStatusBar);
     Ini.WriteString('view', 'TimecodeBackground', ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
     Ini.WriteInteger('view', 'TimestampTextAlpha', FTimestampTextAlpha);
+    Ini.WriteString('view', 'TimestampTextColor', ColorToHex(FTimestampTextColor));
     Ini.WriteString('view', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('view', 'TimestampFontSize', FTimestampFontSize);
     Ini.WriteInteger('view', 'CellGap', FCellGap);
@@ -505,7 +510,9 @@ end;
 
 class function TPluginSettings.StrToTimestampCorner(const AValue: string): TTimestampCorner;
 begin
-  if SameText(AValue, 'topleft') then
+  if SameText(AValue, 'none') then
+    Result := tcNone
+  else if SameText(AValue, 'topleft') then
     Result := tcTopLeft
   else if SameText(AValue, 'topright') then
     Result := tcTopRight
@@ -520,6 +527,8 @@ end;
 class function TPluginSettings.TimestampCornerToStr(ACorner: TTimestampCorner): string;
 begin
   case ACorner of
+    tcNone:
+      Result := 'none';
     tcTopLeft:
       Result := 'topleft';
     tcTopRight:

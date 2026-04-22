@@ -80,6 +80,12 @@ type
     [Test]
     procedure TestTimestampTextAlphaClampedLow;
     [Test]
+    procedure TestTimestampTextColorDefault;
+    [Test]
+    procedure TestTimestampTextColorRoundTrip;
+    [Test]
+    procedure TestTimestampTextColorMalformedFallback;
+    [Test]
     procedure TestTimestampFontDefaults;
     [Test]
     procedure TestTimestampFontRoundTrip;
@@ -227,6 +233,7 @@ begin
     S1.TimecodeBackColor := TColor($0055AA00);
     S1.TimecodeBackAlpha := 200;
     S1.TimestampTextAlpha := 128;
+    S1.TimestampTextColor := TColor($00336699);
     S1.ExtensionList := 'mp4,mkv,avi';
     S1.SaveFormat := sfJPEG;
     S1.JpegQuality := 75;
@@ -261,6 +268,7 @@ begin
     Assert.AreEqual(Integer(TColor($0055AA00)), Integer(S2.TimecodeBackColor));
     Assert.AreEqual(200, Integer(S2.TimecodeBackAlpha));
     Assert.AreEqual(128, Integer(S2.TimestampTextAlpha));
+    Assert.AreEqual(Integer(TColor($00336699)), Integer(S2.TimestampTextColor));
     Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);
     Assert.AreEqual(Ord(sfJPEG), Ord(S2.SaveFormat));
     Assert.AreEqual(75, S2.JpegQuality);
@@ -977,6 +985,67 @@ begin
     S.Load;
     Assert.AreEqual(Integer(MIN_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
       'Negative value should clamp to MIN_TIMESTAMP_TEXT_ALPHA');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextColorDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_COLOR), Integer(S.TimestampTextColor),
+      'Fresh settings should carry the text color default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextColorRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  Expected: TColor;
+begin
+  Expected := TColor($00336699);
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.TimestampTextColor := Expected;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(Expected), Integer(S2.TimestampTextColor),
+      'Text color should survive save/load round trip');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextColorMalformedFallback;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  {An invalid hex value must leave the default in place rather than produce
+   a corrupted color; HexToColor returns the supplied default on parse failure}
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimestampTextColor', 'not-a-color');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_COLOR), Integer(S.TimestampTextColor),
+      'Malformed hex should fall back to default text color');
   finally
     S.Free;
   end;

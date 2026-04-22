@@ -375,7 +375,7 @@ begin
     Y := Border + Row * (CellH + AGap);
     Result.Canvas.Draw(X, Y, AFrames[I]);
 
-    if AShowTimestamp and (I < Length(AOffsets)) then
+    if AShowTimestamp and (ATimestampCorner <> tcNone) and (I < Length(AOffsets)) then
     begin
       Tc := FormatTimecode(AOffsets[I].TimeOffset);
       Result.Canvas.Font.Name := AFontName;
