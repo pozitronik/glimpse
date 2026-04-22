@@ -58,6 +58,16 @@ const
   {Default timestamp corner for both WLX cells and combined image cells.}
   DEF_TIMESTAMP_CORNER = tcBottomLeft;
 
+  {Info banner defaults (shared by WLX exports and WCX combined output).
+   Font size 0 = auto (image-width-based heuristic); otherwise fixed point size.}
+  DEF_BANNER_BACKGROUND = TColor($00282828);
+  DEF_BANNER_TEXT_COLOR = TColor($00E0E0E0);
+  DEF_BANNER_FONT_NAME = 'Segoe UI';
+  DEF_BANNER_FONT_SIZE = 0;
+  DEF_BANNER_POSITION = bpTop;
+  MIN_BANNER_FONT_SIZE = 0;
+  MAX_BANNER_FONT_SIZE = 16;
+
   {Clamping ranges}
   MIN_FRAMES_COUNT = 1;
   MAX_FRAMES_COUNT = 99;

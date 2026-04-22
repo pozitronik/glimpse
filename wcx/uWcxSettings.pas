@@ -44,6 +44,11 @@ type
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FShowBanner: Boolean;
+    FBannerBackground: TColor;
+    FBannerTextColor: TColor;
+    FBannerFontName: string;
+    FBannerFontSize: Integer;
+    FBannerPosition: TBannerPosition;
     {[output]}
     FShowFileSizes: Boolean;
     {Output size cap in pixels, 0 = no limit. The cap applies to whichever
@@ -55,6 +60,8 @@ type
 
     class function StrToTimestampCorner(const AValue: string): TTimestampCorner; static;
     class function TimestampCornerToStr(ACorner: TTimestampCorner): string; static;
+    class function StrToBannerPosition(const AValue: string): TBannerPosition; static;
+    class function BannerPositionToStr(APosition: TBannerPosition): string; static;
   public
     constructor Create(const AIniPath: string);
     procedure Load;
@@ -87,6 +94,11 @@ type
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property ShowBanner: Boolean read FShowBanner write FShowBanner;
+    property BannerBackground: TColor read FBannerBackground write FBannerBackground;
+    property BannerTextColor: TColor read FBannerTextColor write FBannerTextColor;
+    property BannerFontName: string read FBannerFontName write FBannerFontName;
+    property BannerFontSize: Integer read FBannerFontSize write FBannerFontSize;
+    property BannerPosition: TBannerPosition read FBannerPosition write FBannerPosition;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
     property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
@@ -145,6 +157,26 @@ begin
   end;
 end;
 
+class function TWcxSettings.StrToBannerPosition(const AValue: string): TBannerPosition;
+begin
+  if SameText(AValue, 'bottom') then
+    Result := bpBottom
+  else if SameText(AValue, 'top') then
+    Result := bpTop
+  else
+    Result := DEF_BANNER_POSITION;
+end;
+
+class function TWcxSettings.BannerPositionToStr(APosition: TBannerPosition): string;
+begin
+  case APosition of
+    bpBottom:
+      Result := 'bottom';
+    else
+      Result := 'top';
+  end;
+end;
+
 {TWcxSettings}
 
 constructor TWcxSettings.Create(const AIniPath: string);
@@ -177,6 +209,11 @@ begin
   FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
   FTimestampFontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
   FShowBanner := WCX_DEF_SHOW_BANNER;
+  FBannerBackground := DEF_BANNER_BACKGROUND;
+  FBannerTextColor := DEF_BANNER_TEXT_COLOR;
+  FBannerFontName := DEF_BANNER_FONT_NAME;
+  FBannerFontSize := DEF_BANNER_FONT_SIZE;
+  FBannerPosition := DEF_BANNER_POSITION;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
   FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
   FCombinedMaxSide := WCX_DEF_COMBINED_MAX_SIDE;
@@ -224,6 +261,13 @@ begin
       FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
     FTimestampFontSize := EnsureRange(Ini.ReadInteger('combined', 'TimestampFontSize', WCX_DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
     FShowBanner := Ini.ReadBool('combined', 'ShowBanner', WCX_DEF_SHOW_BANNER);
+    FBannerBackground := HexToColor(Ini.ReadString('combined', 'BannerBackground', ''), DEF_BANNER_BACKGROUND);
+    FBannerTextColor := HexToColor(Ini.ReadString('combined', 'BannerTextColor', ''), DEF_BANNER_TEXT_COLOR);
+    FBannerFontName := Ini.ReadString('combined', 'BannerFont', DEF_BANNER_FONT_NAME);
+    if FBannerFontName.Trim = '' then
+      FBannerFontName := DEF_BANNER_FONT_NAME;
+    FBannerFontSize := EnsureRange(Ini.ReadInteger('combined', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
+    FBannerPosition := StrToBannerPosition(Ini.ReadString('combined', 'BannerPosition', ''));
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
 
@@ -274,6 +318,11 @@ begin
     Ini.WriteString('combined', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('combined', 'TimestampFontSize', FTimestampFontSize);
     Ini.WriteBool('combined', 'ShowBanner', FShowBanner);
+    Ini.WriteString('combined', 'BannerBackground', ColorToHex(FBannerBackground));
+    Ini.WriteString('combined', 'BannerTextColor', ColorToHex(FBannerTextColor));
+    Ini.WriteString('combined', 'BannerFont', FBannerFontName);
+    Ini.WriteInteger('combined', 'BannerFontSize', FBannerFontSize);
+    Ini.WriteString('combined', 'BannerPosition', BannerPositionToStr(FBannerPosition));
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
 

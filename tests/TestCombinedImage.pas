@@ -58,17 +58,19 @@ type
     [Test] procedure BannerLines_FullInfo_ThreeLines;
     [Test] procedure BannerLines_NoAudio_OmitsAudioPart;
     [Test] procedure BannerLines_FileSizeFormatting;
-    { PrependBanner }
-    [Test] procedure PrependBanner_EmptyLines_ReturnsCopy;
-    [Test] procedure PrependBanner_AddsHeightAboveSource;
-    [Test] procedure PrependBanner_PreservesSourceContent;
-    [Test] procedure PrependBanner_NilSource_ReturnsEmptyBitmap;
-    [Test] procedure PrependBanner_NarrowImage_SmallBanner;
-    [Test] procedure PrependBanner_WideImage_LargerBanner;
-    [Test] procedure PrependBanner_LongLine_PreservesWidth;
-    [Test] procedure PrependBanner_LongMultiWordLine_GrowsBannerHeight;
-    [Test] procedure PrependBanner_PathologicalSingleToken_HeightStaysBounded;
-    [Test] procedure PrependBanner_LongLineDoesNotTruncateToEllipsis;
+    { AttachBanner }
+    [Test] procedure AttachBanner_EmptyLines_ReturnsCopy;
+    [Test] procedure AttachBanner_AddsHeightAboveSource;
+    [Test] procedure AttachBanner_PreservesSourceContent;
+    [Test] procedure AttachBanner_NilSource_ReturnsEmptyBitmap;
+    [Test] procedure AttachBanner_NarrowImage_SmallBanner;
+    [Test] procedure AttachBanner_WideImage_LargerBanner;
+    [Test] procedure AttachBanner_LongLine_PreservesWidth;
+    [Test] procedure AttachBanner_LongMultiWordLine_GrowsBannerHeight;
+    [Test] procedure AttachBanner_PathologicalSingleToken_HeightStaysBounded;
+    [Test] procedure AttachBanner_LongLineDoesNotTruncateToEllipsis;
+    [Test] procedure AttachBanner_PositionBottom_PreservesTopSource;
+    [Test] procedure AttachBanner_FixedFontSize_DiffersFromAutoHeight;
     { FormatBannerLines edge cases }
     [Test] procedure BannerLines_AllEmpty_StillThreeLines;
     [Test] procedure BannerLines_ZeroDuration_OmitsDuration;
@@ -602,9 +604,9 @@ begin
   Assert.IsTrue(Lines[0].Contains('KB'), 'Should format as KB');
 end;
 
-{ PrependBanner }
+{ AttachBanner }
 
-procedure TTestCombinedImage.PrependBanner_EmptyLines_ReturnsCopy;
+procedure TTestCombinedImage.AttachBanner_EmptyLines_ReturnsCopy;
 var
   Src, R: TBitmap;
   EmptyLines: TArray<string>;
@@ -612,7 +614,7 @@ begin
   Src := MakeFrame(100, 80, Integer(clRed));
   try
     SetLength(EmptyLines, 0);
-    R := PrependBanner(Src, EmptyLines);
+    R := AttachBanner(Src, EmptyLines, DefaultBannerStyle);
     try
       Assert.AreEqual(100, R.Width);
       Assert.AreEqual(80, R.Height);
@@ -624,13 +626,13 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_AddsHeightAboveSource;
+procedure TTestCombinedImage.AttachBanner_AddsHeightAboveSource;
 var
   Src, R: TBitmap;
 begin
   Src := MakeFrame(200, 100, Integer(clBlue));
   try
-    R := PrependBanner(Src, ['Line 1', 'Line 2']);
+    R := AttachBanner(Src, ['Line 1', 'Line 2'], DefaultBannerStyle);
     try
       Assert.AreEqual(200, R.Width, 'Width should match source');
       Assert.IsTrue(R.Height > 100, 'Height should exceed source by banner');
@@ -642,14 +644,14 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_PreservesSourceContent;
+procedure TTestCombinedImage.AttachBanner_PreservesSourceContent;
 var
   Src, R: TBitmap;
   BannerH: Integer;
 begin
   Src := MakeFrame(100, 50, Integer(clRed));
   try
-    R := PrependBanner(Src, ['Test']);
+    R := AttachBanner(Src, ['Test'], DefaultBannerStyle);
     try
       BannerH := R.Height - 50;
       Assert.IsTrue(BannerH > 0, 'Banner should add height');
@@ -665,11 +667,11 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_NilSource_ReturnsEmptyBitmap;
+procedure TTestCombinedImage.AttachBanner_NilSource_ReturnsEmptyBitmap;
 var
   R: TBitmap;
 begin
-  R := PrependBanner(nil, ['Line']);
+  R := AttachBanner(nil, ['Line'], DefaultBannerStyle);
   try
     Assert.AreEqual(0, R.Width);
     Assert.AreEqual(0, R.Height);
@@ -678,7 +680,7 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_NarrowImage_SmallBanner;
+procedure TTestCombinedImage.AttachBanner_NarrowImage_SmallBanner;
 var
   Narrow, Wide, R1, R2: TBitmap;
   H1, H2: Integer;
@@ -687,8 +689,8 @@ begin
   Narrow := MakeFrame(200, 100, Integer(clBlack));
   Wide := MakeFrame(1200, 100, Integer(clBlack));
   try
-    R1 := PrependBanner(Narrow, ['Test line']);
-    R2 := PrependBanner(Wide, ['Test line']);
+    R1 := AttachBanner(Narrow, ['Test line'], DefaultBannerStyle);
+    R2 := AttachBanner(Wide, ['Test line'], DefaultBannerStyle);
     try
       H1 := R1.Height - 100;
       H2 := R2.Height - 100;
@@ -704,7 +706,7 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_WideImage_LargerBanner;
+procedure TTestCombinedImage.AttachBanner_WideImage_LargerBanner;
 var
   Src, R: TBitmap;
   BannerH: Integer;
@@ -712,7 +714,7 @@ begin
   { Font size caps at BANNER_FONT_MAX for very wide images }
   Src := MakeFrame(2000, 100, Integer(clBlack));
   try
-    R := PrependBanner(Src, ['Line']);
+    R := AttachBanner(Src, ['Line'], DefaultBannerStyle);
     try
       BannerH := R.Height - 100;
       Assert.IsTrue(BannerH > 0, 'Banner should have height');
@@ -725,7 +727,7 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_LongLine_PreservesWidth;
+procedure TTestCombinedImage.AttachBanner_LongLine_PreservesWidth;
 var
   Src, R: TBitmap;
   LongText: string;
@@ -734,7 +736,7 @@ begin
   Src := MakeFrame(200, 100, Integer(clBlack));
   try
     LongText := StringOfChar('W', 500);
-    R := PrependBanner(Src, [LongText]);
+    R := AttachBanner(Src, [LongText], DefaultBannerStyle);
     try
       Assert.AreEqual(200, R.Width, 'Width must match source, not expand');
     finally
@@ -745,7 +747,7 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_LongMultiWordLine_GrowsBannerHeight;
+procedure TTestCombinedImage.AttachBanner_LongMultiWordLine_GrowsBannerHeight;
 var
   Src, RShort, RLong: TBitmap;
   ShortH, LongH, I: Integer;
@@ -765,8 +767,8 @@ begin
       LongLine := LongLine + 'word' + IntToStr(I);
     end;
 
-    RShort := PrependBanner(Src, ['short']);
-    RLong := PrependBanner(Src, [LongLine]);
+    RShort := AttachBanner(Src, ['short'], DefaultBannerStyle);
+    RLong := AttachBanner(Src, [LongLine], DefaultBannerStyle);
     try
       ShortH := RShort.Height - 100;
       LongH := RLong.Height - 100;
@@ -783,7 +785,7 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_PathologicalSingleToken_HeightStaysBounded;
+procedure TTestCombinedImage.AttachBanner_PathologicalSingleToken_HeightStaysBounded;
 var
   Src, RNormal, RPath: TBitmap;
   NormalH, PathH: Integer;
@@ -795,8 +797,8 @@ begin
   Src := MakeFrame(200, 100, Integer(clBlack));
   try
     Token := StringOfChar('W', 500);
-    RNormal := PrependBanner(Src, ['short']);
-    RPath := PrependBanner(Src, [Token]);
+    RNormal := AttachBanner(Src, ['short'], DefaultBannerStyle);
+    RPath := AttachBanner(Src, [Token], DefaultBannerStyle);
     try
       NormalH := RNormal.Height - 100;
       PathH := RPath.Height - 100;
@@ -818,7 +820,7 @@ begin
   end;
 end;
 
-procedure TTestCombinedImage.PrependBanner_LongLineDoesNotTruncateToEllipsis;
+procedure TTestCombinedImage.AttachBanner_LongLineDoesNotTruncateToEllipsis;
 var
   Src, RShort, RLong: TBitmap;
   ShortH, LongH, I: Integer;
@@ -836,8 +838,8 @@ begin
       LongLine := LongLine + 'segment' + IntToStr(I);
     end;
 
-    RShort := PrependBanner(Src, ['short line']);
-    RLong := PrependBanner(Src, [LongLine]);
+    RShort := AttachBanner(Src, ['short line'], DefaultBannerStyle);
+    RLong := AttachBanner(Src, [LongLine], DefaultBannerStyle);
     try
       ShortH := RShort.Height - 200;
       LongH := RLong.Height - 200;
@@ -848,6 +850,66 @@ begin
     finally
       RShort.Free;
       RLong.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.AttachBanner_PositionBottom_PreservesTopSource;
+var
+  Src, R: TBitmap;
+  Style: TBannerStyle;
+  BannerH: Integer;
+begin
+  { bpBottom must place the banner BELOW the source, so the source pixel
+    at (x, 0) is preserved at result (x, 0). }
+  Src := MakeFrame(200, 100, Integer(clLime));
+  try
+    Style := DefaultBannerStyle;
+    Style.Position := bpBottom;
+    R := AttachBanner(Src, ['Bottom banner'], Style);
+    try
+      BannerH := R.Height - 100;
+      Assert.IsTrue(BannerH > 0, 'Banner should add height');
+      Assert.AreEqual(200, R.Width, 'Width must match source');
+      Assert.AreEqual(Integer(clLime), Integer(R.Canvas.Pixels[50, 25]),
+        'Source content should be preserved at the top when banner is at bottom');
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.AttachBanner_FixedFontSize_DiffersFromAutoHeight;
+var
+  Src, RAuto, RFixed: TBitmap;
+  Style: TBannerStyle;
+  AutoH, FixedH: Integer;
+begin
+  { A fixed font size must bypass the auto-width heuristic. On a wide image,
+    a small fixed font produces a visibly shorter banner than the auto sizing
+    would. }
+  Src := MakeFrame(1600, 100, Integer(clBlack));
+  try
+    RAuto := AttachBanner(Src, ['One line'], DefaultBannerStyle);
+
+    Style := DefaultBannerStyle;
+    Style.FontSize := 6;
+    RFixed := AttachBanner(Src, ['One line'], Style);
+    try
+      AutoH := RAuto.Height - 100;
+      FixedH := RFixed.Height - 100;
+      Assert.IsTrue(AutoH > 0, 'Auto banner should have height');
+      Assert.IsTrue(FixedH > 0, 'Fixed banner should have height');
+      Assert.IsTrue(FixedH < AutoH,
+        Format('Fixed small font (%d) should produce shorter banner than auto (%d)',
+          [FixedH, AutoH]));
+    finally
+      RAuto.Free;
+      RFixed.Free;
     end;
   finally
     Src.Free;

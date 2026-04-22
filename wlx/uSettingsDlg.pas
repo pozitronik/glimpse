@@ -88,6 +88,19 @@ type
     EdtSaveFolder: TEdit;
     BtnSaveFolder: TButton;
     ChkShowBanner: TCheckBox;
+    LblBannerBackground: TLabel;
+    PnlBannerBackground: TPanel;
+    BtnBannerBackground: TButton;
+    LblBannerTextColor: TLabel;
+    PnlBannerTextColor: TPanel;
+    BtnBannerTextColor: TButton;
+    LblBannerFont: TLabel;
+    EdtBannerFont: TEdit;
+    LblBannerFontSize: TLabel;
+    EdtBannerFontSize: TEdit;
+    UdBannerFontSize: TUpDown;
+    LblBannerPosition: TLabel;
+    CbxBannerPosition: TComboBox;
     TshCache: TTabSheet;
     ChkCacheEnabled: TCheckBox;
     BtnClearCache: TButton;
@@ -124,6 +137,9 @@ type
     procedure PnlBackgroundClick(Sender: TObject);
     procedure PnlTCBackClick(Sender: TObject);
     procedure PnlTCTextColorClick(Sender: TObject);
+    procedure PnlBannerBackgroundClick(Sender: TObject);
+    procedure PnlBannerTextColorClick(Sender: TObject);
+    procedure ChkShowBannerClick(Sender: TObject);
     procedure CbxSaveFormatChange(Sender: TObject);
     procedure BtnSaveFolderClick(Sender: TObject);
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
@@ -148,6 +164,7 @@ type
     procedure ControlsToSettings(ASettings: TPluginSettings);
     procedure UpdateMaxWorkersControls;
     procedure UpdateSaveFormatControls;
+    procedure UpdateBannerControls;
     procedure UpdateCacheControls;
     procedure UpdateScaledExtractionControls;
     procedure UpdateThumbnailControls;
@@ -229,6 +246,11 @@ begin
   UdPngCompression.Position := ASettings.PngCompression;
   EdtSaveFolder.Text := ASettings.SaveFolder;
   ChkShowBanner.Checked := ASettings.ShowBanner;
+  PnlBannerBackground.Color := ASettings.BannerBackground;
+  PnlBannerTextColor.Color := ASettings.BannerTextColor;
+  EdtBannerFont.Text := ASettings.BannerFontName;
+  UdBannerFontSize.Position := ASettings.BannerFontSize;
+  CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
 
   ChkCacheEnabled.Checked := ASettings.CacheEnabled;
   EdtCacheFolder.Text := ASettings.CacheFolder;
@@ -244,6 +266,7 @@ begin
   UdThumbnailGridFrames.Position := ASettings.ThumbnailGridFrames;
 
   UpdateSaveFormatControls;
+  UpdateBannerControls;
   UpdateCacheControls;
   UpdateThumbnailControls;
   UpdateFFmpegInfo;
@@ -296,6 +319,11 @@ begin
   ASettings.PngCompression := UdPngCompression.Position;
   ASettings.SaveFolder := EdtSaveFolder.Text;
   ASettings.ShowBanner := ChkShowBanner.Checked;
+  ASettings.BannerBackground := PnlBannerBackground.Color;
+  ASettings.BannerTextColor := PnlBannerTextColor.Color;
+  ASettings.BannerFontName := EdtBannerFont.Text;
+  ASettings.BannerFontSize := UdBannerFontSize.Position;
+  ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
 
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;
   ASettings.CacheFolder := EdtCacheFolder.Text;
@@ -331,6 +359,21 @@ end;
 procedure TSettingsForm.PnlTCTextColorClick(Sender: TObject);
 begin
   PickColor(PnlTCTextColor);
+end;
+
+procedure TSettingsForm.PnlBannerBackgroundClick(Sender: TObject);
+begin
+  PickColor(PnlBannerBackground);
+end;
+
+procedure TSettingsForm.PnlBannerTextColorClick(Sender: TObject);
+begin
+  PickColor(PnlBannerTextColor);
+end;
+
+procedure TSettingsForm.ChkShowBannerClick(Sender: TObject);
+begin
+  UpdateBannerControls;
 end;
 
 procedure TSettingsForm.BrowseFolder(AEdit: TEdit);
@@ -500,6 +543,27 @@ begin
   LblPngCompression.Enabled := IsPNG;
   EdtPngCompression.Enabled := IsPNG;
   UdPngCompression.Enabled := IsPNG;
+end;
+
+procedure TSettingsForm.UpdateBannerControls;
+var
+  Enabled: Boolean;
+begin
+  {Banner style is only meaningful when the banner is actually drawn}
+  Enabled := ChkShowBanner.Checked;
+  LblBannerBackground.Enabled := Enabled;
+  PnlBannerBackground.Enabled := Enabled;
+  BtnBannerBackground.Enabled := Enabled;
+  LblBannerTextColor.Enabled := Enabled;
+  PnlBannerTextColor.Enabled := Enabled;
+  BtnBannerTextColor.Enabled := Enabled;
+  LblBannerFont.Enabled := Enabled;
+  EdtBannerFont.Enabled := Enabled;
+  LblBannerFontSize.Enabled := Enabled;
+  EdtBannerFontSize.Enabled := Enabled;
+  UdBannerFontSize.Enabled := Enabled;
+  LblBannerPosition.Enabled := Enabled;
+  CbxBannerPosition.Enabled := Enabled;
 end;
 
 procedure TSettingsForm.UpdateCacheControls;

@@ -73,10 +73,17 @@ begin
 end;
 
 function TFrameExporter.RenderWithBanner(ABmp: TBitmap): TBitmap;
+var
+  Style: TBannerStyle;
 begin
   if FSettings.ShowBanner then
   begin
-    Result := PrependBanner(ABmp, FormatBannerLines(FBannerInfo));
+    Style.Background := FSettings.BannerBackground;
+    Style.TextColor := FSettings.BannerTextColor;
+    Style.FontName := FSettings.BannerFontName;
+    Style.FontSize := FSettings.BannerFontSize;
+    Style.Position := FSettings.BannerPosition;
+    Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo), Style);
     ABmp.Free;
   end
   else

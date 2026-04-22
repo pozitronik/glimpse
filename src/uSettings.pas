@@ -51,6 +51,11 @@ type
     FPngCompression: Integer;
     FSaveFolder: string;
     FShowBanner: Boolean;
+    FBannerBackground: TColor;
+    FBannerTextColor: TColor;
+    FBannerFontName: string;
+    FBannerFontSize: Integer;
+    FBannerPosition: TBannerPosition;
     {[cache]}
     FCacheEnabled: Boolean;
     FCacheFolder: string;
@@ -77,6 +82,8 @@ type
     class function ThumbnailModeToStr(AMode: TThumbnailMode): string; static;
     class function StrToTimestampCorner(const AValue: string): TTimestampCorner; static;
     class function TimestampCornerToStr(ACorner: TTimestampCorner): string; static;
+    class function StrToBannerPosition(const AValue: string): TBannerPosition; static;
+    class function BannerPositionToStr(APosition: TBannerPosition): string; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
     function GetActiveZoom: TZoomMode;
@@ -139,6 +146,11 @@ type
     property PngCompression: Integer read FPngCompression write FPngCompression;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
     property ShowBanner: Boolean read FShowBanner write FShowBanner;
+    property BannerBackground: TColor read FBannerBackground write FBannerBackground;
+    property BannerTextColor: TColor read FBannerTextColor write FBannerTextColor;
+    property BannerFontName: string read FBannerFontName write FBannerFontName;
+    property BannerFontSize: Integer read FBannerFontSize write FBannerFontSize;
+    property BannerPosition: TBannerPosition read FBannerPosition write FBannerPosition;
 
     {[cache]}
     property CacheEnabled: Boolean read FCacheEnabled write FCacheEnabled;
@@ -254,6 +266,11 @@ begin
   FPngCompression := DEF_PNG_COMPRESSION;
   FSaveFolder := DEF_SAVE_FOLDER;
   FShowBanner := DEF_SHOW_BANNER;
+  FBannerBackground := DEF_BANNER_BACKGROUND;
+  FBannerTextColor := DEF_BANNER_TEXT_COLOR;
+  FBannerFontName := DEF_BANNER_FONT_NAME;
+  FBannerFontSize := DEF_BANNER_FONT_SIZE;
+  FBannerPosition := DEF_BANNER_POSITION;
   FCacheEnabled := DEF_CACHE_ENABLED;
   FCacheFolder := DEF_CACHE_FOLDER;
   FCacheMaxSizeMB := DEF_CACHE_MAX_SIZE_MB;
@@ -318,6 +335,13 @@ begin
     FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
     FShowBanner := Ini.ReadBool('save', 'ShowBanner', DEF_SHOW_BANNER);
+    FBannerBackground := HexToColor(Ini.ReadString('save', 'BannerBackground', ''), DEF_BANNER_BACKGROUND);
+    FBannerTextColor := HexToColor(Ini.ReadString('save', 'BannerTextColor', ''), DEF_BANNER_TEXT_COLOR);
+    FBannerFontName := Ini.ReadString('save', 'BannerFont', DEF_BANNER_FONT_NAME);
+    if FBannerFontName.Trim = '' then
+      FBannerFontName := DEF_BANNER_FONT_NAME;
+    FBannerFontSize := EnsureRange(Ini.ReadInteger('save', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
+    FBannerPosition := StrToBannerPosition(Ini.ReadString('save', 'BannerPosition', ''));
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
@@ -382,6 +406,11 @@ begin
     Ini.WriteInteger('save', 'PngCompression', FPngCompression);
     Ini.WriteString('save', 'SaveFolder', FSaveFolder);
     Ini.WriteBool('save', 'ShowBanner', FShowBanner);
+    Ini.WriteString('save', 'BannerBackground', ColorToHex(FBannerBackground));
+    Ini.WriteString('save', 'BannerTextColor', ColorToHex(FBannerTextColor));
+    Ini.WriteString('save', 'BannerFont', FBannerFontName);
+    Ini.WriteInteger('save', 'BannerFontSize', FBannerFontSize);
+    Ini.WriteString('save', 'BannerPosition', BannerPositionToStr(FBannerPosition));
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
     Ini.WriteString('cache', 'Folder', FCacheFolder);
@@ -535,6 +564,26 @@ begin
       Result := 'bottomright';
     else
       Result := 'bottomleft';
+  end;
+end;
+
+class function TPluginSettings.StrToBannerPosition(const AValue: string): TBannerPosition;
+begin
+  if SameText(AValue, 'bottom') then
+    Result := bpBottom
+  else if SameText(AValue, 'top') then
+    Result := bpTop
+  else
+    Result := DEF_BANNER_POSITION;
+end;
+
+class function TPluginSettings.BannerPositionToStr(APosition: TBannerPosition): string;
+begin
+  case APosition of
+    bpBottom:
+      Result := 'bottom';
+    else
+      Result := 'top';
   end;
 end;
 

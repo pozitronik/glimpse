@@ -122,6 +122,7 @@ function RenderCombinedBitmap(H: TArchiveHandle; const AExtractor: IFrameExtract
 var
   Frames: TArray<TBitmap>;
   Resized, WithBanner: TBitmap;
+  BannerStyle: TBannerStyle;
   I: Integer;
 begin
   SetLength(Frames, Length(H.Offsets));
@@ -145,7 +146,12 @@ begin
 
     if (Result <> nil) and H.Settings.ShowBanner then
     begin
-      WithBanner := PrependBanner(Result, FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)));
+      BannerStyle.Background := H.Settings.BannerBackground;
+      BannerStyle.TextColor := H.Settings.BannerTextColor;
+      BannerStyle.FontName := H.Settings.BannerFontName;
+      BannerStyle.FontSize := H.Settings.BannerFontSize;
+      BannerStyle.Position := H.Settings.BannerPosition;
+      WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)), BannerStyle);
       Result.Free;
       Result := WithBanner;
     end;

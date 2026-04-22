@@ -673,6 +673,121 @@ object SettingsForm: TSettingsForm
         Height = 17
         Caption = 'Include file info banner in combined image export'
         TabOrder = 7
+        OnClick = ChkShowBannerClick
+      end
+      object LblBannerBackground: TLabel
+        Left = 12
+        Top = 173
+        Width = 128
+        Height = 15
+        AutoSize = False
+        Caption = 'Banner background:'
+      end
+      object PnlBannerBackground: TPanel
+        Left = 130
+        Top = 169
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 8
+        OnClick = PnlBannerBackgroundClick
+      end
+      object BtnBannerBackground: TButton
+        Left = 214
+        Top = 169
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 9
+        OnClick = PnlBannerBackgroundClick
+      end
+      object LblBannerTextColor: TLabel
+        Left = 12
+        Top = 202
+        Width = 128
+        Height = 15
+        AutoSize = False
+        Caption = 'Banner text color:'
+      end
+      object PnlBannerTextColor: TPanel
+        Left = 130
+        Top = 198
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 10
+        OnClick = PnlBannerTextColorClick
+      end
+      object BtnBannerTextColor: TButton
+        Left = 214
+        Top = 198
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 11
+        OnClick = PnlBannerTextColorClick
+      end
+      object LblBannerFont: TLabel
+        Left = 12
+        Top = 231
+        Width = 95
+        Height = 15
+        Caption = 'Banner font:'
+      end
+      object EdtBannerFont: TEdit
+        Left = 130
+        Top = 227
+        Width = 150
+        Height = 23
+        TabOrder = 12
+      end
+      object LblBannerFontSize: TLabel
+        Left = 290
+        Top = 231
+        Width = 90
+        Height = 15
+        Caption = 'Size (0=auto):'
+      end
+      object EdtBannerFontSize: TEdit
+        Left = 385
+        Top = 227
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 13
+        Text = '0'
+      end
+      object UdBannerFontSize: TUpDown
+        Left = 430
+        Top = 227
+        Width = 17
+        Height = 23
+        Associate = EdtBannerFontSize
+        Max = 16
+        TabOrder = 14
+        Thousands = False
+      end
+      object LblBannerPosition: TLabel
+        Left = 12
+        Top = 260
+        Width = 95
+        Height = 15
+        Caption = 'Banner position:'
+      end
+      object CbxBannerPosition: TComboBox
+        Left = 130
+        Top = 256
+        Width = 105
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 15
+        Items.Strings = (
+          'Top'
+          'Bottom')
       end
     end
     object TshCache: TTabSheet

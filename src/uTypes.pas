@@ -14,6 +14,8 @@ type
   {Timestamp overlay corner on each frame cell (WLX live view and combined image).
    tcNone disables the overlay entirely (useful as a single-control off switch).}
   TTimestampCorner = (tcNone, tcTopLeft, tcTopRight, tcBottomLeft, tcBottomRight);
+  {Info banner placement relative to the combined image.}
+  TBannerPosition = (bpTop, bpBottom);
 
   {Bundles extraction parameters that travel together through the
    extraction pipeline (controller -> worker -> extractor).}

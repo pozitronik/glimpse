@@ -82,6 +82,19 @@ type
     EdtTimestampFontSize: TEdit;
     UdTimestampFontSize: TUpDown;
     ChkShowBanner: TCheckBox;
+    LblBannerBackground: TLabel;
+    PnlBannerBackground: TPanel;
+    BtnBannerBackground: TButton;
+    LblBannerTextColor: TLabel;
+    PnlBannerTextColor: TPanel;
+    BtnBannerTextColor: TButton;
+    LblBannerFont: TLabel;
+    EdtBannerFont: TEdit;
+    LblBannerFontSize: TLabel;
+    EdtBannerFontSize: TEdit;
+    UdBannerFontSize: TUpDown;
+    LblBannerPosition: TLabel;
+    CbxBannerPosition: TComboBox;
     TshLimits: TTabSheet;
     LblLimitsHint: TLabel;
     LblFrameMax: TLabel;
@@ -103,6 +116,9 @@ type
     procedure PnlBackgroundClick(Sender: TObject);
     procedure PnlTCBackClick(Sender: TObject);
     procedure PnlTCTextColorClick(Sender: TObject);
+    procedure PnlBannerBackgroundClick(Sender: TObject);
+    procedure PnlBannerTextColorClick(Sender: TObject);
+    procedure ChkShowBannerClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
@@ -178,6 +194,11 @@ begin
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   ChkShowBanner.Checked := ASettings.ShowBanner;
+  PnlBannerBackground.Color := ASettings.BannerBackground;
+  PnlBannerTextColor.Color := ASettings.BannerTextColor;
+  EdtBannerFont.Text := ASettings.BannerFontName;
+  UdBannerFontSize.Position := ASettings.BannerFontSize;
+  CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
 
   UdFrameMax.Position := ASettings.FrameMaxSide;
   UdCombinedMax.Position := ASettings.CombinedMaxSide;
@@ -225,6 +246,11 @@ begin
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.ShowBanner := ChkShowBanner.Checked;
+  ASettings.BannerBackground := PnlBannerBackground.Color;
+  ASettings.BannerTextColor := PnlBannerTextColor.Color;
+  ASettings.BannerFontName := EdtBannerFont.Text;
+  ASettings.BannerFontSize := UdBannerFontSize.Position;
+  ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
 
   ASettings.FrameMaxSide := UdFrameMax.Position;
   ASettings.CombinedMaxSide := UdCombinedMax.Position;
@@ -232,7 +258,7 @@ end;
 
 procedure TWcxSettingsForm.UpdateCombinedState;
 var
-  IsCombined: Boolean;
+  IsCombined, BannerOn: Boolean;
 begin
   IsCombined := CbxOutputMode.ItemIndex = 1;
   LblColumns.Enabled := IsCombined;
@@ -267,6 +293,21 @@ begin
   EdtTimestampFontSize.Enabled := IsCombined;
   UdTimestampFontSize.Enabled := IsCombined;
   ChkShowBanner.Enabled := IsCombined;
+
+  BannerOn := IsCombined and ChkShowBanner.Checked;
+  LblBannerBackground.Enabled := BannerOn;
+  PnlBannerBackground.Enabled := BannerOn;
+  BtnBannerBackground.Enabled := BannerOn;
+  LblBannerTextColor.Enabled := BannerOn;
+  PnlBannerTextColor.Enabled := BannerOn;
+  BtnBannerTextColor.Enabled := BannerOn;
+  LblBannerFont.Enabled := BannerOn;
+  EdtBannerFont.Enabled := BannerOn;
+  LblBannerFontSize.Enabled := BannerOn;
+  EdtBannerFontSize.Enabled := BannerOn;
+  UdBannerFontSize.Enabled := BannerOn;
+  LblBannerPosition.Enabled := BannerOn;
+  CbxBannerPosition.Enabled := BannerOn;
 end;
 
 procedure TWcxSettingsForm.UpdateMaxWorkersControls;
@@ -351,6 +392,21 @@ end;
 procedure TWcxSettingsForm.PnlTCTextColorClick(Sender: TObject);
 begin
   PickColor(PnlTCTextColor);
+end;
+
+procedure TWcxSettingsForm.PnlBannerBackgroundClick(Sender: TObject);
+begin
+  PickColor(PnlBannerBackground);
+end;
+
+procedure TWcxSettingsForm.PnlBannerTextColorClick(Sender: TObject);
+begin
+  PickColor(PnlBannerTextColor);
+end;
+
+procedure TWcxSettingsForm.ChkShowBannerClick(Sender: TObject);
+begin
+  UpdateCombinedState;
 end;
 
 procedure TWcxSettingsForm.BtnFFmpegPathClick(Sender: TObject);

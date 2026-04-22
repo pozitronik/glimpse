@@ -24,6 +24,18 @@ type
     AudioBitrateKbps: Integer;
   end;
 
+  {Visual style and placement for the info banner. FontSize = 0 selects the
+   historical width-based auto-scaling heuristic; any positive value is used
+   as a fixed point size and the renderer will wrap overflowing lines rather
+   than shrink below that size.}
+  TBannerStyle = record
+    Background: TColor;
+    TextColor: TColor;
+    FontName: string;
+    FontSize: Integer;
+    Position: TBannerPosition;
+  end;
+
   {Formats banner info into human-readable text lines.
    Returns an empty array if AInfo has no meaningful data.}
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
@@ -32,12 +44,16 @@ function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
  Reads file size from disk; all other fields come from AVideoInfo.}
 function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
 
-{Prepends a dark info banner to an existing bitmap.
- Font is auto-scaled to fit the image width.
+{Returns the historical defaults (dark bg, light text, Segoe UI, auto size, top).
+ Useful for tests and as a fallback when a caller has no configured style.}
+function DefaultBannerStyle: TBannerStyle;
+
+{Attaches a solid-color info banner above or below an existing bitmap.
  @param ASrc Source bitmap (not freed; caller still owns it)
  @param ALines Text lines to display (empty array = no banner, returns copy of ASrc)
- @return New bitmap with banner above source content. Caller owns result.}
-function PrependBanner(ASrc: TBitmap; const ALines: TArray<string>): TBitmap;
+ @param AStyle Colors, font, and placement (top/bottom)
+ @return New bitmap with banner attached. Caller owns result.}
+function AttachBanner(ASrc: TBitmap; const ALines: TArray<string>; const AStyle: TBannerStyle): TBitmap;
 
 {Renders all frames into a single grid image.
  @param AFrames Array of frame bitmaps (nil entries are skipped)
@@ -62,18 +78,16 @@ function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFr
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Math, System.Types;
+  System.SysUtils, System.IOUtils, System.Math, System.Types,
+  uDefaults;
 
 const
-  BANNER_BG_COLOR = TColor($00282828); {dark gray background}
-  BANNER_TEXT_COLOR = TColor($00E0E0E0); {light gray text}
   BANNER_PADDING_H = 10; {horizontal padding}
   BANNER_PADDING_V = 6; {vertical padding (top and bottom)}
   BANNER_LINE_GAP = 2; {extra spacing between lines}
-  BANNER_FONT_NAME = 'Segoe UI';
-  BANNER_FONT_MIN = 8; {minimum font size in points}
-  BANNER_FONT_MAX = 16; {maximum font size in points}
-  BANNER_FONT_RATIO = 55; {image width divisor for font size}
+  BANNER_FONT_MIN = 8; {minimum font size for auto-scale}
+  BANNER_FONT_MAX = 16; {maximum font size for auto-scale}
+  BANNER_FONT_RATIO = 55; {image width divisor for auto-scale font size}
   BANNER_ELLIPSIS = '...';
 
   {Formats a file size as a human-readable string}
@@ -261,11 +275,21 @@ begin
   Result := BANNER_FONT_MIN;
 end;
 
-function PrependBanner(ASrc: TBitmap; const ALines: TArray<string>): TBitmap;
+function DefaultBannerStyle: TBannerStyle;
+begin
+  Result.Background := DEF_BANNER_BACKGROUND;
+  Result.TextColor := DEF_BANNER_TEXT_COLOR;
+  Result.FontName := DEF_BANNER_FONT_NAME;
+  Result.FontSize := DEF_BANNER_FONT_SIZE;
+  Result.Position := DEF_BANNER_POSITION;
+end;
+
+function AttachBanner(ASrc: TBitmap; const ALines: TArray<string>; const AStyle: TBannerStyle): TBitmap;
 var
-  InitialSize, FontSize, LineH, BannerH, MaxTextW, I: Integer;
+  FontSize, LineH, BannerH, MaxTextW, BannerY, SrcY, I: Integer;
   TempBmp: TBitmap;
   Wrapped, RenderLines: TArray<string>;
+  FontName: string;
 begin
   if (Length(ALines) = 0) or (ASrc = nil) then
   begin
@@ -276,21 +300,24 @@ begin
     Exit;
   end;
 
-  {Initial size from the historical width-based ratio. The shrink loop
-   below may pick something smaller if the actual text doesn't fit.}
-  InitialSize := EnsureRange(ASrc.Width div BANNER_FONT_RATIO, BANNER_FONT_MIN, BANNER_FONT_MAX);
+  FontName := AStyle.FontName;
+  if FontName.Trim = '' then
+    FontName := DEF_BANNER_FONT_NAME;
   MaxTextW := ASrc.Width - 2 * BANNER_PADDING_H;
 
   {Measure on a temp bitmap so the result canvas isn't dirtied with
    intermediate font states during the shrink probe.}
   TempBmp := TBitmap.Create;
   try
-    TempBmp.Canvas.Font.Name := BANNER_FONT_NAME;
+    TempBmp.Canvas.Font.Name := FontName;
 
-    {Globally pick the largest font size where every original line fits.
-     If even the minimum doesn't fit, the offending lines get word-wrapped
-     below at that minimum size.}
-    FontSize := FindFittingBannerFontSize(TempBmp.Canvas, ALines, InitialSize, MaxTextW);
+    if AStyle.FontSize <= 0 then
+      {Auto mode: historical width-based ratio, then shrink until every
+       line fits (or bottom out at BANNER_FONT_MIN and rely on wrapping).}
+      FontSize := FindFittingBannerFontSize(TempBmp.Canvas, ALines, EnsureRange(ASrc.Width div BANNER_FONT_RATIO, BANNER_FONT_MIN, BANNER_FONT_MAX), MaxTextW)
+    else
+      {Fixed mode: user-chosen size; overflow is handled by wrapping only.}
+      FontSize := AStyle.FontSize;
     TempBmp.Canvas.Font.Size := FontSize;
 
     {Build the final render list: pass each line through the wrapper,
@@ -313,20 +340,31 @@ begin
   Result.PixelFormat := pf24bit;
   Result.SetSize(ASrc.Width, BannerH + ASrc.Height);
 
+  if AStyle.Position = bpBottom then
+  begin
+    SrcY := 0;
+    BannerY := ASrc.Height;
+  end
+  else
+  begin
+    BannerY := 0;
+    SrcY := BannerH;
+  end;
+
   {Draw banner background}
-  Result.Canvas.Brush.Color := BANNER_BG_COLOR;
-  Result.Canvas.FillRect(Rect(0, 0, Result.Width, BannerH));
+  Result.Canvas.Brush.Color := AStyle.Background;
+  Result.Canvas.FillRect(Rect(0, BannerY, Result.Width, BannerY + BannerH));
 
   {Draw text lines (already fitted by shrink + wrap; no truncation pass)}
-  Result.Canvas.Font.Name := BANNER_FONT_NAME;
+  Result.Canvas.Font.Name := FontName;
   Result.Canvas.Font.Size := FontSize;
-  Result.Canvas.Font.Color := BANNER_TEXT_COLOR;
+  Result.Canvas.Font.Color := AStyle.TextColor;
   Result.Canvas.Brush.Style := bsClear;
   for I := 0 to High(RenderLines) do
-    Result.Canvas.TextOut(BANNER_PADDING_H, BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), RenderLines[I]);
+    Result.Canvas.TextOut(BANNER_PADDING_H, BannerY + BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), RenderLines[I]);
 
-  {Draw source image below banner}
-  Result.Canvas.Draw(0, BannerH, ASrc);
+  {Draw source image in the remaining region}
+  Result.Canvas.Draw(0, SrcY, ASrc);
 end;
 
 function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer; ABorder: Integer; ATimestampCorner: TTimestampCorner; ATimecodeBackColor: TColor; ATimecodeBackAlpha: Byte; ATimestampTextColor: TColor; ATimestampTextAlpha: Byte): TBitmap;

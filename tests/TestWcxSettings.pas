@@ -44,6 +44,10 @@ type
     { Banner }
     [Test] procedure TestShowBannerDefault;
     [Test] procedure TestShowBannerRoundTrip;
+    [Test] procedure TestBannerStyleDefaults;
+    [Test] procedure TestBannerStyleRoundTrip;
+    [Test] procedure TestBannerPositionUnknownFallsBackToDefault;
+    [Test] procedure TestBannerFontSizeClampedToRange;
     { Lower bound clamping }
     [Test] procedure TestFramesCountClampedLower;
     [Test] procedure TestSkipEdgesClampedLower;
@@ -707,6 +711,125 @@ begin
     Assert.IsTrue(S2.ShowBanner, 'ShowBanner should persist as True');
   finally
     S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBannerStyleDefaults;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create('');
+  try
+    Assert.AreEqual(Integer(DEF_BANNER_BACKGROUND), Integer(S.BannerBackground),
+      'BannerBackground default');
+    Assert.AreEqual(Integer(DEF_BANNER_TEXT_COLOR), Integer(S.BannerTextColor),
+      'BannerTextColor default');
+    Assert.AreEqual(DEF_BANNER_FONT_NAME, S.BannerFontName,
+      'BannerFontName default');
+    Assert.AreEqual(DEF_BANNER_FONT_SIZE, S.BannerFontSize,
+      'BannerFontSize default');
+    Assert.AreEqual(Ord(DEF_BANNER_POSITION), Ord(S.BannerPosition),
+      'BannerPosition default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBannerStyleRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_banner_style.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.BannerBackground := TColor($00112233);
+    S1.BannerTextColor := TColor($00AABBCC);
+    S1.BannerFontName := 'Verdana';
+    S1.BannerFontSize := 10;
+    S1.BannerPosition := bpBottom;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(TColor($00112233)), Integer(S2.BannerBackground),
+      'BannerBackground round-trip');
+    Assert.AreEqual(Integer(TColor($00AABBCC)), Integer(S2.BannerTextColor),
+      'BannerTextColor round-trip');
+    Assert.AreEqual('Verdana', S2.BannerFontName, 'BannerFontName round-trip');
+    Assert.AreEqual(10, S2.BannerFontSize, 'BannerFontSize round-trip');
+    Assert.AreEqual(Ord(bpBottom), Ord(S2.BannerPosition), 'BannerPosition round-trip');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBannerPositionUnknownFallsBackToDefault;
+var
+  Ini: TIniFile;
+  S: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_banner_pos_unknown.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('combined', 'BannerPosition', 'nonsense');
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(DEF_BANNER_POSITION), Ord(S.BannerPosition),
+      'Unknown banner position should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBannerFontSizeClampedToRange;
+var
+  Ini: TIniFile;
+  S: TWcxSettings;
+  IniPath: string;
+begin
+  { Values outside [MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE] must clamp. }
+  IniPath := TPath.Combine(FTempDir, 'wcx_banner_size_clamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'BannerFontSize', 999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_BANNER_FONT_SIZE, S.BannerFontSize,
+      'Oversized font size should clamp to MAX_BANNER_FONT_SIZE');
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'BannerFontSize', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_BANNER_FONT_SIZE, S.BannerFontSize,
+      'Negative font size should clamp to MIN_BANNER_FONT_SIZE');
+  finally
+    S.Free;
   end;
 end;
 

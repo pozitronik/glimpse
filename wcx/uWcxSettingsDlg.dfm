@@ -4,7 +4,7 @@ object WcxSettingsForm: TWcxSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse WCX Settings'
-  ClientHeight = 410
+  ClientHeight = 440
   ClientWidth = 460
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -17,7 +17,7 @@ object WcxSettingsForm: TWcxSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 370
+    Height = 400
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -607,6 +607,121 @@ object WcxSettingsForm: TWcxSettingsForm
         Height = 17
         Caption = 'Include file info banner'
         TabOrder = 21
+        OnClick = ChkShowBannerClick
+      end
+      object LblBannerBackground: TLabel
+        Left = 12
+        Top = 256
+        Width = 135
+        Height = 15
+        AutoSize = False
+        Caption = 'Banner background:'
+      end
+      object PnlBannerBackground: TPanel
+        Left = 150
+        Top = 252
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 22
+        OnClick = PnlBannerBackgroundClick
+      end
+      object BtnBannerBackground: TButton
+        Left = 234
+        Top = 252
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 23
+        OnClick = PnlBannerBackgroundClick
+      end
+      object LblBannerTextColor: TLabel
+        Left = 12
+        Top = 285
+        Width = 135
+        Height = 15
+        AutoSize = False
+        Caption = 'Banner text color:'
+      end
+      object PnlBannerTextColor: TPanel
+        Left = 150
+        Top = 281
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 24
+        OnClick = PnlBannerTextColorClick
+      end
+      object BtnBannerTextColor: TButton
+        Left = 234
+        Top = 281
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 25
+        OnClick = PnlBannerTextColorClick
+      end
+      object LblBannerFont: TLabel
+        Left = 12
+        Top = 314
+        Width = 95
+        Height = 15
+        Caption = 'Banner font:'
+      end
+      object EdtBannerFont: TEdit
+        Left = 150
+        Top = 310
+        Width = 150
+        Height = 23
+        TabOrder = 26
+      end
+      object LblBannerFontSize: TLabel
+        Left = 310
+        Top = 314
+        Width = 55
+        Height = 15
+        Caption = 'Size (0=auto):'
+      end
+      object EdtBannerFontSize: TEdit
+        Left = 370
+        Top = 310
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 27
+        Text = '0'
+      end
+      object UdBannerFontSize: TUpDown
+        Left = 415
+        Top = 310
+        Width = 17
+        Height = 23
+        Associate = EdtBannerFontSize
+        Max = 16
+        TabOrder = 28
+        Thousands = False
+      end
+      object LblBannerPosition: TLabel
+        Left = 12
+        Top = 343
+        Width = 95
+        Height = 15
+        Caption = 'Banner position:'
+      end
+      object CbxBannerPosition: TComboBox
+        Left = 150
+        Top = 339
+        Width = 105
+        Height = 23
+        Style = csDropDownList
+        TabOrder = 29
+        Items.Strings = (
+          'Top'
+          'Bottom')
       end
     end
     object TshLimits: TTabSheet
@@ -679,7 +794,7 @@ object WcxSettingsForm: TWcxSettingsForm
   end
   object PnlButtons: TPanel
     Left = 0
-    Top = 370
+    Top = 400
     Width = 460
     Height = 40
     Align = alBottom
