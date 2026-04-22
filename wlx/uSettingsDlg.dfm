@@ -296,88 +296,78 @@ object SettingsForm: TSettingsForm
       object LblBackground: TLabel
         Left = 12
         Top = 24
-        Width = 67
+        Width = 120
         Height = 15
-        Caption = 'Background:'
-      end
-      object LblTCBack: TLabel
-        Left = 12
-        Top = 53
-        Width = 73
-        Height = 15
-        Caption = 'Timecode bg:'
-      end
-      object LblTCAlpha: TLabel
-        Left = 12
-        Top = 82
-        Width = 75
-        Height = 15
-        Caption = 'Bg opacity:'
-      end
-      object LblTCAlphaHint: TLabel
-        Left = 198
-        Top = 82
-        Width = 166
-        Height = 15
-        Caption = '(0 = transparent, 255 = opaque)'
-        Font.Charset = DEFAULT_CHARSET
-        Font.Color = clGray
-        Font.Height = -12
-        Font.Name = 'Segoe UI'
-        Font.Style = []
-        ParentFont = False
-      end
-      object LblTCTextAlpha: TLabel
-        Left = 12
-        Top = 111
-        Width = 78
-        Height = 15
-        Caption = 'Text opacity:'
-      end
-      object LblTCTextColor: TLabel
-        Left = 230
-        Top = 111
-        Width = 63
-        Height = 15
-        Caption = 'Text color:'
-      end
-      object LblTimestampFont: TLabel
-        Left = 12
-        Top = 140
-        Width = 88
-        Height = 15
-        Caption = 'Timestamp font:'
-      end
-      object LblTimestampFontSize: TLabel
-        Left = 320
-        Top = 140
-        Width = 23
-        Height = 15
-        Caption = 'Size:'
+        Caption = 'Background color:'
       end
       object LblCellGap: TLabel
-        Left = 277
+        Left = 12
         Top = 53
-        Width = 69
+        Width = 82
         Height = 15
         Caption = 'Cell gap (px):'
       end
       object LblBorder: TLabel
-        Left = 12
-        Top = 173
-        Width = 69
+        Left = 275
+        Top = 53
+        Width = 73
         Height = 15
+        AutoSize = False
         Caption = 'Border (px):'
       end
       object LblTimestampCorner: TLabel
-        Left = 230
-        Top = 173
-        Width = 101
+        Left = 12
+        Top = 82
+        Width = 100
         Height = 15
-        Caption = 'Timestamp corner:'
+        Caption = 'Show timestamp:'
+      end
+      object LblTCBack: TLabel
+        Left = 12
+        Top = 111
+        Width = 135
+        Height = 15
+        AutoSize = False
+        Caption = 'Timecode background:'
+      end
+      object LblTCAlpha: TLabel
+        Left = 275
+        Top = 111
+        Width = 50
+        Height = 15
+        Caption = 'Opacity:'
+      end
+      object LblTCTextColor: TLabel
+        Left = 12
+        Top = 140
+        Width = 128
+        Height = 15
+        AutoSize = False
+        Caption = 'Timecode text color:'
+      end
+      object LblTCTextAlpha: TLabel
+        Left = 275
+        Top = 140
+        Width = 50
+        Height = 15
+        Caption = 'Opacity:'
+      end
+      object LblTimestampFont: TLabel
+        Left = 12
+        Top = 169
+        Width = 95
+        Height = 15
+        Caption = 'Timestamp font:'
+      end
+      object LblTimestampFontSize: TLabel
+        Left = 335
+        Top = 169
+        Width = 27
+        Height = 15
+        Caption = 'Size:'
       end
       object PnlBackground: TPanel
-        Left = 130
+        Left = 150
         Top = 20
         Width = 80
         Height = 23
@@ -388,7 +378,7 @@ object SettingsForm: TSettingsForm
         OnClick = PnlBackgroundClick
       end
       object BtnBackground: TButton
-        Left = 214
+        Left = 234
         Top = 20
         Width = 25
         Height = 23
@@ -396,180 +386,180 @@ object SettingsForm: TSettingsForm
         TabOrder = 1
         OnClick = PnlBackgroundClick
       end
-      object PnlTCBack: TPanel
-        Left = 130
+      object EdtCellGap: TEdit
+        Left = 150
         Top = 49
-        Width = 80
+        Width = 45
         Height = 23
-        Cursor = crHandPoint
-        BevelOuter = bvLowered
-        ParentBackground = False
+        NumbersOnly = True
         TabOrder = 2
-        OnClick = PnlTCBackClick
+        Text = '0'
       end
-      object BtnTCBack: TButton
-        Left = 214
+      object UdCellGap: TUpDown
+        Left = 195
         Top = 49
-        Width = 25
+        Width = 17
         Height = 23
-        Caption = '...'
+        Associate = EdtCellGap
+        Max = 20
         TabOrder = 3
-        OnClick = PnlTCBackClick
+        Thousands = False
       end
-      object EdtTCAlpha: TEdit
-        Left = 130
-        Top = 78
+      object EdtBorder: TEdit
+        Left = 360
+        Top = 49
         Width = 45
         Height = 23
         NumbersOnly = True
         TabOrder = 4
         Text = '0'
       end
-      object UdTCAlpha: TUpDown
-        Left = 175
-        Top = 78
-        Width = 17
-        Height = 23
-        Associate = EdtTCAlpha
-        Max = 255
-        TabOrder = 5
-        Thousands = False
-      end
-      object EdtTCTextAlpha: TEdit
-        Left = 130
-        Top = 107
-        Width = 45
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 6
-        Text = '255'
-      end
-      object UdTCTextAlpha: TUpDown
-        Left = 175
-        Top = 107
-        Width = 17
-        Height = 23
-        Associate = EdtTCTextAlpha
-        Max = 255
-        Position = 255
-        TabOrder = 7
-        Thousands = False
-      end
-      object PnlTCTextColor: TPanel
-        Left = 310
-        Top = 107
-        Width = 80
-        Height = 23
-        Cursor = crHandPoint
-        BevelOuter = bvLowered
-        ParentBackground = False
-        TabOrder = 18
-        OnClick = PnlTCTextColorClick
-      end
-      object BtnTCTextColor: TButton
-        Left = 394
-        Top = 107
-        Width = 25
-        Height = 23
-        Caption = '...'
-        TabOrder = 19
-        OnClick = PnlTCTextColorClick
-      end
-      object EdtTimestampFont: TEdit
-        Left = 130
-        Top = 136
-        Width = 180
-        Height = 23
-        TabOrder = 8
-      end
-      object EdtTimestampFontSize: TEdit
-        Left = 350
-        Top = 136
-        Width = 45
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 9
-        Text = '6'
-      end
-      object UdTimestampFontSize: TUpDown
-        Left = 395
-        Top = 136
-        Width = 17
-        Height = 23
-        Associate = EdtTimestampFontSize
-        Min = 6
-        Max = 72
-        Position = 6
-        TabOrder = 10
-        Thousands = False
-      end
-      object ChkShowToolbar: TCheckBox
-        Left = 12
-        Top = 202
-        Width = 200
-        Height = 17
-        Caption = 'Show toolbar (F4 to toggle)'
-        TabOrder = 11
-      end
-      object ChkShowStatusBar: TCheckBox
-        Left = 230
-        Top = 202
-        Width = 200
-        Height = 17
-        Caption = 'Show status bar (F3 to toggle)'
-        TabOrder = 12
-      end
-      object EdtCellGap: TEdit
-        Left = 350
-        Top = 49
-        Width = 45
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 13
-        Text = '0'
-      end
-      object UdCellGap: TUpDown
-        Left = 395
-        Top = 49
-        Width = 17
-        Height = 23
-        Associate = EdtCellGap
-        Max = 20
-        TabOrder = 14
-        Thousands = False
-      end
-      object EdtBorder: TEdit
-        Left = 130
-        Top = 169
-        Width = 45
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 15
-        Text = '0'
-      end
       object UdBorder: TUpDown
-        Left = 175
-        Top = 169
+        Left = 405
+        Top = 49
         Width = 17
         Height = 23
         Associate = EdtBorder
         Max = 200
-        TabOrder = 16
+        TabOrder = 5
         Thousands = False
       end
       object CbxTimestampCorner: TComboBox
-        Left = 340
-        Top = 169
+        Left = 150
+        Top = 78
         Width = 105
         Height = 23
         Style = csDropDownList
-        TabOrder = 17
+        TabOrder = 6
         Items.Strings = (
           'None'
           'Top left'
           'Top right'
           'Bottom left'
           'Bottom right')
+      end
+      object PnlTCBack: TPanel
+        Left = 150
+        Top = 107
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 7
+        OnClick = PnlTCBackClick
+      end
+      object BtnTCBack: TButton
+        Left = 234
+        Top = 107
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 8
+        OnClick = PnlTCBackClick
+      end
+      object EdtTCAlpha: TEdit
+        Left = 360
+        Top = 107
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 9
+        Text = '0'
+      end
+      object UdTCAlpha: TUpDown
+        Left = 405
+        Top = 107
+        Width = 17
+        Height = 23
+        Associate = EdtTCAlpha
+        Max = 255
+        TabOrder = 10
+        Thousands = False
+      end
+      object PnlTCTextColor: TPanel
+        Left = 150
+        Top = 136
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 11
+        OnClick = PnlTCTextColorClick
+      end
+      object BtnTCTextColor: TButton
+        Left = 234
+        Top = 136
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 12
+        OnClick = PnlTCTextColorClick
+      end
+      object EdtTCTextAlpha: TEdit
+        Left = 360
+        Top = 136
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 13
+        Text = '255'
+      end
+      object UdTCTextAlpha: TUpDown
+        Left = 405
+        Top = 136
+        Width = 17
+        Height = 23
+        Associate = EdtTCTextAlpha
+        Max = 255
+        Position = 255
+        TabOrder = 14
+        Thousands = False
+      end
+      object EdtTimestampFont: TEdit
+        Left = 150
+        Top = 165
+        Width = 180
+        Height = 23
+        TabOrder = 15
+      end
+      object EdtTimestampFontSize: TEdit
+        Left = 370
+        Top = 165
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 16
+        Text = '6'
+      end
+      object UdTimestampFontSize: TUpDown
+        Left = 415
+        Top = 165
+        Width = 17
+        Height = 23
+        Associate = EdtTimestampFontSize
+        Min = 6
+        Max = 72
+        Position = 6
+        TabOrder = 17
+        Thousands = False
+      end
+      object ChkShowToolbar: TCheckBox
+        Left = 12
+        Top = 194
+        Width = 200
+        Height = 17
+        Caption = 'Show toolbar (F4 to toggle)'
+        TabOrder = 18
+      end
+      object ChkShowStatusBar: TCheckBox
+        Left = 230
+        Top = 194
+        Width = 200
+        Height = 17
+        Caption = 'Show status bar (F3 to toggle)'
+        TabOrder = 19
       end
     end
     object TshSave: TTabSheet

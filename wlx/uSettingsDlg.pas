@@ -54,7 +54,6 @@ type
     LblTCAlpha: TLabel;
     EdtTCAlpha: TEdit;
     UdTCAlpha: TUpDown;
-    LblTCAlphaHint: TLabel;
     LblTCTextAlpha: TLabel;
     EdtTCTextAlpha: TEdit;
     UdTCTextAlpha: TUpDown;
