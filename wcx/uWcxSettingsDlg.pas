@@ -103,6 +103,7 @@ type
     UdCombinedMax: TUpDown;
     PnlButtons: TPanel;
     BtnDefaults: TButton;
+    BtnApply: TButton;
     BtnOK: TButton;
     BtnCancel: TButton;
     ColorDlg: TColorDialog;
@@ -120,9 +121,12 @@ type
     procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
     procedure BtnBannerFontClick(Sender: TObject);
+    procedure BtnApplyClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
+    FSettings: TWcxSettings;
+    FOnApply: TProc;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FBannerFontName: string;
@@ -143,8 +147,10 @@ type
     constructor CreateWithOwner(AOwnerWnd: HWND);
   end;
 
-  {Shows the WCX settings dialog. Returns True if the user clicked OK.}
-function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings): Boolean;
+  {Shows the WCX settings dialog. Returns True if the user clicked OK.
+   AOnApply fires after every Apply press; the settings object has already
+   been updated and persisted to the INI by the time the callback runs.}
+function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings; AOnApply: TProc = nil): Boolean;
 
 implementation
 
@@ -478,6 +484,18 @@ begin
   UpdateCombinedState;
 end;
 
+procedure TWcxSettingsForm.BtnApplyClick(Sender: TObject);
+begin
+  {Persist immediately so the archive-browsing path, which re-reads the INI,
+   picks up the changes without the user having to close the dialog first.}
+  if FSettings = nil then
+    Exit;
+  ControlsToSettings(FSettings);
+  FSettings.Save;
+  if Assigned(FOnApply) then
+    FOnApply();
+end;
+
 procedure TWcxSettingsForm.BtnFFmpegPathClick(Sender: TObject);
 var
   Dlg: TOpenDialog;
@@ -529,13 +547,15 @@ end;
 
 {Public API}
 
-function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings): Boolean;
+function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings; AOnApply: TProc): Boolean;
 var
   Dlg: TWcxSettingsForm;
 begin
   Result := False;
   Dlg := TWcxSettingsForm.CreateWithOwner(AParentWnd);
   try
+    Dlg.FSettings := ASettings;
+    Dlg.FOnApply := AOnApply;
     Dlg.SettingsToControls(ASettings);
     if Dlg.ShowModal = mrOk then
     begin

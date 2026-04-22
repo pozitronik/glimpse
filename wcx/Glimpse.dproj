@@ -55,7 +55,9 @@
         <DCCReference Include="uWcxAPI.pas"/>
         <DCCReference Include="uWcxExports.pas"/>
         <DCCReference Include="uWcxSettings.pas"/>
-        <DCCReference Include="uWcxSettingsDlg.pas"/>
+        <DCCReference Include="uWcxSettingsDlg.pas">
+            <Form>WcxSettingsForm</Form>
+        </DCCReference>
         <DCCReference Include="..\src\uFrameOffsets.pas"/>
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>

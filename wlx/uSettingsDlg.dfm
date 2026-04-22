@@ -26,7 +26,7 @@ object SettingsForm: TSettingsForm
       Caption = 'General'
       DesignSize = (
         452
-        340)
+        370)
       object LblSkipEdges: TLabel
         Left = 12
         Top = 24
@@ -70,27 +70,27 @@ object SettingsForm: TSettingsForm
       object LblScaleTarget: TLabel
         Left = 32
         Top = 227
-        Width = 72
+        Width = 64
         Height = 15
         Caption = 'Scale target:'
       end
       object LblScaleSep: TLabel
         Left = 193
         Top = 227
-        Width = 6
+        Width = 12
         Height = 15
-        Caption = '-'
+        Caption = #8212
       end
       object LblScaleUnit: TLabel
         Left = 291
         Top = 227
-        Width = 92
+        Width = 81
         Height = 15
         Caption = 'px (bigger side)'
       end
       object LblExtensions: TLabel
         Left = 12
-        Top = 256
+        Top = 255
         Width = 58
         Height = 15
         Caption = 'Extensions:'
@@ -189,6 +189,7 @@ object SettingsForm: TSettingsForm
         Top = 111
         Width = 424
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
         TabOrder = 7
       end
@@ -197,6 +198,7 @@ object SettingsForm: TSettingsForm
         Top = 140
         Width = 424
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Use hardware-accelerated decoding (GPU)'
         TabOrder = 8
       end
@@ -205,6 +207,7 @@ object SettingsForm: TSettingsForm
         Top = 169
         Width = 424
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Use keyframes (faster seeking, less precise timecodes)'
         TabOrder = 9
       end
@@ -213,6 +216,7 @@ object SettingsForm: TSettingsForm
         Top = 198
         Width = 424
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Extract frames at display size (faster for high-res video)'
         TabOrder = 10
         OnClick = ChkScaledExtractionClick
@@ -262,17 +266,17 @@ object SettingsForm: TSettingsForm
         Thousands = False
       end
       object EdtExtensions: TEdit
-        Left = 130
+        Left = 115
         Top = 252
-        Width = 322
+        Width = 324
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 15
       end
       object EdtFFmpegPath: TEdit
-        Left = 130
+        Left = 115
         Top = 281
-        Width = 288
+        Width = 293
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 16
@@ -280,9 +284,9 @@ object SettingsForm: TSettingsForm
         OnChange = EdtFFmpegPathChange
       end
       object BtnFFmpegPath: TButton
-        Left = 424
+        Left = 414
         Top = 281
-        Width = 28
+        Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
@@ -293,22 +297,25 @@ object SettingsForm: TSettingsForm
     object TshAppearance: TTabSheet
       Caption = 'Appearance'
       ImageIndex = 1
+      DesignSize = (
+        452
+        370)
       object LblBackground: TLabel
         Left = 12
         Top = 24
-        Width = 120
+        Width = 97
         Height = 15
         Caption = 'Background color:'
       end
       object LblCellGap: TLabel
         Left = 12
         Top = 53
-        Width = 82
+        Width = 69
         Height = 15
         Caption = 'Cell gap (px):'
       end
       object LblBorder: TLabel
-        Left = 275
+        Left = 292
         Top = 53
         Width = 73
         Height = 15
@@ -324,9 +331,9 @@ object SettingsForm: TSettingsForm
         Caption = 'Timecode background:'
       end
       object LblTCAlpha: TLabel
-        Left = 275
+        Left = 292
         Top = 111
-        Width = 50
+        Width = 44
         Height = 15
         Caption = 'Opacity:'
       end
@@ -339,16 +346,16 @@ object SettingsForm: TSettingsForm
         Caption = 'Timecode text color:'
       end
       object LblTCTextAlpha: TLabel
-        Left = 275
+        Left = 292
         Top = 140
-        Width = 50
+        Width = 44
         Height = 15
         Caption = 'Opacity:'
       end
       object LblTimestampFont: TLabel
         Left = 12
         Top = 169
-        Width = 95
+        Width = 88
         Height = 15
         Caption = 'Timestamp font:'
       end
@@ -392,7 +399,7 @@ object SettingsForm: TSettingsForm
         Thousands = False
       end
       object EdtBorder: TEdit
-        Left = 360
+        Left = 377
         Top = 49
         Width = 45
         Height = 23
@@ -401,7 +408,7 @@ object SettingsForm: TSettingsForm
         Text = '0'
       end
       object UdBorder: TUpDown
-        Left = 405
+        Left = 422
         Top = 49
         Width = 17
         Height = 23
@@ -452,7 +459,7 @@ object SettingsForm: TSettingsForm
         OnClick = PnlTCBackClick
       end
       object EdtTCAlpha: TEdit
-        Left = 360
+        Left = 377
         Top = 107
         Width = 45
         Height = 23
@@ -461,7 +468,7 @@ object SettingsForm: TSettingsForm
         Text = '0'
       end
       object UdTCAlpha: TUpDown
-        Left = 405
+        Left = 422
         Top = 107
         Width = 17
         Height = 23
@@ -491,7 +498,7 @@ object SettingsForm: TSettingsForm
         OnClick = PnlTCTextColorClick
       end
       object EdtTCTextAlpha: TEdit
-        Left = 360
+        Left = 377
         Top = 136
         Width = 45
         Height = 23
@@ -500,7 +507,7 @@ object SettingsForm: TSettingsForm
         Text = '255'
       end
       object UdTCTextAlpha: TUpDown
-        Left = 405
+        Left = 422
         Top = 136
         Width = 17
         Height = 23
@@ -511,19 +518,21 @@ object SettingsForm: TSettingsForm
         Thousands = False
       end
       object EdtTimestampFont: TEdit
-        Left = 150
+        Left = 149
         Top = 165
-        Width = 255
+        Width = 259
         Height = 23
-        ReadOnly = True
         TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        ReadOnly = True
         TabOrder = 16
       end
       object BtnTimestampFont: TButton
-        Left = 408
+        Left = 414
         Top = 165
         Width = 25
         Height = 23
+        Anchors = [akTop, akRight]
         Caption = '...'
         TabOrder = 17
         OnClick = BtnTimestampFontClick
@@ -542,7 +551,7 @@ object SettingsForm: TSettingsForm
         Width = 200
         Height = 17
         Caption = 'Show status bar (F3 to toggle)'
-        TabOrder = 20
+        TabOrder = 18
       end
     end
     object TshSave: TTabSheet
@@ -550,7 +559,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 2
       DesignSize = (
         452
-        340)
+        370)
       object LblSaveFormat: TLabel
         Left = 12
         Top = 24
@@ -578,6 +587,36 @@ object SettingsForm: TSettingsForm
         Width = 75
         Height = 15
         Caption = 'Default folder:'
+      end
+      object LblBannerBackground: TLabel
+        Left = 12
+        Top = 173
+        Width = 128
+        Height = 15
+        AutoSize = False
+        Caption = 'Banner background:'
+      end
+      object LblBannerTextColor: TLabel
+        Left = 12
+        Top = 202
+        Width = 128
+        Height = 15
+        AutoSize = False
+        Caption = 'Banner text color:'
+      end
+      object LblBannerFont: TLabel
+        Left = 12
+        Top = 231
+        Width = 65
+        Height = 15
+        Caption = 'Banner font:'
+      end
+      object LblBannerPosition: TLabel
+        Left = 12
+        Top = 289
+        Width = 86
+        Height = 15
+        Caption = 'Banner position:'
       end
       object CbxSaveFormat: TComboBox
         Left = 130
@@ -633,16 +672,16 @@ object SettingsForm: TSettingsForm
       object EdtSaveFolder: TEdit
         Left = 130
         Top = 107
-        Width = 288
+        Width = 278
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 5
         TextHint = 'Leave empty for no default'
       end
       object BtnSaveFolder: TButton
-        Left = 424
+        Left = 414
         Top = 107
-        Width = 28
+        Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
@@ -654,17 +693,10 @@ object SettingsForm: TSettingsForm
         Top = 140
         Width = 424
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Include file info banner in combined image export'
         TabOrder = 7
         OnClick = ChkShowBannerClick
-      end
-      object LblBannerBackground: TLabel
-        Left = 12
-        Top = 173
-        Width = 128
-        Height = 15
-        AutoSize = False
-        Caption = 'Banner background:'
       end
       object PnlBannerBackground: TPanel
         Left = 130
@@ -686,14 +718,6 @@ object SettingsForm: TSettingsForm
         TabOrder = 9
         OnClick = PnlBannerBackgroundClick
       end
-      object LblBannerTextColor: TLabel
-        Left = 12
-        Top = 202
-        Width = 128
-        Height = 15
-        AutoSize = False
-        Caption = 'Banner text color:'
-      end
       object PnlBannerTextColor: TPanel
         Left = 130
         Top = 198
@@ -714,27 +738,22 @@ object SettingsForm: TSettingsForm
         TabOrder = 11
         OnClick = PnlBannerTextColorClick
       end
-      object LblBannerFont: TLabel
-        Left = 12
-        Top = 231
-        Width = 95
-        Height = 15
-        Caption = 'Banner font:'
-      end
       object EdtBannerFont: TEdit
         Left = 130
         Top = 227
-        Width = 265
+        Width = 278
         Height = 23
-        ReadOnly = True
         TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        ReadOnly = True
         TabOrder = 12
       end
       object BtnBannerFont: TButton
-        Left = 398
+        Left = 414
         Top = 227
         Width = 25
         Height = 23
+        Anchors = [akTop, akRight]
         Caption = '...'
         TabOrder = 13
         OnClick = BtnBannerFontClick
@@ -742,18 +761,12 @@ object SettingsForm: TSettingsForm
       object ChkBannerAutoSize: TCheckBox
         Left = 130
         Top = 258
-        Width = 293
+        Width = 306
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Auto-size banner font to image width'
         TabOrder = 14
         OnClick = ChkBannerAutoSizeClick
-      end
-      object LblBannerPosition: TLabel
-        Left = 12
-        Top = 289
-        Width = 95
-        Height = 15
-        Caption = 'Banner position:'
       end
       object CbxBannerPosition: TComboBox
         Left = 130
@@ -772,7 +785,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 3
       DesignSize = (
         452
-        340)
+        370)
       object LblCacheFolder: TLabel
         Left = 12
         Top = 53
@@ -783,8 +796,9 @@ object SettingsForm: TSettingsForm
       object LblCacheFolderInfo: TLabel
         Left = 12
         Top = 82
-        Width = 3
+        Width = 427
         Height = 15
+        AutoSize = False
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
         Font.Height = -12
@@ -809,8 +823,9 @@ object SettingsForm: TSettingsForm
       object LblCacheSizeInfo: TLabel
         Left = 244
         Top = 111
-        Width = 3
+        Width = 195
         Height = 15
+        AutoSize = False
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
         Font.Height = -12
@@ -828,7 +843,7 @@ object SettingsForm: TSettingsForm
         OnClick = ChkCacheEnabledClick
       end
       object BtnClearCache: TButton
-        Left = 364
+        Left = 351
         Top = 20
         Width = 88
         Height = 23
@@ -840,7 +855,7 @@ object SettingsForm: TSettingsForm
       object EdtCacheFolder: TEdit
         Left = 130
         Top = 49
-        Width = 288
+        Width = 278
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 2
@@ -848,9 +863,9 @@ object SettingsForm: TSettingsForm
         OnChange = EdtCacheFolderChange
       end
       object BtnCacheFolder: TButton
-        Left = 424
+        Left = 414
         Top = 49
-        Width = 28
+        Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
@@ -975,27 +990,33 @@ object SettingsForm: TSettingsForm
     object TshQuickView: TTabSheet
       Caption = 'Quick View'
       ImageIndex = 5
+      DesignSize = (
+        452
+        370)
       object ChkQVDisableNavigation: TCheckBox
         Left = 12
         Top = 24
-        Width = 424
+        Width = 427
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Disable internal file navigation'
         TabOrder = 0
       end
       object ChkQVHideToolbar: TCheckBox
         Left = 12
         Top = 53
-        Width = 424
+        Width = 427
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Hide toolbar'
         TabOrder = 1
       end
       object ChkQVHideStatusBar: TCheckBox
         Left = 12
         Top = 82
-        Width = 424
+        Width = 427
         Height = 17
+        Anchors = [akLeft, akTop, akRight]
         Caption = 'Hide status bar'
         TabOrder = 2
       end
@@ -1067,7 +1088,7 @@ object SettingsForm: TSettingsForm
     Font.Name = 'Segoe UI'
     Font.Style = []
     Options = [fdEffects, fdForceFontExist]
-    Left = 408
-    Top = 48
+    Left = 352
+    Top = 8
   end
 end

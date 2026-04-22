@@ -1,4 +1,4 @@
-{Settings dialog for configuring plugin behavior.
+﻿{Settings dialog for configuring plugin behavior.
  Works on TPluginSettings directly; changes take effect only when OK is pressed.}
 unit uSettingsDlg;
 

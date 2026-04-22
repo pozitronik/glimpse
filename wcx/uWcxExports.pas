@@ -555,7 +555,7 @@ begin
   Settings := TWcxSettings.Create(GIniPath);
   try
     Settings.Load;
-    if ShowWcxSettingsDialog(Parent, Settings) then
+    if ShowWcxSettingsDialog(Parent, Settings, procedure begin InvalidateFrameCache; end) then
     begin
       Settings.Save;
       InvalidateFrameCache;
