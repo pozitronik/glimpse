@@ -37,6 +37,30 @@ type
     Position: TBannerPosition;
   end;
 
+  {Grid geometry for the combined image. Columns = 0 means "auto" (ceil(sqrt(n)));
+   Border is the outer margin painted with Background around the whole grid.}
+  TCombinedGridStyle = record
+    Columns: Integer;
+    CellGap: Integer;
+    Border: Integer;
+    Background: TColor;
+  end;
+
+  {Overlay style for per-cell timecodes. When Show=False nothing is drawn and
+   the other fields are ignored. BackAlpha=0 selects the legacy shadow-only
+   rendering (pixel-exact back-compat); values > 0 switch to the modern
+   flush-rect rendering that matches the live view's overlay.}
+  TTimestampStyle = record
+    Show: Boolean;
+    Corner: TTimestampCorner;
+    FontName: string;
+    FontSize: Integer;
+    BackColor: TColor;
+    BackAlpha: Byte;
+    TextColor: TColor;
+    TextAlpha: Byte;
+  end;
+
   {Formats banner info into human-readable text lines.
    Returns an empty array if AInfo has no meaningful data.}
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
@@ -56,25 +80,23 @@ function DefaultBannerStyle: TBannerStyle;
  @return New bitmap with banner attached. Caller owns result.}
 function AttachBanner(ASrc: TBitmap; const ALines: TArray<string>; const AStyle: TBannerStyle): TBitmap;
 
+{Returns the historical defaults for the grid layout (auto columns, no gap,
+ no border, black background). Callers override individual fields as needed.}
+function DefaultCombinedGridStyle: TCombinedGridStyle;
+
+{Returns the historical defaults for the timestamp overlay (hidden, bottom-left,
+ Consolas 9pt, black legacy-shadow background, white text). Callers override
+ individual fields as needed.}
+function DefaultTimestampStyle: TTimestampStyle;
+
 {Renders all frames into a single grid image.
  @param AFrames Array of frame bitmaps (nil entries are skipped)
- @param AOffsets Frame time offsets (used for timestamp overlay)
- @param ACols Number of columns (0 = auto based on frame count)
- @param AGap Pixel gap between cells
- @param ABackground Background fill color
- @param AShowTimestamp Whether to overlay timecodes on each cell
- @param AFontName Font face for timestamp text
- @param AFontSize Font size in points for timestamp text
- @param ABorder Outer margin (pixels) painted with ABackground around the whole grid
- @param ATimestampCorner Corner where the timecode overlay is drawn on each cell
- @param ATimecodeBackColor Fill color for the optional timecode background block
- @param ATimecodeBackAlpha Opacity [0..255] for the background block; 0 selects the
-        legacy shadow-only rendering for pixel-exact back-compat, values > 0 switch
-        to the modern flush-rect rendering matching the live view's overlay
- @param ATimestampTextColor Foreground color for the timecode text
- @param ATimestampTextAlpha Opacity [0..255] for the timecode text
+ @param AOffsets Frame time offsets (used for the timestamp overlay)
+ @param AGrid Grid geometry (columns, gap, border, background)
+ @param ATimestamp Per-cell timecode overlay style; ignored when Show=False
  @return Combined bitmap, or nil if AFrames is empty. Caller owns result.}
-function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer; ABorder: Integer = 0; ATimestampCorner: TTimestampCorner = tcBottomLeft; ATimecodeBackColor: TColor = clBlack; ATimecodeBackAlpha: Byte = 0; ATimestampTextColor: TColor = clWhite; ATimestampTextAlpha: Byte = 255): TBitmap;
+function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
+  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 
 implementation
 
@@ -369,7 +391,28 @@ begin
   Result.Canvas.Draw(0, SrcY, ASrc);
 end;
 
-function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; ACols, AGap: Integer; ABackground: TColor; AShowTimestamp: Boolean; const AFontName: string; AFontSize: Integer; ABorder: Integer; ATimestampCorner: TTimestampCorner; ATimecodeBackColor: TColor; ATimecodeBackAlpha: Byte; ATimestampTextColor: TColor; ATimestampTextAlpha: Byte): TBitmap;
+function DefaultCombinedGridStyle: TCombinedGridStyle;
+begin
+  Result.Columns := 0;
+  Result.CellGap := 0;
+  Result.Border := DEF_COMBINED_BORDER;
+  Result.Background := clBlack;
+end;
+
+function DefaultTimestampStyle: TTimestampStyle;
+begin
+  Result.Show := False;
+  Result.Corner := DEF_TIMESTAMP_CORNER;
+  Result.FontName := 'Consolas';
+  Result.FontSize := 9;
+  Result.BackColor := DEF_TC_BACK_COLOR;
+  Result.BackAlpha := 0;
+  Result.TextColor := DEF_TIMESTAMP_TEXT_COLOR;
+  Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
+end;
+
+function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
+  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 const
   TC_MARGIN = 4; {distance from the cell edge to the timecode bounding box (legacy path)}
   TC_PADDING_H = 8; {horizontal padding inside the modern-path timecode rect}
@@ -388,11 +431,11 @@ begin
   if FrameCount = 0 then
     Exit(nil);
 
-  Border := ABorder;
+  Border := AGrid.Border;
   if Border < 0 then
     Border := 0;
 
-  Cols := ACols;
+  Cols := AGrid.Columns;
   if Cols <= 0 then
     Cols := Ceil(Sqrt(FrameCount));
   if Cols > FrameCount then
@@ -412,8 +455,8 @@ begin
 
   Result := TBitmap.Create;
   Result.PixelFormat := pf24bit;
-  Result.SetSize(Cols * CellW + Max(Cols - 1, 0) * AGap + 2 * Border, Rows * CellH + Max(Rows - 1, 0) * AGap + 2 * Border);
-  Result.Canvas.Brush.Color := ABackground;
+  Result.SetSize(Cols * CellW + Max(Cols - 1, 0) * AGrid.CellGap + 2 * Border, Rows * CellH + Max(Rows - 1, 0) * AGrid.CellGap + 2 * Border);
+  Result.Canvas.Brush.Color := AGrid.Background;
   Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
 
   for I := 0 to FrameCount - 1 do
@@ -422,25 +465,25 @@ begin
       Continue;
     Row := I div Cols;
     Col := I mod Cols;
-    X := Border + Col * (CellW + AGap);
-    Y := Border + Row * (CellH + AGap);
+    X := Border + Col * (CellW + AGrid.CellGap);
+    Y := Border + Row * (CellH + AGrid.CellGap);
     Result.Canvas.Draw(X, Y, AFrames[I]);
 
-    if AShowTimestamp and (ATimestampCorner <> tcNone) and (I < Length(AOffsets)) then
+    if ATimestamp.Show and (ATimestamp.Corner <> tcNone) and (I < Length(AOffsets)) then
     begin
       Tc := FormatTimecode(AOffsets[I].TimeOffset);
-      Result.Canvas.Font.Name := AFontName;
-      Result.Canvas.Font.Size := AFontSize;
+      Result.Canvas.Font.Name := ATimestamp.FontName;
+      Result.Canvas.Font.Size := ATimestamp.FontSize;
       Result.Canvas.Font.Style := [fsBold];
 
-      if ATimecodeBackAlpha > 0 then
+      if ATimestamp.BackAlpha > 0 then
       begin
         {Modern path: flush-to-corner rect with bg block and centered text (matches live view).
          Rect height floors at TC_MIN_H for live-view parity at small font sizes, but grows to
          fit when larger fonts would otherwise be clipped by DT_VCENTER inside a fixed rect.}
         TW := Result.Canvas.TextWidth(Tc) + TC_PADDING_H;
         TH := Max(Result.Canvas.TextHeight(Tc) + 4, TC_MIN_H);
-        case ATimestampCorner of
+        case ATimestamp.Corner of
           tcTopLeft:
             R := Rect(X, Y, X + TW, Y + TH);
           tcTopRight:
@@ -451,9 +494,9 @@ begin
             R := Rect(X, Y + CellH - TH, X + TW, Y + CellH);
         end;
 
-        if ATimecodeBackAlpha = 255 then
+        if ATimestamp.BackAlpha = 255 then
         begin
-          Result.Canvas.Brush.Color := ATimecodeBackColor;
+          Result.Canvas.Brush.Color := ATimestamp.BackColor;
           Result.Canvas.Brush.Style := bsSolid;
           Result.Canvas.FillRect(R);
         end else begin
@@ -462,10 +505,10 @@ begin
           try
             BgBmp.PixelFormat := pf24bit;
             BgBmp.SetSize(1, 1);
-            BgBmp.Canvas.Pixels[0, 0] := ATimecodeBackColor;
+            BgBmp.Canvas.Pixels[0, 0] := ATimestamp.BackColor;
             BF.BlendOp := AC_SRC_OVER;
             BF.BlendFlags := 0;
-            BF.SourceConstantAlpha := ATimecodeBackAlpha;
+            BF.SourceConstantAlpha := ATimestamp.BackAlpha;
             BF.AlphaFormat := 0;
             Winapi.Windows.AlphaBlend(Result.Canvas.Handle, R.Left, R.Top, R.Width, R.Height, BgBmp.Canvas.Handle, 0, 0, 1, 1, BF);
           finally
@@ -473,11 +516,11 @@ begin
           end;
         end;
 
-        if ATimestampTextAlpha > 0 then
+        if ATimestamp.TextAlpha > 0 then
         begin
-          if ATimestampTextAlpha = 255 then
+          if ATimestamp.TextAlpha = 255 then
           begin
-            Result.Canvas.Font.Color := ATimestampTextColor;
+            Result.Canvas.Font.Color := ATimestamp.TextColor;
             Result.Canvas.Brush.Style := bsClear;
             DrawText(Result.Canvas.Handle, PChar(Tc), -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
           end else begin
@@ -487,16 +530,16 @@ begin
               TextBmp.PixelFormat := pf24bit;
               TextBmp.SetSize(R.Width, R.Height);
               BitBlt(TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height, Result.Canvas.Handle, R.Left, R.Top, SRCCOPY);
-              TextBmp.Canvas.Font.Name := AFontName;
-              TextBmp.Canvas.Font.Size := AFontSize;
+              TextBmp.Canvas.Font.Name := ATimestamp.FontName;
+              TextBmp.Canvas.Font.Size := ATimestamp.FontSize;
               TextBmp.Canvas.Font.Style := [fsBold];
-              TextBmp.Canvas.Font.Color := ATimestampTextColor;
+              TextBmp.Canvas.Font.Color := ATimestamp.TextColor;
               TextBmp.Canvas.Brush.Style := bsClear;
               LocalR := Rect(0, 0, R.Width, R.Height);
               DrawText(TextBmp.Canvas.Handle, PChar(Tc), -1, LocalR, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
               BF.BlendOp := AC_SRC_OVER;
               BF.BlendFlags := 0;
-              BF.SourceConstantAlpha := ATimestampTextAlpha;
+              BF.SourceConstantAlpha := ATimestamp.TextAlpha;
               BF.AlphaFormat := 0;
               Winapi.Windows.AlphaBlend(Result.Canvas.Handle, R.Left, R.Top, R.Width, R.Height, TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height, BF);
             finally
@@ -510,7 +553,7 @@ begin
          (clWhite foreground, full opacity, black shadow).}
         TW := Result.Canvas.TextWidth(Tc);
         TH := Result.Canvas.TextHeight(Tc);
-        case ATimestampCorner of
+        case ATimestamp.Corner of
           tcTopLeft:
             begin
               TX := X + TC_MARGIN;
@@ -533,16 +576,16 @@ begin
             end;
         end;
 
-        if ATimestampTextAlpha = 255 then
+        if ATimestamp.TextAlpha = 255 then
         begin
           {Shadow for readability (1-pixel offset to the lower-right of the foreground text)}
           Result.Canvas.Brush.Style := bsClear;
           Result.Canvas.Font.Color := clBlack;
           Result.Canvas.TextOut(TX + 1, TY + 1, Tc);
           {Foreground text}
-          Result.Canvas.Font.Color := ATimestampTextColor;
+          Result.Canvas.Font.Color := ATimestamp.TextColor;
           Result.Canvas.TextOut(TX, TY, Tc);
-        end else if ATimestampTextAlpha > 0 then
+        end else if ATimestamp.TextAlpha > 0 then
         begin
           {Partial opacity with shadow: render shadow + text onto an offscreen copy of the region,
            then AlphaBlend back. The region spans the shadow's extra pixel on the bottom-right.}
@@ -556,17 +599,17 @@ begin
             TextBmp.PixelFormat := pf24bit;
             TextBmp.SetSize(R.Width, R.Height);
             BitBlt(TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height, Result.Canvas.Handle, R.Left, R.Top, SRCCOPY);
-            TextBmp.Canvas.Font.Name := AFontName;
-            TextBmp.Canvas.Font.Size := AFontSize;
+            TextBmp.Canvas.Font.Name := ATimestamp.FontName;
+            TextBmp.Canvas.Font.Size := ATimestamp.FontSize;
             TextBmp.Canvas.Font.Style := [fsBold];
             TextBmp.Canvas.Brush.Style := bsClear;
             TextBmp.Canvas.Font.Color := clBlack;
             TextBmp.Canvas.TextOut(TX + 1 - R.Left, TY + 1 - R.Top, Tc);
-            TextBmp.Canvas.Font.Color := ATimestampTextColor;
+            TextBmp.Canvas.Font.Color := ATimestamp.TextColor;
             TextBmp.Canvas.TextOut(TX - R.Left, TY - R.Top, Tc);
             BF.BlendOp := AC_SRC_OVER;
             BF.BlendFlags := 0;
-            BF.SourceConstantAlpha := ATimestampTextAlpha;
+            BF.SourceConstantAlpha := ATimestamp.TextAlpha;
             BF.AlphaFormat := 0;
             Winapi.Windows.AlphaBlend(Result.Canvas.Handle, R.Left, R.Top, R.Width, R.Height, TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height, BF);
           finally

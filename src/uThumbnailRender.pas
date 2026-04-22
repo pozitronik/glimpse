@@ -137,6 +137,7 @@ var
   Offsets: TFrameOffsetArray;
   Frames: TArray<TBitmap>;
   Options: TExtractionOptions;
+  GridStyle: TCombinedGridStyle;
   I: Integer;
 begin
   Result := nil;
@@ -198,9 +199,9 @@ begin
       begin
         { Combine into a grid. Gap=0 keeps tiny thumbnails tight; timecode
           overlay is suppressed because thumbnail cells are too small to read. }
-        Result := RenderCombinedImage(Frames, Offsets, 0, 0,
-          ASettings.Background, False,
-          ASettings.TimestampFontName, ASettings.TimestampFontSize);
+        GridStyle := DefaultCombinedGridStyle;
+        GridStyle.Background := ASettings.Background;
+        Result := RenderCombinedImage(Frames, Offsets, GridStyle, DefaultTimestampStyle);
         if Result = nil then
           Exit;
       end;

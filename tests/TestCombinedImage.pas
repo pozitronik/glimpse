@@ -109,6 +109,31 @@ begin
   Result.Canvas.FillRect(Rect(0, 0, AWidth, AHeight));
 end;
 
+{ Positional-arg builders so the pre-DTO test call sites stay one-liners.
+  Match the old RenderCombinedImage parameter order/defaults exactly. }
+function MakeGrid(ACols, AGap: Integer; ABg: TColor; ABorder: Integer = 0): TCombinedGridStyle;
+begin
+  Result.Columns := ACols;
+  Result.CellGap := AGap;
+  Result.Border := ABorder;
+  Result.Background := ABg;
+end;
+
+function MakeTs(AShow: Boolean; const AFontName: string; AFontSize: Integer;
+  ACorner: TTimestampCorner = tcBottomLeft;
+  ABackColor: TColor = clBlack; ABackAlpha: Byte = 0;
+  ATextColor: TColor = clWhite; ATextAlpha: Byte = 255): TTimestampStyle;
+begin
+  Result.Show := AShow;
+  Result.Corner := ACorner;
+  Result.FontName := AFontName;
+  Result.FontSize := AFontSize;
+  Result.BackColor := ABackColor;
+  Result.BackAlpha := ABackAlpha;
+  Result.TextColor := ATextColor;
+  Result.TextAlpha := ATextAlpha;
+end;
+
 { Empty input }
 
 procedure TTestCombinedImage.EmptyFrames_ReturnsNil;
@@ -119,7 +144,7 @@ var
 begin
   SetLength(Frames, 0);
   SetLength(Offsets, 0);
-  R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+  R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
   Assert.IsNull(R);
 end;
 
@@ -136,7 +161,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 1.0;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width);
@@ -163,7 +188,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, '2 cols * 50px');
@@ -190,7 +215,7 @@ begin
     Frames[I] := MakeFrame(60, 40, 0);
   SetLength(Offsets, 4);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(120, R.Width, '2 cols * 60px');
@@ -216,7 +241,7 @@ begin
     Frames[I] := MakeFrame(60, 40, 0);
   SetLength(Offsets, 4);
   try
-    R := RenderCombinedImage(Frames, Offsets, 1, 0, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(1, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(60, R.Width, '1 col * 60px');
@@ -243,7 +268,7 @@ begin
     Frames[I] := MakeFrame(50, 30, 0);
   SetLength(Offsets, 3);
   try
-    R := RenderCombinedImage(Frames, Offsets, 2, 0, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(2, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, '2 cols * 50px');
@@ -270,7 +295,7 @@ begin
   Frames[0] := MakeFrame(100, 80, 0);
   SetLength(Offsets, 1);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 10, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 10, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, 'No gap for single frame');
@@ -295,7 +320,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 5, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 5, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(105, R.Width, '2*50 + 1*5');
@@ -322,7 +347,7 @@ begin
     Frames[I] := MakeFrame(30, 20, 0);
   SetLength(Offsets, 4);
   try
-    R := RenderCombinedImage(Frames, Offsets, 2, 4, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(2, 4, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(64, R.Width, '2*30 + 1*4');
@@ -354,7 +379,7 @@ begin
     Frames[I] := MakeFrame(20, 20, Integer(clRed));
   SetLength(Offsets, 3);
   try
-    R := RenderCombinedImage(Frames, Offsets, 2, 0, BgColor, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(2, 0, BgColor), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       { Check pixel in the empty cell (row 1, col 1) }
@@ -382,7 +407,7 @@ begin
   SetLength(Frames, 1);
   Frames[0] := nil;
   SetLength(Offsets, 1);
-  R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+  R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
   Assert.IsNotNull(R);
   try
     Assert.AreEqual(320, R.Width, 'Default cell width');
@@ -406,7 +431,7 @@ begin
   Frames[1] := nil;
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clWhite, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clWhite), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(80, R.Width, '2 cols * 40px');
@@ -437,7 +462,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 10, 0, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(10, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, 'Clamped to 2 cols * 50px');
@@ -464,7 +489,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(True, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(pf24bit, R.PixelFormat);
@@ -489,7 +514,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 10.0;
   try
-    WithoutTS := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
+    WithoutTS := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(WithoutTS);
     try
       { Bottom-left pixel should be the frame color when no timestamp }
@@ -519,7 +544,7 @@ begin
     Frames[I] := MakeFrame(40, 30, 0);
   SetLength(Offsets, 9);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 2, clBlack, False, 'Consolas', 9);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 2, clBlack), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(3 * 40 + 2 * 2, R.Width, '3 cols * 40px + 2 gaps * 2px');
@@ -1230,7 +1255,7 @@ begin
   Frames[1] := MakeFrame(50, 40, 0);
   SetLength(Offsets, 2);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, 8);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 8), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(2 * 50 + 2 * 8, R.Width, '2 cols * 50 + 2*border');
@@ -1256,7 +1281,7 @@ begin
   Frames[0] := MakeFrame(100, 80, 0);
   SetLength(Offsets, 1);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, -50);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, -50), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(100, R.Width, 'Negative border clamps to zero');
@@ -1281,8 +1306,8 @@ begin
   Frames[0] := MakeFrame(100, 80, 0);
   SetLength(Offsets, 1);
   try
-    R1 := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9);
-    R2 := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, 0);
+    R1 := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
+    R2 := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0), MakeTs(False, 'Consolas', 9));
     try
       Assert.AreEqual(R2.Width, R1.Width, 'Default border must equal explicit 0');
       Assert.AreEqual(R2.Height, R1.Height, 'Default border must equal explicit 0');
@@ -1309,7 +1334,7 @@ begin
   Frames[0] := MakeFrame(60, 40, Integer(clRed));
   SetLength(Offsets, 1);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, BgColor, False, 'Consolas', 9, 10);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, BgColor, 10), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       { Corner of the output should be background, not frame color }
@@ -1339,7 +1364,7 @@ begin
   Frames[0] := MakeFrame(60, 40, Integer(clRed));
   SetLength(Offsets, 1);
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, False, 'Consolas', 9, Border);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, Border), MakeTs(False, 'Consolas', 9));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(Integer(clRed), Integer(R.Canvas.Pixels[Border + 5, Border + 5]),
@@ -1371,7 +1396,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0, tcTopLeft);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0), MakeTs(True, 'Consolas', 12, tcTopLeft));
     Assert.IsNotNull(R);
     try
       { Bottom-right corner of the only cell: frame is 200x150, cell is at (0,0) }
@@ -1398,7 +1423,7 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0, tcBottomRight);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0), MakeTs(True, 'Consolas', 12, tcBottomRight));
     Assert.IsNotNull(R);
     try
       Assert.AreEqual(Integer(clRed), Integer(R.Canvas.Pixels[5, 5]),
@@ -1426,8 +1451,8 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    RDefault := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12);
-    RExplicit := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0, tcBottomLeft);
+    RDefault := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack), MakeTs(True, 'Consolas', 12));
+    RExplicit := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0), MakeTs(True, 'Consolas', 12, tcBottomLeft));
     try
       Assert.AreEqual(RExplicit.Width, RDefault.Width);
       Assert.AreEqual(RExplicit.Height, RDefault.Height);
@@ -1465,8 +1490,8 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 9, 0,
-      tcBottomLeft, clGreen, 255, clWhite, 255);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0),
+      MakeTs(True, 'Consolas', 9, tcBottomLeft, clGreen, 255, clWhite, 255));
     Assert.IsNotNull(R);
     try
       { Bg rect is flush to (0, 149-H) ... (W, 150). A point a few pixels above the
@@ -1498,8 +1523,8 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 9, 0,
-      tcBottomLeft, clGreen, 255, clWhite, 0);
+    R := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0),
+      MakeTs(True, 'Consolas', 9, tcBottomLeft, clGreen, 255, clWhite, 0));
     Assert.IsNotNull(R);
     try
       { Block is in the bottom-left; scan a safe 10x10 window inside it }
@@ -1535,10 +1560,10 @@ begin
   SetLength(Offsets, 1);
   Offsets[0].TimeOffset := 65.5;
   try
-    RDefault := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0,
-      tcBottomLeft, clBlack, 0, clWhite, 255);
-    RYellow := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0,
-      tcBottomLeft, clBlack, 0, clYellow, 255);
+    RDefault := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0),
+      MakeTs(True, 'Consolas', 12, tcBottomLeft, clBlack, 0, clWhite, 255));
+    RYellow := RenderCombinedImage(Frames, Offsets, MakeGrid(0, 0, clBlack, 0),
+      MakeTs(True, 'Consolas', 12, tcBottomLeft, clBlack, 0, clYellow, 255));
     try
       DiffersInTextArea := False;
       { Bottom-left text area after the 4px margin; font height ~16 at 12pt bold }

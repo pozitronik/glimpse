@@ -123,6 +123,8 @@ var
   Frames: TArray<TBitmap>;
   Resized, WithBanner: TBitmap;
   BannerStyle: TBannerStyle;
+  GridStyle: TCombinedGridStyle;
+  TimestampStyle: TTimestampStyle;
   I: Integer;
 begin
   SetLength(Frames, Length(H.Offsets));
@@ -130,7 +132,21 @@ begin
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
 
-    Result := RenderCombinedImage(Frames, H.Offsets, H.Settings.CombinedColumns, H.Settings.CellGap, H.Settings.Background, H.Settings.ShowTimestamp, H.Settings.TimestampFontName, H.Settings.TimestampFontSize, H.Settings.CombinedBorder, H.Settings.TimestampCorner, H.Settings.TimecodeBackColor, H.Settings.TimecodeBackAlpha, H.Settings.TimestampTextColor, H.Settings.TimestampTextAlpha);
+    GridStyle.Columns := H.Settings.CombinedColumns;
+    GridStyle.CellGap := H.Settings.CellGap;
+    GridStyle.Border := H.Settings.CombinedBorder;
+    GridStyle.Background := H.Settings.Background;
+
+    TimestampStyle.Show := H.Settings.ShowTimestamp;
+    TimestampStyle.Corner := H.Settings.TimestampCorner;
+    TimestampStyle.FontName := H.Settings.TimestampFontName;
+    TimestampStyle.FontSize := H.Settings.TimestampFontSize;
+    TimestampStyle.BackColor := H.Settings.TimecodeBackColor;
+    TimestampStyle.BackAlpha := H.Settings.TimecodeBackAlpha;
+    TimestampStyle.TextColor := H.Settings.TimestampTextColor;
+    TimestampStyle.TextAlpha := H.Settings.TimestampTextAlpha;
+
+    Result := RenderCombinedImage(Frames, H.Offsets, GridStyle, TimestampStyle);
 
     {Apply combined size limit BEFORE the banner so the banner stays
      at full width and is not counted toward the limit}
