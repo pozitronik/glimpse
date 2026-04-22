@@ -315,13 +315,6 @@ object SettingsForm: TSettingsForm
         AutoSize = False
         Caption = 'Border (px):'
       end
-      object LblTimestampCorner: TLabel
-        Left = 12
-        Top = 82
-        Width = 100
-        Height = 15
-        Caption = 'Show timestamp:'
-      end
       object LblTCBack: TLabel
         Left = 12
         Top = 111
@@ -424,15 +417,22 @@ object SettingsForm: TSettingsForm
         TabOrder = 5
         Thousands = False
       end
+      object ChkShowTimecode: TCheckBox
+        Left = 12
+        Top = 82
+        Width = 130
+        Height = 17
+        Caption = 'Show timestamp'
+        TabOrder = 6
+      end
       object CbxTimestampCorner: TComboBox
         Left = 150
         Top = 78
         Width = 105
         Height = 23
         Style = csDropDownList
-        TabOrder = 6
+        TabOrder = 7
         Items.Strings = (
-          'None'
           'Top left'
           'Top right'
           'Bottom left'
@@ -446,7 +446,7 @@ object SettingsForm: TSettingsForm
         Cursor = crHandPoint
         BevelOuter = bvLowered
         ParentBackground = False
-        TabOrder = 7
+        TabOrder = 8
         OnClick = PnlTCBackClick
       end
       object BtnTCBack: TButton
@@ -455,7 +455,7 @@ object SettingsForm: TSettingsForm
         Width = 25
         Height = 23
         Caption = '...'
-        TabOrder = 8
+        TabOrder = 9
         OnClick = PnlTCBackClick
       end
       object EdtTCAlpha: TEdit
@@ -464,7 +464,7 @@ object SettingsForm: TSettingsForm
         Width = 45
         Height = 23
         NumbersOnly = True
-        TabOrder = 9
+        TabOrder = 10
         Text = '0'
       end
       object UdTCAlpha: TUpDown
@@ -474,7 +474,7 @@ object SettingsForm: TSettingsForm
         Height = 23
         Associate = EdtTCAlpha
         Max = 255
-        TabOrder = 10
+        TabOrder = 11
         Thousands = False
       end
       object PnlTCTextColor: TPanel
@@ -485,7 +485,7 @@ object SettingsForm: TSettingsForm
         Cursor = crHandPoint
         BevelOuter = bvLowered
         ParentBackground = False
-        TabOrder = 11
+        TabOrder = 12
         OnClick = PnlTCTextColorClick
       end
       object BtnTCTextColor: TButton
@@ -494,7 +494,7 @@ object SettingsForm: TSettingsForm
         Width = 25
         Height = 23
         Caption = '...'
-        TabOrder = 12
+        TabOrder = 13
         OnClick = PnlTCTextColorClick
       end
       object EdtTCTextAlpha: TEdit
@@ -503,7 +503,7 @@ object SettingsForm: TSettingsForm
         Width = 45
         Height = 23
         NumbersOnly = True
-        TabOrder = 13
+        TabOrder = 14
         Text = '255'
       end
       object UdTCTextAlpha: TUpDown
@@ -514,7 +514,7 @@ object SettingsForm: TSettingsForm
         Associate = EdtTCTextAlpha
         Max = 255
         Position = 255
-        TabOrder = 14
+        TabOrder = 15
         Thousands = False
       end
       object EdtTimestampFont: TEdit
@@ -522,7 +522,7 @@ object SettingsForm: TSettingsForm
         Top = 165
         Width = 180
         Height = 23
-        TabOrder = 15
+        TabOrder = 16
       end
       object EdtTimestampFontSize: TEdit
         Left = 370
@@ -530,7 +530,7 @@ object SettingsForm: TSettingsForm
         Width = 45
         Height = 23
         NumbersOnly = True
-        TabOrder = 16
+        TabOrder = 17
         Text = '6'
       end
       object UdTimestampFontSize: TUpDown
@@ -542,7 +542,7 @@ object SettingsForm: TSettingsForm
         Min = 6
         Max = 72
         Position = 6
-        TabOrder = 17
+        TabOrder = 18
         Thousands = False
       end
       object ChkShowToolbar: TCheckBox
@@ -551,7 +551,7 @@ object SettingsForm: TSettingsForm
         Width = 200
         Height = 17
         Caption = 'Show toolbar (F4 to toggle)'
-        TabOrder = 18
+        TabOrder = 19
       end
       object ChkShowStatusBar: TCheckBox
         Left = 230
@@ -559,7 +559,7 @@ object SettingsForm: TSettingsForm
         Width = 200
         Height = 17
         Caption = 'Show status bar (F3 to toggle)'
-        TabOrder = 19
+        TabOrder = 20
       end
     end
     object TshSave: TTabSheet

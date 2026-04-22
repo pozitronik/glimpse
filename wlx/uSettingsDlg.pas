@@ -71,7 +71,7 @@ type
     LblBorder: TLabel;
     EdtBorder: TEdit;
     UdBorder: TUpDown;
-    LblTimestampCorner: TLabel;
+    ChkShowTimecode: TCheckBox;
     CbxTimestampCorner: TComboBox;
     ChkShowToolbar: TCheckBox;
     ChkShowStatusBar: TCheckBox;
@@ -177,7 +177,7 @@ implementation
 
 uses
   System.IOUtils,
-  uFFmpegExe, uCache, uBitmapSaver, uPathExpand, uSettingsDlgLogic;
+  uDefaults, uFFmpegExe, uCache, uBitmapSaver, uPathExpand, uSettingsDlgLogic;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
@@ -211,7 +211,16 @@ begin
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   UdCellGap.Position := ASettings.CellGap;
   UdBorder.Position := ASettings.CombinedBorder;
-  CbxTimestampCorner.ItemIndex := Ord(ASettings.TimestampCorner);
+  {Migrate legacy tcNone (formerly used as the off-switch in the combo) to a
+   real corner plus ShowTimecode=False — the dedicated checkbox now gates visibility}
+  if ASettings.TimestampCorner = tcNone then
+  begin
+    ChkShowTimecode.Checked := False;
+    CbxTimestampCorner.ItemIndex := Ord(DEF_TIMESTAMP_CORNER) - 1;
+  end else begin
+    ChkShowTimecode.Checked := ASettings.ShowTimecode;
+    CbxTimestampCorner.ItemIndex := Ord(ASettings.TimestampCorner) - 1;
+  end;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
 
@@ -277,7 +286,8 @@ begin
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.CellGap := UdCellGap.Position;
   ASettings.CombinedBorder := UdBorder.Position;
-  ASettings.TimestampCorner := TTimestampCorner(CbxTimestampCorner.ItemIndex);
+  ASettings.ShowTimecode := ChkShowTimecode.Checked;
+  ASettings.TimestampCorner := TTimestampCorner(CbxTimestampCorner.ItemIndex + 1);
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
 
