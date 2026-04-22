@@ -72,13 +72,24 @@ type
     [Test] procedure TestCombinedMaxSideRoundTrip;
     [Test] procedure TestFrameMaxSideClampedUpper;
     [Test] procedure TestCombinedMaxSideClampedLower;
+    { Appearance parity with WLX }
+    [Test] procedure TestAppearanceDefaults;
+    [Test] procedure TestCombinedBorderRoundTrip;
+    [Test] procedure TestCombinedBorderClampedUpper;
+    [Test] procedure TestCombinedBorderClampedLower;
+    [Test] procedure TestTimestampCornerRoundTripAllCorners;
+    [Test] procedure TestUnknownTimestampCornerDefaults;
+    [Test] procedure TestTimecodeBackColorAlphaRoundTrip;
+    [Test] procedure TestTimestampTextColorRoundTrip;
+    [Test] procedure TestTimestampTextAlphaRoundTrip;
+    [Test] procedure TestTimestampTextAlphaClampedUpper;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uWcxSettings, uBitmapSaver, uDefaults;
+  uWcxSettings, uBitmapSaver, uDefaults, uTypes;
 
 { TTestWcxSettings }
 
@@ -1160,6 +1171,248 @@ begin
   try
     S.Load;
     Assert.AreEqual(0, S.CombinedMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+{ Appearance parity with WLX: WCX gained Border, TimestampCorner, timecode bg
+  color+alpha, and timestamp text color+alpha. Defaults must match the shared
+  WLX defaults so both plugins render the combined image identically when run
+  with fresh configs. }
+
+procedure TTestWcxSettings.TestAppearanceDefaults;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'appdef.ini'));
+  try
+    Assert.AreEqual(DEF_COMBINED_BORDER, S.CombinedBorder);
+    Assert.IsTrue(S.TimestampCorner = DEF_TIMESTAMP_CORNER);
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor));
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha));
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_COLOR), Integer(S.TimestampTextColor));
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedBorderRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.CombinedBorder := 24;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(24, S2.CombinedBorder);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedBorderClampedUpper;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_hi.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'CombinedBorder', 99999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_COMBINED_BORDER, S.CombinedBorder);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestCombinedBorderClampedLower;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_lo.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'CombinedBorder', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_COMBINED_BORDER, S.CombinedBorder);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampCornerRoundTripAllCorners;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+  Corner: TTimestampCorner;
+begin
+  { Every defined enum value must survive save+load. tcNone is a legacy value
+    still supported at the settings layer for backward compatibility with old
+    INI files, even though the dialog no longer offers it. }
+  for Corner := Low(TTimestampCorner) to High(TTimestampCorner) do
+  begin
+    IniPath := TPath.Combine(FTempDir, 'corner_' + IntToStr(Ord(Corner)) + '.ini');
+    S1 := TWcxSettings.Create(IniPath);
+    try
+      S1.TimestampCorner := Corner;
+      S1.Save;
+    finally
+      S1.Free;
+    end;
+
+    S2 := TWcxSettings.Create(IniPath);
+    try
+      S2.Load;
+      Assert.IsTrue(S2.TimestampCorner = Corner,
+        Format('Corner %d failed round-trip', [Ord(Corner)]));
+    finally
+      S2.Free;
+    end;
+  end;
+end;
+
+procedure TTestWcxSettings.TestUnknownTimestampCornerDefaults;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'corner_unk.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('combined', 'TimestampCorner', 'garbage');
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.TimestampCorner = DEF_TIMESTAMP_CORNER,
+      'Unknown corner string must fall back to DEF_TIMESTAMP_CORNER');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimecodeBackColorAlphaRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  { Background color + alpha share one INI key using the #RRGGBBAA encoding,
+    so a single round-trip must preserve both components independently. }
+  IniPath := TPath.Combine(FTempDir, 'tcback_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.TimecodeBackColor := TColor($00112233);
+    S1.TimecodeBackAlpha := 123;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(TColor($00112233)), Integer(S2.TimecodeBackColor));
+    Assert.AreEqual(123, Integer(S2.TimecodeBackAlpha));
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampTextColorRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'tctext_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.TimestampTextColor := TColor($0044AA88);
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(TColor($0044AA88)), Integer(S2.TimestampTextColor));
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampTextAlphaRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'txtalpha_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.TimestampTextAlpha := 64;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(64, Integer(S2.TimestampTextAlpha));
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestTimestampTextAlphaClampedUpper;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'txtalpha_hi.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('combined', 'TimestampTextAlpha', 500);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(MAX_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha));
   finally
     S.Free;
   end;

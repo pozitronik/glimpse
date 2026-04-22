@@ -42,6 +42,10 @@ const
    Matches the historical CLR_TIMECODE_OVERLAY shade so legacy configs look identical.}
   DEF_TIMESTAMP_TEXT_COLOR = TColor($00CCCCCC);
 
+  {Timecode background block (shared by WLX live view and WCX combined image).}
+  DEF_TC_BACK_COLOR = TColor($002D2D2D);
+  DEF_TC_BACK_ALPHA = 180;
+
   {Cell gap range (shared by both plugins: WLX viewer and WCX combined image)}
   MIN_CELL_GAP = 0;
   MAX_CELL_GAP = 20;

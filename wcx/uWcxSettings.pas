@@ -35,6 +35,12 @@ type
     FShowTimestamp: Boolean;
     FBackground: TColor;
     FCellGap: Integer;
+    FCombinedBorder: Integer;
+    FTimestampCorner: TTimestampCorner;
+    FTimecodeBackColor: TColor;
+    FTimecodeBackAlpha: Byte;
+    FTimestampTextColor: TColor;
+    FTimestampTextAlpha: Byte;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FShowBanner: Boolean;
@@ -46,6 +52,9 @@ type
      cap triggers a post-render HALFTONE downscale of the assembled grid.}
     FFrameMaxSide: Integer;
     FCombinedMaxSide: Integer;
+
+    class function StrToTimestampCorner(const AValue: string): TTimestampCorner; static;
+    class function TimestampCornerToStr(ACorner: TTimestampCorner): string; static;
   public
     constructor Create(const AIniPath: string);
     procedure Load;
@@ -69,6 +78,12 @@ type
     property ShowTimestamp: Boolean read FShowTimestamp write FShowTimestamp;
     property Background: TColor read FBackground write FBackground;
     property CellGap: Integer read FCellGap write FCellGap;
+    property CombinedBorder: Integer read FCombinedBorder write FCombinedBorder;
+    property TimestampCorner: TTimestampCorner read FTimestampCorner write FTimestampCorner;
+    property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
+    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
+    property TimestampTextColor: TColor read FTimestampTextColor write FTimestampTextColor;
+    property TimestampTextAlpha: Byte read FTimestampTextAlpha write FTimestampTextAlpha;
     property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
     property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
     property ShowBanner: Boolean read FShowBanner write FShowBanner;
@@ -98,6 +113,38 @@ implementation
 uses
   uPathExpand, uColorConv;
 
+class function TWcxSettings.StrToTimestampCorner(const AValue: string): TTimestampCorner;
+begin
+  if SameText(AValue, 'none') then
+    Result := tcNone
+  else if SameText(AValue, 'topleft') then
+    Result := tcTopLeft
+  else if SameText(AValue, 'topright') then
+    Result := tcTopRight
+  else if SameText(AValue, 'bottomright') then
+    Result := tcBottomRight
+  else if SameText(AValue, 'bottomleft') then
+    Result := tcBottomLeft
+  else
+    Result := DEF_TIMESTAMP_CORNER;
+end;
+
+class function TWcxSettings.TimestampCornerToStr(ACorner: TTimestampCorner): string;
+begin
+  case ACorner of
+    tcNone:
+      Result := 'none';
+    tcTopLeft:
+      Result := 'topleft';
+    tcTopRight:
+      Result := 'topright';
+    tcBottomRight:
+      Result := 'bottomright';
+    else
+      Result := 'bottomleft';
+  end;
+end;
+
 {TWcxSettings}
 
 constructor TWcxSettings.Create(const AIniPath: string);
@@ -121,6 +168,12 @@ begin
   FShowTimestamp := WCX_DEF_SHOW_TIMESTAMP;
   FBackground := WCX_DEF_BACKGROUND;
   FCellGap := WCX_DEF_CELL_GAP;
+  FCombinedBorder := DEF_COMBINED_BORDER;
+  FTimestampCorner := DEF_TIMESTAMP_CORNER;
+  FTimecodeBackColor := DEF_TC_BACK_COLOR;
+  FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
+  FTimestampTextColor := DEF_TIMESTAMP_TEXT_COLOR;
+  FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
   FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
   FTimestampFontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
   FShowBanner := WCX_DEF_SHOW_BANNER;
@@ -160,7 +213,12 @@ begin
     FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
     FShowTimestamp := Ini.ReadBool('combined', 'ShowTimestamp', WCX_DEF_SHOW_TIMESTAMP);
     FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
-    FCellGap := EnsureRange(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), 0, 20);
+    FCellGap := EnsureRange(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
+    FCombinedBorder := EnsureRange(Ini.ReadInteger('combined', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
+    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('combined', 'TimestampCorner', ''));
+    HexToColorAlpha(Ini.ReadString('combined', 'TimecodeBackground', ''), DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
+    FTimestampTextColor := HexToColor(Ini.ReadString('combined', 'TimestampTextColor', ''), DEF_TIMESTAMP_TEXT_COLOR);
+    FTimestampTextAlpha := EnsureRange(Ini.ReadInteger('combined', 'TimestampTextAlpha', DEF_TIMESTAMP_TEXT_ALPHA), MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
     FTimestampFontName := Ini.ReadString('combined', 'TimestampFont', WCX_DEF_TIMESTAMP_FONT);
     if FTimestampFontName.Trim = '' then
       FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
@@ -208,6 +266,11 @@ begin
     Ini.WriteBool('combined', 'ShowTimestamp', FShowTimestamp);
     Ini.WriteString('combined', 'Background', ColorToHex(FBackground));
     Ini.WriteInteger('combined', 'CellGap', FCellGap);
+    Ini.WriteInteger('combined', 'CombinedBorder', FCombinedBorder);
+    Ini.WriteString('combined', 'TimestampCorner', TimestampCornerToStr(FTimestampCorner));
+    Ini.WriteString('combined', 'TimecodeBackground', ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
+    Ini.WriteString('combined', 'TimestampTextColor', ColorToHex(FTimestampTextColor));
+    Ini.WriteInteger('combined', 'TimestampTextAlpha', FTimestampTextAlpha);
     Ini.WriteString('combined', 'TimestampFont', FTimestampFontName);
     Ini.WriteInteger('combined', 'TimestampFontSize', FTimestampFontSize);
     Ini.WriteBool('combined', 'ShowBanner', FShowBanner);

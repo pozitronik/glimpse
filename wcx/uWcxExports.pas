@@ -129,7 +129,7 @@ begin
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
 
-    Result := RenderCombinedImage(Frames, H.Offsets, H.Settings.CombinedColumns, H.Settings.CellGap, H.Settings.Background, H.Settings.ShowTimestamp, H.Settings.TimestampFontName, H.Settings.TimestampFontSize);
+    Result := RenderCombinedImage(Frames, H.Offsets, H.Settings.CombinedColumns, H.Settings.CellGap, H.Settings.Background, H.Settings.ShowTimestamp, H.Settings.TimestampFontName, H.Settings.TimestampFontSize, H.Settings.CombinedBorder, H.Settings.TimestampCorner, H.Settings.TimecodeBackColor, H.Settings.TimecodeBackAlpha, H.Settings.TimestampTextColor, H.Settings.TimestampTextAlpha);
 
     {Apply combined size limit BEFORE the banner so the banner stays
      at full width and is not counted toward the limit}

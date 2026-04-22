@@ -53,13 +53,29 @@ type
     LblColumns: TLabel;
     EdtColumns: TEdit;
     UdColumns: TUpDown;
-    LblCellGap: TLabel;
-    EdtCellGap: TEdit;
-    UdCellGap: TUpDown;
     LblBackground: TLabel;
     PnlBackground: TPanel;
     BtnBackground: TButton;
+    LblCellGap: TLabel;
+    EdtCellGap: TEdit;
+    UdCellGap: TUpDown;
+    LblBorder: TLabel;
+    EdtBorder: TEdit;
+    UdBorder: TUpDown;
     ChkTimestamp: TCheckBox;
+    CbxTimestampCorner: TComboBox;
+    LblTCBack: TLabel;
+    PnlTCBack: TPanel;
+    BtnTCBack: TButton;
+    LblTCAlpha: TLabel;
+    EdtTCAlpha: TEdit;
+    UdTCAlpha: TUpDown;
+    LblTCTextColor: TLabel;
+    PnlTCTextColor: TPanel;
+    BtnTCTextColor: TButton;
+    LblTCTextAlpha: TLabel;
+    EdtTCTextAlpha: TEdit;
+    UdTCTextAlpha: TUpDown;
     LblTimestampFont: TLabel;
     EdtTimestampFont: TEdit;
     LblTimestampFontSize: TLabel;
@@ -85,6 +101,8 @@ type
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
     procedure EdtMaxThreadsChange(Sender: TObject);
     procedure PnlBackgroundClick(Sender: TObject);
+    procedure PnlTCBackClick(Sender: TObject);
+    procedure PnlTCTextColorClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
@@ -93,6 +111,7 @@ type
     procedure UpdateCombinedState;
     procedure UpdateMaxWorkersControls;
     procedure UpdateFFmpegInfo;
+    procedure PickColor(APanel: TPanel);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -107,7 +126,8 @@ implementation
 {$R *.dfm}
 
 uses
-  uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic;
+  uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic,
+  uDefaults, uTypes;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 begin
@@ -140,8 +160,21 @@ begin
 
   UdColumns.Position := ASettings.CombinedColumns;
   UdCellGap.Position := ASettings.CellGap;
+  UdBorder.Position := ASettings.CombinedBorder;
   PnlBackground.Color := ASettings.Background;
-  ChkTimestamp.Checked := ASettings.ShowTimestamp;
+  {Legacy tcNone shown as ShowTimestamp=False; corner combo picks default visible corner}
+  if ASettings.TimestampCorner = tcNone then
+  begin
+    ChkTimestamp.Checked := False;
+    CbxTimestampCorner.ItemIndex := Ord(DEF_TIMESTAMP_CORNER) - 1;
+  end else begin
+    ChkTimestamp.Checked := ASettings.ShowTimestamp;
+    CbxTimestampCorner.ItemIndex := Ord(ASettings.TimestampCorner) - 1;
+  end;
+  PnlTCBack.Color := ASettings.TimecodeBackColor;
+  UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
+  PnlTCTextColor.Color := ASettings.TimestampTextColor;
+  UdTCTextAlpha.Position := ASettings.TimestampTextAlpha;
   EdtTimestampFont.Text := ASettings.TimestampFontName;
   UdTimestampFontSize.Position := ASettings.TimestampFontSize;
   ChkShowBanner.Checked := ASettings.ShowBanner;
@@ -181,8 +214,14 @@ begin
 
   ASettings.CombinedColumns := UdColumns.Position;
   ASettings.CellGap := UdCellGap.Position;
+  ASettings.CombinedBorder := UdBorder.Position;
   ASettings.Background := PnlBackground.Color;
   ASettings.ShowTimestamp := ChkTimestamp.Checked;
+  ASettings.TimestampCorner := TTimestampCorner(CbxTimestampCorner.ItemIndex + 1);
+  ASettings.TimecodeBackColor := PnlTCBack.Color;
+  ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
+  ASettings.TimestampTextColor := PnlTCTextColor.Color;
+  ASettings.TimestampTextAlpha := UdTCTextAlpha.Position;
   ASettings.TimestampFontName := EdtTimestampFont.Text;
   ASettings.TimestampFontSize := UdTimestampFontSize.Position;
   ASettings.ShowBanner := ChkShowBanner.Checked;
@@ -202,10 +241,26 @@ begin
   LblCellGap.Enabled := IsCombined;
   EdtCellGap.Enabled := IsCombined;
   UdCellGap.Enabled := IsCombined;
+  LblBorder.Enabled := IsCombined;
+  EdtBorder.Enabled := IsCombined;
+  UdBorder.Enabled := IsCombined;
   LblBackground.Enabled := IsCombined;
   PnlBackground.Enabled := IsCombined;
   BtnBackground.Enabled := IsCombined;
   ChkTimestamp.Enabled := IsCombined;
+  CbxTimestampCorner.Enabled := IsCombined;
+  LblTCBack.Enabled := IsCombined;
+  PnlTCBack.Enabled := IsCombined;
+  BtnTCBack.Enabled := IsCombined;
+  LblTCAlpha.Enabled := IsCombined;
+  EdtTCAlpha.Enabled := IsCombined;
+  UdTCAlpha.Enabled := IsCombined;
+  LblTCTextColor.Enabled := IsCombined;
+  PnlTCTextColor.Enabled := IsCombined;
+  BtnTCTextColor.Enabled := IsCombined;
+  LblTCTextAlpha.Enabled := IsCombined;
+  EdtTCTextAlpha.Enabled := IsCombined;
+  UdTCTextAlpha.Enabled := IsCombined;
   LblTimestampFont.Enabled := IsCombined;
   EdtTimestampFont.Enabled := IsCombined;
   LblTimestampFontSize.Enabled := IsCombined;
@@ -276,11 +331,26 @@ begin
   UpdateFFmpegInfo;
 end;
 
+procedure TWcxSettingsForm.PickColor(APanel: TPanel);
+begin
+  ColorDlg.Color := APanel.Color;
+  if ColorDlg.Execute then
+    APanel.Color := ColorDlg.Color;
+end;
+
 procedure TWcxSettingsForm.PnlBackgroundClick(Sender: TObject);
 begin
-  ColorDlg.Color := PnlBackground.Color;
-  if ColorDlg.Execute then
-    PnlBackground.Color := ColorDlg.Color;
+  PickColor(PnlBackground);
+end;
+
+procedure TWcxSettingsForm.PnlTCBackClick(Sender: TObject);
+begin
+  PickColor(PnlTCBack);
+end;
+
+procedure TWcxSettingsForm.PnlTCTextColorClick(Sender: TObject);
+begin
+  PickColor(PnlTCTextColor);
 end;
 
 procedure TWcxSettingsForm.BtnFFmpegPathClick(Sender: TObject);
