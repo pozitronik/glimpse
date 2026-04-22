@@ -128,6 +128,7 @@ begin
   Result.Corner := ACorner;
   Result.FontName := AFontName;
   Result.FontSize := AFontSize;
+  Result.FontStyles := [fsBold];
   Result.BackColor := ABackColor;
   Result.BackAlpha := ABackAlpha;
   Result.TextColor := ATextColor;

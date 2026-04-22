@@ -794,6 +794,7 @@ end;
 procedure TPluginForm.ApplySettings;
 var
   VM: TViewMode;
+  Style: TTimestampStyle;
 begin
   if FSettings = nil then
     Exit;
@@ -809,16 +810,20 @@ begin
   UpdateViewModeButtons;
   FToolbar.Visible := FSettings.ShowToolbar and not(FQuickViewMode and FSettings.QVHideToolbar);
   FStatusBar.Visible := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
-  FFrameView.ShowTimecode := FSettings.ShowTimecode;
-  FFrameView.TimecodeBackColor := FSettings.TimecodeBackColor;
-  FFrameView.TimecodeBackAlpha := FSettings.TimecodeBackAlpha;
-  FFrameView.TimestampTextAlpha := FSettings.TimestampTextAlpha;
-  FFrameView.TimestampTextColor := FSettings.TimestampTextColor;
-  FFrameView.TimestampFontName := FSettings.TimestampFontName;
-  FFrameView.TimestampFontSize := FSettings.TimestampFontSize;
+  {Copy the current style so fields the live view owns (FontStyles: live view
+   renders non-bold) survive while settings-driven fields update.}
+  Style := FFrameView.TimestampStyle;
+  Style.Show := FSettings.ShowTimecode;
+  Style.Corner := FSettings.TimestampCorner;
+  Style.FontName := FSettings.TimestampFontName;
+  Style.FontSize := FSettings.TimestampFontSize;
+  Style.BackColor := FSettings.TimecodeBackColor;
+  Style.BackAlpha := FSettings.TimecodeBackAlpha;
+  Style.TextColor := FSettings.TimestampTextColor;
+  Style.TextAlpha := FSettings.TimestampTextAlpha;
+  FFrameView.TimestampStyle := Style;
   FFrameView.CellGap := FSettings.CellGap;
   FFrameView.CellMargin := FSettings.CombinedBorder;
-  FFrameView.TimestampCorner := FSettings.TimestampCorner;
   UpdateTimecodeButton;
   FFrameView.BackColor := FSettings.Background;
   FScrollBox.Color := FSettings.Background;

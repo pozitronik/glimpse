@@ -141,6 +141,7 @@ begin
     TimestampStyle.Corner := H.Settings.TimestampCorner;
     TimestampStyle.FontName := H.Settings.TimestampFontName;
     TimestampStyle.FontSize := H.Settings.TimestampFontSize;
+    TimestampStyle.FontStyles := [fsBold];
     TimestampStyle.BackColor := H.Settings.TimecodeBackColor;
     TimestampStyle.BackAlpha := H.Settings.TimecodeBackAlpha;
     TimestampStyle.TextColor := H.Settings.TimestampTextColor;

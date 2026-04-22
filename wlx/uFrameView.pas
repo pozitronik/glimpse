@@ -8,7 +8,7 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  uTypes, uSettings, uDefaults, uFrameOffsets, uViewModeLayout;
+  uTypes, uSettings, uDefaults, uFrameOffsets, uViewModeLayout, uCombinedImage;
 
 type
   TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);
@@ -34,7 +34,6 @@ type
     FAnimStep: Integer;
     FCellGap: Integer;
     FCellMargin: Integer;
-    FTimestampCorner: TTimestampCorner;
     FColumnCount: Integer;
     FCurrentFrameIndex: Integer;
     FAspectRatio: Double;
@@ -45,15 +44,8 @@ type
     FBaseViewportW: Integer; {frozen viewport for layout when zoomed}
     FBaseViewportH: Integer;
     FZoomFactor: Double;
-    FShowTimecode: Boolean;
-    FTimecodeBackColor: TColor;
-    FTimecodeBackAlpha: Byte;
-    FTimestampTextAlpha: Byte;
-    FTimestampTextColor: TColor;
-    FTimestampFontName: string;
-    FTimestampFontSize: Integer;
+    FStyle: TTimestampStyle;
     FBlendBmp: TBitmap; {reusable 1x1 bitmap for alpha-blended timecode background}
-    FBlendBmpColor: TColor; {cached color to avoid redundant Pixels[] writes}
     FTextBlendBmp: TBitmap; {offscreen bitmap for alpha-blended timecode text; resized on demand}
     FOnCtrlWheel: TCtrlWheelEvent;
     FLayout: TViewModeLayout;
@@ -64,14 +56,10 @@ type
     procedure SetViewMode(AValue: TViewMode);
     procedure SetCellGap(AValue: Integer);
     procedure SetCellMargin(AValue: Integer);
-    procedure SetTimestampCorner(AValue: TTimestampCorner);
     procedure SetBackColor(AValue: TColor);
-    procedure SetTimecodeBackColor(AValue: TColor);
-    procedure SetTimecodeBackAlpha(AValue: Byte);
-    procedure SetTimestampTextAlpha(AValue: Byte);
-    procedure SetTimestampTextColor(AValue: TColor);
-    procedure SetTimestampFontName(const AValue: string);
-    procedure SetTimestampFontSize(AValue: Integer);
+    procedure SetTimestampStyle(const AValue: TTimestampStyle);
+    function GetShowTimecode: Boolean;
+    procedure SetShowTimecode(AValue: Boolean);
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
@@ -79,7 +67,6 @@ type
     procedure PaintArc(const ARect: TRect);
     procedure PaintTimecode(AIndex: Integer; const ACellRect: TRect);
     procedure PaintErrorCell(const ARect: TRect);
-    procedure SetShowTimecode(AValue: Boolean);
     procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
   protected
@@ -120,16 +107,13 @@ type
     property BackColor: TColor read FBackColor write SetBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
     property ZoomFactor: Double read FZoomFactor write FZoomFactor;
-    property ShowTimecode: Boolean read FShowTimecode write SetShowTimecode;
-    property TimecodeBackColor: TColor read FTimecodeBackColor write SetTimecodeBackColor;
-    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write SetTimecodeBackAlpha;
-    property TimestampTextAlpha: Byte read FTimestampTextAlpha write SetTimestampTextAlpha;
-    property TimestampTextColor: TColor read FTimestampTextColor write SetTimestampTextColor;
-    property TimestampFontName: string read FTimestampFontName write SetTimestampFontName;
-    property TimestampFontSize: Integer read FTimestampFontSize write SetTimestampFontSize;
+    {Convenience accessor: the timecode toggle button and settings write-back
+     only care about the visible/hidden flag, so it gets a narrow property;
+     the rest of the overlay configuration flows through TimestampStyle.}
+    property ShowTimecode: Boolean read GetShowTimecode write SetShowTimecode;
+    property TimestampStyle: TTimestampStyle read FStyle write SetTimestampStyle;
     property CellGap: Integer read FCellGap write SetCellGap;
     property CellMargin: Integer read FCellMargin write SetCellMargin;
-    property TimestampCorner: TTimestampCorner read FTimestampCorner write SetTimestampCorner;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
     property PopupMenu;
     property BaseW: Integer read GetBaseW;
@@ -170,14 +154,12 @@ begin
   DoubleBuffered := True;
   FCellGap := DEF_CELL_GAP;
   FCellMargin := DEF_COMBINED_BORDER;
-  FTimestampCorner := DEF_TIMESTAMP_CORNER;
-  FShowTimecode := True;
-  FTimecodeBackColor := DEF_TC_BACK_COLOR;
-  FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
-  FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
-  FTimestampTextColor := DEF_TIMESTAMP_TEXT_COLOR;
-  FTimestampFontName := DEF_TIMESTAMP_FONT;
-  FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
+  FStyle := DefaultTimestampStyle;
+  FStyle.Show := True;
+  FStyle.FontName := DEF_TIMESTAMP_FONT;
+  FStyle.FontSize := DEF_TIMESTAMP_FONT_SIZE;
+  FStyle.FontStyles := []; {live-view timecodes render non-bold (canvas default)}
+  FStyle.BackAlpha := DEF_TC_BACK_ALPHA;
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
   FZoomMode := zmFitWindow;
@@ -193,8 +175,8 @@ begin
   FBaseViewportH := 0;
   FZoomFactor := 1.0;
   FBlendBmp := TBitmap.Create;
+  FBlendBmp.PixelFormat := pf24bit;
   FBlendBmp.SetSize(1, 1);
-  FBlendBmpColor := TColor(-1); {force first-use update}
   FTextBlendBmp := TBitmap.Create;
   FTextBlendBmp.PixelFormat := pf24bit;
   FLayout := CreateViewModeLayout(vmGrid);
@@ -359,10 +341,11 @@ function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer
 var
   TW: Integer;
 begin
-  Canvas.Font.Name := FTimestampFontName;
-  Canvas.Font.Size := FTimestampFontSize;
+  Canvas.Font.Name := FStyle.FontName;
+  Canvas.Font.Size := FStyle.FontSize;
+  Canvas.Font.Style := FStyle.FontStyles;
   TW := Canvas.TextWidth(FCells[AIndex].Timecode) + TIMECODE_PADDING;
-  case FTimestampCorner of
+  case FStyle.Corner of
     tcTopLeft:
       Result := Rect(ACellRect.Left, ACellRect.Top, ACellRect.Left + TW, ACellRect.Top + TIMECODE_H);
     tcTopRight:
@@ -522,14 +505,6 @@ begin
   end;
 end;
 
-procedure TFrameView.SetShowTimecode(AValue: Boolean);
-begin
-  if FShowTimecode = AValue then
-    Exit;
-  FShowTimecode := AValue;
-  Invalidate;
-end;
-
 procedure TFrameView.SetBackColor(AValue: TColor);
 begin
   if FBackColor = AValue then
@@ -538,53 +513,31 @@ begin
   Invalidate;
 end;
 
-procedure TFrameView.SetTimecodeBackColor(AValue: TColor);
+procedure TFrameView.SetTimestampStyle(const AValue: TTimestampStyle);
 begin
-  if FTimecodeBackColor = AValue then
+  {Field-by-field compare rather than a single record-equality check because
+   TTimestampStyle contains a managed string (FontName) that should be compared
+   by value. Bail out of the invalidate when nothing visible changed.}
+  if (FStyle.Show = AValue.Show) and (FStyle.Corner = AValue.Corner)
+     and (FStyle.FontName = AValue.FontName) and (FStyle.FontSize = AValue.FontSize)
+     and (FStyle.FontStyles = AValue.FontStyles)
+     and (FStyle.BackColor = AValue.BackColor) and (FStyle.BackAlpha = AValue.BackAlpha)
+     and (FStyle.TextColor = AValue.TextColor) and (FStyle.TextAlpha = AValue.TextAlpha) then
     Exit;
-  FTimecodeBackColor := AValue;
-  {Reset cached blend color so AlphaBlend picks up the new hue next paint}
-  FBlendBmpColor := TColor(-1);
+  FStyle := AValue;
   Invalidate;
 end;
 
-procedure TFrameView.SetTimecodeBackAlpha(AValue: Byte);
+function TFrameView.GetShowTimecode: Boolean;
 begin
-  if FTimecodeBackAlpha = AValue then
-    Exit;
-  FTimecodeBackAlpha := AValue;
-  Invalidate;
+  Result := FStyle.Show;
 end;
 
-procedure TFrameView.SetTimestampTextAlpha(AValue: Byte);
+procedure TFrameView.SetShowTimecode(AValue: Boolean);
 begin
-  if FTimestampTextAlpha = AValue then
+  if FStyle.Show = AValue then
     Exit;
-  FTimestampTextAlpha := AValue;
-  Invalidate;
-end;
-
-procedure TFrameView.SetTimestampTextColor(AValue: TColor);
-begin
-  if FTimestampTextColor = AValue then
-    Exit;
-  FTimestampTextColor := AValue;
-  Invalidate;
-end;
-
-procedure TFrameView.SetTimestampFontName(const AValue: string);
-begin
-  if FTimestampFontName = AValue then
-    Exit;
-  FTimestampFontName := AValue;
-  Invalidate;
-end;
-
-procedure TFrameView.SetTimestampFontSize(AValue: Integer);
-begin
-  if FTimestampFontSize = AValue then
-    Exit;
-  FTimestampFontSize := AValue;
+  FStyle.Show := AValue;
   Invalidate;
 end;
 
@@ -610,96 +563,30 @@ begin
   Invalidate;
 end;
 
-procedure TFrameView.SetTimestampCorner(AValue: TTimestampCorner);
-begin
-  if FTimestampCorner = AValue then
-    Exit;
-  FTimestampCorner := AValue;
-  Invalidate;
-end;
-
 procedure TFrameView.PaintTimecode(AIndex: Integer; const ACellRect: TRect);
 var
-  R, LocalR: TRect;
-  BF: TBlendFunction;
-  TextColor: TColor;
+  R: TRect;
+  EffectiveStyle: TTimestampStyle;
 begin
-  if not FShowTimecode then
+  if not FStyle.Show then
     Exit;
-  if FTimestampCorner = tcNone then
+  if FStyle.Corner = tcNone then
     Exit;
   if FCells[AIndex].Timecode = '' then
     Exit;
 
   R := TimecodeRectFromCell(ACellRect, AIndex);
-  Canvas.Font.Name := FTimestampFontName;
-  Canvas.Font.Size := FTimestampFontSize;
 
-  {Alpha-blended background for readability. Drawn independently of text alpha
-   so users can disable text entirely while keeping a visible background.}
-  if FTimecodeBackAlpha > 0 then
-  begin
-    if FTimecodeBackAlpha = 255 then
-    begin
-      Canvas.Brush.Color := FTimecodeBackColor;
-      Canvas.Brush.Style := bsSolid;
-      Canvas.FillRect(R);
-    end else begin
-      if FBlendBmpColor <> FTimecodeBackColor then
-      begin
-        FBlendBmp.Canvas.Pixels[0, 0] := FTimecodeBackColor;
-        FBlendBmpColor := FTimecodeBackColor;
-      end;
-      BF.BlendOp := AC_SRC_OVER;
-      BF.BlendFlags := 0;
-      BF.SourceConstantAlpha := FTimecodeBackAlpha;
-      BF.AlphaFormat := 0;
-      Winapi.Windows.AlphaBlend(Canvas.Handle, R.Left, R.Top, R.Width, R.Height, FBlendBmp.Canvas.Handle, 0, 0, 1, 1, BF);
-    end;
-  end;
+  {Pending cells dim the configured text color to half luminance so the
+   load-fade cue stays visible with any user-chosen hue.}
+  EffectiveStyle := FStyle;
+  if FCells[AIndex].State <> fcsLoaded then
+    EffectiveStyle.TextColor := RGB(GetRValue(FStyle.TextColor) shr 1,
+                                    GetGValue(FStyle.TextColor) shr 1,
+                                    GetBValue(FStyle.TextColor) shr 1);
 
-  if FTimestampTextAlpha = 0 then
-    Exit;
-
-  {Pending cells use the same hue at half luminance: the user's color choice
-   still reads through, and the existing load-fade cue is preserved without
-   a second configurable field.}
-  if FCells[AIndex].State = fcsLoaded then
-    TextColor := FTimestampTextColor
-  else
-    TextColor := RGB(GetRValue(FTimestampTextColor) shr 1,
-                     GetGValue(FTimestampTextColor) shr 1,
-                     GetBValue(FTimestampTextColor) shr 1);
-
-  if FTimestampTextAlpha = 255 then
-  begin
-    {Fast path: opaque text straight onto canvas}
-    Canvas.Font.Color := TextColor;
-    Canvas.Brush.Style := bsClear;
-    DrawText(Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
-    Exit;
-  end;
-
-  {Partial text opacity: blit the target region onto an offscreen bitmap,
-   DrawText onto it, then AlphaBlend it back with SourceConstantAlpha. This
-   blends the text correctly over the (already-painted) frame pixels.}
-  if (FTextBlendBmp.Width < R.Width) or (FTextBlendBmp.Height < R.Height) then
-    FTextBlendBmp.SetSize(Max(R.Width, FTextBlendBmp.Width), Max(R.Height, FTextBlendBmp.Height));
-
-  BitBlt(FTextBlendBmp.Canvas.Handle, 0, 0, R.Width, R.Height, Canvas.Handle, R.Left, R.Top, SRCCOPY);
-
-  FTextBlendBmp.Canvas.Font.Name := FTimestampFontName;
-  FTextBlendBmp.Canvas.Font.Size := FTimestampFontSize;
-  FTextBlendBmp.Canvas.Font.Color := TextColor;
-  FTextBlendBmp.Canvas.Brush.Style := bsClear;
-  LocalR := Rect(0, 0, R.Width, R.Height);
-  DrawText(FTextBlendBmp.Canvas.Handle, PChar(FCells[AIndex].Timecode), -1, LocalR, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
-
-  BF.BlendOp := AC_SRC_OVER;
-  BF.BlendFlags := 0;
-  BF.SourceConstantAlpha := FTimestampTextAlpha;
-  BF.AlphaFormat := 0;
-  Winapi.Windows.AlphaBlend(Canvas.Handle, R.Left, R.Top, R.Width, R.Height, FTextBlendBmp.Canvas.Handle, 0, 0, R.Width, R.Height, BF);
+  DrawTimecodeOverlay(Canvas, R, FCells[AIndex].Timecode, EffectiveStyle,
+    FBlendBmp, FTextBlendBmp);
 end;
 
 procedure TFrameView.PaintErrorCell(const ARect: TRect);
