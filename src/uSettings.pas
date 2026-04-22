@@ -81,10 +81,6 @@ type
     class function SaveFormatToStr(AFormat: TSaveFormat): string; static;
     class function StrToThumbnailMode(const AValue: string): TThumbnailMode; static;
     class function ThumbnailModeToStr(AMode: TThumbnailMode): string; static;
-    class function StrToTimestampCorner(const AValue: string): TTimestampCorner; static;
-    class function TimestampCornerToStr(ACorner: TTimestampCorner): string; static;
-    class function StrToBannerPosition(const AValue: string): TBannerPosition; static;
-    class function BannerPositionToStr(APosition: TBannerPosition): string; static;
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
     function GetActiveZoom: TZoomMode;
@@ -327,7 +323,7 @@ begin
     FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize', DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
     FCellGap := EnsureRange(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
     FCombinedBorder := EnsureRange(Ini.ReadInteger('view', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
-    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('view', 'TimestampCorner', ''));
+    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('view', 'TimestampCorner', ''), DEF_TIMESTAMP_CORNER);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
@@ -345,7 +341,7 @@ begin
       FBannerFontName := DEF_BANNER_FONT_NAME;
     FBannerFontSize := EnsureRange(Ini.ReadInteger('save', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
     FBannerFontAutoSize := Ini.ReadBool('save', 'BannerFontAutoSize', DEF_BANNER_FONT_AUTO_SIZE);
-    FBannerPosition := StrToBannerPosition(Ini.ReadString('save', 'BannerPosition', ''));
+    FBannerPosition := StrToBannerPosition(Ini.ReadString('save', 'BannerPosition', ''), DEF_BANNER_POSITION);
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
@@ -537,58 +533,6 @@ begin
       Result := 'grid';
     else
       Result := 'single';
-  end;
-end;
-
-class function TPluginSettings.StrToTimestampCorner(const AValue: string): TTimestampCorner;
-begin
-  if SameText(AValue, 'none') then
-    Result := tcNone
-  else if SameText(AValue, 'topleft') then
-    Result := tcTopLeft
-  else if SameText(AValue, 'topright') then
-    Result := tcTopRight
-  else if SameText(AValue, 'bottomright') then
-    Result := tcBottomRight
-  else if SameText(AValue, 'bottomleft') then
-    Result := tcBottomLeft
-  else
-    Result := DEF_TIMESTAMP_CORNER;
-end;
-
-class function TPluginSettings.TimestampCornerToStr(ACorner: TTimestampCorner): string;
-begin
-  case ACorner of
-    tcNone:
-      Result := 'none';
-    tcTopLeft:
-      Result := 'topleft';
-    tcTopRight:
-      Result := 'topright';
-    tcBottomRight:
-      Result := 'bottomright';
-    else
-      Result := 'bottomleft';
-  end;
-end;
-
-class function TPluginSettings.StrToBannerPosition(const AValue: string): TBannerPosition;
-begin
-  if SameText(AValue, 'bottom') then
-    Result := bpBottom
-  else if SameText(AValue, 'top') then
-    Result := bpTop
-  else
-    Result := DEF_BANNER_POSITION;
-end;
-
-class function TPluginSettings.BannerPositionToStr(APosition: TBannerPosition): string;
-begin
-  case APosition of
-    bpBottom:
-      Result := 'bottom';
-    else
-      Result := 'top';
   end;
 end;
 

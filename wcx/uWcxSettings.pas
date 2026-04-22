@@ -59,10 +59,6 @@ type
     FFrameMaxSide: Integer;
     FCombinedMaxSide: Integer;
 
-    class function StrToTimestampCorner(const AValue: string): TTimestampCorner; static;
-    class function TimestampCornerToStr(ACorner: TTimestampCorner): string; static;
-    class function StrToBannerPosition(const AValue: string): TBannerPosition; static;
-    class function BannerPositionToStr(APosition: TBannerPosition): string; static;
   public
     constructor Create(const AIniPath: string);
     procedure Load;
@@ -126,58 +122,6 @@ implementation
 
 uses
   uPathExpand, uColorConv;
-
-class function TWcxSettings.StrToTimestampCorner(const AValue: string): TTimestampCorner;
-begin
-  if SameText(AValue, 'none') then
-    Result := tcNone
-  else if SameText(AValue, 'topleft') then
-    Result := tcTopLeft
-  else if SameText(AValue, 'topright') then
-    Result := tcTopRight
-  else if SameText(AValue, 'bottomright') then
-    Result := tcBottomRight
-  else if SameText(AValue, 'bottomleft') then
-    Result := tcBottomLeft
-  else
-    Result := DEF_TIMESTAMP_CORNER;
-end;
-
-class function TWcxSettings.TimestampCornerToStr(ACorner: TTimestampCorner): string;
-begin
-  case ACorner of
-    tcNone:
-      Result := 'none';
-    tcTopLeft:
-      Result := 'topleft';
-    tcTopRight:
-      Result := 'topright';
-    tcBottomRight:
-      Result := 'bottomright';
-    else
-      Result := 'bottomleft';
-  end;
-end;
-
-class function TWcxSettings.StrToBannerPosition(const AValue: string): TBannerPosition;
-begin
-  if SameText(AValue, 'bottom') then
-    Result := bpBottom
-  else if SameText(AValue, 'top') then
-    Result := bpTop
-  else
-    Result := DEF_BANNER_POSITION;
-end;
-
-class function TWcxSettings.BannerPositionToStr(APosition: TBannerPosition): string;
-begin
-  case APosition of
-    bpBottom:
-      Result := 'bottom';
-    else
-      Result := 'top';
-  end;
-end;
 
 {TWcxSettings}
 
@@ -255,7 +199,7 @@ begin
     FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
     FCellGap := EnsureRange(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
     FCombinedBorder := EnsureRange(Ini.ReadInteger('combined', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
-    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('combined', 'TimestampCorner', ''));
+    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('combined', 'TimestampCorner', ''), DEF_TIMESTAMP_CORNER);
     HexToColorAlpha(Ini.ReadString('combined', 'TimecodeBackground', ''), DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
     FTimestampTextColor := HexToColor(Ini.ReadString('combined', 'TimestampTextColor', ''), DEF_TIMESTAMP_TEXT_COLOR);
     FTimestampTextAlpha := EnsureRange(Ini.ReadInteger('combined', 'TimestampTextAlpha', DEF_TIMESTAMP_TEXT_ALPHA), MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
@@ -271,7 +215,7 @@ begin
       FBannerFontName := DEF_BANNER_FONT_NAME;
     FBannerFontSize := EnsureRange(Ini.ReadInteger('combined', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
     FBannerFontAutoSize := Ini.ReadBool('combined', 'BannerFontAutoSize', DEF_BANNER_FONT_AUTO_SIZE);
-    FBannerPosition := StrToBannerPosition(Ini.ReadString('combined', 'BannerPosition', ''));
+    FBannerPosition := StrToBannerPosition(Ini.ReadString('combined', 'BannerPosition', ''), DEF_BANNER_POSITION);
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
 
