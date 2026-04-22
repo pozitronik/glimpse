@@ -48,6 +48,10 @@ type
     [Test] procedure TimestampCorner_TopLeft_LeavesBottomRightClean;
     [Test] procedure TimestampCorner_BottomRight_LeavesTopLeftClean;
     [Test] procedure TimestampCorner_DefaultIsBottomLeft;
+    { Timecode background block and text alpha (parity with live-view overlay) }
+    [Test] procedure TimecodeBack_OpaqueBg_PaintsConfiguredColorAtCorner;
+    [Test] procedure TimecodeBack_OpaqueBg_TextAlphaZero_LeavesBgIntact;
+    [Test] procedure TimestampText_LegacyPath_UsesConfiguredColor;
     { Large grid }
     [Test] procedure NineFrames_AutoCols_Produces3x3;
     { FormatBannerLines }
@@ -1376,6 +1380,121 @@ begin
     finally
       RDefault.Free;
       RExplicit.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+{ Timecode background block and text alpha }
+
+procedure TTestCombinedImage.TimecodeBack_OpaqueBg_PaintsConfiguredColorAtCorner;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+begin
+  { With a fully opaque green bg block at bottom-left, the top-left pixel of the
+    block (flush to the cell corner) must be green. The opposite corner of the
+    cell must remain frame color - this proves bg is scoped to the label rect. }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(200, 150, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 65.5;
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 9, 0,
+      tcBottomLeft, clGreen, 255, clWhite, 255);
+    Assert.IsNotNull(R);
+    try
+      { Bg rect is flush to (0, 149-H) ... (W, 150). A point a few pixels above the
+        bottom-left edge lands inside the block regardless of text width }
+      Assert.AreEqual(Integer(clGreen), Integer(R.Canvas.Pixels[1, 148]),
+        'Bottom-left block must paint configured bg color');
+      Assert.AreEqual(Integer(clRed), Integer(R.Canvas.Pixels[195, 5]),
+        'Opposite corner must stay frame color');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.TimecodeBack_OpaqueBg_TextAlphaZero_LeavesBgIntact;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  R: TBitmap;
+  X, Y, FoundNonGreen: Integer;
+begin
+  { TextAlpha=0 with an opaque bg must render bg-only: every pixel inside the
+    block must be the bg color. Scans the block's interior (avoiding edges)
+    and counts any pixels that are not clGreen - expected count is zero. }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(200, 150, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 65.5;
+  try
+    R := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 9, 0,
+      tcBottomLeft, clGreen, 255, clWhite, 0);
+    Assert.IsNotNull(R);
+    try
+      { Block is in the bottom-left; scan a safe 10x10 window inside it }
+      FoundNonGreen := 0;
+      for Y := 135 to 145 do
+        for X := 2 to 12 do
+          if R.Canvas.Pixels[X, Y] <> clGreen then
+            Inc(FoundNonGreen);
+      Assert.AreEqual(0, FoundNonGreen,
+        'TextAlpha=0 must leave the bg block free of text pixels');
+    finally
+      R.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.TimestampText_LegacyPath_UsesConfiguredColor;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RDefault, RYellow: TBitmap;
+  X, Y: Integer;
+  DiffersInTextArea: Boolean;
+begin
+  { Legacy path (bg alpha = 0) with a non-default text color must produce
+    different pixels than the default (clWhite) render inside the text area.
+    We compare two renders that differ only in ATimestampTextColor and assert
+    at least one pixel in the bottom-left text region differs between them. }
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(200, 150, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 65.5;
+  try
+    RDefault := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0,
+      tcBottomLeft, clBlack, 0, clWhite, 255);
+    RYellow := RenderCombinedImage(Frames, Offsets, 0, 0, clBlack, True, 'Consolas', 12, 0,
+      tcBottomLeft, clBlack, 0, clYellow, 255);
+    try
+      DiffersInTextArea := False;
+      { Bottom-left text area after the 4px margin; font height ~16 at 12pt bold }
+      for Y := 125 to 145 do
+      begin
+        for X := 4 to 80 do
+          if RDefault.Canvas.Pixels[X, Y] <> RYellow.Canvas.Pixels[X, Y] then
+          begin
+            DiffersInTextArea := True;
+            Break;
+          end;
+        if DiffersInTextArea then
+          Break;
+      end;
+      Assert.IsTrue(DiffersInTextArea,
+        'Non-default text color must change pixels in the legacy-path text area');
+    finally
+      RDefault.Free;
+      RYellow.Free;
     end;
   finally
     Frames[0].Free;
