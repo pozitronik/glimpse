@@ -163,6 +163,10 @@ type
     procedure TestThumbnailGridFramesClampedLow;
     [Test]
     procedure TestThumbnailModeUnknownStringFallsBackToSingle;
+    [Test]
+    procedure TestAutoRefreshOnViewportChangeDefault;
+    [Test]
+    procedure TestAutoRefreshOnViewportChangeRoundTrip;
   end;
 
 implementation
@@ -1901,6 +1905,43 @@ begin
       'Unknown Mode string should fall back to tnmSingle');
   finally
     S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestAutoRefreshOnViewportChangeDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'no_such.ini'));
+  try
+    Assert.IsTrue(S.AutoRefreshOnViewportChange,
+      'Auto-refresh ships enabled so viewport changes transparently upscale');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestAutoRefreshOnViewportChangeRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'viewport_refresh.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.AutoRefreshOnViewportChange := False;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsFalse(S2.AutoRefreshOnViewportChange,
+      'Disabled state should round-trip through INI');
+  finally
+    S2.Free;
   end;
 end;
 

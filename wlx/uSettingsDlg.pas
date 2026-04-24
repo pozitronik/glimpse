@@ -38,6 +38,7 @@ type
     EdtMaxFrameSide: TEdit;
     UdMaxFrameSide: TUpDown;
     LblScaleUnit: TLabel;
+    ChkAutoRefreshViewport: TCheckBox;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -241,6 +242,7 @@ begin
   ChkScaledExtraction.Checked := ASettings.ScaledExtraction;
   UdMinFrameSide.Position := ASettings.MinFrameSide;
   UdMaxFrameSide.Position := ASettings.MaxFrameSide;
+  ChkAutoRefreshViewport.Checked := ASettings.AutoRefreshOnViewportChange;
   UpdateMaxWorkersControls;
   UpdateScaledExtractionControls;
   EdtExtensions.Text := ASettings.ExtensionList;
@@ -322,6 +324,7 @@ begin
   ASettings.ScaledExtraction := ChkScaledExtraction.Checked;
   ASettings.MinFrameSide := UdMinFrameSide.Position;
   ASettings.MaxFrameSide := UdMaxFrameSide.Position;
+  ASettings.AutoRefreshOnViewportChange := ChkAutoRefreshViewport.Checked;
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
@@ -807,6 +810,8 @@ begin
   EdtMaxFrameSide.Enabled := Enabled;
   UdMaxFrameSide.Enabled := Enabled;
   LblScaleUnit.Enabled := Enabled;
+  {Auto-refresh has no effect when scaling is off (no MaxSide to compare).}
+  ChkAutoRefreshViewport.Enabled := Enabled;
 end;
 
 procedure TSettingsForm.UpdateThumbnailControls;

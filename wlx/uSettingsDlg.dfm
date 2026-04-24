@@ -90,21 +90,21 @@ object SettingsForm: TSettingsForm
       end
       object LblExtensions: TLabel
         Left = 12
-        Top = 255
+        Top = 284
         Width = 58
         Height = 15
         Caption = 'Extensions:'
       end
       object LblFFmpegPath: TLabel
         Left = 12
-        Top = 285
+        Top = 314
         Width = 73
         Height = 15
         Caption = 'FFmpeg path:'
       end
       object LblFFmpegInfo: TLabel
         Left = 12
-        Top = 306
+        Top = 335
         Width = 3
         Height = 15
         Font.Charset = DEFAULT_CHARSET
@@ -265,32 +265,41 @@ object SettingsForm: TSettingsForm
         TabOrder = 14
         Thousands = False
       end
+      object ChkAutoRefreshViewport: TCheckBox
+        Left = 12
+        Top = 252
+        Width = 424
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Re-extract automatically when the viewport changes'
+        TabOrder = 15
+      end
       object EdtExtensions: TEdit
         Left = 115
-        Top = 252
+        Top = 281
         Width = 324
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 15
+        TabOrder = 16
       end
       object EdtFFmpegPath: TEdit
         Left = 115
-        Top = 281
+        Top = 310
         Width = 293
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 16
+        TabOrder = 17
         TextHint = 'Auto-detect'
         OnChange = EdtFFmpegPathChange
       end
       object BtnFFmpegPath: TButton
         Left = 414
-        Top = 281
+        Top = 310
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 17
+        TabOrder = 18
         OnClick = BtnFFmpegPathClick
       end
     end

@@ -56,6 +56,15 @@ type
     FProbeCache: TProbeCache;
     {Animation}
     FAnimTimer: TTimer;
+    {Debounce timer for "re-extract after the user stops resizing / switching
+     modes". Kicked on every viewport-changing event; its OnTimer fires once
+     the events settle, compares the computed MaxSide to what was used for
+     the last extraction, and triggers a soft refresh when they differ.}
+    FViewportRefreshTimer: TTimer;
+    {Options.MaxSide value from the last StartExtraction. 0 means no prior
+     extraction or scaling was off; compared against the freshly-computed
+     MaxSide in OnViewportRefreshTimer to decide whether to soft-refresh.}
+    FLastExtractionMaxSide: Integer;
     {Layout guard: prevents re-entrant UpdateFrameViewSize during zoom}
     FUpdatingLayout: Boolean;
     {True when the plugin is hosted in TC's Quick View panel (Ctrl+Q)}
@@ -110,6 +119,9 @@ type
     procedure OnSettingsApply(Sender: TObject);
     procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
+    procedure SoftRefreshExtraction;
+    procedure ScheduleViewportRefresh;
+    procedure OnViewportRefreshTimer(Sender: TObject);
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
     procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
     procedure OnExtractionProgress(Sender: TObject);
@@ -278,6 +290,10 @@ const
   {UI layout}
   ANIM_INTERVAL_MS = 80; {placeholder spinner animation tick}
   MAX_FRAME_COUNT = 99; {upper limit for frame count spin edit}
+  {Resize-drag debounce for the background viewport-refresh timer. Long
+   enough that mid-drag pixel deltas don't trigger ffmpeg spawns, short
+   enough that the user sees the high-res refresh promptly after release.}
+  VIEWPORT_REFRESH_DEBOUNCE_MS = 500;
   FRAME_COUNT_EDIT_W = 40; {width of the frame count edit control}
   STATUSBAR_HEIGHT = 21;
   STATUSBAR_FONT = 9;
@@ -375,6 +391,11 @@ begin
   FAnimTimer.Interval := ANIM_INTERVAL_MS;
   FAnimTimer.OnTimer := OnAnimTimer;
   FAnimTimer.Enabled := True;
+
+  FViewportRefreshTimer := TTimer.Create(Self);
+  FViewportRefreshTimer.Interval := VIEWPORT_REFRESH_DEBOUNCE_MS;
+  FViewportRefreshTimer.OnTimer := OnViewportRefreshTimer;
+  FViewportRefreshTimer.Enabled := False;
 
   LoadFile(AFileName);
 end;
@@ -879,6 +900,10 @@ procedure TPluginForm.ActivateMode(AMode: TViewMode);
 begin
   FFrameView.ZoomFactor := 1.0;
   FFrameView.ViewMode := AMode;
+  {Mode change might have altered the effective per-frame viewport
+   (grid<->single), so kick the debounce timer; the actual refresh only
+   fires if the computed MaxSide actually changes.}
+  ScheduleViewportRefresh;
 
   {Apply the zoom mode stored in the popup, or force Fit for modes without submodes}
   if FModePopups[AMode] <> nil then
@@ -1059,6 +1084,10 @@ begin
   end;
   Options.HwAccel := FSettings.HwAccel;
   Options.UseKeyframes := FSettings.UseKeyframes;
+
+  {Remember the extraction size so OnViewportRefreshTimer can decide
+   whether the next viewport-change event actually changed anything.}
+  FLastExtractionMaxSide := Options.MaxSide;
 
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets, FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
@@ -1617,6 +1646,12 @@ begin
    constructing sub-controls, so FFrameView may not exist yet}
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
+  {Viewport width/height may have changed the MaxSide bucket; debounce and
+   let the timer decide whether to refresh. ScheduleViewportRefresh is a
+   no-op before the timer field is constructed, so calling during early
+   VCL construction is safe.}
+  if Assigned(FViewportRefreshTimer) then
+    ScheduleViewportRefresh;
 end;
 
 function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
@@ -1798,6 +1833,68 @@ begin
   FFrameView.ClearCells;
   SetupPlaceholders;
   StartExtraction(TBypassFrameCache.Create(FExtractCtrl.Cache));
+end;
+
+procedure TPluginForm.SoftRefreshExtraction;
+begin
+  {Like RefreshExtraction but keeps the current frames on screen: cells
+   are NOT cleared, placeholders are NOT reset, and the cache is used
+   normally so repeated grid<->single cycles hit cache entries from an
+   earlier extraction at the same MaxSide. As new frames come in via
+   OnFrameDelivered, TFrameView.SetFrame replaces the existing bitmap in
+   place — the user just sees the image sharpen. Called from the debounce
+   timer after a viewport-changing event settles.}
+  if not FVideoInfo.IsValid then
+    Exit;
+  FExtractCtrl.Stop;
+  FExtractCtrl.DrainPendingFrameMessages;
+  StartExtraction(nil);
+end;
+
+procedure TPluginForm.ScheduleViewportRefresh;
+begin
+  {Kick (or re-kick) the debounce timer. Every viewport-changing event
+   calls this; when the events stop arriving for VIEWPORT_REFRESH_DEBOUNCE_MS
+   the timer fires OnViewportRefreshTimer, which does the actual comparison
+   and (maybe) refresh. No-op when the user disabled the feature.}
+  if FSettings = nil then
+    Exit;
+  if not FSettings.AutoRefreshOnViewportChange then
+    Exit;
+  {Restart the countdown by toggling Enabled — setting False then True
+   resets the internal timer.}
+  FViewportRefreshTimer.Enabled := False;
+  FViewportRefreshTimer.Enabled := True;
+end;
+
+procedure TPluginForm.OnViewportRefreshTimer(Sender: TObject);
+var
+  NewMaxSide: Integer;
+  ViewportFrames: Integer;
+begin
+  FViewportRefreshTimer.Enabled := False;
+  {All of these can become false between the event that kicked the timer
+   and the timer firing (user closed, disabled the feature, etc.), so
+   re-check every precondition.}
+  if FSettings = nil then Exit;
+  if not FSettings.AutoRefreshOnViewportChange then Exit;
+  if not FSettings.ScaledExtraction then Exit;
+  if not FVideoInfo.IsValid then Exit;
+  if FFileName = '' then Exit;
+  if Length(FOffsets) = 0 then Exit;
+
+  ViewportFrames := ViewportFrameCount(FFrameView.ViewMode, Length(FOffsets));
+  NewMaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight,
+    ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height,
+    FSettings.MinFrameSide, FSettings.MaxFrameSide);
+
+  {Same size bucket as the live extraction (viewport only jittered within
+   one SCALE_BUCKET, or the view mode didn't actually change the divisor).
+   Nothing to do — any cached frames are already at the right resolution.}
+  if NewMaxSide = FLastExtractionMaxSide then
+    Exit;
+
+  SoftRefreshExtraction;
 end;
 
 end.

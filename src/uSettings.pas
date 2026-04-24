@@ -27,6 +27,7 @@ type
     FScaledExtraction: Boolean;
     FMinFrameSide: Integer;
     FMaxFrameSide: Integer;
+    FAutoRefreshOnViewportChange: Boolean;
     {[view]}
     FViewMode: TViewMode;
     FModeZoom: array [TViewMode] of TZoomMode;
@@ -116,6 +117,7 @@ type
     property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;
+    property AutoRefreshOnViewportChange: Boolean read FAutoRefreshOnViewportChange write FAutoRefreshOnViewportChange;
 
     {[view]}
     property ViewMode: TViewMode read FViewMode write FViewMode;
@@ -256,6 +258,7 @@ begin
   FScaledExtraction := DEF_SCALED_EXTRACTION;
   FMinFrameSide := DEF_MIN_FRAME_SIDE;
   FMaxFrameSide := DEF_MAX_FRAME_SIDE;
+  FAutoRefreshOnViewportChange := DEF_AUTO_REFRESH_VIEWPORT;
   FViewMode := DEF_VIEW_MODE;
   for var VM := Low(TViewMode) to High(TViewMode) do
     FModeZoom[VM] := DEF_ZOOM_MODE;
@@ -325,6 +328,7 @@ begin
     FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
     FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide', DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
     FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide', DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
+    FAutoRefreshOnViewportChange := Ini.ReadBool('extraction', 'AutoRefreshOnViewportChange', DEF_AUTO_REFRESH_VIEWPORT);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
@@ -403,6 +407,7 @@ begin
     Ini.WriteBool('extraction', 'ScaledExtraction', FScaledExtraction);
     Ini.WriteInteger('extraction', 'MinFrameSide', FMinFrameSide);
     Ini.WriteInteger('extraction', 'MaxFrameSide', FMaxFrameSide);
+    Ini.WriteBool('extraction', 'AutoRefreshOnViewportChange', FAutoRefreshOnViewportChange);
 
     Ini.WriteString('view', 'Mode', ViewModeToStr(FViewMode));
     for var VM := Low(TViewMode) to High(TViewMode) do

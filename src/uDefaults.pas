@@ -20,6 +20,10 @@ const
   DEF_SCALED_EXTRACTION = False;
   DEF_MIN_FRAME_SIDE = 120;
   DEF_MAX_FRAME_SIDE = 1920;
+  {When the viewport changes (view mode switch, Lister window resize) and
+   ScaledExtraction would pick a different MaxSide, re-extract in the
+   background so the visible frames stay at display resolution.}
+  DEF_AUTO_REFRESH_VIEWPORT = True;
 
   {Output format defaults}
   DEF_SAVE_FORMAT = sfPNG;
