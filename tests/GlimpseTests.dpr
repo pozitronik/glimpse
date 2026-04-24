@@ -16,6 +16,8 @@ uses
   uFFmpegExe in '..\src\uFFmpegExe.pas',
   TestFFmpegLocator in 'TestFFmpegLocator.pas',
   TestSettings in 'TestSettings.pas',
+  uHotkeys in '..\src\uHotkeys.pas',
+  TestHotkeys in 'TestHotkeys.pas',
   TestFrameOffsets in 'TestFrameOffsets.pas',
   TestFFmpegExe in 'TestFFmpegExe.pas',
   uFrameView in '..\wlx\uFrameView.pas',

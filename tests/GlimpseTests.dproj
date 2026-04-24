@@ -76,6 +76,8 @@
         <DCCReference Include="TestSettings.pas"/>
         <DCCReference Include="TestFrameOffsets.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
+        <DCCReference Include="..\src\uHotkeys.pas"/>
+        <DCCReference Include="TestHotkeys.pas"/>
         <DCCReference Include="..\src\uFrameOffsets.pas"/>
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>

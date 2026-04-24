@@ -9,7 +9,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons,
-  uTypes, uSettings, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
+  uTypes, uSettings, uHotkeys, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache;
@@ -128,6 +128,8 @@ type
     procedure OnContextMenuClick(Sender: TObject);
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure OnFormKeyPress(Sender: TObject; var Key: Char);
+    function ExecuteHotkey(AAction: TPluginAction): Boolean;
+    procedure ForwardKeyToLister(AKey: Word; ASysKey: Boolean);
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
     procedure CMDialogKey(var Message: TWMKey); message CM_DIALOGKEY;
@@ -1114,11 +1116,122 @@ begin
   FormLog(Format('  hasPlaceholders=%s timerEnabled=%s', [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));
 end;
 
+procedure TPluginForm.ForwardKeyToLister(AKey: Word; ASysKey: Boolean);
+begin
+  {Synthesises a keystroke into Lister's message queue so it can handle its
+   own shortcuts (Escape to close, F11 to maximise, Alt+Enter for full-screen)
+   while the plugin holds focus. SysKey mode sets the context-code bits on
+   the lParam so Lister accepts the message as a genuine Alt-combo regardless
+   of the physical Alt state when the message is pumped.}
+  if ASysKey then
+  begin
+    PostMessage(GetParent(Handle), WM_SYSKEYDOWN, AKey, Integer($20000000));
+    PostMessage(GetParent(Handle), WM_SYSKEYUP, AKey, Integer($E0000000));
+  end else
+  begin
+    PostMessage(GetParent(Handle), WM_KEYDOWN, AKey, 0);
+    PostMessage(GetParent(Handle), WM_KEYUP, AKey, 0);
+  end;
+end;
+
+function TPluginForm.ExecuteHotkey(AAction: TPluginAction): Boolean;
+begin
+  Result := True;
+  case AAction of
+    paSettings:
+      ShowSettings;
+    paToggleToolbar:
+      begin
+        FToolbar.Visible := not FToolbar.Visible;
+        {Reclaim focus so TC's subclass sees keystrokes again}
+        if not FToolbar.Visible then
+          Winapi.Windows.SetFocus(Handle);
+        if not FQuickViewMode then
+        begin
+          FSettings.ShowToolbar := FToolbar.Visible;
+          FSettings.Save;
+        end;
+      end;
+    paToggleStatusBar:
+      begin
+        FStatusBar.Visible := not FStatusBar.Visible;
+        if not FQuickViewMode then
+        begin
+          FSettings.ShowStatusBar := FStatusBar.Visible;
+          FSettings.Save;
+        end;
+      end;
+    paToggleTimecode:
+      OnTimecodeButtonClick(nil);
+    paToggleMaximize:
+      ForwardKeyToLister(VK_F11, False);
+    paToggleFullScreen:
+      ForwardKeyToLister(VK_RETURN, True);
+    paHamburgerMenu:
+      if FBtnHamburger.Visible then
+        OnHamburgerClick(FBtnHamburger)
+      else
+        Result := False;
+    paCloseLister:
+      ForwardKeyToLister(VK_ESCAPE, False);
+    paOpenInPlayer:
+      {Don't consume Enter while the frame-count edit has focus — the
+       edit-focus fallback below commits the value. No file loaded is also
+       a valid no-op: let the key pass through.}
+      if (GetFocus <> FEditFrameCount.Handle) and (FFileName <> '') then
+        ShellExecute(Handle, 'open', PChar(FFileName), nil, nil, SW_SHOWNORMAL)
+      else
+        Result := False;
+    paRefreshExtraction:
+      RefreshExtraction;
+    paSaveSingleFrame:
+      begin
+        FContextCellIndex := -1;
+        FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
+      end;
+    paSaveAllFrames:
+      FExporter.SaveAllFrames(FFileName);
+    paSaveCombined:
+      FExporter.SaveCombinedFrame(FFileName);
+    paSaveSelected:
+      FExporter.SaveSelectedFrames(FFileName);
+    paSelectAllFrames:
+      FFrameView.SelectAll;
+    paCopyToClipboard:
+      CopyFrameToClipboard;
+    paCopyAllToClipboard:
+      FExporter.CopyAllToClipboard;
+    paZoomIn:
+      ZoomBy(ZOOM_IN_FACTOR);
+    paZoomOut:
+      ZoomBy(ZOOM_OUT_FACTOR);
+    paZoomReset:
+      ResetZoom;
+    {View-mode actions pass the canonical digit to SwitchOrCycleMode so the
+     cycle-submodes logic keeps working regardless of what key the user
+     bound the action to.}
+    paViewModeSmartGrid:
+      SwitchOrCycleMode(Ord('1'));
+    paViewModeGrid:
+      SwitchOrCycleMode(Ord('2'));
+    paViewModeScroll:
+      SwitchOrCycleMode(Ord('3'));
+    paViewModeFilmstrip:
+      SwitchOrCycleMode(Ord('4'));
+    paViewModeSingle:
+      SwitchOrCycleMode(Ord('5'));
+  else
+    Result := False;
+  end;
+end;
+
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+var
+  Action: TPluginAction;
 begin
   FKeyConsumed := False;
 
-  {Ctrl+Up/Down: adjust frame count}
+  {Ctrl+Up/Down: adjust frame count. Directional — stays hardcoded.}
   if (ssCtrl in Shift) and (Key in [VK_UP, VK_DOWN]) then
   begin
     if Key = VK_UP then
@@ -1130,7 +1243,7 @@ begin
     Exit;
   end;
 
-  {Ctrl+Left/Right: navigate frames in single mode}
+  {Ctrl+Left/Right: navigate frames in single mode. Directional — stays hardcoded.}
   if (Shift = [ssCtrl]) and (Key in [VK_LEFT, VK_RIGHT]) and (FFrameView.ViewMode = vmSingle) then
   begin
     if Key = VK_LEFT then
@@ -1142,10 +1255,11 @@ begin
     Exit;
   end;
 
-  {Bare Left/Right/PageUp/PageDown: navigate between files}
-  if (Shift = []) and (Key in [VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT]) then
+  {File navigation: bare Left/Right/PageUp/PageDown/Space/Backspace/Z all
+   move between adjacent files. Purely directional and not user-configurable.}
+  if (Shift = []) and (Key in [VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT, VK_SPACE, VK_BACK, Ord('Z')]) then
   begin
-    if Key in [VK_LEFT, VK_PRIOR] then
+    if Key in [VK_LEFT, VK_PRIOR, VK_BACK, Ord('Z')] then
       NavigateToAdjacentFile(-1)
     else
       NavigateToAdjacentFile(1);
@@ -1154,174 +1268,22 @@ begin
     Exit;
   end;
 
-  case Key of
-    Ord('C'):
-      if ssCtrl in Shift then
-      begin
-        if ssShift in Shift then
-          FExporter.CopyAllToClipboard
-        else
-          CopyFrameToClipboard;
-        Key := 0;
-      end;
-    Ord('S'):
-      if ssCtrl in Shift then
-      begin
-        if [ssShift, ssAlt] * Shift = [ssAlt] then
-        begin
-          FExporter.SaveAllFrames(FFileName);
-          Key := 0;
-        end else if [ssShift, ssAlt] * Shift = [ssShift] then
-        begin
-          FExporter.SaveCombinedFrame(FFileName);
-          Key := 0;
-        end else if [ssShift, ssAlt] * Shift = [] then
-        begin
-          FContextCellIndex := -1;
-          FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
-          Key := 0;
-        end;
-      end;
-    Ord('A'):
-      if (ssCtrl in Shift) and not(ssShift in Shift) and not(ssAlt in Shift) then
-      begin
-        FFrameView.SelectAll;
-        Key := 0;
-      end;
-    Ord('R'):
-      if Shift = [] then
-      begin
-        RefreshExtraction;
-        Key := 0;
-      end;
-    Ord('T'):
-      if Shift = [] then
-      begin
-        OnTimecodeButtonClick(nil);
-        Key := 0;
-      end;
-    Ord('Z'):
-      if Shift = [] then
-      begin
-        NavigateToAdjacentFile(-1);
-        Key := 0;
-      end;
-    VK_SPACE:
-      if Shift = [] then
-      begin
-        NavigateToAdjacentFile(1);
-        Key := 0;
-      end;
-    VK_BACK:
-      if Shift = [] then
-      begin
-        NavigateToAdjacentFile(-1);
-        Key := 0;
-      end;
-    VK_TAB:
-      if Shift - [ssShift] = [] then
-      begin
-        SelectNext(ActiveControl, not(ssShift in Shift), True);
-        Key := 0;
-      end;
-    VK_ESCAPE:
-      if Shift = [] then
-      begin
-        PostMessage(GetParent(Handle), WM_KEYDOWN, VK_ESCAPE, 0);
-        PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
-        Key := 0;
-      end;
-    VK_RETURN:
-      if Shift = [ssAlt] then
-      begin
-        {Alt+Enter natively arrives as WM_SYSKEYDOWN with the context-code bit
-         set. Mirror that bit on the synthetic message so Lister treats the
-         keystroke as a genuine sys-key combo regardless of the physical Alt
-         state when the message gets pumped.}
-        PostMessage(GetParent(Handle), WM_SYSKEYDOWN, VK_RETURN, Integer($20000000));
-        PostMessage(GetParent(Handle), WM_SYSKEYUP, VK_RETURN, Integer($E0000000));
-        Key := 0;
-      end
-      else if (Shift = []) and (GetFocus <> FEditFrameCount.Handle) and (FFileName <> '') then
-      begin
-        {Plain Enter: hand the file off to whatever the OS has registered as
-         the default opener for this extension. The frame-count edit keeps
-         its own commit-and-refocus behaviour via the fallthrough block below.}
-        ShellExecute(Handle, 'open', PChar(FFileName), nil, nil, SW_SHOWNORMAL);
-        Key := 0;
-      end;
-    VK_OEM_PLUS, VK_ADD:
-      if Shift = [] then
-      begin
-        ZoomBy(ZOOM_IN_FACTOR);
-        Key := 0;
-      end;
-    VK_OEM_MINUS, VK_SUBTRACT:
-      if Shift = [] then
-      begin
-        ZoomBy(ZOOM_OUT_FACTOR);
-        Key := 0;
-      end;
-    Ord('0'), VK_NUMPAD0:
-      if Shift = [] then
-      begin
-        ResetZoom;
-        Key := 0;
-      end;
-    Ord('1') .. Ord('5'), VK_NUMPAD1 .. VK_NUMPAD5:
-      if ssCtrl in Shift then
-      begin
-        SwitchOrCycleMode(Key);
-        Key := 0;
-      end;
-    VK_F2:
-      if Shift = [] then
-      begin
-        ShowSettings;
-        Key := 0;
-      end;
-    VK_F3:
-      if Shift = [] then
-      begin
-        FStatusBar.Visible := not FStatusBar.Visible;
-        if not FQuickViewMode then
-        begin
-          FSettings.ShowStatusBar := FStatusBar.Visible;
-          FSettings.Save;
-        end;
-        Key := 0;
-      end;
-    VK_F4:
-      if Shift = [] then
-      begin
-        FToolbar.Visible := not FToolbar.Visible;
-        {Reclaim focus so TC's subclass sees keystrokes again}
-        if not FToolbar.Visible then
-          Winapi.Windows.SetFocus(Handle);
-        if not FQuickViewMode then
-        begin
-          FSettings.ShowToolbar := FToolbar.Visible;
-          FSettings.Save;
-        end;
-        Key := 0;
-      end;
-    VK_F11:
-      if Shift = [] then
-      begin
-        {Forward to Lister; F11 is Lister's own maximize toggle and only
-         works when Lister itself has focus, so without this bridge the
-         keystroke is silently swallowed by the plugin.}
-        PostMessage(GetParent(Handle), WM_KEYDOWN, VK_F11, 0);
-        PostMessage(GetParent(Handle), WM_KEYUP, VK_F11, 0);
-        Key := 0;
-      end;
-    VK_OEM_3: {~ / ` key}
-      if (Shift = []) and FBtnHamburger.Visible then
-      begin
-        OnHamburgerClick(FBtnHamburger);
-        Key := 0;
-      end;
+  {Tab: VCL focus cycling. System-level, never user-configurable.}
+  if (Key = VK_TAB) and (Shift - [ssShift] = []) then
+  begin
+    SelectNext(ActiveControl, not(ssShift in Shift), True);
+    Key := 0;
+    FKeyConsumed := True;
+    Exit;
   end;
+
+  {Configurable hotkeys. ExecuteHotkey returns False when the action's
+   contextual guards say "not applicable right now" (e.g. paOpenInPlayer
+   with no file), in which case the key falls through to the edit-focus
+   fallback below rather than being silently swallowed.}
+  Action := FSettings.Hotkeys.Lookup(Key, Shift);
+  if (Action <> paNone) and ExecuteHotkey(Action) then
+    Key := 0;
 
   {When the frame count edit has Win32 focus and the key was not consumed by
    a hotkey above, only allow digit-editing and modifier keys through.

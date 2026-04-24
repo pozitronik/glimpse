@@ -76,6 +76,7 @@
         <DCCReference Include="..\src\uFrameExtractor.pas"/>
         <DCCReference Include="..\src\uCombinedImage.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
+        <DCCReference Include="..\src\uHotkeys.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

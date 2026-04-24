@@ -6,7 +6,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver, uTypes, uDefaults;
+  uBitmapSaver, uTypes, uDefaults, uHotkeys;
 
 type
   TPluginSettings = class
@@ -70,6 +70,8 @@ type
     FThumbnailMode: TThumbnailMode;
     FThumbnailPosition: Integer; {0..100 percent}
     FThumbnailGridFrames: Integer; {count for grid mode}
+    {[hotkeys] — owned; reset/load/save delegates through this object.}
+    FHotkeys: THotkeyBindings;
 
     class function StrToFFmpegMode(const AValue: string): TFFmpegMode; static;
     class function FFmpegModeToStr(AMode: TFFmpegMode): string; static;
@@ -87,6 +89,7 @@ type
     procedure SetActiveZoom(AValue: TZoomMode);
   public
     constructor Create(const AIniPath: string);
+    destructor Destroy; override;
 
     {Loads all settings from the INI file. Missing or invalid values get defaults.}
     procedure Load;
@@ -165,6 +168,10 @@ type
     property ThumbnailMode: TThumbnailMode read FThumbnailMode write FThumbnailMode;
     property ThumbnailPosition: Integer read FThumbnailPosition write FThumbnailPosition;
     property ThumbnailGridFrames: Integer read FThumbnailGridFrames write FThumbnailGridFrames;
+
+    {[hotkeys] — the binding table owns itself; callers mutate it via its
+     own Get/Put/ResetToDefaults API rather than through scalar properties.}
+    property Hotkeys: THotkeyBindings read FHotkeys;
   end;
 
 const
@@ -224,7 +231,14 @@ constructor TPluginSettings.Create(const AIniPath: string);
 begin
   inherited Create;
   FIniPath := AIniPath;
+  FHotkeys := THotkeyBindings.Create;
   ResetDefaults;
+end;
+
+destructor TPluginSettings.Destroy;
+begin
+  FHotkeys.Free;
+  inherited;
 end;
 
 procedure TPluginSettings.ResetDefaults;
@@ -280,6 +294,11 @@ begin
   FThumbnailMode := DEF_THUMBNAIL_MODE;
   FThumbnailPosition := DEF_THUMBNAIL_POSITION;
   FThumbnailGridFrames := DEF_THUMBNAIL_GRID_FRAMES;
+  {FHotkeys may be nil when ResetDefaults is called from the constructor
+   before the hotkey table is allocated (the ctor creates it just above,
+   so this path is safe today, but guard anyway in case call order shifts.)}
+  if FHotkeys <> nil then
+    FHotkeys.ResetToDefaults;
 end;
 
 procedure TPluginSettings.Load;
@@ -355,6 +374,8 @@ begin
     FThumbnailMode := StrToThumbnailMode(Ini.ReadString('thumbnails', 'Mode', ''));
     FThumbnailPosition := EnsureRange(Ini.ReadInteger('thumbnails', 'Position', DEF_THUMBNAIL_POSITION), MIN_THUMBNAIL_POSITION, MAX_THUMBNAIL_POSITION);
     FThumbnailGridFrames := EnsureRange(Ini.ReadInteger('thumbnails', 'GridFrames', DEF_THUMBNAIL_GRID_FRAMES), MIN_THUMBNAIL_GRID_FRAMES, MAX_THUMBNAIL_GRID_FRAMES);
+
+    FHotkeys.Load(Ini);
   finally
     Ini.Free;
   end;
@@ -425,6 +446,8 @@ begin
     Ini.WriteString('thumbnails', 'Mode', ThumbnailModeToStr(FThumbnailMode));
     Ini.WriteInteger('thumbnails', 'Position', FThumbnailPosition);
     Ini.WriteInteger('thumbnails', 'GridFrames', FThumbnailGridFrames);
+
+    FHotkeys.Save(Ini);
   finally
     Ini.Free;
   end;
