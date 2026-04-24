@@ -32,6 +32,11 @@ type
     [Test] procedure TestListerParamsToZoomModeFitToWindow;
     [Test] procedure TestListerParamsToZoomModeFitLarger;
     [Test] procedure TestListerParamsToZoomModeActual;
+    [Test] procedure TestViewportFrameCountSingle_Returns1;
+    [Test] procedure TestViewportFrameCountGrid_ReturnsTotal;
+    [Test] procedure TestViewportFrameCountSmartGrid_ReturnsTotal;
+    [Test] procedure TestViewportFrameCountScroll_ReturnsTotal;
+    [Test] procedure TestViewportFrameCountFilmstrip_ReturnsTotal;
   end;
 
 implementation
@@ -178,6 +183,39 @@ procedure TTestViewModeLogic.TestListerParamsToZoomModeActual;
 begin
   Assert.AreEqual(Ord(zmActual), Ord(ListerParamsToZoomMode(0)),
     'No fit flags should mean actual/original size');
+end;
+
+procedure TTestViewModeLogic.TestViewportFrameCountSingle_Returns1;
+begin
+  {The single-view regression: one visible frame owns the whole viewport,
+   so scaled extraction must size against 1 regardless of how many frames
+   sit in the queue. Opening a 1920x1080 video with the default FramesCount=4
+   used to produce 480x270 stretched previews because ViewportFrameCount
+   returned 4 and divided the area four ways.}
+  Assert.AreEqual(1, ViewportFrameCount(vmSingle, 4));
+  Assert.AreEqual(1, ViewportFrameCount(vmSingle, 99));
+  Assert.AreEqual(1, ViewportFrameCount(vmSingle, 1));
+end;
+
+procedure TTestViewModeLogic.TestViewportFrameCountGrid_ReturnsTotal;
+begin
+  Assert.AreEqual(4, ViewportFrameCount(vmGrid, 4));
+  Assert.AreEqual(16, ViewportFrameCount(vmGrid, 16));
+end;
+
+procedure TTestViewModeLogic.TestViewportFrameCountSmartGrid_ReturnsTotal;
+begin
+  Assert.AreEqual(9, ViewportFrameCount(vmSmartGrid, 9));
+end;
+
+procedure TTestViewModeLogic.TestViewportFrameCountScroll_ReturnsTotal;
+begin
+  Assert.AreEqual(4, ViewportFrameCount(vmScroll, 4));
+end;
+
+procedure TTestViewModeLogic.TestViewportFrameCountFilmstrip_ReturnsTotal;
+begin
+  Assert.AreEqual(4, ViewportFrameCount(vmFilmstrip, 4));
 end;
 
 initialization

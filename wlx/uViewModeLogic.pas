@@ -22,6 +22,13 @@ function ModeHasZoomSubmodes(AMode: TViewMode): Boolean;
 {Maps Total Commander Lister parameter flags to a zoom mode.}
 function ListerParamsToZoomMode(AParams: Integer): TZoomMode;
 
+{Number of frames that share the viewport at once under a given mode.
+ Single-view displays one frame at a time occupying the full viewport,
+ so scaled extraction must size against 1 regardless of how many frames
+ are queued. All other modes render every extracted frame simultaneously,
+ so the full queue length is the right divisor for viewport area.}
+function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;
+
 implementation
 
 uses
@@ -70,6 +77,14 @@ begin
   end
   else
     Result := zmActual;
+end;
+
+function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;
+begin
+  if AMode = vmSingle then
+    Result := 1
+  else
+    Result := ATotalFrames;
 end;
 
 end.

@@ -1038,6 +1038,7 @@ procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
 var
   Extractor: IFrameExtractor;
   Options: TExtractionOptions;
+  ViewportFrames: Integer;
 begin
   FExtractCtrl.Stop;
   FLoadStartTick := GetTickCount64;
@@ -1052,7 +1053,10 @@ begin
   Options := Default (TExtractionOptions);
   Options.UseBmpPipe := FSettings.UseBmpPipe;
   if FSettings.ScaledExtraction then
-    Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, Length(FOffsets), FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide);
+  begin
+    ViewportFrames := ViewportFrameCount(FFrameView.ViewMode, Length(FOffsets));
+    Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide);
+  end;
   Options.HwAccel := FSettings.HwAccel;
   Options.UseKeyframes := FSettings.UseKeyframes;
 
