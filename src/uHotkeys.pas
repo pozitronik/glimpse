@@ -257,7 +257,10 @@ end;
 
 class function THotkeyChord.Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord;
 begin
-  Result.Key := AKey;
+  {Normalise at construction so numpad/OEM aliases captured from the shortcut
+   editor round-trip through INI. Without this, VK_NUMPAD0..9 and VK_ADD /
+   VK_SUBTRACT / VK_DECIMAL would hit VKToName as unknown and serialise empty.}
+  Result.Key := NormalizeKey(AKey);
   Result.Modifiers := NormalizeShift(AModifiers);
 end;
 

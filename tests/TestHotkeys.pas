@@ -29,6 +29,14 @@ type
     [Test] procedure Equals_DifferentKey_False;
     [Test] procedure Equals_DifferentModifiers_False;
     [Test] procedure RoundTrip_EveryDefaultBinding;
+    {The next five tests pin down THotkeyChord.Make's normalisation contract
+     for numpad and OEM alias keys handed in by the capture dialog. They guard
+     the round-trip that kept captured numpad chords from surviving INI save.}
+    [Test] procedure Make_NumpadDigit_NormalisesToTopRow;
+    [Test] procedure Make_VKAdd_NormalisesToOemPlus;
+    [Test] procedure Make_VKSubtract_NormalisesToOemMinus;
+    [Test] procedure Make_VKDecimal_NormalisesToOemPeriod;
+    [Test] procedure Make_CapturedNumpad_RoundTripsThroughIni;
   end;
 
   [TestFixture]
@@ -213,6 +221,68 @@ begin
   A := THotkeyChord.Make(VK_F1, [ssCtrl]);
   B := THotkeyChord.Make(VK_F1, [ssCtrl, ssShift]);
   Assert.IsFalse(A.Equals(B));
+end;
+
+procedure TTestHotkeyChord.Make_NumpadDigit_NormalisesToTopRow;
+var
+  C: THotkeyChord;
+begin
+  {When the shortcut editor captures a VK_NUMPAD0 press and calls
+   THotkeyChord.Make, the resulting chord must carry the normalised
+   Ord('0') — otherwise the chord has no display name (VKToName returns
+   empty for VK_NUMPAD0..9), rendering as blank in the editor list box
+   and failing to round-trip through the INI. Lookup already normalises
+   at match time, so storing normalised is consistent with runtime.}
+  C := THotkeyChord.Make(VK_NUMPAD0, []);
+  Assert.AreEqual<Integer>(Ord('0'), C.Key,
+    'Numpad 0 must be stored as Ord(''0'')');
+  Assert.AreEqual('0', C.ToDisplayStr,
+    'Display must show ''0'' rather than empty');
+end;
+
+procedure TTestHotkeyChord.Make_VKAdd_NormalisesToOemPlus;
+var
+  C: THotkeyChord;
+begin
+  C := THotkeyChord.Make(VK_ADD, []);
+  Assert.AreEqual<Integer>(VK_OEM_PLUS, C.Key,
+    'Numpad + must be stored as VK_OEM_PLUS');
+  Assert.AreEqual('+', C.ToDisplayStr);
+end;
+
+procedure TTestHotkeyChord.Make_VKSubtract_NormalisesToOemMinus;
+var
+  C: THotkeyChord;
+begin
+  C := THotkeyChord.Make(VK_SUBTRACT, []);
+  Assert.AreEqual<Integer>(VK_OEM_MINUS, C.Key);
+  Assert.AreEqual('-', C.ToDisplayStr);
+end;
+
+procedure TTestHotkeyChord.Make_VKDecimal_NormalisesToOemPeriod;
+var
+  C: THotkeyChord;
+begin
+  C := THotkeyChord.Make(VK_DECIMAL, []);
+  Assert.AreEqual<Integer>(VK_OEM_PERIOD, C.Key);
+  Assert.AreEqual('.', C.ToDisplayStr);
+end;
+
+procedure TTestHotkeyChord.Make_CapturedNumpad_RoundTripsThroughIni;
+var
+  C, Back: THotkeyChord;
+begin
+  {End-to-end: a user presses Numpad 0 in the capture dialog, the chord
+   is serialised to INI, reloaded on the next session. Without
+   normalisation in Make the ToIniStr result is empty and the binding
+   silently disappears.}
+  C := THotkeyChord.Make(VK_NUMPAD0, [ssCtrl]);
+  Assert.AreNotEqual('', C.ToIniStr,
+    'Captured numpad key must produce a non-empty INI representation');
+  Back := THotkeyChord.FromIniStr(C.ToIniStr);
+  Assert.IsTrue(Back.IsAssigned);
+  Assert.AreEqual<Integer>(Ord('0'), Back.Key);
+  Assert.IsTrue(Back.Modifiers = [ssCtrl]);
 end;
 
 procedure TTestHotkeyChord.RoundTrip_EveryDefaultBinding;
