@@ -30,6 +30,13 @@ type
     [Test] procedure TestLargePositiveDelta;
     [Test] procedure TestZeroDelta_ReturnsSameFile;
     [Test] procedure TestSpacesInExtensionList;
+    [Test] procedure TestGetFilePositionFirst;
+    [Test] procedure TestGetFilePositionMiddle;
+    [Test] procedure TestGetFilePositionLast;
+    [Test] procedure TestGetFilePositionSingleFile;
+    [Test] procedure TestGetFilePositionMixedExtensionsMatchesOnlyCount;
+    [Test] procedure TestGetFilePositionCurrentNotInList;
+    [Test] procedure TestGetFilePositionEmptyDirReturnsFalse;
   end;
 
 implementation
@@ -201,6 +208,81 @@ begin
   CreateFiles(['a.mp4', 'b.mkv', 'c.avi']);
   Assert.AreEqual(FTempDir + 'b.mkv',
     FindAdjacentFile(FTempDir + 'a.mp4', ' mp4 , mkv , avi ', 1));
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionFirst;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.IsTrue(GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total));
+  Assert.AreEqual(1, Idx);
+  Assert.AreEqual(3, Total);
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionMiddle;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.IsTrue(GetFilePosition(FTempDir + 'b.mp4', 'mp4', Idx, Total));
+  Assert.AreEqual(2, Idx);
+  Assert.AreEqual(3, Total);
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionLast;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mp4', 'c.mp4']);
+  Assert.IsTrue(GetFilePosition(FTempDir + 'c.mp4', 'mp4', Idx, Total));
+  Assert.AreEqual(3, Idx);
+  Assert.AreEqual(3, Total);
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionSingleFile;
+var
+  Idx, Total: Integer;
+begin
+  { GetFilePosition MUST succeed with a single file (position 1 of 1),
+    unlike FindAdjacentFile which needs at least two to navigate. }
+  CreateFiles(['lonely.mp4']);
+  Assert.IsTrue(GetFilePosition(FTempDir + 'lonely.mp4', 'mp4', Idx, Total));
+  Assert.AreEqual(1, Idx);
+  Assert.AreEqual(1, Total);
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionMixedExtensionsMatchesOnlyCount;
+var
+  Idx, Total: Integer;
+begin
+  { Only supported extensions count toward the total. Here txt/jpg are
+    filtered out, leaving just a.mp4 and b.mkv. }
+  CreateFiles(['a.mp4', 'b.mkv', 'c.txt', 'd.jpg']);
+  Assert.IsTrue(GetFilePosition(FTempDir + 'b.mkv', 'mp4,mkv', Idx, Total));
+  Assert.AreEqual(2, Idx);
+  Assert.AreEqual(2, Total);
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionCurrentNotInList;
+var
+  Idx, Total: Integer;
+begin
+  { File on disk but extension not in the supported list. }
+  CreateFiles(['a.mp4', 'b.mp4', 'foreign.xyz']);
+  Assert.IsFalse(GetFilePosition(FTempDir + 'foreign.xyz', 'mp4,mkv', Idx, Total));
+  Assert.AreEqual(0, Idx, 'Out params reset to 0 on failure');
+  Assert.AreEqual(0, Total);
+end;
+
+procedure TTestFileNavigator.TestGetFilePositionEmptyDirReturnsFalse;
+var
+  Idx, Total: Integer;
+begin
+  { Directory exists but has no supported files. }
+  Assert.IsFalse(GetFilePosition(FTempDir + 'phantom.mp4', 'mp4', Idx, Total));
+  Assert.AreEqual(0, Idx);
+  Assert.AreEqual(0, Total);
 end;
 
 end.

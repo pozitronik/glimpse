@@ -308,6 +308,11 @@ const
   SBP_VIDEOCODEC_W = 90;
   SBP_AUDIO_W = 300;
   SBP_NOAUDIO_W = 110;
+  {Panel width fits "999 / 999" comfortably. File count in a typical video
+   folder sits well below 1000; capping visual width here keeps the panel
+   from stretching when the user stumbles into a huge directory.}
+  SBP_FILEPOS_W = 80;
+  SBP_FRAMEPOS_W = 70;
   SBP_LOADTIME_W = 110;
   {Total width including per-panel borders added by the common control}
   SBP_TOTAL_RIGHT = 1000;
@@ -783,11 +788,31 @@ procedure TPluginForm.UpdateStatusBar;
 
 var
   AudioStr: string;
+  FileIdx, FileTotal: Integer;
 begin
   FStatusBar.Panels.Clear;
 
   if not FVideoInfo.IsValid then
     Exit;
+
+  {File position: 1-based index within the directory's supported files.
+   Omitted when the current file can't be located (e.g. extension not in
+   the list or directory unreadable).}
+  if GetFilePosition(FFileName, FSettings.ExtensionList, FileIdx, FileTotal) then
+    AddPanel(Format('%d / %d', [FileIdx, FileTotal]), SBP_FILEPOS_W);
+
+  {Frame position: shown as "current / total" only in single view, where
+   the notion of "current frame" is visible. Other modes render the whole
+   grid, so the "current" slot is meaningless; show just the total.}
+  if Length(FOffsets) > 0 then
+  begin
+    if FFrameView.ViewMode = vmSingle then
+      AddPanel(Format('%d / %d',
+        [FFrameView.CurrentFrameIndex + 1, Length(FOffsets)]),
+        SBP_FRAMEPOS_W)
+    else
+      AddPanel(IntToStr(Length(FOffsets)), SBP_FRAMEPOS_W);
+  end;
 
   {Resolution}
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
@@ -904,6 +929,9 @@ begin
    (grid<->single), so kick the debounce timer; the actual refresh only
    fires if the computed MaxSide actually changes.}
   ScheduleViewportRefresh;
+  {Status bar's frame-position cell switches between "N / Total" and
+   "Total" based on mode.}
+  UpdateStatusBar;
 
   {Apply the zoom mode stored in the popup, or force Fit for modes without submodes}
   if FModePopups[AMode] <> nil then
@@ -1259,12 +1287,18 @@ begin
        False when the guard fails lets the keystroke fall through to any
        edit that had focus (same as the pre-refactor behaviour).}
       if FFrameView.ViewMode = vmSingle then
-        FFrameView.NavigateFrame(-1)
+      begin
+        FFrameView.NavigateFrame(-1);
+        UpdateStatusBar;
+      end
       else
         Result := False;
     paNextFrame:
       if FFrameView.ViewMode = vmSingle then
-        FFrameView.NavigateFrame(1)
+      begin
+        FFrameView.NavigateFrame(1);
+        UpdateStatusBar;
+      end
       else
         Result := False;
     paFrameCountInc:
@@ -1779,6 +1813,9 @@ begin
   FSettings.Save;
 
   RefreshExtraction;
+  {Status bar's frame-position cell reflects the new total immediately,
+   before extraction finishes (which would also refresh it).}
+  UpdateStatusBar;
 end;
 
 procedure TPluginForm.CommitSettingsChanges;
