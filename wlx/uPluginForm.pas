@@ -1231,6 +1231,17 @@ begin
         PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
         Key := 0;
       end;
+    VK_RETURN:
+      if Shift = [ssAlt] then
+      begin
+        {Alt+Enter natively arrives as WM_SYSKEYDOWN with the context-code bit
+         set. Mirror that bit on the synthetic message so Lister treats the
+         keystroke as a genuine sys-key combo regardless of the physical Alt
+         state when the message gets pumped.}
+        PostMessage(GetParent(Handle), WM_SYSKEYDOWN, VK_RETURN, Integer($20000000));
+        PostMessage(GetParent(Handle), WM_SYSKEYUP, VK_RETURN, Integer($E0000000));
+        Key := 0;
+      end;
     VK_OEM_PLUS, VK_ADD:
       if Shift = [] then
       begin
@@ -1284,6 +1295,16 @@ begin
           FSettings.ShowToolbar := FToolbar.Visible;
           FSettings.Save;
         end;
+        Key := 0;
+      end;
+    VK_F11:
+      if Shift = [] then
+      begin
+        {Forward to Lister; F11 is Lister's own maximize toggle and only
+         works when Lister itself has focus, so without this bridge the
+         keystroke is silently swallowed by the plugin.}
+        PostMessage(GetParent(Handle), WM_KEYDOWN, VK_F11, 0);
+        PostMessage(GetParent(Handle), WM_KEYUP, VK_F11, 0);
         Key := 0;
       end;
     VK_OEM_3: {~ / ` key}
