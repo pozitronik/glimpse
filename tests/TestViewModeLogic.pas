@@ -35,8 +35,8 @@ type
     [Test] procedure TestViewportFrameCountSingle_Returns1;
     [Test] procedure TestViewportFrameCountGrid_ReturnsTotal;
     [Test] procedure TestViewportFrameCountSmartGrid_ReturnsTotal;
-    [Test] procedure TestViewportFrameCountScroll_ReturnsTotal;
-    [Test] procedure TestViewportFrameCountFilmstrip_ReturnsTotal;
+    [Test] procedure TestViewportFrameCountScroll_Returns1;
+    [Test] procedure TestViewportFrameCountFilmstrip_Returns1;
   end;
 
 implementation
@@ -208,14 +208,21 @@ begin
   Assert.AreEqual(9, ViewportFrameCount(vmSmartGrid, 9));
 end;
 
-procedure TTestViewModeLogic.TestViewportFrameCountScroll_ReturnsTotal;
+procedure TTestViewModeLogic.TestViewportFrameCountScroll_Returns1;
 begin
-  Assert.AreEqual(4, ViewportFrameCount(vmScroll, 4));
+  {Scroll layout stacks frames vertically at full viewport width — one
+   frame effectively owns the whole horizontal viewport, so extraction
+   sizes against 1 like single view.}
+  Assert.AreEqual(1, ViewportFrameCount(vmScroll, 4));
+  Assert.AreEqual(1, ViewportFrameCount(vmScroll, 99));
 end;
 
-procedure TTestViewModeLogic.TestViewportFrameCountFilmstrip_ReturnsTotal;
+procedure TTestViewModeLogic.TestViewportFrameCountFilmstrip_Returns1;
 begin
-  Assert.AreEqual(4, ViewportFrameCount(vmFilmstrip, 4));
+  {Filmstrip lays frames horizontally at full viewport height — again one
+   frame per visible slot at viewport scale, so divisor is 1.}
+  Assert.AreEqual(1, ViewportFrameCount(vmFilmstrip, 4));
+  Assert.AreEqual(1, ViewportFrameCount(vmFilmstrip, 99));
 end;
 
 initialization

@@ -23,10 +23,12 @@ function ModeHasZoomSubmodes(AMode: TViewMode): Boolean;
 function ListerParamsToZoomMode(AParams: Integer): TZoomMode;
 
 {Number of frames that share the viewport at once under a given mode.
- Single-view displays one frame at a time occupying the full viewport,
- so scaled extraction must size against 1 regardless of how many frames
- are queued. All other modes render every extracted frame simultaneously,
- so the full queue length is the right divisor for viewport area.}
+ Single-view, scroll and filmstrip all display at most one frame at
+ viewport scale at a time (scroll stacks them vertically at full viewport
+ width; filmstrip lays them horizontally at full viewport height), so
+ scaled extraction must size against 1 for all three. Only the grid
+ layouts tile multiple frames into shared cells, so the full queue
+ length is the right divisor there.}
 function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;
 
 implementation
@@ -81,10 +83,12 @@ end;
 
 function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;
 begin
-  if AMode = vmSingle then
-    Result := 1
+  case AMode of
+    vmSingle, vmScroll, vmFilmstrip:
+      Result := 1;
   else
     Result := ATotalFrames;
+  end;
 end;
 
 end.
