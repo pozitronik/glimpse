@@ -162,19 +162,17 @@ uses
   uDefaults, uTypes;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
+var
+  AutoChecked, ShowChecked: Boolean;
+  UdPos, ComboIdx: Integer;
 begin
   UdFrameCount.Position := ASettings.FramesCount;
   UdSkipEdges.Position := ASettings.SkipEdgesPercent;
 
-  ChkMaxWorkersAuto.Checked := ASettings.MaxWorkers = 0;
-  if ASettings.MaxWorkers > 0 then
-    UdMaxWorkers.Position := ASettings.MaxWorkers
-  else
-    UdMaxWorkers.Position := 1;
-  if ASettings.MaxThreads > 0 then
-    UdMaxThreads.Position := ASettings.MaxThreads
-  else
-    UdMaxThreads.Position := 0;
+  DecodeMaxWorkersControls(ASettings.MaxWorkers, AutoChecked, UdPos);
+  ChkMaxWorkersAuto.Checked := AutoChecked;
+  UdMaxWorkers.Position := UdPos;
+  UdMaxThreads.Position := DecodeMaxThreadsControl(ASettings.MaxThreads);
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
   ChkHwAccel.Checked := ASettings.HwAccel;
   ChkUseKeyframes.Checked := ASettings.UseKeyframes;
@@ -194,15 +192,10 @@ begin
   UdCellGap.Position := ASettings.CellGap;
   UdBorder.Position := ASettings.CombinedBorder;
   PnlBackground.Color := ASettings.Background;
-  {Legacy tcNone shown as ShowTimestamp=False; corner combo picks default visible corner}
-  if ASettings.TimestampCorner = tcNone then
-  begin
-    ChkTimestamp.Checked := False;
-    CbxTimestampCorner.ItemIndex := Ord(DEF_TIMESTAMP_CORNER) - 1;
-  end else begin
-    ChkTimestamp.Checked := ASettings.ShowTimestamp;
-    CbxTimestampCorner.ItemIndex := Ord(ASettings.TimestampCorner) - 1;
-  end;
+  DecodeTimestampCornerControls(ASettings.ShowTimestamp, ASettings.TimestampCorner,
+    ShowChecked, ComboIdx);
+  ChkTimestamp.Checked := ShowChecked;
+  CbxTimestampCorner.ItemIndex := ComboIdx;
   PnlTCBack.Color := ASettings.TimecodeBackColor;
   UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
   PnlTCTextColor.Color := ASettings.TimestampTextColor;
@@ -228,14 +221,15 @@ begin
 end;
 
 procedure TWcxSettingsForm.ControlsToSettings(ASettings: TWcxSettings);
+var
+  Show: Boolean;
+  Corner: TTimestampCorner;
 begin
   ASettings.FramesCount := UdFrameCount.Position;
   ASettings.SkipEdgesPercent := UdSkipEdges.Position;
 
-  if ChkMaxWorkersAuto.Checked then
-    ASettings.MaxWorkers := 0
-  else
-    ASettings.MaxWorkers := UdMaxWorkers.Position;
+  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked,
+    UdMaxWorkers.Position);
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
@@ -256,8 +250,10 @@ begin
   ASettings.CellGap := UdCellGap.Position;
   ASettings.CombinedBorder := UdBorder.Position;
   ASettings.Background := PnlBackground.Color;
-  ASettings.ShowTimestamp := ChkTimestamp.Checked;
-  ASettings.TimestampCorner := TTimestampCorner(CbxTimestampCorner.ItemIndex + 1);
+  EncodeTimestampCornerControls(ChkTimestamp.Checked, CbxTimestampCorner.ItemIndex,
+    Show, Corner);
+  ASettings.ShowTimestamp := Show;
+  ASettings.TimestampCorner := Corner;
   ASettings.TimecodeBackColor := PnlTCBack.Color;
   ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
   ASettings.TimestampTextColor := PnlTCTextColor.Color;

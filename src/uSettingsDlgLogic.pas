@@ -1,10 +1,13 @@
 {Pure formatting helpers shared by the WLX and WCX settings dialogs.
  No VCL dependency, so these run under unit tests without a UI. The
  dialogs keep the wiring (control reads/writes, dialog plumbing); only
- the deterministic label-formatting policy lives here.}
+ the deterministic label-formatting and encode/decode policy lives here.}
 unit uSettingsDlgLogic;
 
 interface
+
+uses
+  uTypes;
 
 type
   {Outcome of probing the ffmpeg path field in either settings dialog.
@@ -33,10 +36,47 @@ function MaxThreadsAutoLabel(AOnePerFrame: Boolean; AThreadsPos, ACpuCount: Inte
  fpsFileMissing) are simply ignored.}
 function FFmpegInfoLabelText(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean): string;
 
+{Decodes a stored timestamp (Show, Corner) pair into the (checkbox state,
+ corner combo index) expected by the settings dialogs.
+
+ Legacy tcNone — the pre-1.1 encoding when the corner combo had a "None"
+ entry that doubled as the off-switch — migrates to ShowChecked=False
+ plus the current default corner. The combo no longer carries tcNone;
+ its items 0..3 map to tcTopLeft..tcBottomRight. This single helper
+ prevents the two dialogs from drifting on the migration rule.}
+procedure DecodeTimestampCornerControls(AShow: Boolean; ACorner: TTimestampCorner;
+  out AShowChecked: Boolean; out AComboIndex: Integer);
+
+{Encodes the checkbox state + combo index back into (Show, Corner) for
+ saving. AComboIndex is assumed to be in range 0..3 (four real corners);
+ Show passes through directly.}
+procedure EncodeTimestampCornerControls(AShowChecked: Boolean; AComboIndex: Integer;
+  out AShow: Boolean; out ACorner: TTimestampCorner);
+
+{Decodes a stored MaxWorkers value into the (Auto checkbox, UpDown position)
+ pair the dialogs display. MaxWorkers = 0 is the auto sentinel — checkbox
+ checked, UpDown falls back to 1 so the explicit-mode field doesn't flash
+ "0" when the user toggles auto off.}
+procedure DecodeMaxWorkersControls(AMaxWorkers: Integer;
+  out AAutoChecked: Boolean; out AUdPosition: Integer);
+
+{Encodes the Auto checkbox + UpDown position back into MaxWorkers. Auto
+ always maps to 0 regardless of the UpDown position (the UpDown value is
+ stale when auto is toggled on).}
+function EncodeMaxWorkersControls(AAutoChecked: Boolean; AUdPosition: Integer): Integer;
+
+{Decodes a stored MaxThreads value into UpDown position. Positive values
+ show as themselves; non-positive (-1 no-limit, 0 auto) collapse to 0 in
+ the UI because the up-down min is 0. The reverse direction is a straight
+ passthrough (UdPosition becomes MaxThreads), which is why no encode
+ helper is needed here.}
+function DecodeMaxThreadsControl(AMaxThreads: Integer): Integer;
+
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  uDefaults;
 
 function MaxThreadsAutoLabel(AOnePerFrame: Boolean; AThreadsPos, ACpuCount: Integer): string;
 begin
@@ -66,6 +106,56 @@ begin
     else
       Result := '';
   end;
+end;
+
+procedure DecodeTimestampCornerControls(AShow: Boolean; ACorner: TTimestampCorner;
+  out AShowChecked: Boolean; out AComboIndex: Integer);
+begin
+  if ACorner = tcNone then
+  begin
+    {Legacy migration: pre-1.1 "None" corner meant off. Show checkbox now
+     owns visibility; corner falls back to the documented default.}
+    AShowChecked := False;
+    AComboIndex := Ord(DEF_TIMESTAMP_CORNER) - 1;
+  end
+  else
+  begin
+    AShowChecked := AShow;
+    AComboIndex := Ord(ACorner) - 1;
+  end;
+end;
+
+procedure EncodeTimestampCornerControls(AShowChecked: Boolean; AComboIndex: Integer;
+  out AShow: Boolean; out ACorner: TTimestampCorner);
+begin
+  AShow := AShowChecked;
+  ACorner := TTimestampCorner(AComboIndex + 1);
+end;
+
+procedure DecodeMaxWorkersControls(AMaxWorkers: Integer;
+  out AAutoChecked: Boolean; out AUdPosition: Integer);
+begin
+  AAutoChecked := AMaxWorkers = 0;
+  if AMaxWorkers > 0 then
+    AUdPosition := AMaxWorkers
+  else
+    AUdPosition := 1;
+end;
+
+function EncodeMaxWorkersControls(AAutoChecked: Boolean; AUdPosition: Integer): Integer;
+begin
+  if AAutoChecked then
+    Result := 0
+  else
+    Result := AUdPosition;
+end;
+
+function DecodeMaxThreadsControl(AMaxThreads: Integer): Integer;
+begin
+  if AMaxThreads > 0 then
+    Result := AMaxThreads
+  else
+    Result := 0;
 end;
 
 end.

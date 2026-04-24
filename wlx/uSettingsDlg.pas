@@ -225,20 +225,18 @@ uses
   uCaptureShortcutDlg;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
+var
+  AutoChecked, ShowChecked: Boolean;
+  UdPos, ComboIdx: Integer;
 begin
   UdSkipEdges.Position := ASettings.SkipEdgesPercent;
-  ChkMaxWorkersAuto.Checked := ASettings.MaxWorkers = 0;
-  if ASettings.MaxWorkers > 0 then
-    UdMaxWorkers.Position := ASettings.MaxWorkers
-  else
-    UdMaxWorkers.Position := 1;
+  DecodeMaxWorkersControls(ASettings.MaxWorkers, AutoChecked, UdPos);
+  ChkMaxWorkersAuto.Checked := AutoChecked;
+  UdMaxWorkers.Position := UdPos;
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
   ChkHwAccel.Checked := ASettings.HwAccel;
   ChkUseKeyframes.Checked := ASettings.UseKeyframes;
-  if ASettings.MaxThreads > 0 then
-    UdMaxThreads.Position := ASettings.MaxThreads
-  else
-    UdMaxThreads.Position := 0;
+  UdMaxThreads.Position := DecodeMaxThreadsControl(ASettings.MaxThreads);
   ChkScaledExtraction.Checked := ASettings.ScaledExtraction;
   UdMinFrameSide.Position := ASettings.MinFrameSide;
   UdMaxFrameSide.Position := ASettings.MaxFrameSide;
@@ -258,16 +256,10 @@ begin
   UpdateTimestampFontDisplay;
   UdCellGap.Position := ASettings.CellGap;
   UdBorder.Position := ASettings.CombinedBorder;
-  {Migrate legacy tcNone (formerly used as the off-switch in the combo) to a
-   real corner plus ShowTimecode=False — the dedicated checkbox now gates visibility}
-  if ASettings.TimestampCorner = tcNone then
-  begin
-    ChkShowTimecode.Checked := False;
-    CbxTimestampCorner.ItemIndex := Ord(DEF_TIMESTAMP_CORNER) - 1;
-  end else begin
-    ChkShowTimecode.Checked := ASettings.ShowTimecode;
-    CbxTimestampCorner.ItemIndex := Ord(ASettings.TimestampCorner) - 1;
-  end;
+  DecodeTimestampCornerControls(ASettings.ShowTimecode, ASettings.TimestampCorner,
+    ShowChecked, ComboIdx);
+  ChkShowTimecode.Checked := ShowChecked;
+  CbxTimestampCorner.ItemIndex := ComboIdx;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
 
@@ -312,12 +304,13 @@ begin
 end;
 
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
+var
+  Show: Boolean;
+  Corner: TTimestampCorner;
 begin
   ASettings.SkipEdgesPercent := UdSkipEdges.Position;
-  if ChkMaxWorkersAuto.Checked then
-    ASettings.MaxWorkers := 0
-  else
-    ASettings.MaxWorkers := UdMaxWorkers.Position;
+  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked,
+    UdMaxWorkers.Position);
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
   ASettings.UseKeyframes := ChkUseKeyframes.Checked;
@@ -347,8 +340,10 @@ begin
   ASettings.TimestampFontSize := FTimestampFontSize;
   ASettings.CellGap := UdCellGap.Position;
   ASettings.CombinedBorder := UdBorder.Position;
-  ASettings.ShowTimecode := ChkShowTimecode.Checked;
-  ASettings.TimestampCorner := TTimestampCorner(CbxTimestampCorner.ItemIndex + 1);
+  EncodeTimestampCornerControls(ChkShowTimecode.Checked, CbxTimestampCorner.ItemIndex,
+    Show, Corner);
+  ASettings.ShowTimecode := Show;
+  ASettings.TimestampCorner := Corner;
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
 
