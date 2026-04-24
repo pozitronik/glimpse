@@ -147,7 +147,7 @@ type
 implementation
 
 uses
-  System.IOUtils,
+  System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage;
 
 procedure FormLog(const AMsg: string);
@@ -1240,6 +1240,14 @@ begin
          state when the message gets pumped.}
         PostMessage(GetParent(Handle), WM_SYSKEYDOWN, VK_RETURN, Integer($20000000));
         PostMessage(GetParent(Handle), WM_SYSKEYUP, VK_RETURN, Integer($E0000000));
+        Key := 0;
+      end
+      else if (Shift = []) and (GetFocus <> FEditFrameCount.Handle) and (FFileName <> '') then
+      begin
+        {Plain Enter: hand the file off to whatever the OS has registered as
+         the default opener for this extension. The frame-count edit keeps
+         its own commit-and-refocus behaviour via the fallthrough block below.}
+        ShellExecute(Handle, 'open', PChar(FFileName), nil, nil, SW_SHOWNORMAL);
         Key := 0;
       end;
     VK_OEM_PLUS, VK_ADD:
