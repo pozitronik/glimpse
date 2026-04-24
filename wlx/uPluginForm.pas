@@ -1338,6 +1338,22 @@ begin
     Exit;
   end;
 
+  {Edit-focus passthrough (fires BEFORE hotkey dispatch). When the frame
+   count edit holds focus, digits and basic editing keys must reach the
+   edit regardless of whether the user happened to bind them to a global
+   action. Without this check, typing "12" in the edit would fire
+   paViewModeSmartGrid and paViewModeGrid on a default install because
+   "1" and "2" are default Ctrl+digit chords that collapse to the bare
+   digit when no modifier keys are held. The post-dispatch fallback below
+   still handles the non-typable keys (Enter to commit, unbound Ctrl+V
+   to reclaim focus, etc.).}
+  if (GetFocus = FEditFrameCount.Handle) and (Shift * [ssCtrl, ssAlt] = []) then
+    case Key of
+      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9,
+      VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN:
+        Exit;
+    end;
+
   {Configurable hotkeys. ExecuteHotkey returns False when the action's
    contextual guards say "not applicable right now" (e.g. paPrevFrame when
    not in single-view mode, or paOpenInPlayer with no file), in which case
@@ -1347,15 +1363,14 @@ begin
   if (Action <> paNone) and ExecuteHotkey(Action) then
     Key := 0;
 
-  {When the frame count edit has Win32 focus and the key was not consumed by
-   a hotkey above, only allow digit-editing and modifier keys through.
-   Non-digit keys reclaim form focus so TC's subclass sees subsequent
-   keystrokes. The current keystroke is consumed (not re-posted) to avoid
-   corrupting keyboard state with unmatched WM_KEYDOWN messages.}
+  {Post-dispatch edit-focus fallback: any keystroke that the edit wasn't
+   allowed to handle above AND wasn't consumed by a hotkey is mopped up
+   here. Enter is allowed to commit the value; everything else reclaims
+   form focus so TC's subclass sees subsequent keystrokes.}
   if (Key <> 0) and (GetFocus = FEditFrameCount.Handle) then
     case Key of
-      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9, VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN, VK_SHIFT, VK_CONTROL, VK_MENU:
-        ; {Allow through to the edit / UpDown / modifier state}
+      VK_SHIFT, VK_CONTROL, VK_MENU:
+        ; {Let modifier key-downs flow through naturally}
       VK_RETURN:
         begin
           Winapi.Windows.SetFocus(Handle);

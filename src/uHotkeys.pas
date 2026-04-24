@@ -469,22 +469,28 @@ begin
     paCloseLister:
       Result := [THotkeyChord.Make(VK_ESCAPE, [])];
     paPrevFile:
-      Result := [THotkeyChord.Make(VK_LEFT, []),
-                 THotkeyChord.Make(VK_PRIOR, []),
+      Result := [THotkeyChord.Make(VK_PRIOR, []),
                  THotkeyChord.Make(VK_BACK, []),
                  THotkeyChord.Make(Ord('Z'), [])];
     paNextFile:
-      Result := [THotkeyChord.Make(VK_RIGHT, []),
-                 THotkeyChord.Make(VK_NEXT, []),
+      Result := [THotkeyChord.Make(VK_NEXT, []),
                  THotkeyChord.Make(VK_SPACE, [])];
     paOpenInPlayer:
       Result := [THotkeyChord.Make(VK_RETURN, [])];
     paRefreshExtraction:
       Result := [THotkeyChord.Make(Ord('R'), [])];
+    {Bare Left/Right bind to frame navigation so the single-view "slideshow"
+     feel is the default. paPrevFrame/paNextFrame have a vmSingle guard in
+     the dispatcher — in other modes the action's ExecuteHotkey returns
+     False and the keystroke quietly does nothing (matching "no natural
+     arrow action in grid"). Ctrl+Left/Ctrl+Right are kept as a
+     modifier-qualified alias.}
     paPrevFrame:
-      Result := [THotkeyChord.Make(VK_LEFT, [ssCtrl])];
+      Result := [THotkeyChord.Make(VK_LEFT, []),
+                 THotkeyChord.Make(VK_LEFT, [ssCtrl])];
     paNextFrame:
-      Result := [THotkeyChord.Make(VK_RIGHT, [ssCtrl])];
+      Result := [THotkeyChord.Make(VK_RIGHT, []),
+                 THotkeyChord.Make(VK_RIGHT, [ssCtrl])];
     paFrameCountInc:
       Result := [THotkeyChord.Make(VK_UP, [ssCtrl])];
     paFrameCountDec:

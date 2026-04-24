@@ -10,14 +10,19 @@ Provides an instant visual summary of a video's content without opening a media 
 
 ### Keyboard Shortcuts
 
+All shortcuts below are defaults. Every row is user-configurable via the **Hotkeys** tab in Settings — bindings can be added, removed, or replaced, and each action can carry more than one chord at a time.
+
 | Key             | Action                                                                                            |
 |-----------------|---------------------------------------------------------------------------------------------------|
 | Ctrl+1..5       | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
 | +/-             | Zoom in / out                                                                                     |
 | 0               | Reset zoom to 1x                                                                                  |
-| Left/Right      | Previous / next video file in directory                                                           |
+| Left/Right      | Previous / next frame (single-view mode; ignored in other modes)                                  |
+| Ctrl+Left/Right | Previous / next frame (alias of bare Left/Right)                                                  |
 | PageUp/Down     | Previous / next video file in directory                                                           |
-| Ctrl+Left/Right | Previous / next frame (single mode)                                                               |
+| Space           | Next video file in directory                                                                      |
+| Backspace       | Previous video file in directory                                                                  |
+| Z               | Previous video file in directory                                                                  |
 | Ctrl+Up/Down    | Increase / decrease frame count                                                                   |
 | Ctrl+A          | Select all                                                                                        |
 | Ctrl+Click      | Toggle frame selection                                                                            |
@@ -26,19 +31,20 @@ Provides an instant visual summary of a video's content without opening a media 
 | Ctrl+Shift+S    | Save combined image                                                                               |
 | Ctrl+C          | Copy focused frame to clipboard                                                                   |
 | Ctrl+Shift+C    | Copy combined image to clipboard                                                                  |
+| Enter           | Open the current file in the OS default player                                                    |
+| F11             | Toggle Lister maximize                                                                            |
+| Alt+Enter       | Toggle Lister full-screen (maximize without the window caption)                                   |
 | T               | Toggle timecodes                                                                                  |
 | R               | Refresh (re-extract all frames)                                                                   |
-| Space           | Next video file in directory                                                                      |
-| Backspace       | Previous video file in directory                                                                  |
-| Z               | Previous video file in directory                                                                  |
 | ~               | Open hamburger menu (when toolbar is collapsed)                                                   |
 | F2              | Settings                                                                                          |
 | F3              | Toggle status bar                                                                                 |
 | F4              | Toggle toolbar                                                                                    |
+| Escape          | Close Lister                                                                                      |
 
 ### Configuration
 
-All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into six tabs: **General**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
+All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into seven tabs: **General**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**, **Hotkeys**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
 
 #### General
 
@@ -54,6 +60,8 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Extract frames at display size    | Off         | Asks ffmpeg to produce frames already scaled to display size instead of full resolution. Significantly faster for 4K+    |
 | Scale target min (px)             | 120         | Lower bound on the scale target (bigger side). Prevents the viewport-derived target from collapsing too small            |
 | Scale target max (px)             | 1920        | Upper bound on the scale target (bigger side). Frames are left at native resolution when the target exceeds it           |
+| Re-extract on viewport change     | On          | Quietly re-extracts in the background when switching view modes or resizing Lister so frames stay at display resolution. |
+|                                   |             | Existing frames remain on screen until new ones arrive. No effect when *Extract frames at display size* is off           |
 | Extensions                        | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                     |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                           |
 
@@ -109,6 +117,18 @@ These settings only apply when the plugin is opened in TC's Quick View panel (Ct
 | Disable internal file navigation | On      | Prevents the arrow keys from advancing to neighbor video files, leaving them to TC's file panel where they're usually wanted |
 | Hide toolbar                     | On      | Hides the toolbar in Quick View mode regardless of the Appearance setting                                                    |
 | Hide status bar                  | On      | Hides the status bar in Quick View mode regardless of the Appearance setting                                                 |
+
+#### Hotkeys
+
+Every command-style action in the plugin is configurable. Each action can carry any number of chords — "Previous frame", for example, ships with both `Left` and `Ctrl+Left` bound, and you can add more (or remove either).
+
+- Select a row in the list and press **Assign…** (or double-click the row) to open the shortcut editor. Press a key combination to add it; select a chord and press **Remove** to delete it. Numpad digits and `+`/`-`/`.` aliases collapse onto their top-row counterparts, so binding `0` covers `Numpad 0` automatically.
+- **Clear** wipes every chord assigned to the selected action.
+- **Reset all** restores every action to its default binding.
+- Conflicts are resolved at assignment time: when you add a chord that another action already owns, the editor asks whether to reassign. Saying yes silently strips the chord from the previous owner.
+- Tab, Alt+F4, and bare modifier keys are not user-configurable — they belong to VCL focus cycling and the Windows window-management shell.
+
+When the plugin holds keyboard focus, all other key combinations are owned by this table, regardless of Lister's built-in defaults. An unbound action simply does nothing; Lister's original shortcuts (Escape to close, `1`..`9` to switch text/binary/hex views, etc.) are still available via Lister's menu.
 
 ## WCX Plugin (Packer)
 

@@ -54,10 +54,14 @@ type
 
     [Test] procedure Defaults_PaNoneIsEmpty;
     [Test] procedure Defaults_SaveSelectedIsUnbound;
-    [Test] procedure Defaults_PrevFileHasFourChords;
-    [Test] procedure Defaults_NextFileHasThreeChords;
+    [Test] procedure Defaults_PrevFileHasThreeChords;
+    [Test] procedure Defaults_NextFileHasTwoChords;
+    [Test] procedure Defaults_PrevFrameHasBareAndCtrlLeft;
+    [Test] procedure Defaults_NextFrameHasBareAndCtrlRight;
     [Test] procedure Lookup_Defaults_Resolve;
     [Test] procedure Lookup_PrevFile_EveryDefaultChord_ResolvesSameAction;
+    [Test] procedure Lookup_BareLeft_IsFrameNavNotFileNav;
+    [Test] procedure Lookup_BareRight_IsFrameNavNotFileNav;
     [Test] procedure Lookup_Numpad0_ResolvesAsDigit0;
     [Test] procedure Lookup_NumpadAdd_ResolvesAsOemPlus;
     [Test] procedure Lookup_NumpadSubtract_ResolvesAsOemMinus;
@@ -357,29 +361,53 @@ begin
   end;
 end;
 
-procedure TTestHotkeyBindings.Defaults_PrevFileHasFourChords;
+procedure TTestHotkeyBindings.Defaults_PrevFileHasThreeChords;
 var
   B: THotkeyBindings;
-  C: THotkeyChordArray;
 begin
   B := THotkeyBindings.Create;
   try
-    C := B.Get(paPrevFile);
-    Assert.AreEqual<Integer>(4, Length(C),
-      'paPrevFile ships with Left, PageUp, Backspace, Z');
+    Assert.AreEqual<Integer>(3, Length(B.Get(paPrevFile)),
+      'paPrevFile ships with PageUp, Backspace, Z (Left moved to paPrevFrame)');
   finally
     B.Free;
   end;
 end;
 
-procedure TTestHotkeyBindings.Defaults_NextFileHasThreeChords;
+procedure TTestHotkeyBindings.Defaults_NextFileHasTwoChords;
 var
   B: THotkeyBindings;
 begin
   B := THotkeyBindings.Create;
   try
-    Assert.AreEqual<Integer>(3, Length(B.Get(paNextFile)),
-      'paNextFile ships with Right, PageDown, Space');
+    Assert.AreEqual<Integer>(2, Length(B.Get(paNextFile)),
+      'paNextFile ships with PageDown, Space (Right moved to paNextFrame)');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Defaults_PrevFrameHasBareAndCtrlLeft;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.AreEqual<Integer>(2, Length(B.Get(paPrevFrame)),
+      'paPrevFrame ships with bare Left and Ctrl+Left');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Defaults_NextFrameHasBareAndCtrlRight;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.AreEqual<Integer>(2, Length(B.Get(paNextFrame)),
+      'paNextFrame ships with bare Right and Ctrl+Right');
   finally
     B.Free;
   end;
@@ -410,11 +438,39 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    {All four default chords for paPrevFile must resolve to the same action.}
-    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_LEFT, [])));
+    {All three default chords for paPrevFile must resolve to the same action.}
     Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_PRIOR, [])));
     Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_BACK, [])));
     Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(Ord('Z'), [])));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Lookup_BareLeft_IsFrameNavNotFileNav;
+var
+  B: THotkeyBindings;
+begin
+  {Regression guard: bare Left is paPrevFrame, not paPrevFile, so single
+   view acts as a frame slideshow with arrows. File nav falls to the
+   other defaults (PageUp / Backspace / Z).}
+  B := THotkeyBindings.Create;
+  try
+    Assert.AreEqual(Ord(paPrevFrame), Ord(B.Lookup(VK_LEFT, [])));
+    Assert.AreEqual(Ord(paPrevFrame), Ord(B.Lookup(VK_LEFT, [ssCtrl])));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Lookup_BareRight_IsFrameNavNotFileNav;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.AreEqual(Ord(paNextFrame), Ord(B.Lookup(VK_RIGHT, [])));
+    Assert.AreEqual(Ord(paNextFrame), Ord(B.Lookup(VK_RIGHT, [ssCtrl])));
   finally
     B.Free;
   end;
@@ -529,11 +585,12 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    {paPrevFile ships with Left; removing it leaves three chords.}
-    Assert.IsTrue(B.RemoveChord(paPrevFile, THotkeyChord.Make(VK_LEFT, [])));
-    Assert.AreEqual<Integer>(3, Length(B.Get(paPrevFile)));
-    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_LEFT, [])),
-      'Left is no longer bound after removal');
+    {paPrevFile ships with PageUp; removing it leaves two chords (Backspace
+     and Z), and PageUp stops resolving.}
+    Assert.IsTrue(B.RemoveChord(paPrevFile, THotkeyChord.Make(VK_PRIOR, [])));
+    Assert.AreEqual<Integer>(2, Length(B.Get(paPrevFile)));
+    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_PRIOR, [])),
+      'PageUp is no longer bound after removal');
   finally
     B.Free;
   end;
@@ -563,8 +620,8 @@ begin
     NewList[1] := THotkeyChord.Make(VK_F10, []);
     B.Put(paPrevFile, NewList);
     Assert.AreEqual<Integer>(2, Length(B.Get(paPrevFile)));
-    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_LEFT, [])),
-      'After Put, the original Left chord is gone');
+    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_PRIOR, [])),
+      'After Put, the original PageUp chord is gone from paPrevFile');
     Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_F9, [])));
   finally
     B.Free;
