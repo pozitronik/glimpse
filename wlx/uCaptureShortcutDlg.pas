@@ -130,18 +130,10 @@ procedure TShortcutEditorForm.FormKeyDown(Sender: TObject; var Key: Word; Shift:
 var
   Chord: uHotkeys.THotkeyChord;
 begin
-  {Escape always cancels, regardless of modifiers. Users are unlikely to
-   want to rebind Escape itself, so losing its capturability here keeps
-   dismiss behaviour predictable.}
-  if (Key = VK_ESCAPE) and (Shift * [ssCtrl, ssShift, ssAlt] = []) then
-  begin
-    ModalResult := mrCancel;
-    Key := 0;
-    Exit;
-  end;
-
   {Bare modifier keys are dropped — we want a terminal non-modifier key
-   to finish the chord.}
+   to finish the chord. Escape is deliberately NOT special-cased so it can
+   be captured and bound like any other key; users cancel the dialog via
+   the Cancel button or the window-frame close.}
   case Key of
     VK_SHIFT, VK_CONTROL, VK_MENU,
     VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:

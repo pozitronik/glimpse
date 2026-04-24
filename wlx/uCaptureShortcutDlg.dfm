@@ -43,7 +43,7 @@ object ShortcutEditorForm: TShortcutEditorForm
     Width = 400
     Height = 15
     Align = alTop
-    Caption = 'Press a key to add a shortcut (Escape closes the dialog)'
+    Caption = 'Press a key to add a shortcut'
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clGrayText
     Font.Height = -12
