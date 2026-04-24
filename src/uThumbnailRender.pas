@@ -87,16 +87,17 @@ end;
 function FetchOrExtract(const AFFmpeg: TFFmpegExe; const AFileName: string;
   AOffset: Double; const AOptions: TExtractionOptions;
   const ACache: IFrameCache; ATimeoutMs: DWORD): TBitmap;
+var
+  Key: TFrameCacheKey;
 begin
-  Result := ACache.TryGet(AFileName, AOffset, AOptions.MaxSide,
-    AOptions.UseKeyframes);
+  Key := TFrameCacheKey.Create(AFileName, AOffset, AOptions.MaxSide, AOptions.UseKeyframes);
+  Result := ACache.TryGet(Key);
   if Result <> nil then
     Exit;
 
   Result := AFFmpeg.ExtractFrame(AFileName, AOffset, AOptions, ATimeoutMs);
   if Result <> nil then
-    ACache.Put(AFileName, AOffset, Result, AOptions.MaxSide,
-      AOptions.UseKeyframes);
+    ACache.Put(Key, Result);
 end;
 
 { Downscales ABmp into a fresh bitmap that fits within AReqW x AReqH while

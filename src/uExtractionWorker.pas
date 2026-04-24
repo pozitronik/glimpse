@@ -102,6 +102,7 @@ var
   Frame: TPendingFrame;
   I, CellIdx: Integer;
   Source: string;
+  CacheKey: TFrameCacheKey;
 begin
   ThreadLog(Format('Execute START frames=%d', [Length(FOffsets)]));
   try
@@ -119,8 +120,9 @@ begin
       try
         Source := 'none';
 
-        Bmp := FCache.TryGet(FFileName, FOffsets[I].TimeOffset,
+        CacheKey := TFrameCacheKey.Create(FFileName, FOffsets[I].TimeOffset,
           FOptions.MaxSide, FOptions.UseKeyframes);
+        Bmp := FCache.TryGet(CacheKey);
         if Bmp <> nil then
           Source := 'cache';
 
@@ -132,8 +134,7 @@ begin
           if Bmp <> nil then
           begin
             Source := 'extract';
-            FCache.Put(FFileName, FOffsets[I].TimeOffset, Bmp,
-              FOptions.MaxSide, FOptions.UseKeyframes);
+            FCache.Put(CacheKey, Bmp);
           end;
         end;
 

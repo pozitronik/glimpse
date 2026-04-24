@@ -238,12 +238,12 @@ begin
   try
     Bmp := CreateTestBitmap(64, 48);
     try
-      Cache.Put(FilePath, 5.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath, 5.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
 
-    Retrieved := Cache.TryGet(FilePath, 5.0, 0, False);
+    Retrieved := Cache.TryGet(TFrameCacheKey.Create(FilePath, 5.0, 0, False));
     try
       Assert.IsNotNull(Retrieved, 'Cached bitmap must be retrievable');
       Assert.AreEqual(64, Retrieved.Width, 'Width must match');
@@ -265,7 +265,7 @@ begin
   FilePath := CreateDummyFile('miss.mp4', 256);
   Cache := TFrameCache.Create(FCacheDir, 100);
   try
-    Bmp := Cache.TryGet(FilePath, 99.0, 0, False);
+    Bmp := Cache.TryGet(TFrameCacheKey.Create(FilePath, 99.0, 0, False));
     Assert.IsNull(Bmp, 'Non-existent cache entry must return nil');
   finally
     Cache.Free;
@@ -297,7 +297,7 @@ begin
       FS.Free;
     end;
 
-    Bmp := Cache.TryGet(FilePath, 1.0, 0, False);
+    Bmp := Cache.TryGet(TFrameCacheKey.Create(FilePath, 1.0, 0, False));
     Assert.IsNull(Bmp, 'Corrupt PNG must return nil, not raise exception');
   finally
     Cache.Free;
@@ -315,7 +315,7 @@ begin
   try
     Bmp := CreateTestBitmap(16, 16);
     try
-      Cache.Put(FilePath, 5.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath, 5.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -350,9 +350,9 @@ begin
   try
     Bmp := CreateTestBitmap(100, 100);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
-      Cache.Put(FilePath2, 1.0, Bmp, 0, False);
-      Cache.Put(FilePath3, 1.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath1, 1.0, 0, False), Bmp);
+      Cache.Put(TFrameCacheKey.Create(FilePath2, 1.0, 0, False), Bmp);
+      Cache.Put(TFrameCacheKey.Create(FilePath3, 1.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -401,8 +401,8 @@ begin
   try
     Bmp := CreateTestBitmap(50, 50);
     try
-      Cache.Put(FilePathOld, 1.0, Bmp, 0, False);
-      Cache.Put(FilePathNew, 1.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePathOld, 1.0, 0, False), Bmp);
+      Cache.Put(TFrameCacheKey.Create(FilePathNew, 1.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -433,7 +433,7 @@ begin
   try
     Bmp := CreateTestBitmap(50, 50);
     try
-      Cache.Put(FilePathNew, 1.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePathNew, 1.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -459,8 +459,8 @@ begin
   try
     Bmp := CreateTestBitmap(32, 32);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
-      Cache.Put(FilePath2, 2.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath1, 1.0, 0, False), Bmp);
+      Cache.Put(TFrameCacheKey.Create(FilePath2, 2.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -493,7 +493,7 @@ begin
 
     Bmp := CreateTestBitmap(32, 32);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath1, 1.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -502,7 +502,7 @@ begin
 
     Bmp := CreateTestBitmap(64, 64);
     try
-      Cache.Put(FilePath2, 2.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath2, 2.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -524,7 +524,7 @@ var
 begin
   FilePath := CreateDummyFile('null_get.mp4', 128);
   Cache := TNullFrameCache.Create;
-  Bmp := Cache.TryGet(FilePath, 5.0, 0, False);
+  Bmp := Cache.TryGet(TFrameCacheKey.Create(FilePath, 5.0, 0, False));
   Assert.IsNull(Bmp, 'Null cache must always return nil');
 end;
 
@@ -539,7 +539,7 @@ begin
   Cache := TNullFrameCache.Create;
   Bmp := CreateTestBitmap(16, 16);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0, False);
+    Cache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
   finally
     Bmp.Free;
   end;
@@ -563,19 +563,19 @@ begin
   { Store a frame in the real cache }
   Bmp := CreateTestBitmap(32, 32);
   try
-    RealCache.Put(FilePath, 5.0, Bmp, 0, False);
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 5.0, 0, False), Bmp);
   finally
     Bmp.Free;
   end;
 
   { Verify the frame is in the real cache }
-  Bmp := RealCache.TryGet(FilePath, 5.0, 0, False);
+  Bmp := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 5.0, 0, False));
   Assert.IsNotNull(Bmp, 'Frame must exist in real cache');
   Bmp.Free;
 
   { Bypass must return nil even though the frame is cached }
   Bypass := TBypassFrameCache.Create(RealCache);
-  Bmp := Bypass.TryGet(FilePath, 5.0, 0, False);
+  Bmp := Bypass.TryGet(TFrameCacheKey.Create(FilePath, 5.0, 0, False));
   Assert.IsNull(Bmp, 'Bypass cache must always return nil on TryGet');
 end;
 
@@ -594,13 +594,13 @@ begin
   Bypass := TBypassFrameCache.Create(RealCache);
   Bmp := CreateTestBitmap(48, 48);
   try
-    Bypass.Put(FilePath, 3.0, Bmp, 0, False);
+    Bypass.Put(TFrameCacheKey.Create(FilePath, 3.0, 0, False), Bmp);
   finally
     Bmp.Free;
   end;
 
   { Verify the frame landed in the real cache }
-  Bmp := RealCache.TryGet(FilePath, 3.0, 0, False);
+  Bmp := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 3.0, 0, False));
   try
     Assert.IsNotNull(Bmp, 'Bypass Put must delegate to inner cache');
     Assert.AreEqual(48, Bmp.Width, 'Width must match');
@@ -629,11 +629,11 @@ begin
   try
     Bmp := CreateTestBitmap(64, 64);
     try
-      Cache.Put(FilePath1, 1.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath1, 1.0, 0, False), Bmp);
       Sleep(50);
-      Cache.Put(FilePath2, 2.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath2, 2.0, 0, False), Bmp);
       Sleep(50);
-      Cache.Put(FilePath3, 3.0, Bmp, 0, False);
+      Cache.Put(TFrameCacheKey.Create(FilePath3, 3.0, 0, False), Bmp);
     finally
       Bmp.Free;
     end;
@@ -680,7 +680,7 @@ begin
     { First put: 10x10 bitmap }
     Bmp1 := CreateTestBitmap(10, 10);
     try
-      Cache.Put(VideoPath, 1.0, Bmp1, 0, False);
+      Cache.Put(TFrameCacheKey.Create(VideoPath, 1.0, 0, False), Bmp1);
     finally
       Bmp1.Free;
     end;
@@ -688,13 +688,13 @@ begin
     { Second put: 20x15 bitmap at same offset }
     Bmp2 := CreateTestBitmap(20, 15);
     try
-      Cache.Put(VideoPath, 1.0, Bmp2, 0, False);
+      Cache.Put(TFrameCacheKey.Create(VideoPath, 1.0, 0, False), Bmp2);
     finally
       Bmp2.Free;
     end;
 
     { Get should return the second bitmap's dimensions }
-    Got := Cache.TryGet(VideoPath, 1.0, 0, False);
+    Got := Cache.TryGet(TFrameCacheKey.Create(VideoPath, 1.0, 0, False));
     try
       Assert.IsNotNull(Got, 'Should retrieve overwritten entry');
       Assert.AreEqual(20, Got.Width, 'Width should match second put');
@@ -720,7 +720,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   Bmp := CreateTestBitmap(32, 32);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0, False);
+    Cache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
   finally
     Bmp.Free;
   end;
@@ -742,7 +742,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   Bmp := CreateTestBitmap(64, 64);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0, False);
+    Cache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
   finally
     Bmp.Free;
   end;
@@ -767,7 +767,7 @@ begin
   Cache := TFrameCache.Create(FCacheDir, 100);
   Bmp := CreateTestBitmap(32, 32);
   try
-    Cache.Put(FilePath, 1.0, Bmp, 0, False);
+    Cache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
   finally
     Bmp.Free;
   end;

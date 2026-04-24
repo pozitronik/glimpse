@@ -72,10 +72,8 @@ type
     procedure Seed(AOffset: Double; AColor: TColor);
     property GetCalls: Integer read FGetCalls;
     property PutCalls: Integer read FPutCalls;
-    function TryGet(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap; override;
-    procedure Put(const AFilePath: string; ATimeOffset: Double; ABitmap: TBitmap;
-      AMaxSide: Integer; AUseKeyframes: Boolean); override;
+    function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
+    procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
   end;
 
 function MakeSolidBitmap(AColor: TColor): TBitmap;
@@ -154,20 +152,18 @@ begin
   FSeeded.AddOrSetValue(AOffset, AColor);
 end;
 
-function TFakeCache.TryGet(const AFilePath: string; ATimeOffset: Double;
-  AMaxSide: Integer; AUseKeyframes: Boolean): TBitmap;
+function TFakeCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
 var
   Color: TColor;
 begin
   Inc(FGetCalls);
-  if FSeeded.TryGetValue(ATimeOffset, Color) then
+  if FSeeded.TryGetValue(AKey.TimeOffset, Color) then
     Result := MakeSolidBitmap(Color)
   else
     Result := nil;
 end;
 
-procedure TFakeCache.Put(const AFilePath: string; ATimeOffset: Double;
-  ABitmap: TBitmap; AMaxSide: Integer; AUseKeyframes: Boolean);
+procedure TFakeCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
 begin
   Inc(FPutCalls);
   {Fake does not retain the bitmap — ownership stays with the worker,
