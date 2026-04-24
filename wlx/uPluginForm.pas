@@ -205,20 +205,63 @@ const
   {Deferred self-subclass: installed after TC subclasses us so we fire first}
   FORM_SUBCLASS_ID = 2;
   WM_DEFERRED_INIT = WM_USER + 102; {Triggers self-subclass installation}
-  WM_PLUGIN_FKEY = WM_USER + 103; {Re-posted F-key intercepted from TC}
+  WM_PLUGIN_FKEY = WM_USER + 103; {Re-posted key intercepted from TC}
 
-  {Self-subclass callback on the plugin form window.
-   Installed AFTER TC subclasses us (via deferred PostMessage), so it fires
-   first in the chain. Intercepts bare F2/F3 before TC can consume them.}
+  {Bit flags packed into the re-posted WM_PLUGIN_FKEY's lParam so the form
+   WndProc can reconstruct TShiftState on the other side of the re-post.}
+  FKEY_LPARAM_SHIFT = 1;
+  FKEY_LPARAM_CTRL = 2;
+  FKEY_LPARAM_ALT = 4;
+
+{True when AKey should flow through to the VCL/OS key pipeline unchanged
+ instead of being swallowed by the plugin's key-interception. These are the
+ keys the plugin cannot own without breaking system behaviour:
+ - Tab: VCL focus cycling relies on the standard WM_KEYDOWN path.
+ - Alt+F4: Windows delivers SC_CLOSE via the normal chain; hijacking it
+   would leave users unable to close the Lister window.
+ - Bare modifier keys: meaningless alone, and we need TranslateMessage to
+   see their down/up transitions for subsequent key combinations to build
+   correct WM_SYSKEYDOWN messages.}
+function ShouldLetKeyPassThrough(AKey: Word): Boolean;
+begin
+  case AKey of
+    VK_TAB, VK_SHIFT, VK_CONTROL, VK_MENU,
+    VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
+      Exit(True);
+  end;
+  {Alt+F4 is a system close shortcut — let the OS deliver its SC_CLOSE.}
+  if (AKey = VK_F4) and (GetKeyState(VK_MENU) < 0) then
+    Exit(True);
+  Result := False;
+end;
+
+{Packs the live modifier-key state into a single LPARAM value so the
+ repost target can rebuild TShiftState without another GetKeyState call.}
+function PackShiftIntoLParam: LPARAM;
+begin
+  Result := 0;
+  if GetKeyState(VK_SHIFT) < 0 then
+    Result := Result or FKEY_LPARAM_SHIFT;
+  if GetKeyState(VK_CONTROL) < 0 then
+    Result := Result or FKEY_LPARAM_CTRL;
+  if GetKeyState(VK_MENU) < 0 then
+    Result := Result or FKEY_LPARAM_ALT;
+end;
+
+{Self-subclass callback on the plugin form window.
+ Installed AFTER TC subclasses us (via deferred PostMessage), so it fires
+ first in the chain. Claims every key-down message so Lister's built-in
+ shortcuts (Escape to close, 1-9 view-mode switch, N/P file navigation,
+ letter-key mode toggles, etc.) stay out of the plugin's way and every
+ key flows through the plugin's own hotkey dispatcher instead. Excluded
+ keys (see ShouldLetKeyPassThrough) flow through unchanged.}
 function FormSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): LRESULT; stdcall;
 begin
   case uMsg of
-    WM_KEYDOWN:
-      if ((wParam = VK_F2) or (wParam = VK_F3)) and (GetKeyState(VK_CONTROL) >= 0) and (GetKeyState(VK_SHIFT) >= 0) and (GetKeyState(VK_MENU) >= 0) then
+    WM_KEYDOWN, WM_SYSKEYDOWN:
+      if not ShouldLetKeyPassThrough(wParam) then
       begin
-        {Bare F2/F3: re-post as custom message so our WndProc handles it
-         instead of TC treating F2 as refresh and F3 as find.}
-        PostMessage(HWND, WM_PLUGIN_FKEY, wParam, 0);
+        PostMessage(HWND, WM_PLUGIN_FKEY, wParam, PackShiftIntoLParam);
         Result := 0;
         Exit;
       end;
@@ -1525,6 +1568,7 @@ end;
 procedure TPluginForm.WndProc(var Message: TMessage);
 var
   Key: Word;
+  Shift: TShiftState;
 begin
   case Message.Msg of
     WM_DEFERRED_INIT:
@@ -1535,7 +1579,14 @@ begin
     WM_PLUGIN_FKEY:
       begin
         Key := Message.wParam;
-        OnFormKeyDown(Self, Key, []);
+        Shift := [];
+        if (Message.lParam and FKEY_LPARAM_SHIFT) <> 0 then
+          Include(Shift, ssShift);
+        if (Message.lParam and FKEY_LPARAM_CTRL) <> 0 then
+          Include(Shift, ssCtrl);
+        if (Message.lParam and FKEY_LPARAM_ALT) <> 0 then
+          Include(Shift, ssAlt);
+        OnFormKeyDown(Self, Key, Shift);
         Exit;
       end;
   end;
