@@ -9,7 +9,7 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Dialogs,
   Winapi.Windows,
-  uTypes, uSettings;
+  uTypes, uSettings, uHotkeys;
 
 type
   TSettingsForm = class(TForm)
@@ -125,6 +125,11 @@ type
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
     ChkQVHideStatusBar: TCheckBox;
+    TshHotkeys: TTabSheet;
+    LvwHotkeys: TListView;
+    BtnHotkeyClear: TButton;
+    BtnHotkeyAssign: TButton;
+    BtnHotkeyResetAll: TButton;
     PnlButtons: TPanel;
     BtnDefaults: TButton;
     BtnApply: TButton;
@@ -156,6 +161,10 @@ type
     procedure ChkThumbnailsEnabledClick(Sender: TObject);
     procedure CbxThumbnailModeChange(Sender: TObject);
     procedure BtnApplyClick(Sender: TObject);
+    procedure LvwHotkeysDblClick(Sender: TObject);
+    procedure BtnHotkeyClearClick(Sender: TObject);
+    procedure BtnHotkeyAssignClick(Sender: TObject);
+    procedure BtnHotkeyResetAllClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
     FResolvedFFmpegPath: string;
@@ -165,6 +174,9 @@ type
     FTimestampFontSize: Integer;
     FBannerFontName: string;
     FBannerFontSize: Integer;
+    {Local snapshot of the bindings so the live table isn't mutated unless
+     the user confirms with OK/Apply. Mirrors the per-row listview rows.}
+    FHotkeys: uHotkeys.THotkeyBindings;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
     procedure UpdateMaxWorkersControls;
@@ -182,10 +194,15 @@ type
     procedure UpdateTimestampFontDisplay;
     procedure UpdateBannerFontDisplay;
     procedure BrowseFolder(AEdit: TEdit);
+    procedure PopulateHotkeyList;
+    procedure RefreshHotkeyRow(AAction: uHotkeys.TPluginAction);
+    function SelectedHotkeyAction: uHotkeys.TPluginAction;
+    procedure CaptureAndAssignHotkey(AAction: uHotkeys.TPluginAction);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     constructor CreateWithOwner(AOwnerWnd: HWND);
+    destructor Destroy; override;
   end;
 
   {Shows the settings dialog.
@@ -203,7 +220,8 @@ implementation
 
 uses
   System.IOUtils, System.Math,
-  uDefaults, uFFmpegExe, uCache, uBitmapSaver, uPathExpand, uSettingsDlgLogic;
+  uDefaults, uFFmpegExe, uCache, uBitmapSaver, uPathExpand, uSettingsDlgLogic,
+  uCaptureShortcutDlg;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
@@ -276,6 +294,11 @@ begin
   CbxThumbnailMode.ItemIndex := Ord(ASettings.ThumbnailMode);
   UdThumbnailPosition.Position := ASettings.ThumbnailPosition;
   UdThumbnailGridFrames.Position := ASettings.ThumbnailGridFrames;
+
+  {Snapshot the bindings into our local copy so edits here only commit on
+   OK/Apply via ControlsToSettings.}
+  FHotkeys.Assign(ASettings.Hotkeys);
+  PopulateHotkeyList;
 
   UpdateSaveFormatControls;
   UpdateBannerControls;
@@ -350,6 +373,9 @@ begin
   ASettings.ThumbnailMode := TThumbnailMode(CbxThumbnailMode.ItemIndex);
   ASettings.ThumbnailPosition := UdThumbnailPosition.Position;
   ASettings.ThumbnailGridFrames := UdThumbnailGridFrames.Position;
+
+  {Hotkeys were edited into our local snapshot; push the whole table back.}
+  ASettings.Hotkeys.Assign(FHotkeys);
 end;
 
 procedure TSettingsForm.PickColor(APanel: TPanel);
@@ -588,6 +614,125 @@ begin
     FOnApply(Self);
 end;
 
+{Hotkeys tab}
+
+procedure TSettingsForm.PopulateHotkeyList;
+var
+  A: uHotkeys.TPluginAction;
+  Item: TListItem;
+begin
+  LvwHotkeys.Items.BeginUpdate;
+  try
+    LvwHotkeys.Items.Clear;
+    for A := Succ(uHotkeys.paNone) to High(uHotkeys.TPluginAction) do
+    begin
+      Item := LvwHotkeys.Items.Add;
+      Item.Caption := uHotkeys.ActionCaption(A);
+      {Tag-via-Data the action ordinal so the row survives a sort or
+       filter without relying on Items.IndexOf positional mapping.}
+      Item.Data := Pointer(NativeInt(Ord(A)));
+      Item.SubItems.Add(uHotkeys.ChordsToDisplayStr(FHotkeys.Get(A)));
+    end;
+  finally
+    LvwHotkeys.Items.EndUpdate;
+  end;
+end;
+
+procedure TSettingsForm.RefreshHotkeyRow(AAction: uHotkeys.TPluginAction);
+var
+  I: Integer;
+  Item: TListItem;
+  Display: string;
+begin
+  Display := uHotkeys.ChordsToDisplayStr(FHotkeys.Get(AAction));
+  for I := 0 to LvwHotkeys.Items.Count - 1 do
+  begin
+    Item := LvwHotkeys.Items[I];
+    if uHotkeys.TPluginAction(NativeInt(Item.Data)) = AAction then
+    begin
+      if Item.SubItems.Count = 0 then
+        Item.SubItems.Add(Display)
+      else
+        Item.SubItems[0] := Display;
+      Exit;
+    end;
+  end;
+end;
+
+function TSettingsForm.SelectedHotkeyAction: uHotkeys.TPluginAction;
+var
+  Item: TListItem;
+begin
+  Item := LvwHotkeys.Selected;
+  if Item = nil then
+    Exit(uHotkeys.paNone);
+  Result := uHotkeys.TPluginAction(NativeInt(Item.Data));
+end;
+
+procedure TSettingsForm.CaptureAndAssignHotkey(AAction: uHotkeys.TPluginAction);
+var
+  NewChords: uHotkeys.THotkeyChordArray;
+  I: Integer;
+  Conflict: uHotkeys.TPluginAction;
+begin
+  if AAction = uHotkeys.paNone then
+    Exit;
+  if not EditShortcuts(Self, AAction, FHotkeys, NewChords) then
+    Exit;
+
+  {The editor prompted for conflicts at the moment each chord was added,
+   and the user said "Yes, reassign" for every chord that reached here.
+   Reconcile the table now by removing those chords from any other action
+   that still owns them. Without this step the old owner would keep the
+   binding in memory until the user also opens its row.}
+  for I := 0 to High(NewChords) do
+  begin
+    Conflict := FHotkeys.FindActionByChord(NewChords[I], AAction);
+    while Conflict <> uHotkeys.paNone do
+    begin
+      FHotkeys.RemoveChord(Conflict, NewChords[I]);
+      RefreshHotkeyRow(Conflict);
+      {A chord could (in pathological INI-edited data) appear more than
+       once across different actions; keep stripping until gone.}
+      Conflict := FHotkeys.FindActionByChord(NewChords[I], AAction);
+    end;
+  end;
+
+  FHotkeys.Put(AAction, NewChords);
+  RefreshHotkeyRow(AAction);
+end;
+
+procedure TSettingsForm.LvwHotkeysDblClick(Sender: TObject);
+begin
+  CaptureAndAssignHotkey(SelectedHotkeyAction);
+end;
+
+procedure TSettingsForm.BtnHotkeyAssignClick(Sender: TObject);
+begin
+  CaptureAndAssignHotkey(SelectedHotkeyAction);
+end;
+
+procedure TSettingsForm.BtnHotkeyClearClick(Sender: TObject);
+var
+  A: uHotkeys.TPluginAction;
+begin
+  A := SelectedHotkeyAction;
+  if A = uHotkeys.paNone then
+    Exit;
+  FHotkeys.Put(A, nil);
+  RefreshHotkeyRow(A);
+end;
+
+procedure TSettingsForm.BtnHotkeyResetAllClick(Sender: TObject);
+begin
+  if MessageBox(Handle,
+    'Reset every hotkey to its default? Unsaved changes in this tab will be lost.',
+    'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
+    Exit;
+  FHotkeys.ResetToDefaults;
+  PopulateHotkeyList;
+end;
+
 procedure TSettingsForm.UpdateMaxWorkersControls;
 var
   OnePerFrame: Boolean;
@@ -752,6 +897,13 @@ begin
    and CreateParams needs the value at that point}
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
+  FHotkeys := uHotkeys.THotkeyBindings.Create;
+end;
+
+destructor TSettingsForm.Destroy;
+begin
+  FHotkeys.Free;
+  inherited;
 end;
 
 procedure TSettingsForm.CreateParams(var Params: TCreateParams);

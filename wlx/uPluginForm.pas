@@ -1174,6 +1174,27 @@ begin
         Result := False;
     paCloseLister:
       ForwardKeyToLister(VK_ESCAPE, False);
+    paPrevFile:
+      NavigateToAdjacentFile(-1);
+    paNextFile:
+      NavigateToAdjacentFile(1);
+    paPrevFrame:
+      {Frame navigation is only meaningful in single-view mode. Returning
+       False when the guard fails lets the keystroke fall through to any
+       edit that had focus (same as the pre-refactor behaviour).}
+      if FFrameView.ViewMode = vmSingle then
+        FFrameView.NavigateFrame(-1)
+      else
+        Result := False;
+    paNextFrame:
+      if FFrameView.ViewMode = vmSingle then
+        FFrameView.NavigateFrame(1)
+      else
+        Result := False;
+    paFrameCountInc:
+      FUpDown.Position := FUpDown.Position + 1;
+    paFrameCountDec:
+      FUpDown.Position := FUpDown.Position - 1;
     paOpenInPlayer:
       {Don't consume Enter while the frame-count edit has focus — the
        edit-focus fallback below commits the value. No file loaded is also
@@ -1231,44 +1252,8 @@ var
 begin
   FKeyConsumed := False;
 
-  {Ctrl+Up/Down: adjust frame count. Directional — stays hardcoded.}
-  if (ssCtrl in Shift) and (Key in [VK_UP, VK_DOWN]) then
-  begin
-    if Key = VK_UP then
-      FUpDown.Position := FUpDown.Position + 1
-    else
-      FUpDown.Position := FUpDown.Position - 1;
-    Key := 0;
-    FKeyConsumed := True;
-    Exit;
-  end;
-
-  {Ctrl+Left/Right: navigate frames in single mode. Directional — stays hardcoded.}
-  if (Shift = [ssCtrl]) and (Key in [VK_LEFT, VK_RIGHT]) and (FFrameView.ViewMode = vmSingle) then
-  begin
-    if Key = VK_LEFT then
-      FFrameView.NavigateFrame(-1)
-    else
-      FFrameView.NavigateFrame(1);
-    Key := 0;
-    FKeyConsumed := True;
-    Exit;
-  end;
-
-  {File navigation: bare Left/Right/PageUp/PageDown/Space/Backspace/Z all
-   move between adjacent files. Purely directional and not user-configurable.}
-  if (Shift = []) and (Key in [VK_LEFT, VK_RIGHT, VK_PRIOR, VK_NEXT, VK_SPACE, VK_BACK, Ord('Z')]) then
-  begin
-    if Key in [VK_LEFT, VK_PRIOR, VK_BACK, Ord('Z')] then
-      NavigateToAdjacentFile(-1)
-    else
-      NavigateToAdjacentFile(1);
-    Key := 0;
-    FKeyConsumed := True;
-    Exit;
-  end;
-
-  {Tab: VCL focus cycling. System-level, never user-configurable.}
+  {Tab: VCL focus cycling. System-level, never user-configurable; the
+   configurable dispatcher intentionally doesn't handle this.}
   if (Key = VK_TAB) and (Shift - [ssShift] = []) then
   begin
     SelectNext(ActiveControl, not(ssShift in Shift), True);
@@ -1278,9 +1263,10 @@ begin
   end;
 
   {Configurable hotkeys. ExecuteHotkey returns False when the action's
-   contextual guards say "not applicable right now" (e.g. paOpenInPlayer
-   with no file), in which case the key falls through to the edit-focus
-   fallback below rather than being silently swallowed.}
+   contextual guards say "not applicable right now" (e.g. paPrevFrame when
+   not in single-view mode, or paOpenInPlayer with no file), in which case
+   the key falls through to the edit-focus fallback below rather than being
+   silently swallowed — matching pre-refactor behaviour.}
   Action := FSettings.Hotkeys.Lookup(Key, Shift);
   if (Action <> paNone) and ExecuteHotkey(Action) then
     Key := 0;

@@ -1021,6 +1021,65 @@ object SettingsForm: TSettingsForm
         TabOrder = 2
       end
     end
+    object TshHotkeys: TTabSheet
+      Caption = 'Hotkeys'
+      ImageIndex = 6
+      DesignSize = (
+        452
+        370)
+      object LvwHotkeys: TListView
+        Left = 12
+        Top = 12
+        Width = 427
+        Height = 318
+        Anchors = [akLeft, akTop, akRight, akBottom]
+        Columns = <
+          item
+            Caption = 'Action'
+            Width = 240
+          end
+          item
+            Caption = 'Shortcut'
+            Width = 160
+          end>
+        HideSelection = False
+        ReadOnly = True
+        RowSelect = True
+        TabOrder = 0
+        ViewStyle = vsReport
+        OnDblClick = LvwHotkeysDblClick
+      end
+      object BtnHotkeyClear: TButton
+        Left = 12
+        Top = 338
+        Width = 75
+        Height = 25
+        Anchors = [akLeft, akBottom]
+        Caption = 'Clear'
+        TabOrder = 1
+        OnClick = BtnHotkeyClearClick
+      end
+      object BtnHotkeyAssign: TButton
+        Left = 93
+        Top = 338
+        Width = 85
+        Height = 25
+        Anchors = [akLeft, akBottom]
+        Caption = 'Assign...'
+        TabOrder = 2
+        OnClick = BtnHotkeyAssignClick
+      end
+      object BtnHotkeyResetAll: TButton
+        Left = 364
+        Top = 338
+        Width = 75
+        Height = 25
+        Anchors = [akRight, akBottom]
+        Caption = 'Reset all'
+        TabOrder = 3
+        OnClick = BtnHotkeyResetAllClick
+      end
+    end
   end
   object PnlButtons: TPanel
     Left = 0

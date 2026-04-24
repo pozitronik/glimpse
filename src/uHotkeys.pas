@@ -1,16 +1,17 @@
 {Configurable-hotkey machinery for the WLX plugin.
 
- Defines the enum of command-style plugin actions, a chord record that
- pairs a VK_* key with a modifier set, and a binding table that persists
- to INI and exposes a Lookup used by the form's OnKeyDown dispatcher.
+ Each plugin action can be bound to any number of chords (a "chord" is a
+ VK_* key plus a modifier set). Multiple chords let a single action — say
+ "previous file" — be invoked by several shorthand keys at once: Left,
+ PageUp, Backspace, Z all navigate backward out of the box.
 
  Numpad digits and symbol aliases (VK_NUMPAD0..9, VK_ADD, VK_SUBTRACT,
  VK_DECIMAL) are collapsed to their letter-row equivalents at Lookup
- time so the single binding "Zoom reset = 0" matches both top-row 0 and
+ time so a single binding "Zoom reset = 0" matches both top-row 0 and
  numpad 0 without the UI having to show two entries.
 
- Pure: no VCL, no form references. TestHotkeys covers the record and
- the binding table end-to-end.}
+ Pure: no VCL, no form references. TestHotkeys covers the record, the
+ binding table, and the INI round-trip end-to-end.}
 unit uHotkeys;
 
 interface
@@ -19,15 +20,19 @@ uses
   System.Classes, System.SysUtils, System.IniFiles;
 
 type
-  {Command-style actions the user can assign hotkeys to. Directional /
-   navigation behaviour (bare arrows, Ctrl+arrows, Space/Backspace for
-   file nav) stays hardcoded in the form and is not represented here.}
+  {Command-style actions the user can assign hotkeys to. Tab (VCL focus
+   cycling) is intentionally not listed — it's a system-level shortcut
+   that isn't user-configurable.}
   TPluginAction = (paNone,
     {Window / view}
     paSettings, paToggleToolbar, paToggleStatusBar, paToggleTimecode,
     paToggleMaximize, paToggleFullScreen, paHamburgerMenu, paCloseLister,
     {File}
+    paPrevFile, paNextFile,
     paOpenInPlayer, paRefreshExtraction,
+    {Frame}
+    paPrevFrame, paNextFrame,
+    paFrameCountInc, paFrameCountDec,
     {Frame output}
     paSaveSingleFrame, paSaveAllFrames, paSaveCombined, paSaveSelected,
     paSelectAllFrames, paCopyToClipboard, paCopyAllToClipboard,
@@ -42,6 +47,7 @@ type
     Modifiers: TShiftState;  {subset of [ssCtrl, ssShift, ssAlt]}
     function IsAssigned: Boolean;
     function Matches(AKey: Word; AShift: TShiftState): Boolean;
+    function Equals(const AOther: THotkeyChord): Boolean;
     function ToDisplayStr: string;
     function ToIniStr: string;
     class function Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord; static;
@@ -49,24 +55,48 @@ type
     class function FromIniStr(const AValue: string): THotkeyChord; static;
   end;
 
+  THotkeyChordArray = TArray<THotkeyChord>;
+
   THotkeyBindings = class
   private
-    FBindings: array [TPluginAction] of THotkeyChord;
+    FBindings: array [TPluginAction] of THotkeyChordArray;
   public
     constructor Create;
-    function Get(AAction: TPluginAction): THotkeyChord;
-    procedure Put(AAction: TPluginAction; const AChord: THotkeyChord);
+    {Returns a copy of the chord list for AAction; callers mutate through
+     the Put / Add / Remove API rather than editing the returned array.}
+    function Get(AAction: TPluginAction): THotkeyChordArray;
+    {Replaces the chord list for AAction wholesale. Empty list means unbound.}
+    procedure Put(AAction: TPluginAction; const AChords: THotkeyChordArray);
+    {Appends AChord to AAction's list if it's not already present (silent
+     no-op on duplicate). Returns True when a new chord was actually added.}
+    function AddChord(AAction: TPluginAction; const AChord: THotkeyChord): Boolean;
+    {Removes the first chord equal to AChord from AAction's list. Returns
+     True when a chord was removed.}
+    function RemoveChord(AAction: TPluginAction; const AChord: THotkeyChord): Boolean;
+    {Scans every action's chord list and returns the first action whose
+     chord matches the incoming key + modifiers. Numpad aliases are
+     normalised before matching. Returns paNone on no match.}
     function Lookup(AKey: Word; const AShift: TShiftState): TPluginAction;
+    {Load / Save read and write the [hotkeys] section with '|' as the
+     between-chords separator, e.g. PrevFile=Left|PageUp|Backspace|Z.}
     procedure Load(AIni: TIniFile);
     procedure Save(AIni: TIniFile);
     procedure ResetToDefaults;
+    {Overwrites every action's chord list with AOther's (deep copy of the
+     arrays). Used by the settings dialog to snapshot/restore.}
+    procedure Assign(const AOther: THotkeyBindings);
+    {First action (other than AExcept) that contains a chord equal to
+     AChord. Returns paNone when no conflict.}
+    function FindActionByChord(const AChord: THotkeyChord;
+      AExcept: TPluginAction = paNone): TPluginAction;
   end;
 
 const
   HOTKEYS_SECTION = 'hotkeys';
+  CHORD_SEPARATOR = '|';
 
-{Default chord (or THotkeyChord.None for intentionally-unbound) for an action.}
-function DefaultBinding(AAction: TPluginAction): THotkeyChord;
+{Default chord list (possibly empty) for an action.}
+function DefaultBinding(AAction: TPluginAction): THotkeyChordArray;
 
 {Short INI key used to serialise the action (without the 'pa' enum prefix).}
 function ActionIniKey(AAction: TPluginAction): string;
@@ -74,13 +104,22 @@ function ActionIniKey(AAction: TPluginAction): string;
 {Human-readable caption for the action, used by the settings dialog UI.}
 function ActionCaption(AAction: TPluginAction): string;
 
+{Joins AChords with CHORD_SEPARATOR for INI storage.}
+function ChordsToIniStr(const AChords: THotkeyChordArray): string;
+
+{Parses AValue (CHORD_SEPARATOR-joined) into a list of chords. Unparseable
+ segments are skipped rather than causing the whole value to be rejected.}
+function ChordsFromIniStr(const AValue: string): THotkeyChordArray;
+
+{Joins AChords with ', ' for on-screen display. Empty chord list renders
+ as '' so the listview's Shortcut column is simply blank.}
+function ChordsToDisplayStr(const AChords: THotkeyChordArray): string;
+
 implementation
 
 uses
   Winapi.Windows;
 
-{Key-to-name canonical table for INI serialisation and display. Maps in
- both directions; parsing is case-insensitive via SameText below.}
 type
   TKeyName = record
     Key: Word;
@@ -88,9 +127,7 @@ type
   end;
 
 const
-  {Fixed named keys. Letter/digit keys are handled separately (single char).
-   VK_OEM_* codes are the subset the plugin actually uses as hotkeys today;
-   adding more is a matter of extending this array.}
+  {Fixed named keys. Letter/digit keys are handled separately (single char).}
   KEY_NAMES: array [0 .. 20] of TKeyName = (
     (Key: VK_RETURN; Name: 'Enter'),
     (Key: VK_ESCAPE; Name: 'Escape'),
@@ -138,13 +175,11 @@ begin
   S := AName.Trim;
   if S = '' then
     Exit(0);
-  {F-keys: "F1".."F12"}
   if (Length(S) >= 2) and ((S[1] = 'F') or (S[1] = 'f')) then
   begin
     if TryStrToInt(Copy(S, 2, Length(S) - 1), N) and (N >= 1) and (N <= 12) then
       Exit(VK_F1 + N - 1);
   end;
-  {Single char: letter or digit}
   if Length(S) = 1 then
   begin
     if CharInSet(S[1], ['0' .. '9']) then
@@ -158,9 +193,6 @@ begin
   Result := 0;
 end;
 
-{Collapse keyboard aliases so a single binding covers both top-row and
- numpad equivalents; called on incoming events in Lookup, never applied
- to stored values.}
 function NormalizeKey(AKey: Word): Word;
 begin
   case AKey of
@@ -192,6 +224,11 @@ end;
 function THotkeyChord.Matches(AKey: Word; AShift: TShiftState): Boolean;
 begin
   Result := IsAssigned and (Key = AKey) and (Modifiers = AShift);
+end;
+
+function THotkeyChord.Equals(const AOther: THotkeyChord): Boolean;
+begin
+  Result := (Key = AOther.Key) and (Modifiers = AOther.Modifiers);
 end;
 
 function THotkeyChord.ToDisplayStr: string;
@@ -255,17 +292,10 @@ begin
       Include(Mods, ssShift)
     else if SameText(Token, 'Alt') then
       Include(Mods, ssAlt)
-    else
-      {Last non-modifier token is the key itself. Empty tokens appear when
-       the key part is '+' (VK_OEM_PLUS) split on '+' — the final split
-       element is '' immediately after an empty-before-'+'. Only assign
-       when we find a recognised key; unparseable values leave Result as
-       None so callers fall back to defaults.}
-      if (Token <> '') and (KeyCode = 0) then
-        KeyCode := NameToVK(Token);
+    else if (Token <> '') and (KeyCode = 0) then
+      KeyCode := NameToVK(Token);
   end;
-  {Special case: the key '+' when used bare is Split into ['', ''] (split on
-   '+' with two empty neighbours). Recover it by checking the raw input.}
+  {Bare '+' gets split into two empty tokens; recover it from the raw input.}
   if (KeyCode = 0) and (AValue.Trim = '+') then
     KeyCode := VK_OEM_PLUS;
   if KeyCode = 0 then
@@ -282,14 +312,52 @@ begin
   ResetToDefaults;
 end;
 
-function THotkeyBindings.Get(AAction: TPluginAction): THotkeyChord;
+function THotkeyBindings.Get(AAction: TPluginAction): THotkeyChordArray;
+var
+  I: Integer;
 begin
-  Result := FBindings[AAction];
+  SetLength(Result, Length(FBindings[AAction]));
+  for I := 0 to High(FBindings[AAction]) do
+    Result[I] := FBindings[AAction][I];
 end;
 
-procedure THotkeyBindings.Put(AAction: TPluginAction; const AChord: THotkeyChord);
+procedure THotkeyBindings.Put(AAction: TPluginAction; const AChords: THotkeyChordArray);
+var
+  I: Integer;
 begin
-  FBindings[AAction] := AChord;
+  SetLength(FBindings[AAction], Length(AChords));
+  for I := 0 to High(AChords) do
+    FBindings[AAction][I] := AChords[I];
+end;
+
+function THotkeyBindings.AddChord(AAction: TPluginAction; const AChord: THotkeyChord): Boolean;
+var
+  I, N: Integer;
+begin
+  if not AChord.IsAssigned then
+    Exit(False);
+  for I := 0 to High(FBindings[AAction]) do
+    if FBindings[AAction][I].Equals(AChord) then
+      Exit(False);
+  N := Length(FBindings[AAction]);
+  SetLength(FBindings[AAction], N + 1);
+  FBindings[AAction][N] := AChord;
+  Result := True;
+end;
+
+function THotkeyBindings.RemoveChord(AAction: TPluginAction; const AChord: THotkeyChord): Boolean;
+var
+  I, J: Integer;
+begin
+  Result := False;
+  for I := 0 to High(FBindings[AAction]) do
+    if FBindings[AAction][I].Equals(AChord) then
+    begin
+      for J := I to High(FBindings[AAction]) - 1 do
+        FBindings[AAction][J] := FBindings[AAction][J + 1];
+      SetLength(FBindings[AAction], Length(FBindings[AAction]) - 1);
+      Exit(True);
+    end;
 end;
 
 function THotkeyBindings.Lookup(AKey: Word; const AShift: TShiftState): TPluginAction;
@@ -297,12 +365,14 @@ var
   NormKey: Word;
   NormShift: TShiftState;
   A: TPluginAction;
+  I: Integer;
 begin
   NormKey := NormalizeKey(AKey);
   NormShift := NormalizeShift(AShift);
   for A := Succ(paNone) to High(TPluginAction) do
-    if FBindings[A].Matches(NormKey, NormShift) then
-      Exit(A);
+    for I := 0 to High(FBindings[A]) do
+      if FBindings[A][I].Matches(NormKey, NormShift) then
+        Exit(A);
   Result := paNone;
 end;
 
@@ -310,7 +380,6 @@ procedure THotkeyBindings.Load(AIni: TIniFile);
 var
   A: TPluginAction;
   Raw: string;
-  Parsed: THotkeyChord;
 begin
   {Start from defaults so any key missing from the INI retains its default
    binding rather than becoming unbound. Users can explicitly disable a
@@ -322,14 +391,9 @@ begin
       Continue;
     Raw := AIni.ReadString(HOTKEYS_SECTION, ActionIniKey(A), '');
     if Raw.Trim = '' then
-    begin
-      FBindings[A] := THotkeyChord.None;
-      Continue;
-    end;
-    Parsed := THotkeyChord.FromIniStr(Raw);
-    if Parsed.IsAssigned then
-      FBindings[A] := Parsed;
-    {Unparseable values keep the default — no silent unbind for typos.}
+      FBindings[A] := nil
+    else
+      FBindings[A] := ChordsFromIniStr(Raw);
   end;
 end;
 
@@ -338,7 +402,7 @@ var
   A: TPluginAction;
 begin
   for A := Succ(paNone) to High(TPluginAction) do
-    AIni.WriteString(HOTKEYS_SECTION, ActionIniKey(A), FBindings[A].ToIniStr);
+    AIni.WriteString(HOTKEYS_SECTION, ActionIniKey(A), ChordsToIniStr(FBindings[A]));
 end;
 
 procedure THotkeyBindings.ResetToDefaults;
@@ -349,63 +413,114 @@ begin
     FBindings[A] := DefaultBinding(A);
 end;
 
+procedure THotkeyBindings.Assign(const AOther: THotkeyBindings);
+var
+  A: TPluginAction;
+  I: Integer;
+begin
+  if AOther = nil then
+    Exit;
+  for A := Low(TPluginAction) to High(TPluginAction) do
+  begin
+    SetLength(FBindings[A], Length(AOther.FBindings[A]));
+    for I := 0 to High(AOther.FBindings[A]) do
+      FBindings[A][I] := AOther.FBindings[A][I];
+  end;
+end;
+
+function THotkeyBindings.FindActionByChord(const AChord: THotkeyChord;
+  AExcept: TPluginAction): TPluginAction;
+var
+  A: TPluginAction;
+  I: Integer;
+begin
+  if not AChord.IsAssigned then
+    Exit(paNone);
+  for A := Succ(paNone) to High(TPluginAction) do
+  begin
+    if A = AExcept then
+      Continue;
+    for I := 0 to High(FBindings[A]) do
+      if FBindings[A][I].Equals(AChord) then
+        Exit(A);
+  end;
+  Result := paNone;
+end;
+
 {Unit-level helpers}
 
-function DefaultBinding(AAction: TPluginAction): THotkeyChord;
+function DefaultBinding(AAction: TPluginAction): THotkeyChordArray;
 begin
   case AAction of
     paSettings:
-      Result := THotkeyChord.Make(VK_F2, []);
+      Result := [THotkeyChord.Make(VK_F2, [])];
     paToggleToolbar:
-      Result := THotkeyChord.Make(VK_F4, []);
+      Result := [THotkeyChord.Make(VK_F4, [])];
     paToggleStatusBar:
-      Result := THotkeyChord.Make(VK_F3, []);
+      Result := [THotkeyChord.Make(VK_F3, [])];
     paToggleTimecode:
-      Result := THotkeyChord.Make(Ord('T'), []);
+      Result := [THotkeyChord.Make(Ord('T'), [])];
     paToggleMaximize:
-      Result := THotkeyChord.Make(VK_F11, []);
+      Result := [THotkeyChord.Make(VK_F11, [])];
     paToggleFullScreen:
-      Result := THotkeyChord.Make(VK_RETURN, [ssAlt]);
+      Result := [THotkeyChord.Make(VK_RETURN, [ssAlt])];
     paHamburgerMenu:
-      Result := THotkeyChord.Make(VK_OEM_3, []);
+      Result := [THotkeyChord.Make(VK_OEM_3, [])];
     paCloseLister:
-      Result := THotkeyChord.Make(VK_ESCAPE, []);
+      Result := [THotkeyChord.Make(VK_ESCAPE, [])];
+    paPrevFile:
+      Result := [THotkeyChord.Make(VK_LEFT, []),
+                 THotkeyChord.Make(VK_PRIOR, []),
+                 THotkeyChord.Make(VK_BACK, []),
+                 THotkeyChord.Make(Ord('Z'), [])];
+    paNextFile:
+      Result := [THotkeyChord.Make(VK_RIGHT, []),
+                 THotkeyChord.Make(VK_NEXT, []),
+                 THotkeyChord.Make(VK_SPACE, [])];
     paOpenInPlayer:
-      Result := THotkeyChord.Make(VK_RETURN, []);
+      Result := [THotkeyChord.Make(VK_RETURN, [])];
     paRefreshExtraction:
-      Result := THotkeyChord.Make(Ord('R'), []);
+      Result := [THotkeyChord.Make(Ord('R'), [])];
+    paPrevFrame:
+      Result := [THotkeyChord.Make(VK_LEFT, [ssCtrl])];
+    paNextFrame:
+      Result := [THotkeyChord.Make(VK_RIGHT, [ssCtrl])];
+    paFrameCountInc:
+      Result := [THotkeyChord.Make(VK_UP, [ssCtrl])];
+    paFrameCountDec:
+      Result := [THotkeyChord.Make(VK_DOWN, [ssCtrl])];
     paSaveSingleFrame:
-      Result := THotkeyChord.Make(Ord('S'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl])];
     paSaveAllFrames:
-      Result := THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt]);
+      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt])];
     paSaveCombined:
-      Result := THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift]);
+      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift])];
     paSaveSelected:
-      Result := THotkeyChord.None;
+      Result := nil;
     paSelectAllFrames:
-      Result := THotkeyChord.Make(Ord('A'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('A'), [ssCtrl])];
     paCopyToClipboard:
-      Result := THotkeyChord.Make(Ord('C'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('C'), [ssCtrl])];
     paCopyAllToClipboard:
-      Result := THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift]);
+      Result := [THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift])];
     paZoomIn:
-      Result := THotkeyChord.Make(VK_OEM_PLUS, []);
+      Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];
     paZoomOut:
-      Result := THotkeyChord.Make(VK_OEM_MINUS, []);
+      Result := [THotkeyChord.Make(VK_OEM_MINUS, [])];
     paZoomReset:
-      Result := THotkeyChord.Make(Ord('0'), []);
+      Result := [THotkeyChord.Make(Ord('0'), [])];
     paViewModeSmartGrid:
-      Result := THotkeyChord.Make(Ord('1'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('1'), [ssCtrl])];
     paViewModeGrid:
-      Result := THotkeyChord.Make(Ord('2'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('2'), [ssCtrl])];
     paViewModeScroll:
-      Result := THotkeyChord.Make(Ord('3'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('3'), [ssCtrl])];
     paViewModeFilmstrip:
-      Result := THotkeyChord.Make(Ord('4'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('4'), [ssCtrl])];
     paViewModeSingle:
-      Result := THotkeyChord.Make(Ord('5'), [ssCtrl]);
+      Result := [THotkeyChord.Make(Ord('5'), [ssCtrl])];
   else
-    Result := THotkeyChord.None;
+    Result := nil;
   end;
 end;
 
@@ -420,8 +535,14 @@ begin
     paToggleFullScreen: Result := 'ToggleFullScreen';
     paHamburgerMenu: Result := 'HamburgerMenu';
     paCloseLister: Result := 'CloseLister';
+    paPrevFile: Result := 'PrevFile';
+    paNextFile: Result := 'NextFile';
     paOpenInPlayer: Result := 'OpenInPlayer';
     paRefreshExtraction: Result := 'RefreshExtraction';
+    paPrevFrame: Result := 'PrevFrame';
+    paNextFrame: Result := 'NextFrame';
+    paFrameCountInc: Result := 'FrameCountInc';
+    paFrameCountDec: Result := 'FrameCountDec';
     paSaveSingleFrame: Result := 'SaveSingleFrame';
     paSaveAllFrames: Result := 'SaveAllFrames';
     paSaveCombined: Result := 'SaveCombined';
@@ -453,8 +574,14 @@ begin
     paToggleFullScreen: Result := 'Toggle full-screen';
     paHamburgerMenu: Result := 'Open hamburger menu';
     paCloseLister: Result := 'Close viewer';
+    paPrevFile: Result := 'Previous file';
+    paNextFile: Result := 'Next file';
     paOpenInPlayer: Result := 'Open in default player';
     paRefreshExtraction: Result := 'Refresh frames';
+    paPrevFrame: Result := 'Previous frame (single view)';
+    paNextFrame: Result := 'Next frame (single view)';
+    paFrameCountInc: Result := 'Increase frame count';
+    paFrameCountDec: Result := 'Decrease frame count';
     paSaveSingleFrame: Result := 'Save frame';
     paSaveAllFrames: Result := 'Save all frames';
     paSaveCombined: Result := 'Save combined image';
@@ -472,6 +599,60 @@ begin
     paViewModeSingle: Result := 'View mode: Single frame';
   else
     Result := '';
+  end;
+end;
+
+function ChordsToIniStr(const AChords: THotkeyChordArray): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(AChords) do
+  begin
+    if not AChords[I].IsAssigned then
+      Continue;
+    if Result <> '' then
+      Result := Result + CHORD_SEPARATOR;
+    Result := Result + AChords[I].ToIniStr;
+  end;
+end;
+
+function ChordsFromIniStr(const AValue: string): THotkeyChordArray;
+var
+  Parts: TArray<string>;
+  I, Count: Integer;
+  Parsed: THotkeyChord;
+begin
+  Result := nil;
+  if AValue.Trim = '' then
+    Exit;
+  Parts := AValue.Split([CHORD_SEPARATOR]);
+  SetLength(Result, Length(Parts));
+  Count := 0;
+  for I := 0 to High(Parts) do
+  begin
+    Parsed := THotkeyChord.FromIniStr(Parts[I]);
+    if Parsed.IsAssigned then
+    begin
+      Result[Count] := Parsed;
+      Inc(Count);
+    end;
+  end;
+  SetLength(Result, Count);
+end;
+
+function ChordsToDisplayStr(const AChords: THotkeyChordArray): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(AChords) do
+  begin
+    if not AChords[I].IsAssigned then
+      Continue;
+    if Result <> '' then
+      Result := Result + ', ';
+    Result := Result + AChords[I].ToDisplayStr;
   end;
 end;
 

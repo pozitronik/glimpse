@@ -1,5 +1,6 @@
-{Unit tests for uHotkeys: chord parse/serialise round-trip, defaults
- integrity, lookup with alias normalisation, INI load/save.}
+{Unit tests for uHotkeys: chord parse/serialise, multi-chord storage,
+ INI round-trip with '|' separator, lookup with alias normalisation,
+ conflict detection, defaults integrity.}
 unit TestHotkeys;
 
 interface
@@ -24,7 +25,23 @@ type
     [Test] procedure FromIniStr_Nonsense_Unassigned;
     [Test] procedure FromIniStr_LowerCase_Accepted;
     [Test] procedure FromIniStr_PlusKey_Recovered;
+    [Test] procedure Equals_SameFields_True;
+    [Test] procedure Equals_DifferentKey_False;
+    [Test] procedure Equals_DifferentModifiers_False;
     [Test] procedure RoundTrip_EveryDefaultBinding;
+  end;
+
+  [TestFixture]
+  TTestChordArrayHelpers = class
+  public
+    [Test] procedure ToIniStr_Empty;
+    [Test] procedure ToIniStr_SingleChord_NoSeparator;
+    [Test] procedure ToIniStr_MultipleChords_PipeSeparated;
+    [Test] procedure FromIniStr_Empty_EmptyArray;
+    [Test] procedure FromIniStr_MultipleChords_ParsedInOrder;
+    [Test] procedure FromIniStr_OneGarbageAmongValid_GarbageSkipped;
+    [Test] procedure RoundTrip_PrevFileDefaults;
+    [Test] procedure ToDisplayStr_JoinsWithComma;
   end;
 
   [TestFixture]
@@ -35,20 +52,32 @@ type
     [Setup] procedure Setup;
     [TearDown] procedure TearDown;
 
-    [Test] procedure Defaults_NoneForAllUnspecified;
-    [Test] procedure Defaults_EveryActionHasExpected;
+    [Test] procedure Defaults_PaNoneIsEmpty;
+    [Test] procedure Defaults_SaveSelectedIsUnbound;
+    [Test] procedure Defaults_PrevFileHasFourChords;
+    [Test] procedure Defaults_NextFileHasThreeChords;
     [Test] procedure Lookup_Defaults_Resolve;
+    [Test] procedure Lookup_PrevFile_EveryDefaultChord_ResolvesSameAction;
     [Test] procedure Lookup_Numpad0_ResolvesAsDigit0;
     [Test] procedure Lookup_NumpadAdd_ResolvesAsOemPlus;
     [Test] procedure Lookup_NumpadSubtract_ResolvesAsOemMinus;
     [Test] procedure Lookup_Unknown_ReturnsNone;
-    [Test] procedure Lookup_IgnoresNonStandardModifiers;
-    [Test] procedure Put_Lookup_SeesNewBinding;
+    [Test] procedure Lookup_IgnoresMouseFlags;
+    [Test] procedure AddChord_Unique_ReturnsTrue;
+    [Test] procedure AddChord_Duplicate_ReturnsFalseSilently;
+    [Test] procedure AddChord_Unassigned_ReturnsFalse;
+    [Test] procedure RemoveChord_Present_ReturnsTrue;
+    [Test] procedure RemoveChord_Absent_ReturnsFalse;
+    [Test] procedure Put_ReplacesWholeList;
     [Test] procedure ResetToDefaults_ReplacesCustomBindings;
-    [Test] procedure IniRoundTrip_CustomBindingsPreserved;
+    [Test] procedure Assign_DeepCopies;
+    [Test] procedure FindActionByChord_DetectsConflict;
+    [Test] procedure FindActionByChord_ExcludesSelf;
+    [Test] procedure IniRoundTrip_MultiChordPreserved;
     [Test] procedure IniLoad_EmptyValue_Unbinds;
     [Test] procedure IniLoad_MissingKey_KeepsDefault;
-    [Test] procedure IniLoad_UnparseableValue_KeepsDefault;
+    [Test] procedure IniLoad_GarbageAmongValid_OtherChordsKept;
+    [Test] procedure IniSave_SingleChord_NoSeparatorInOutput;
   end;
 
 implementation
@@ -134,8 +163,7 @@ procedure TTestHotkeyChord.FromIniStr_Nonsense_Unassigned;
 begin
   Assert.IsFalse(THotkeyChord.FromIniStr('ZZZZ').IsAssigned);
   Assert.IsFalse(THotkeyChord.FromIniStr('Ctrl+').IsAssigned);
-  Assert.IsFalse(THotkeyChord.FromIniStr('Ctrl+Alt').IsAssigned,
-    'Modifiers without a key must not parse');
+  Assert.IsFalse(THotkeyChord.FromIniStr('Ctrl+Alt').IsAssigned);
 end;
 
 procedure TTestHotkeyChord.FromIniStr_LowerCase_Accepted;
@@ -151,31 +179,144 @@ procedure TTestHotkeyChord.FromIniStr_PlusKey_Recovered;
 var
   C: THotkeyChord;
 begin
-  {The '+' character is the delimiter; parsing the single-char key '+' must
-   still recover it so the serialisation round-trips.}
   C := THotkeyChord.FromIniStr('+');
   Assert.IsTrue(C.IsAssigned);
   Assert.AreEqual<Integer>(VK_OEM_PLUS, C.Key);
 end;
 
+procedure TTestHotkeyChord.Equals_SameFields_True;
+var
+  A, B: THotkeyChord;
+begin
+  A := THotkeyChord.Make(VK_F1, [ssCtrl]);
+  B := THotkeyChord.Make(VK_F1, [ssCtrl]);
+  Assert.IsTrue(A.Equals(B));
+end;
+
+procedure TTestHotkeyChord.Equals_DifferentKey_False;
+var
+  A, B: THotkeyChord;
+begin
+  A := THotkeyChord.Make(VK_F1, [ssCtrl]);
+  B := THotkeyChord.Make(VK_F2, [ssCtrl]);
+  Assert.IsFalse(A.Equals(B));
+end;
+
+procedure TTestHotkeyChord.Equals_DifferentModifiers_False;
+var
+  A, B: THotkeyChord;
+begin
+  A := THotkeyChord.Make(VK_F1, [ssCtrl]);
+  B := THotkeyChord.Make(VK_F1, [ssCtrl, ssShift]);
+  Assert.IsFalse(A.Equals(B));
+end;
+
 procedure TTestHotkeyChord.RoundTrip_EveryDefaultBinding;
 var
   A: TPluginAction;
-  Orig, Parsed: THotkeyChord;
+  Defaults: THotkeyChordArray;
+  I: Integer;
+  Parsed: THotkeyChord;
 begin
   for A := Succ(paNone) to High(TPluginAction) do
   begin
-    Orig := DefaultBinding(A);
-    if not Orig.IsAssigned then
-      Continue;
-    Parsed := THotkeyChord.FromIniStr(Orig.ToIniStr);
-    Assert.IsTrue(Parsed.IsAssigned,
-      Format('Default for %s failed to parse: %s', [ActionIniKey(A), Orig.ToIniStr]));
-    Assert.AreEqual<Integer>(Orig.Key, Parsed.Key,
-      Format('Key mismatch for %s', [ActionIniKey(A)]));
-    Assert.IsTrue(Orig.Modifiers = Parsed.Modifiers,
-      Format('Modifier mismatch for %s', [ActionIniKey(A)]));
+    Defaults := DefaultBinding(A);
+    for I := 0 to High(Defaults) do
+    begin
+      Parsed := THotkeyChord.FromIniStr(Defaults[I].ToIniStr);
+      Assert.IsTrue(Parsed.IsAssigned,
+        Format('Default chord %d of %s failed to parse: %s',
+          [I, ActionIniKey(A), Defaults[I].ToIniStr]));
+      Assert.IsTrue(Parsed.Equals(Defaults[I]),
+        Format('Round-trip diverged for %s chord %d', [ActionIniKey(A), I]));
+    end;
   end;
+end;
+
+{TTestChordArrayHelpers}
+
+procedure TTestChordArrayHelpers.ToIniStr_Empty;
+var
+  Empty: THotkeyChordArray;
+begin
+  SetLength(Empty, 0);
+  Assert.AreEqual('', ChordsToIniStr(Empty));
+end;
+
+procedure TTestChordArrayHelpers.ToIniStr_SingleChord_NoSeparator;
+var
+  C: THotkeyChordArray;
+begin
+  SetLength(C, 1);
+  C[0] := THotkeyChord.Make(VK_F2, []);
+  Assert.AreEqual('F2', ChordsToIniStr(C));
+end;
+
+procedure TTestChordArrayHelpers.ToIniStr_MultipleChords_PipeSeparated;
+var
+  C: THotkeyChordArray;
+begin
+  SetLength(C, 3);
+  C[0] := THotkeyChord.Make(VK_LEFT, []);
+  C[1] := THotkeyChord.Make(VK_BACK, []);
+  C[2] := THotkeyChord.Make(Ord('Z'), []);
+  Assert.AreEqual('Left|Backspace|Z', ChordsToIniStr(C));
+end;
+
+procedure TTestChordArrayHelpers.FromIniStr_Empty_EmptyArray;
+begin
+  Assert.AreEqual<Integer>(0, Length(ChordsFromIniStr('')));
+  Assert.AreEqual<Integer>(0, Length(ChordsFromIniStr('   ')));
+end;
+
+procedure TTestChordArrayHelpers.FromIniStr_MultipleChords_ParsedInOrder;
+var
+  C: THotkeyChordArray;
+begin
+  C := ChordsFromIniStr('Left|PageUp|Backspace|Z');
+  Assert.AreEqual<Integer>(4, Length(C));
+  Assert.AreEqual<Integer>(VK_LEFT, C[0].Key);
+  Assert.AreEqual<Integer>(VK_PRIOR, C[1].Key);
+  Assert.AreEqual<Integer>(VK_BACK, C[2].Key);
+  Assert.AreEqual<Integer>(Ord('Z'), C[3].Key);
+end;
+
+procedure TTestChordArrayHelpers.FromIniStr_OneGarbageAmongValid_GarbageSkipped;
+var
+  C: THotkeyChordArray;
+begin
+  {Garbage segments are dropped so a single typo doesn't nuke a whole row.}
+  C := ChordsFromIniStr('Left|NotAKey|PageUp');
+  Assert.AreEqual<Integer>(2, Length(C));
+  Assert.AreEqual<Integer>(VK_LEFT, C[0].Key);
+  Assert.AreEqual<Integer>(VK_PRIOR, C[1].Key);
+end;
+
+procedure TTestChordArrayHelpers.RoundTrip_PrevFileDefaults;
+var
+  Orig, Back: THotkeyChordArray;
+  I: Integer;
+  Text: string;
+begin
+  Orig := DefaultBinding(paPrevFile);
+  Text := ChordsToIniStr(Orig);
+  Back := ChordsFromIniStr(Text);
+  Assert.AreEqual<Integer>(Length(Orig), Length(Back));
+  for I := 0 to High(Orig) do
+    Assert.IsTrue(Orig[I].Equals(Back[I]),
+      Format('paPrevFile chord %d diverged: %s != %s',
+        [I, Orig[I].ToIniStr, Back[I].ToIniStr]));
+end;
+
+procedure TTestChordArrayHelpers.ToDisplayStr_JoinsWithComma;
+var
+  C: THotkeyChordArray;
+begin
+  SetLength(C, 3);
+  C[0] := THotkeyChord.Make(VK_LEFT, []);
+  C[1] := THotkeyChord.Make(VK_BACK, []);
+  C[2] := THotkeyChord.Make(Ord('Z'), []);
+  Assert.AreEqual('Left, Backspace, Z', ChordsToDisplayStr(C));
 end;
 
 {TTestHotkeyBindings}
@@ -192,40 +333,53 @@ begin
     TDirectory.Delete(FTempDir, True);
 end;
 
-procedure TTestHotkeyBindings.Defaults_NoneForAllUnspecified;
+procedure TTestHotkeyBindings.Defaults_PaNoneIsEmpty;
 var
   B: THotkeyBindings;
 begin
   B := THotkeyBindings.Create;
   try
-    {paNone is the sentinel and never has a chord.}
-    Assert.IsFalse(B.Get(paNone).IsAssigned);
+    Assert.AreEqual<Integer>(0, Length(B.Get(paNone)));
   finally
     B.Free;
   end;
 end;
 
-procedure TTestHotkeyBindings.Defaults_EveryActionHasExpected;
+procedure TTestHotkeyBindings.Defaults_SaveSelectedIsUnbound;
 var
   B: THotkeyBindings;
-  C: THotkeyChord;
 begin
   B := THotkeyBindings.Create;
   try
-    C := B.Get(paSettings);
-    Assert.IsTrue(C.IsAssigned);
-    Assert.AreEqual<Integer>(VK_F2, C.Key);
+    Assert.AreEqual<Integer>(0, Length(B.Get(paSaveSelected)));
+  finally
+    B.Free;
+  end;
+end;
 
-    C := B.Get(paToggleFullScreen);
-    Assert.AreEqual<Integer>(VK_RETURN, C.Key);
-    Assert.IsTrue(C.Modifiers = [ssAlt]);
+procedure TTestHotkeyBindings.Defaults_PrevFileHasFourChords;
+var
+  B: THotkeyBindings;
+  C: THotkeyChordArray;
+begin
+  B := THotkeyBindings.Create;
+  try
+    C := B.Get(paPrevFile);
+    Assert.AreEqual<Integer>(4, Length(C),
+      'paPrevFile ships with Left, PageUp, Backspace, Z');
+  finally
+    B.Free;
+  end;
+end;
 
-    C := B.Get(paOpenInPlayer);
-    Assert.AreEqual<Integer>(VK_RETURN, C.Key);
-    Assert.IsTrue(C.Modifiers = []);
-
-    C := B.Get(paSaveSelected);
-    Assert.IsFalse(C.IsAssigned, 'paSaveSelected ships unbound by design');
+procedure TTestHotkeyBindings.Defaults_NextFileHasThreeChords;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.AreEqual<Integer>(3, Length(B.Get(paNextFile)),
+      'paNextFile ships with Right, PageDown, Space');
   finally
     B.Free;
   end;
@@ -243,6 +397,24 @@ begin
     Assert.AreEqual(Ord(paCloseLister), Ord(B.Lookup(VK_ESCAPE, [])));
     Assert.AreEqual(Ord(paZoomReset), Ord(B.Lookup(Ord('0'), [])));
     Assert.AreEqual(Ord(paViewModeGrid), Ord(B.Lookup(Ord('2'), [ssCtrl])));
+    Assert.AreEqual(Ord(paPrevFrame), Ord(B.Lookup(VK_LEFT, [ssCtrl])));
+    Assert.AreEqual(Ord(paFrameCountInc), Ord(B.Lookup(VK_UP, [ssCtrl])));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Lookup_PrevFile_EveryDefaultChord_ResolvesSameAction;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    {All four default chords for paPrevFile must resolve to the same action.}
+    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_LEFT, [])));
+    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_PRIOR, [])));
+    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_BACK, [])));
+    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(Ord('Z'), [])));
   finally
     B.Free;
   end;
@@ -252,8 +424,6 @@ procedure TTestHotkeyBindings.Lookup_Numpad0_ResolvesAsDigit0;
 var
   B: THotkeyBindings;
 begin
-  {Numpad digit normalisation: pressing numpad 0 must resolve the same
-   binding as top-row 0, so the user gets one logical entry for Zoom reset.}
   B := THotkeyBindings.Create;
   try
     Assert.AreEqual(Ord(paZoomReset), Ord(B.Lookup(VK_NUMPAD0, [])));
@@ -292,38 +462,110 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    {A random VK that no default maps to, with no modifiers.}
     Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F24, [])));
-    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F2, [ssCtrl])),
-      'F2 is bare-only; Ctrl+F2 must not match paSettings');
+    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F2, [ssCtrl])));
   finally
     B.Free;
   end;
 end;
 
-procedure TTestHotkeyBindings.Lookup_IgnoresNonStandardModifiers;
+procedure TTestHotkeyBindings.Lookup_IgnoresMouseFlags;
 var
   B: THotkeyBindings;
 begin
-  {Some hosts deliver TShiftState including mouse buttons. Lookup must
-   only consider ssCtrl/ssShift/ssAlt.}
   B := THotkeyBindings.Create;
   try
-    Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F2, [ssLeft])),
-      'Mouse flags in the shift set must not block a keyboard-only match');
+    Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F2, [ssLeft])));
   finally
     B.Free;
   end;
 end;
 
-procedure TTestHotkeyBindings.Put_Lookup_SeesNewBinding;
+procedure TTestHotkeyBindings.AddChord_Unique_ReturnsTrue;
 var
   B: THotkeyBindings;
 begin
   B := THotkeyBindings.Create;
   try
-    B.Put(paSaveSelected, THotkeyChord.Make(VK_F9, [ssCtrl]));
-    Assert.AreEqual(Ord(paSaveSelected), Ord(B.Lookup(VK_F9, [ssCtrl])));
+    Assert.IsTrue(B.AddChord(paSaveSelected, THotkeyChord.Make(VK_F9, [ssCtrl])));
+    Assert.AreEqual<Integer>(1, Length(B.Get(paSaveSelected)));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.AddChord_Duplicate_ReturnsFalseSilently;
+var
+  B: THotkeyBindings;
+  Chord: THotkeyChord;
+begin
+  B := THotkeyBindings.Create;
+  try
+    {Adding the same chord twice is a no-op, not a conflict prompt.}
+    Chord := THotkeyChord.Make(VK_F9, [ssCtrl]);
+    Assert.IsTrue(B.AddChord(paSaveSelected, Chord));
+    Assert.IsFalse(B.AddChord(paSaveSelected, Chord));
+    Assert.AreEqual<Integer>(1, Length(B.Get(paSaveSelected)));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.AddChord_Unassigned_ReturnsFalse;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.IsFalse(B.AddChord(paSaveSelected, THotkeyChord.None));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.RemoveChord_Present_ReturnsTrue;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    {paPrevFile ships with Left; removing it leaves three chords.}
+    Assert.IsTrue(B.RemoveChord(paPrevFile, THotkeyChord.Make(VK_LEFT, [])));
+    Assert.AreEqual<Integer>(3, Length(B.Get(paPrevFile)));
+    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_LEFT, [])),
+      'Left is no longer bound after removal');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.RemoveChord_Absent_ReturnsFalse;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.IsFalse(B.RemoveChord(paPrevFile, THotkeyChord.Make(VK_F24, [])));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Put_ReplacesWholeList;
+var
+  B: THotkeyBindings;
+  NewList: THotkeyChordArray;
+begin
+  B := THotkeyBindings.Create;
+  try
+    SetLength(NewList, 2);
+    NewList[0] := THotkeyChord.Make(VK_F9, []);
+    NewList[1] := THotkeyChord.Make(VK_F10, []);
+    B.Put(paPrevFile, NewList);
+    Assert.AreEqual<Integer>(2, Length(B.Get(paPrevFile)));
+    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_LEFT, [])),
+      'After Put, the original Left chord is gone');
+    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_F9, [])));
   finally
     B.Free;
   end;
@@ -335,29 +577,81 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    B.Put(paSettings, THotkeyChord.Make(VK_F9, []));
+    B.Put(paSettings, [THotkeyChord.Make(VK_F9, [])]);
     Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F9, [])));
     B.ResetToDefaults;
-    Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F2, [])),
-      'After reset, F2 must resolve to paSettings again');
-    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F9, [])),
-      'After reset, the custom F9 binding must be gone');
+    Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F2, [])));
+    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F9, [])));
   finally
     B.Free;
   end;
 end;
 
-procedure TTestHotkeyBindings.IniRoundTrip_CustomBindingsPreserved;
+procedure TTestHotkeyBindings.Assign_DeepCopies;
+var
+  A, B: THotkeyBindings;
+  List: THotkeyChordArray;
+begin
+  A := THotkeyBindings.Create;
+  B := THotkeyBindings.Create;
+  try
+    A.Put(paPrevFile, [THotkeyChord.Make(VK_F9, [])]);
+    B.Assign(A);
+    {Mutating A after Assign must not affect B — proves we copied, not aliased.}
+    A.Put(paPrevFile, [THotkeyChord.Make(VK_F10, [])]);
+    List := B.Get(paPrevFile);
+    Assert.AreEqual<Integer>(1, Length(List));
+    Assert.AreEqual<Integer>(VK_F9, List[0].Key);
+  finally
+    A.Free;
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.FindActionByChord_DetectsConflict;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    {F2 is assigned to paSettings by default; a fresh F2 chord searched
+     globally should find paSettings.}
+    Assert.AreEqual(Ord(paSettings),
+      Ord(B.FindActionByChord(THotkeyChord.Make(VK_F2, []))));
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.FindActionByChord_ExcludesSelf;
+var
+  B: THotkeyBindings;
+begin
+  B := THotkeyBindings.Create;
+  try
+    Assert.AreEqual(Ord(paNone),
+      Ord(B.FindActionByChord(THotkeyChord.Make(VK_F2, []), paSettings)),
+      'Self-binding must not count as a conflict');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.IniRoundTrip_MultiChordPreserved;
 var
   A, B: THotkeyBindings;
   Ini: TIniFile;
   Path: string;
+  Loaded: THotkeyChordArray;
 begin
-  Path := TPath.Combine(FTempDir, 'hotkeys.ini');
+  Path := TPath.Combine(FTempDir, 'multi.ini');
   A := THotkeyBindings.Create;
   try
-    A.Put(paSaveSelected, THotkeyChord.Make(VK_F9, [ssCtrl, ssShift]));
-    A.Put(paSettings, THotkeyChord.Make(VK_F12, []));
+    {Put a custom 3-chord list on paSettings so we have something distinct to
+     round-trip.}
+    A.Put(paSettings, [THotkeyChord.Make(VK_F9, []),
+                       THotkeyChord.Make(VK_F10, [ssCtrl]),
+                       THotkeyChord.Make(VK_F11, [ssShift])]);
     Ini := TIniFile.Create(Path);
     try
       A.Save(Ini);
@@ -376,10 +670,13 @@ begin
     finally
       Ini.Free;
     end;
-    Assert.AreEqual(Ord(paSaveSelected), Ord(B.Lookup(VK_F9, [ssCtrl, ssShift])));
-    Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F12, [])));
-    Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F2, [])),
-      'The default F2 binding was overwritten in memory and on disk');
+    Loaded := B.Get(paSettings);
+    Assert.AreEqual<Integer>(3, Length(Loaded));
+    Assert.AreEqual<Integer>(VK_F9, Loaded[0].Key);
+    Assert.AreEqual<Integer>(VK_F10, Loaded[1].Key);
+    Assert.IsTrue(Loaded[1].Modifiers = [ssCtrl]);
+    Assert.AreEqual<Integer>(VK_F11, Loaded[2].Key);
+    Assert.IsTrue(Loaded[2].Modifiers = [ssShift]);
   finally
     B.Free;
   end;
@@ -391,8 +688,6 @@ var
   Ini: TIniFile;
   Path: string;
 begin
-  {An empty value is the user's explicit way to disable a default hotkey
-   without deleting the line. It must unbind, not fall back to the default.}
   Path := TPath.Combine(FTempDir, 'empty.ini');
   Ini := TIniFile.Create(Path);
   try
@@ -409,8 +704,7 @@ begin
     finally
       Ini.Free;
     end;
-    Assert.IsFalse(B.Get(paSettings).IsAssigned,
-      'Empty string in INI should unbind, not restore default');
+    Assert.AreEqual<Integer>(0, Length(B.Get(paSettings)));
     Assert.AreEqual(Ord(paNone), Ord(B.Lookup(VK_F2, [])));
   finally
     B.Free;
@@ -422,14 +716,12 @@ var
   B: THotkeyBindings;
   Ini: TIniFile;
   Path: string;
+  List: THotkeyChordArray;
 begin
-  {An INI file that omits an action should leave that action at its
-   default. Only explicit empty strings unbind.}
   Path := TPath.Combine(FTempDir, 'missing.ini');
   Ini := TIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'F9');
-    {Deliberately do not write anything for ToggleToolbar}
   finally
     Ini.Free;
   end;
@@ -442,26 +734,28 @@ begin
     finally
       Ini.Free;
     end;
-    Assert.AreEqual<Integer>(VK_F9, B.Get(paSettings).Key);
-    Assert.AreEqual<Integer>(VK_F4, B.Get(paToggleToolbar).Key,
+    Assert.AreEqual<Integer>(VK_F9, B.Get(paSettings)[0].Key);
+    List := B.Get(paToggleToolbar);
+    Assert.AreEqual<Integer>(1, Length(List));
+    Assert.AreEqual<Integer>(VK_F4, List[0].Key,
       'ToggleToolbar had no INI entry and must keep its F4 default');
   finally
     B.Free;
   end;
 end;
 
-procedure TTestHotkeyBindings.IniLoad_UnparseableValue_KeepsDefault;
+procedure TTestHotkeyBindings.IniLoad_GarbageAmongValid_OtherChordsKept;
 var
   B: THotkeyBindings;
   Ini: TIniFile;
   Path: string;
+  List: THotkeyChordArray;
 begin
-  {Garbage values should be treated as "couldn't decide" and keep the
-   default, not unbind silently. Typos shouldn't disable features.}
+  {"NotAKey" inside a pipe-joined list shouldn't kill the whole row.}
   Path := TPath.Combine(FTempDir, 'garbage.ini');
   Ini := TIniFile.Create(Path);
   try
-    Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'Ctrl+NotAKey');
+    Ini.WriteString(HOTKEYS_SECTION, 'PrevFile', 'Left|NotAKey|PageUp');
   finally
     Ini.Free;
   end;
@@ -474,7 +768,39 @@ begin
     finally
       Ini.Free;
     end;
-    Assert.AreEqual<Integer>(VK_F2, B.Get(paSettings).Key);
+    List := B.Get(paPrevFile);
+    Assert.AreEqual<Integer>(2, Length(List));
+    Assert.AreEqual<Integer>(VK_LEFT, List[0].Key);
+    Assert.AreEqual<Integer>(VK_PRIOR, List[1].Key);
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.IniSave_SingleChord_NoSeparatorInOutput;
+var
+  B: THotkeyBindings;
+  Ini: TIniFile;
+  Path: string;
+begin
+  {Regression guard: single-chord actions shouldn't write a trailing '|'.}
+  Path := TPath.Combine(FTempDir, 'single.ini');
+  B := THotkeyBindings.Create;
+  try
+    Ini := TIniFile.Create(Path);
+    try
+      B.Save(Ini);
+    finally
+      Ini.Free;
+    end;
+
+    Ini := TIniFile.Create(Path);
+    try
+      Assert.AreEqual('F2', Ini.ReadString(HOTKEYS_SECTION, 'Settings', ''));
+      Assert.AreEqual('Alt+Enter', Ini.ReadString(HOTKEYS_SECTION, 'ToggleFullScreen', ''));
+    finally
+      Ini.Free;
+    end;
   finally
     B.Free;
   end;
@@ -482,6 +808,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestHotkeyChord);
+  TDUnitX.RegisterTestFixture(TTestChordArrayHelpers);
   TDUnitX.RegisterTestFixture(TTestHotkeyBindings);
 
 end.
