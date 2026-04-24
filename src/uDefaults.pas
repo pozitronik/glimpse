@@ -37,6 +37,13 @@ const
   MIN_TIMESTAMP_FONT_SIZE = 6;
   MAX_TIMESTAMP_FONT_SIZE = 72;
 
+  {Timestamp font defaults used by WLX. WCX overrides to its own pair
+   (WCX_DEF_TIMESTAMP_FONT/SIZE) in uWcxSettings. Kept here so the shared
+   settings-group records in uSettingsGroups can seed sensible fallbacks
+   without creating a circular dependency on uSettings.}
+  DEF_TIMESTAMP_FONT = 'Segoe UI';
+  DEF_TIMESTAMP_FONT_SIZE = 8;
+
   {Timestamp text opacity (0 = invisible, 255 = fully opaque). Shared by both plugins.}
   DEF_TIMESTAMP_TEXT_ALPHA = 255;
   MIN_TIMESTAMP_TEXT_ALPHA = 0;

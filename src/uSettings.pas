@@ -6,7 +6,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver, uTypes, uDefaults, uHotkeys;
+  uBitmapSaver, uTypes, uDefaults, uHotkeys, uSettingsGroups;
 
 type
   TPluginSettings = class
@@ -16,14 +16,8 @@ type
     FFFmpegMode: TFFmpegMode;
     FFFmpegExePath: string;
     FFFmpegAutoDownloaded: Boolean;
-    {[extraction]}
-    FFramesCount: Integer;
-    FSkipEdgesPercent: Integer;
-    FMaxWorkers: Integer;
-    FMaxThreads: Integer;
-    FUseBmpPipe: Boolean;
-    FHwAccel: Boolean;
-    FUseKeyframes: Boolean;
+    {[extraction] — group record, exposed via delegated properties below}
+    FExtraction: TExtractionSettingsGroup;
     FScaledExtraction: Boolean;
     FMinFrameSide: Integer;
     FMaxFrameSide: Integer;
@@ -32,18 +26,12 @@ type
     FViewMode: TViewMode;
     FModeZoom: array [TViewMode] of TZoomMode;
     FBackground: TColor;
-    FShowTimecode: Boolean;
     FShowToolbar: Boolean;
     FShowStatusBar: Boolean;
-    FTimecodeBackColor: TColor;
-    FTimecodeBackAlpha: Byte;
-    FTimestampTextAlpha: Byte;
-    FTimestampTextColor: TColor;
-    FTimestampFontName: string;
-    FTimestampFontSize: Integer;
     FCellGap: Integer;
     FCombinedBorder: Integer;
-    FTimestampCorner: TTimestampCorner;
+    {[view] — timestamp overlay group shared with WCX via uSettingsGroups}
+    FTimestamp: TTimestampSettingsGroup;
     {[extensions]}
     FExtensionList: string;
     {[save]}
@@ -51,13 +39,8 @@ type
     FJpegQuality: Integer;
     FPngCompression: Integer;
     FSaveFolder: string;
-    FShowBanner: Boolean;
-    FBannerBackground: TColor;
-    FBannerTextColor: TColor;
-    FBannerFontName: string;
-    FBannerFontSize: Integer;
-    FBannerFontAutoSize: Boolean;
-    FBannerPosition: TBannerPosition;
+    {[save] — banner group shared with WCX}
+    FBanner: TBannerSettingsGroup;
     {[cache]}
     FCacheEnabled: Boolean;
     FCacheFolder: string;
@@ -106,14 +89,15 @@ type
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
     property FFmpegAutoDownloaded: Boolean read FFFmpegAutoDownloaded write FFFmpegAutoDownloaded;
 
-    {[extraction]}
-    property FramesCount: Integer read FFramesCount write FFramesCount;
-    property SkipEdgesPercent: Integer read FSkipEdgesPercent write FSkipEdgesPercent;
-    property MaxWorkers: Integer read FMaxWorkers write FMaxWorkers;
-    property MaxThreads: Integer read FMaxThreads write FMaxThreads;
-    property UseBmpPipe: Boolean read FUseBmpPipe write FUseBmpPipe;
-    property HwAccel: Boolean read FHwAccel write FHwAccel;
-    property UseKeyframes: Boolean read FUseKeyframes write FUseKeyframes;
+    {[extraction] — delegated to FExtraction so the field layout and INI
+     Load/Save stay in lockstep with WCX via uSettingsGroups.}
+    property FramesCount: Integer read FExtraction.FramesCount write FExtraction.FramesCount;
+    property SkipEdgesPercent: Integer read FExtraction.SkipEdgesPercent write FExtraction.SkipEdgesPercent;
+    property MaxWorkers: Integer read FExtraction.MaxWorkers write FExtraction.MaxWorkers;
+    property MaxThreads: Integer read FExtraction.MaxThreads write FExtraction.MaxThreads;
+    property UseBmpPipe: Boolean read FExtraction.UseBmpPipe write FExtraction.UseBmpPipe;
+    property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
+    property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;
@@ -126,18 +110,20 @@ type
     {Convenience: reads/writes FModeZoom[FViewMode]}
     property ZoomMode: TZoomMode read GetActiveZoom write SetActiveZoom;
     property Background: TColor read FBackground write FBackground;
-    property ShowTimecode: Boolean read FShowTimecode write FShowTimecode;
+    {ShowTimecode is the WLX name for the timestamp group's Show toggle;
+     WCX exposes the same field as ShowTimestamp.}
+    property ShowTimecode: Boolean read FTimestamp.Show write FTimestamp.Show;
     property ShowToolbar: Boolean read FShowToolbar write FShowToolbar;
     property ShowStatusBar: Boolean read FShowStatusBar write FShowStatusBar;
-    property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
-    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
-    property TimestampTextAlpha: Byte read FTimestampTextAlpha write FTimestampTextAlpha;
-    property TimestampTextColor: TColor read FTimestampTextColor write FTimestampTextColor;
-    property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
-    property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
+    property TimecodeBackColor: TColor read FTimestamp.BackColor write FTimestamp.BackColor;
+    property TimecodeBackAlpha: Byte read FTimestamp.BackAlpha write FTimestamp.BackAlpha;
+    property TimestampTextAlpha: Byte read FTimestamp.TextAlpha write FTimestamp.TextAlpha;
+    property TimestampTextColor: TColor read FTimestamp.TextColor write FTimestamp.TextColor;
+    property TimestampFontName: string read FTimestamp.FontName write FTimestamp.FontName;
+    property TimestampFontSize: Integer read FTimestamp.FontSize write FTimestamp.FontSize;
     property CellGap: Integer read FCellGap write FCellGap;
     property CombinedBorder: Integer read FCombinedBorder write FCombinedBorder;
-    property TimestampCorner: TTimestampCorner read FTimestampCorner write FTimestampCorner;
+    property TimestampCorner: TTimestampCorner read FTimestamp.Corner write FTimestamp.Corner;
 
     {[extensions]}
     property ExtensionList: string read FExtensionList write FExtensionList;
@@ -147,13 +133,13 @@ type
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
-    property ShowBanner: Boolean read FShowBanner write FShowBanner;
-    property BannerBackground: TColor read FBannerBackground write FBannerBackground;
-    property BannerTextColor: TColor read FBannerTextColor write FBannerTextColor;
-    property BannerFontName: string read FBannerFontName write FBannerFontName;
-    property BannerFontSize: Integer read FBannerFontSize write FBannerFontSize;
-    property BannerFontAutoSize: Boolean read FBannerFontAutoSize write FBannerFontAutoSize;
-    property BannerPosition: TBannerPosition read FBannerPosition write FBannerPosition;
+    property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
+    property BannerBackground: TColor read FBanner.Background write FBanner.Background;
+    property BannerTextColor: TColor read FBanner.TextColor write FBanner.TextColor;
+    property BannerFontName: string read FBanner.FontName write FBanner.FontName;
+    property BannerFontSize: Integer read FBanner.FontSize write FBanner.FontSize;
+    property BannerFontAutoSize: Boolean read FBanner.AutoSize write FBanner.AutoSize;
+    property BannerPosition: TBannerPosition read FBanner.Position write FBanner.Position;
 
     {[cache]}
     property CacheEnabled: Boolean read FCacheEnabled write FCacheEnabled;
@@ -187,8 +173,6 @@ const
   DEF_SHOW_TIMECODE = True;
   DEF_SHOW_TOOLBAR = True;
   DEF_SHOW_STATUS_BAR = True;
-  DEF_TIMESTAMP_FONT = 'Segoe UI';
-  DEF_TIMESTAMP_FONT_SIZE = 8;
   DEF_CELL_GAP = 0;
   DEF_SAVE_FOLDER = '';
   DEF_SHOW_BANNER = False;
@@ -248,13 +232,7 @@ begin
   FFFmpegMode := DEF_FFMPEG_MODE;
   FFFmpegExePath := DEF_FFMPEG_EXE_PATH;
   FFFmpegAutoDownloaded := DEF_FFMPEG_AUTO_DL;
-  FFramesCount := DEF_FRAMES_COUNT;
-  FSkipEdgesPercent := DEF_SKIP_EDGES_PERCENT;
-  FMaxWorkers := DEF_MAX_WORKERS;
-  FMaxThreads := DEF_MAX_THREADS;
-  FUseBmpPipe := DEF_USE_BMP_PIPE;
-  FHwAccel := DEF_HW_ACCEL;
-  FUseKeyframes := DEF_USE_KEYFRAMES;
+  FExtraction := TExtractionSettingsGroup.Defaults;
   FScaledExtraction := DEF_SCALED_EXTRACTION;
   FMinFrameSide := DEF_MIN_FRAME_SIDE;
   FMaxFrameSide := DEF_MAX_FRAME_SIDE;
@@ -263,30 +241,24 @@ begin
   for var VM := Low(TViewMode) to High(TViewMode) do
     FModeZoom[VM] := DEF_ZOOM_MODE;
   FBackground := DEF_BACKGROUND;
-  FShowTimecode := DEF_SHOW_TIMECODE;
   FShowToolbar := DEF_SHOW_TOOLBAR;
   FShowStatusBar := DEF_SHOW_STATUS_BAR;
-  FTimecodeBackColor := DEF_TC_BACK_COLOR;
-  FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
-  FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
-  FTimestampTextColor := DEF_TIMESTAMP_TEXT_COLOR;
-  FTimestampFontName := DEF_TIMESTAMP_FONT;
-  FTimestampFontSize := DEF_TIMESTAMP_FONT_SIZE;
+  FTimestamp := TTimestampSettingsGroup.Defaults;
+  {Group defaults seed Show=True and WLX font — match historical constant
+   names even though current values are identical, so a future change to
+   either constant flows through.}
+  FTimestamp.Show := DEF_SHOW_TIMECODE;
+  FTimestamp.FontName := DEF_TIMESTAMP_FONT;
+  FTimestamp.FontSize := DEF_TIMESTAMP_FONT_SIZE;
   FCellGap := DEF_CELL_GAP;
   FCombinedBorder := DEF_COMBINED_BORDER;
-  FTimestampCorner := DEF_TIMESTAMP_CORNER;
   FExtensionList := DEF_EXTENSION_LIST;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
   FPngCompression := DEF_PNG_COMPRESSION;
   FSaveFolder := DEF_SAVE_FOLDER;
-  FShowBanner := DEF_SHOW_BANNER;
-  FBannerBackground := DEF_BANNER_BACKGROUND;
-  FBannerTextColor := DEF_BANNER_TEXT_COLOR;
-  FBannerFontName := DEF_BANNER_FONT_NAME;
-  FBannerFontSize := DEF_BANNER_FONT_SIZE;
-  FBannerFontAutoSize := DEF_BANNER_FONT_AUTO_SIZE;
-  FBannerPosition := DEF_BANNER_POSITION;
+  FBanner := TBannerSettingsGroup.Defaults;
+  FBanner.Show := DEF_SHOW_BANNER;
   FCacheEnabled := DEF_CACHE_ENABLED;
   FCacheFolder := DEF_CACHE_FOLDER;
   FCacheMaxSizeMB := DEF_CACHE_MAX_SIZE_MB;
@@ -318,13 +290,7 @@ begin
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', DEF_FFMPEG_EXE_PATH);
     FFFmpegAutoDownloaded := Ini.ReadBool('ffmpeg', 'AutoDownloaded', DEF_FFMPEG_AUTO_DL);
 
-    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
-    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
-    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
-    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads', DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
-    FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
-    FHwAccel := Ini.ReadBool('extraction', 'HwAccel', DEF_HW_ACCEL);
-    FUseKeyframes := Ini.ReadBool('extraction', 'UseKeyframes', DEF_USE_KEYFRAMES);
+    FExtraction.LoadFrom(Ini, 'extraction');
     FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
     FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide', DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
     FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide', DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
@@ -334,19 +300,11 @@ begin
     for var VM := Low(TViewMode) to High(TViewMode) do
       FModeZoom[VM] := StrToZoomMode(Ini.ReadString('view.' + ViewModeToStr(VM), 'ZoomMode', ''));
     FBackground := HexToColor(Ini.ReadString('view', 'Background', ''), DEF_BACKGROUND);
-    FShowTimecode := Ini.ReadBool('view', 'ShowTimecode', DEF_SHOW_TIMECODE);
     FShowToolbar := Ini.ReadBool('view', 'ShowToolbar', DEF_SHOW_TOOLBAR);
     FShowStatusBar := Ini.ReadBool('view', 'ShowStatusBar', DEF_SHOW_STATUS_BAR);
-    HexToColorAlpha(Ini.ReadString('view', 'TimecodeBackground', ''), DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
-    FTimestampTextAlpha := EnsureRange(Ini.ReadInteger('view', 'TimestampTextAlpha', DEF_TIMESTAMP_TEXT_ALPHA), MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
-    FTimestampTextColor := HexToColor(Ini.ReadString('view', 'TimestampTextColor', ''), DEF_TIMESTAMP_TEXT_COLOR);
-    FTimestampFontName := Ini.ReadString('view', 'TimestampFont', DEF_TIMESTAMP_FONT);
-    if FTimestampFontName.Trim = '' then
-      FTimestampFontName := DEF_TIMESTAMP_FONT;
-    FTimestampFontSize := EnsureRange(Ini.ReadInteger('view', 'TimestampFontSize', DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+    FTimestamp.LoadFrom(Ini, 'view', 'ShowTimecode');
     FCellGap := EnsureRange(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
     FCombinedBorder := EnsureRange(Ini.ReadInteger('view', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
-    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('view', 'TimestampCorner', ''), DEF_TIMESTAMP_CORNER);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then
@@ -356,15 +314,7 @@ begin
     FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality', DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
     FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
-    FShowBanner := Ini.ReadBool('save', 'ShowBanner', DEF_SHOW_BANNER);
-    FBannerBackground := HexToColor(Ini.ReadString('save', 'BannerBackground', ''), DEF_BANNER_BACKGROUND);
-    FBannerTextColor := HexToColor(Ini.ReadString('save', 'BannerTextColor', ''), DEF_BANNER_TEXT_COLOR);
-    FBannerFontName := Ini.ReadString('save', 'BannerFont', DEF_BANNER_FONT_NAME);
-    if FBannerFontName.Trim = '' then
-      FBannerFontName := DEF_BANNER_FONT_NAME;
-    FBannerFontSize := EnsureRange(Ini.ReadInteger('save', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
-    FBannerFontAutoSize := Ini.ReadBool('save', 'BannerFontAutoSize', DEF_BANNER_FONT_AUTO_SIZE);
-    FBannerPosition := StrToBannerPosition(Ini.ReadString('save', 'BannerPosition', ''), DEF_BANNER_POSITION);
+    FBanner.LoadFrom(Ini, 'save');
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
@@ -397,13 +347,7 @@ begin
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);
     Ini.WriteBool('ffmpeg', 'AutoDownloaded', FFFmpegAutoDownloaded);
 
-    Ini.WriteInteger('extraction', 'FramesCount', FFramesCount);
-    Ini.WriteInteger('extraction', 'SkipEdges', FSkipEdgesPercent);
-    Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
-    Ini.WriteInteger('extraction', 'MaxThreads', FMaxThreads);
-    Ini.WriteBool('extraction', 'UseBmpPipe', FUseBmpPipe);
-    Ini.WriteBool('extraction', 'HwAccel', FHwAccel);
-    Ini.WriteBool('extraction', 'UseKeyframes', FUseKeyframes);
+    FExtraction.SaveTo(Ini, 'extraction');
     Ini.WriteBool('extraction', 'ScaledExtraction', FScaledExtraction);
     Ini.WriteInteger('extraction', 'MinFrameSide', FMinFrameSide);
     Ini.WriteInteger('extraction', 'MaxFrameSide', FMaxFrameSide);
@@ -413,17 +357,11 @@ begin
     for var VM := Low(TViewMode) to High(TViewMode) do
       Ini.WriteString('view.' + ViewModeToStr(VM), 'ZoomMode', ZoomModeToStr(FModeZoom[VM]));
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
-    Ini.WriteBool('view', 'ShowTimecode', FShowTimecode);
     Ini.WriteBool('view', 'ShowToolbar', FShowToolbar);
     Ini.WriteBool('view', 'ShowStatusBar', FShowStatusBar);
-    Ini.WriteString('view', 'TimecodeBackground', ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
-    Ini.WriteInteger('view', 'TimestampTextAlpha', FTimestampTextAlpha);
-    Ini.WriteString('view', 'TimestampTextColor', ColorToHex(FTimestampTextColor));
-    Ini.WriteString('view', 'TimestampFont', FTimestampFontName);
-    Ini.WriteInteger('view', 'TimestampFontSize', FTimestampFontSize);
+    FTimestamp.SaveTo(Ini, 'view', 'ShowTimecode');
     Ini.WriteInteger('view', 'CellGap', FCellGap);
     Ini.WriteInteger('view', 'CombinedBorder', FCombinedBorder);
-    Ini.WriteString('view', 'TimestampCorner', TimestampCornerToStr(FTimestampCorner));
 
     Ini.WriteString('extensions', 'List', FExtensionList);
 
@@ -431,13 +369,7 @@ begin
     Ini.WriteInteger('save', 'JpegQuality', FJpegQuality);
     Ini.WriteInteger('save', 'PngCompression', FPngCompression);
     Ini.WriteString('save', 'SaveFolder', FSaveFolder);
-    Ini.WriteBool('save', 'ShowBanner', FShowBanner);
-    Ini.WriteString('save', 'BannerBackground', ColorToHex(FBannerBackground));
-    Ini.WriteString('save', 'BannerTextColor', ColorToHex(FBannerTextColor));
-    Ini.WriteString('save', 'BannerFont', FBannerFontName);
-    Ini.WriteInteger('save', 'BannerFontSize', FBannerFontSize);
-    Ini.WriteBool('save', 'BannerFontAutoSize', FBannerFontAutoSize);
-    Ini.WriteString('save', 'BannerPosition', BannerPositionToStr(FBannerPosition));
+    FBanner.SaveTo(Ini, 'save');
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
     Ini.WriteString('cache', 'Folder', FCacheFolder);

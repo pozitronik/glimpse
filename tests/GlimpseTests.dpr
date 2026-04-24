@@ -10,6 +10,7 @@ uses
   DUnitX.Loggers.XML.NUnit,
   uTypes in '..\src\uTypes.pas',
   uDefaults in '..\src\uDefaults.pas',
+  uSettingsGroups in '..\src\uSettingsGroups.pas',
   uSettings in '..\src\uSettings.pas',
   uFrameOffsets in '..\src\uFrameOffsets.pas',
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',

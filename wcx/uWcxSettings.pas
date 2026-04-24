@@ -6,7 +6,7 @@ interface
 
 uses
   System.SysUtils, System.IniFiles, System.Math, System.UITypes,
-  uBitmapSaver, uTypes, uDefaults;
+  uBitmapSaver, uTypes, uDefaults, uSettingsGroups;
 
 type
   TWcxOutputMode = (womSeparate, womCombined);
@@ -17,14 +17,8 @@ type
     {[ffmpeg]}
     FFFmpegMode: TFFmpegMode;
     FFFmpegExePath: string;
-    {[extraction]}
-    FFramesCount: Integer;
-    FSkipEdgesPercent: Integer;
-    FMaxWorkers: Integer;
-    FMaxThreads: Integer;
-    FUseBmpPipe: Boolean;
-    FHwAccel: Boolean;
-    FUseKeyframes: Boolean;
+    {[extraction] — shared group record (see uSettingsGroups)}
+    FExtraction: TExtractionSettingsGroup;
     {[output]}
     FOutputMode: TWcxOutputMode;
     FSaveFormat: TSaveFormat;
@@ -32,24 +26,13 @@ type
     FPngCompression: Integer;
     {[combined]}
     FCombinedColumns: Integer;
-    FShowTimestamp: Boolean;
     FBackground: TColor;
     FCellGap: Integer;
     FCombinedBorder: Integer;
-    FTimestampCorner: TTimestampCorner;
-    FTimecodeBackColor: TColor;
-    FTimecodeBackAlpha: Byte;
-    FTimestampTextColor: TColor;
-    FTimestampTextAlpha: Byte;
-    FTimestampFontName: string;
-    FTimestampFontSize: Integer;
-    FShowBanner: Boolean;
-    FBannerBackground: TColor;
-    FBannerTextColor: TColor;
-    FBannerFontName: string;
-    FBannerFontSize: Integer;
-    FBannerFontAutoSize: Boolean;
-    FBannerPosition: TBannerPosition;
+    {[combined] — timestamp overlay group shared with WLX}
+    FTimestamp: TTimestampSettingsGroup;
+    {[combined] — banner group shared with WLX}
+    FBanner: TBannerSettingsGroup;
     {[output]}
     FShowFileSizes: Boolean;
     {Output size cap in pixels, 0 = no limit. The cap applies to whichever
@@ -63,40 +46,46 @@ type
     constructor Create(const AIniPath: string);
     procedure Load;
     procedure Save;
+    {Resets every field to its documented default. Called from Create and at
+     the top of Load so a fresh Load always starts from a known baseline,
+     matching TPluginSettings behaviour.}
+    procedure ResetDefaults;
 
     property IniPath: string read FIniPath;
     property FFmpegMode: TFFmpegMode read FFFmpegMode write FFFmpegMode;
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
-    property FramesCount: Integer read FFramesCount write FFramesCount;
-    property SkipEdgesPercent: Integer read FSkipEdgesPercent write FSkipEdgesPercent;
-    property MaxWorkers: Integer read FMaxWorkers write FMaxWorkers;
-    property MaxThreads: Integer read FMaxThreads write FMaxThreads;
-    property UseBmpPipe: Boolean read FUseBmpPipe write FUseBmpPipe;
-    property HwAccel: Boolean read FHwAccel write FHwAccel;
-    property UseKeyframes: Boolean read FUseKeyframes write FUseKeyframes;
+    property FramesCount: Integer read FExtraction.FramesCount write FExtraction.FramesCount;
+    property SkipEdgesPercent: Integer read FExtraction.SkipEdgesPercent write FExtraction.SkipEdgesPercent;
+    property MaxWorkers: Integer read FExtraction.MaxWorkers write FExtraction.MaxWorkers;
+    property MaxThreads: Integer read FExtraction.MaxThreads write FExtraction.MaxThreads;
+    property UseBmpPipe: Boolean read FExtraction.UseBmpPipe write FExtraction.UseBmpPipe;
+    property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
+    property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property OutputMode: TWcxOutputMode read FOutputMode write FOutputMode;
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
     property CombinedColumns: Integer read FCombinedColumns write FCombinedColumns;
-    property ShowTimestamp: Boolean read FShowTimestamp write FShowTimestamp;
+    {ShowTimestamp is the WCX name for the timestamp group's Show toggle;
+     WLX exposes the same field as ShowTimecode.}
+    property ShowTimestamp: Boolean read FTimestamp.Show write FTimestamp.Show;
     property Background: TColor read FBackground write FBackground;
     property CellGap: Integer read FCellGap write FCellGap;
     property CombinedBorder: Integer read FCombinedBorder write FCombinedBorder;
-    property TimestampCorner: TTimestampCorner read FTimestampCorner write FTimestampCorner;
-    property TimecodeBackColor: TColor read FTimecodeBackColor write FTimecodeBackColor;
-    property TimecodeBackAlpha: Byte read FTimecodeBackAlpha write FTimecodeBackAlpha;
-    property TimestampTextColor: TColor read FTimestampTextColor write FTimestampTextColor;
-    property TimestampTextAlpha: Byte read FTimestampTextAlpha write FTimestampTextAlpha;
-    property TimestampFontName: string read FTimestampFontName write FTimestampFontName;
-    property TimestampFontSize: Integer read FTimestampFontSize write FTimestampFontSize;
-    property ShowBanner: Boolean read FShowBanner write FShowBanner;
-    property BannerBackground: TColor read FBannerBackground write FBannerBackground;
-    property BannerTextColor: TColor read FBannerTextColor write FBannerTextColor;
-    property BannerFontName: string read FBannerFontName write FBannerFontName;
-    property BannerFontSize: Integer read FBannerFontSize write FBannerFontSize;
-    property BannerFontAutoSize: Boolean read FBannerFontAutoSize write FBannerFontAutoSize;
-    property BannerPosition: TBannerPosition read FBannerPosition write FBannerPosition;
+    property TimestampCorner: TTimestampCorner read FTimestamp.Corner write FTimestamp.Corner;
+    property TimecodeBackColor: TColor read FTimestamp.BackColor write FTimestamp.BackColor;
+    property TimecodeBackAlpha: Byte read FTimestamp.BackAlpha write FTimestamp.BackAlpha;
+    property TimestampTextColor: TColor read FTimestamp.TextColor write FTimestamp.TextColor;
+    property TimestampTextAlpha: Byte read FTimestamp.TextAlpha write FTimestamp.TextAlpha;
+    property TimestampFontName: string read FTimestamp.FontName write FTimestamp.FontName;
+    property TimestampFontSize: Integer read FTimestamp.FontSize write FTimestamp.FontSize;
+    property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
+    property BannerBackground: TColor read FBanner.Background write FBanner.Background;
+    property BannerTextColor: TColor read FBanner.TextColor write FBanner.TextColor;
+    property BannerFontName: string read FBanner.FontName write FBanner.FontName;
+    property BannerFontSize: Integer read FBanner.FontSize write FBanner.FontSize;
+    property BannerFontAutoSize: Boolean read FBanner.AutoSize write FBanner.AutoSize;
+    property BannerPosition: TBannerPosition read FBanner.Position write FBanner.Position;
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
     property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
@@ -129,38 +118,30 @@ constructor TWcxSettings.Create(const AIniPath: string);
 begin
   inherited Create;
   FIniPath := AIniPath;
+  ResetDefaults;
+end;
+
+procedure TWcxSettings.ResetDefaults;
+begin
   FFFmpegMode := fmAuto;
   FFFmpegExePath := '';
-  FFramesCount := DEF_FRAMES_COUNT;
-  FSkipEdgesPercent := DEF_SKIP_EDGES;
-  FMaxWorkers := DEF_MAX_WORKERS;
-  FMaxThreads := DEF_MAX_THREADS;
-  FUseBmpPipe := DEF_USE_BMP_PIPE;
-  FHwAccel := DEF_HW_ACCEL;
-  FUseKeyframes := DEF_USE_KEYFRAMES;
+  FExtraction := TExtractionSettingsGroup.Defaults;
   FOutputMode := WCX_DEF_OUTPUT_MODE;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
   FPngCompression := DEF_PNG_COMPRESSION;
   FCombinedColumns := WCX_DEF_COMBINED_COLS;
-  FShowTimestamp := WCX_DEF_SHOW_TIMESTAMP;
   FBackground := WCX_DEF_BACKGROUND;
   FCellGap := WCX_DEF_CELL_GAP;
   FCombinedBorder := DEF_COMBINED_BORDER;
-  FTimestampCorner := DEF_TIMESTAMP_CORNER;
-  FTimecodeBackColor := DEF_TC_BACK_COLOR;
-  FTimecodeBackAlpha := DEF_TC_BACK_ALPHA;
-  FTimestampTextColor := DEF_TIMESTAMP_TEXT_COLOR;
-  FTimestampTextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
-  FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
-  FTimestampFontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
-  FShowBanner := WCX_DEF_SHOW_BANNER;
-  FBannerBackground := DEF_BANNER_BACKGROUND;
-  FBannerTextColor := DEF_BANNER_TEXT_COLOR;
-  FBannerFontName := DEF_BANNER_FONT_NAME;
-  FBannerFontSize := DEF_BANNER_FONT_SIZE;
-  FBannerFontAutoSize := DEF_BANNER_FONT_AUTO_SIZE;
-  FBannerPosition := DEF_BANNER_POSITION;
+  FTimestamp := TTimestampSettingsGroup.Defaults;
+  {WCX historically uses different timestamp font defaults than WLX. Apply
+   the overrides after the group seed so the shared defaults still travel.}
+  FTimestamp.Show := WCX_DEF_SHOW_TIMESTAMP;
+  FTimestamp.FontName := WCX_DEF_TIMESTAMP_FONT;
+  FTimestamp.FontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
+  FBanner := TBannerSettingsGroup.Defaults;
+  FBanner.Show := WCX_DEF_SHOW_BANNER;
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
   FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
   FCombinedMaxSide := WCX_DEF_COMBINED_MAX_SIDE;
@@ -170,18 +151,16 @@ procedure TWcxSettings.Load;
 var
   Ini: TIniFile;
 begin
+  {Reset-then-read mirrors TPluginSettings so a second Load on the same
+   instance starts from a known baseline instead of inheriting whichever
+   values the previous Load produced.}
+  ResetDefaults;
   if not FileExists(FIniPath) then
     Exit;
   Ini := TIniFile.Create(FIniPath);
   try
-    FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', '');
-    FFramesCount := EnsureRange(Ini.ReadInteger('extraction', 'FramesCount', DEF_FRAMES_COUNT), MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
-    FSkipEdgesPercent := EnsureRange(Ini.ReadInteger('extraction', 'SkipEdges', DEF_SKIP_EDGES), MIN_SKIP_EDGES, MAX_SKIP_EDGES);
-    FMaxWorkers := EnsureRange(Ini.ReadInteger('extraction', 'MaxWorkers', DEF_MAX_WORKERS), MIN_MAX_WORKERS, MAX_MAX_WORKERS);
-    FMaxThreads := EnsureRange(Ini.ReadInteger('extraction', 'MaxThreads', DEF_MAX_THREADS), MIN_MAX_THREADS, MAX_MAX_THREADS);
-    FUseBmpPipe := Ini.ReadBool('extraction', 'UseBmpPipe', DEF_USE_BMP_PIPE);
-    FHwAccel := Ini.ReadBool('extraction', 'HwAccel', DEF_HW_ACCEL);
-    FUseKeyframes := Ini.ReadBool('extraction', 'UseKeyframes', DEF_USE_KEYFRAMES);
+    FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', FFFmpegExePath);
+    FExtraction.LoadFrom(Ini, 'extraction');
 
     if SameText(Ini.ReadString('output', 'Mode', 'separate'), 'combined') then
       FOutputMode := womCombined
@@ -195,27 +174,11 @@ begin
     FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
 
     FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
-    FShowTimestamp := Ini.ReadBool('combined', 'ShowTimestamp', WCX_DEF_SHOW_TIMESTAMP);
     FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
     FCellGap := EnsureRange(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
     FCombinedBorder := EnsureRange(Ini.ReadInteger('combined', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
-    FTimestampCorner := StrToTimestampCorner(Ini.ReadString('combined', 'TimestampCorner', ''), DEF_TIMESTAMP_CORNER);
-    HexToColorAlpha(Ini.ReadString('combined', 'TimecodeBackground', ''), DEF_TC_BACK_COLOR, DEF_TC_BACK_ALPHA, FTimecodeBackColor, FTimecodeBackAlpha);
-    FTimestampTextColor := HexToColor(Ini.ReadString('combined', 'TimestampTextColor', ''), DEF_TIMESTAMP_TEXT_COLOR);
-    FTimestampTextAlpha := EnsureRange(Ini.ReadInteger('combined', 'TimestampTextAlpha', DEF_TIMESTAMP_TEXT_ALPHA), MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
-    FTimestampFontName := Ini.ReadString('combined', 'TimestampFont', WCX_DEF_TIMESTAMP_FONT);
-    if FTimestampFontName.Trim = '' then
-      FTimestampFontName := WCX_DEF_TIMESTAMP_FONT;
-    FTimestampFontSize := EnsureRange(Ini.ReadInteger('combined', 'TimestampFontSize', WCX_DEF_TIMESTAMP_FONT_SIZE), MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
-    FShowBanner := Ini.ReadBool('combined', 'ShowBanner', WCX_DEF_SHOW_BANNER);
-    FBannerBackground := HexToColor(Ini.ReadString('combined', 'BannerBackground', ''), DEF_BANNER_BACKGROUND);
-    FBannerTextColor := HexToColor(Ini.ReadString('combined', 'BannerTextColor', ''), DEF_BANNER_TEXT_COLOR);
-    FBannerFontName := Ini.ReadString('combined', 'BannerFont', DEF_BANNER_FONT_NAME);
-    if FBannerFontName.Trim = '' then
-      FBannerFontName := DEF_BANNER_FONT_NAME;
-    FBannerFontSize := EnsureRange(Ini.ReadInteger('combined', 'BannerFontSize', DEF_BANNER_FONT_SIZE), MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
-    FBannerFontAutoSize := Ini.ReadBool('combined', 'BannerFontAutoSize', DEF_BANNER_FONT_AUTO_SIZE);
-    FBannerPosition := StrToBannerPosition(Ini.ReadString('combined', 'BannerPosition', ''), DEF_BANNER_POSITION);
+    FTimestamp.LoadFrom(Ini, 'combined', 'ShowTimestamp');
+    FBanner.LoadFrom(Ini, 'combined');
 
     FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
 
@@ -235,13 +198,7 @@ begin
   Ini := TIniFile.Create(FIniPath);
   try
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);
-    Ini.WriteInteger('extraction', 'FramesCount', FFramesCount);
-    Ini.WriteInteger('extraction', 'SkipEdges', FSkipEdgesPercent);
-    Ini.WriteInteger('extraction', 'MaxWorkers', FMaxWorkers);
-    Ini.WriteInteger('extraction', 'MaxThreads', FMaxThreads);
-    Ini.WriteBool('extraction', 'UseBmpPipe', FUseBmpPipe);
-    Ini.WriteBool('extraction', 'HwAccel', FHwAccel);
-    Ini.WriteBool('extraction', 'UseKeyframes', FUseKeyframes);
+    FExtraction.SaveTo(Ini, 'extraction');
 
     if FOutputMode = womCombined then
       Ini.WriteString('output', 'Mode', 'combined')
@@ -255,23 +212,11 @@ begin
     Ini.WriteInteger('output', 'PngCompression', FPngCompression);
 
     Ini.WriteInteger('combined', 'Columns', FCombinedColumns);
-    Ini.WriteBool('combined', 'ShowTimestamp', FShowTimestamp);
     Ini.WriteString('combined', 'Background', ColorToHex(FBackground));
     Ini.WriteInteger('combined', 'CellGap', FCellGap);
     Ini.WriteInteger('combined', 'CombinedBorder', FCombinedBorder);
-    Ini.WriteString('combined', 'TimestampCorner', TimestampCornerToStr(FTimestampCorner));
-    Ini.WriteString('combined', 'TimecodeBackground', ColorAlphaToHex(FTimecodeBackColor, FTimecodeBackAlpha));
-    Ini.WriteString('combined', 'TimestampTextColor', ColorToHex(FTimestampTextColor));
-    Ini.WriteInteger('combined', 'TimestampTextAlpha', FTimestampTextAlpha);
-    Ini.WriteString('combined', 'TimestampFont', FTimestampFontName);
-    Ini.WriteInteger('combined', 'TimestampFontSize', FTimestampFontSize);
-    Ini.WriteBool('combined', 'ShowBanner', FShowBanner);
-    Ini.WriteString('combined', 'BannerBackground', ColorToHex(FBannerBackground));
-    Ini.WriteString('combined', 'BannerTextColor', ColorToHex(FBannerTextColor));
-    Ini.WriteString('combined', 'BannerFont', FBannerFontName);
-    Ini.WriteInteger('combined', 'BannerFontSize', FBannerFontSize);
-    Ini.WriteBool('combined', 'BannerFontAutoSize', FBannerFontAutoSize);
-    Ini.WriteString('combined', 'BannerPosition', BannerPositionToStr(FBannerPosition));
+    FTimestamp.SaveTo(Ini, 'combined', 'ShowTimestamp');
+    FBanner.SaveTo(Ini, 'combined');
 
     Ini.WriteBool('output', 'ShowFileSizes', FShowFileSizes);
 
