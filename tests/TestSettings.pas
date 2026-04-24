@@ -167,6 +167,26 @@ type
     procedure TestAutoRefreshOnViewportChangeDefault;
     [Test]
     procedure TestAutoRefreshOnViewportChangeRoundTrip;
+
+    {Gap-fill: extraction-group fields that had no dedicated coverage
+     before the uSettings group-record refactor. These pin the current
+     Load/Save behaviour so the refactor can't silently change it.}
+    [Test]
+    procedure TestFramesCountClampedHigh;
+    [Test]
+    procedure TestFramesCountClampedLow;
+    [Test]
+    procedure TestSkipEdgesPercentClampedHigh;
+    [Test]
+    procedure TestSkipEdgesPercentClampedLow;
+    [Test]
+    procedure TestMaxThreadsRoundTrip;
+    [Test]
+    procedure TestUseBmpPipeRoundTrip;
+    [Test]
+    procedure TestHwAccelRoundTrip;
+    [Test]
+    procedure TestUseKeyframesRoundTrip;
   end;
 
 implementation
@@ -1942,6 +1962,175 @@ begin
       'Disabled state should round-trip through INI');
   finally
     S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFramesCountClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  {Out-of-range INI values must clamp to MAX_FRAMES_COUNT rather than
+   round-trip verbatim — otherwise a hand-edited file with FramesCount=1000
+   would starve extraction and thrash the cache.}
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 1000);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_FRAMES_COUNT, S.FramesCount,
+      'FramesCount above MAX_FRAMES_COUNT must clamp down');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFramesCountClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 0);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_FRAMES_COUNT, S.FramesCount,
+      'FramesCount=0 must clamp up to MIN_FRAMES_COUNT');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSkipEdgesPercentClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    {SkipEdges >= 50% is non-sensical (leaves no room for frames) — clamp
+     to MAX_SKIP_EDGES so the planner still has a usable window.}
+    Ini.WriteInteger('extraction', 'SkipEdges', 80);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_SKIP_EDGES, S.SkipEdgesPercent,
+      'SkipEdges above MAX_SKIP_EDGES must clamp down');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSkipEdgesPercentClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'SkipEdges', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_SKIP_EDGES, S.SkipEdgesPercent,
+      'Negative SkipEdges must clamp up to MIN_SKIP_EDGES');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestMaxThreadsRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  {MaxThreads uses a tri-state convention: -1 = no limit, 0 = auto (CPU count),
+   positive = explicit cap. Each must round-trip so the auto/no-limit UI
+   doesn't silently flip to explicit.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.MaxThreads := -1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual<Integer>(-1, S.MaxThreads, '-1 (no limit) must round-trip');
+
+    S.MaxThreads := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual<Integer>(0, S.MaxThreads, '0 (auto) must round-trip');
+
+    S.MaxThreads := 8;
+    S.Save;
+    S.Load;
+    Assert.AreEqual<Integer>(8, S.MaxThreads, 'Explicit value must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestUseBmpPipeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.UseBmpPipe := not DEF_USE_BMP_PIPE;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_USE_BMP_PIPE, S.UseBmpPipe,
+      'Flipped UseBmpPipe must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestHwAccelRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.HwAccel := not DEF_HW_ACCEL;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_HW_ACCEL, S.HwAccel,
+      'Flipped HwAccel must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestUseKeyframesRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.UseKeyframes := not DEF_USE_KEYFRAMES;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_USE_KEYFRAMES, S.UseKeyframes,
+      'Flipped UseKeyframes must round-trip');
+  finally
+    S.Free;
   end;
 end;
 

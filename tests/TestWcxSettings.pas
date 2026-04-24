@@ -68,8 +68,10 @@ type
     [Test] procedure TestUnknownFormatDefaultsToPNG;
     { Partial INI with missing sections }
     [Test] procedure TestPartialIniUsesDefaults;
-    { UseBmpPipe round-trip }
+    { UseBmpPipe / HwAccel / UseKeyframes round-trip }
     [Test] procedure TestUseBmpPipeRoundTrip;
+    [Test] procedure TestHwAccelRoundTrip;
+    [Test] procedure TestUseKeyframesRoundTrip;
     { Output size limits }
     [Test] procedure TestOutputSizeLimitsDefault;
     [Test] procedure TestFrameMaxSideRoundTrip;
@@ -1188,6 +1190,58 @@ begin
   try
     S2.Load;
     Assert.AreEqual(False, S2.UseBmpPipe);
+  finally
+    S2.Free;
+  end;
+end;
+
+{ HwAccel / UseKeyframes — gap-fill ahead of the settings group-record
+  refactor so Load/Save behaviour is pinned before the fields move
+  behind a record-delegation property. }
+
+procedure TTestWcxSettings.TestHwAccelRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'hwaccel.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.HwAccel := not DEF_HW_ACCEL;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_HW_ACCEL, S2.HwAccel,
+      'Flipped HwAccel must round-trip through INI');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestUseKeyframesRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'keyframes.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.UseKeyframes := not DEF_USE_KEYFRAMES;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_USE_KEYFRAMES, S2.UseKeyframes,
+      'Flipped UseKeyframes must round-trip through INI');
   finally
     S2.Free;
   end;
