@@ -25,6 +25,8 @@ type
     [Test] procedure FromIniStr_Nonsense_Unassigned;
     [Test] procedure FromIniStr_LowerCase_Accepted;
     [Test] procedure FromIniStr_PlusKey_Recovered;
+    [Test] procedure FromIniStr_UnknownModifierToken_TreatsLaterTokenAsKey;
+    [Test] procedure FromIniStr_ExtraKeyToken_FirstKeyWins;
     [Test] procedure Equals_SameFields_True;
     [Test] procedure Equals_DifferentKey_False;
     [Test] procedure Equals_DifferentModifiers_False;
@@ -89,6 +91,8 @@ type
     [Test] procedure IniLoad_EmptyValue_Unbinds;
     [Test] procedure IniLoad_MissingKey_KeepsDefault;
     [Test] procedure IniLoad_GarbageAmongValid_OtherChordsKept;
+    [Test] procedure IniLoad_CrossActionDuplicate_FirstInEnumOrderWins;
+    [Test] procedure IniLoad_WithinActionDuplicate_BothStoredAndActionResolves;
     [Test] procedure IniSave_SingleChord_NoSeparatorInOutput;
   end;
 
@@ -194,6 +198,35 @@ begin
   C := THotkeyChord.FromIniStr('+');
   Assert.IsTrue(C.IsAssigned);
   Assert.AreEqual<Integer>(VK_OEM_PLUS, C.Key);
+end;
+
+procedure TTestHotkeyChord.FromIniStr_UnknownModifierToken_TreatsLaterTokenAsKey;
+var
+  C: THotkeyChord;
+begin
+  {Behaviour lock for hand-edited INIs: an unrecognised non-modifier token
+   (here 'Hyper') is silently skipped and the next valid key wins. Parse
+   succeeds with F1 and no modifiers rather than failing closed. If this
+   ever changes to strict rejection, both the test and the load path need
+   to agree on how to report the failure to the user.}
+  C := THotkeyChord.FromIniStr('Hyper+F1');
+  Assert.IsTrue(C.IsAssigned, 'Unknown leading token must not reject the whole chord');
+  Assert.AreEqual<Integer>(VK_F1, C.Key);
+  Assert.IsTrue(C.Modifiers = [], 'Hyper is not promoted to any known modifier');
+end;
+
+procedure TTestHotkeyChord.FromIniStr_ExtraKeyToken_FirstKeyWins;
+var
+  C: THotkeyChord;
+begin
+  {Behaviour lock: a malformed chord with two key tokens keeps only the
+   first. FromIniStr fills KeyCode on the first valid key and ignores
+   subsequent tokens. The second key is silently lost — which is fine
+   for tolerant parsing but must be documented so it doesn't regress to
+   "last key wins" by accident.}
+  C := THotkeyChord.FromIniStr('F1+F2');
+  Assert.IsTrue(C.IsAssigned);
+  Assert.AreEqual<Integer>(VK_F1, C.Key, 'First key token wins when multiple are present');
 end;
 
 procedure TTestHotkeyChord.Equals_SameFields_True;
@@ -899,6 +932,93 @@ begin
     Assert.AreEqual<Integer>(2, Length(List));
     Assert.AreEqual<Integer>(VK_LEFT, List[0].Key);
     Assert.AreEqual<Integer>(VK_PRIOR, List[1].Key);
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.IniLoad_CrossActionDuplicate_FirstInEnumOrderWins;
+var
+  B: THotkeyBindings;
+  Ini: TIniFile;
+  Path: string;
+begin
+  {Behaviour lock for a hand-edited INI where the user binds the same chord
+   (F9, no modifiers) to two different actions. Load does not detect the
+   conflict — both entries are stored verbatim — and Lookup walks actions
+   in TPluginAction declaration order, returning the first match.
+   paSettings precedes paToggleToolbar in the enum, so paSettings wins;
+   paToggleToolbar's F9 binding is effectively shadowed but not removed.
+   If TPluginAction is ever reordered, this test will flag the silent
+   behaviour change so the author can decide whether to preserve
+   compatibility or surface a conflict warning.}
+  Path := TPath.Combine(FTempDir, 'conflict.ini');
+  Ini := TIniFile.Create(Path);
+  try
+    Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'F9');
+    Ini.WriteString(HOTKEYS_SECTION, 'ToggleToolbar', 'F9');
+  finally
+    Ini.Free;
+  end;
+
+  B := THotkeyBindings.Create;
+  try
+    Ini := TIniFile.Create(Path);
+    try
+      B.Load(Ini);
+    finally
+      Ini.Free;
+    end;
+    Assert.AreEqual<Integer>(1, Length(B.Get(paSettings)),
+      'paSettings retains its F9 binding');
+    Assert.AreEqual<Integer>(1, Length(B.Get(paToggleToolbar)),
+      'paToggleToolbar retains its F9 binding (Load does not dedup across actions)');
+    Assert.AreEqual(Ord(paSettings), Ord(B.Lookup(VK_F9, [])),
+      'First action in enum order wins at Lookup time');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.IniLoad_WithinActionDuplicate_BothStoredAndActionResolves;
+var
+  B: THotkeyBindings;
+  Ini: TIniFile;
+  Path: string;
+  List: THotkeyChordArray;
+begin
+  {Behaviour lock: a hand-edited INI with the same chord listed twice for
+   one action (PrevFile=Left|Left) stores both entries. ChordsFromIniStr
+   is a straight split/parse with no dedup, and Load assigns the result
+   directly; AddChord's dedup only runs on the edit path. Lookup still
+   finds the action on the first match, so user-visible behaviour is
+   unchanged, but the listview in the settings dialog would show a
+   redundant row. Documented here so future refactors don't silently
+   start collapsing duplicates (which would be a reasonable change, but
+   needs to be intentional).}
+  Path := TPath.Combine(FTempDir, 'within_dup.ini');
+  Ini := TIniFile.Create(Path);
+  try
+    Ini.WriteString(HOTKEYS_SECTION, 'PrevFile', 'Left|Left');
+  finally
+    Ini.Free;
+  end;
+
+  B := THotkeyBindings.Create;
+  try
+    Ini := TIniFile.Create(Path);
+    try
+      B.Load(Ini);
+    finally
+      Ini.Free;
+    end;
+    List := B.Get(paPrevFile);
+    Assert.AreEqual<Integer>(2, Length(List),
+      'Load preserves within-action duplicates instead of collapsing them');
+    Assert.AreEqual<Integer>(VK_LEFT, List[0].Key);
+    Assert.AreEqual<Integer>(VK_LEFT, List[1].Key);
+    Assert.AreEqual(Ord(paPrevFile), Ord(B.Lookup(VK_LEFT, [])),
+      'Lookup still resolves on first match despite the duplicate');
   finally
     B.Free;
   end;
