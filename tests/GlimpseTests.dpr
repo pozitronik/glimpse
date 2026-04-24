@@ -53,6 +53,8 @@ uses
   uRunProcess in '..\src\uRunProcess.pas',
   TestRunProcess in 'TestRunProcess.pas',
   uFrameExtractor in '..\src\uFrameExtractor.pas',
+  TestFrameExtractor in 'TestFrameExtractor.pas',
+  TestExtractionWorker in 'TestExtractionWorker.pas',
   uViewModeLayout in '..\wlx\uViewModeLayout.pas',
   TestViewModeLayout in 'TestViewModeLayout.pas',
   uFrameExport in '..\wlx\uFrameExport.pas',
