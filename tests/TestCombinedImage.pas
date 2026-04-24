@@ -89,13 +89,25 @@ type
     [Test] procedure BuildBannerInfo_ExistingFile_CopiesAllFields;
     [Test] procedure BuildBannerInfo_MissingFile_FileSizeIsZero;
     [Test] procedure BuildBannerInfo_EmptyVideoInfo_ReturnsZeroedRecord;
+    { Default* factory helpers: pin invariants the dialogs rely on when
+      falling back (font name present, font size positive, "off" start
+      state, documented position/corner). Tests use DEF_* constants so
+      they track the real defaults instead of duplicating them. }
+    [Test] procedure DefaultBannerStyle_PopulatesFontAndSize;
+    [Test] procedure DefaultBannerStyle_AutoSizeMatchesConstant;
+    [Test] procedure DefaultBannerStyle_PositionMatchesConstant;
+    [Test] procedure DefaultCombinedGridStyle_AutoColumnsZero;
+    [Test] procedure DefaultCombinedGridStyle_BorderMatchesConstant;
+    [Test] procedure DefaultTimestampStyle_ShowDefaultsOff;
+    [Test] procedure DefaultTimestampStyle_FontAndSize;
+    [Test] procedure DefaultTimestampStyle_CornerMatchesConstant;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
-  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage;
+  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uDefaults;
 
 { Helper }
 
@@ -1588,6 +1600,83 @@ begin
   finally
     Frames[0].Free;
   end;
+end;
+
+procedure TTestCombinedImage.DefaultBannerStyle_PopulatesFontAndSize;
+var
+  S: TBannerStyle;
+begin
+  S := DefaultBannerStyle;
+  Assert.AreNotEqual('', S.FontName,
+    'Banner default must name a font; empty defers to Canvas default which is fragile');
+  Assert.IsTrue(S.FontSize > 0, 'Banner default font size must be positive');
+  Assert.AreEqual(TColor(DEF_BANNER_BACKGROUND), S.Background);
+  Assert.AreEqual(TColor(DEF_BANNER_TEXT_COLOR), S.TextColor);
+  Assert.AreEqual(DEF_BANNER_FONT_NAME, S.FontName);
+  Assert.AreEqual<Integer>(DEF_BANNER_FONT_SIZE, S.FontSize);
+end;
+
+procedure TTestCombinedImage.DefaultBannerStyle_AutoSizeMatchesConstant;
+begin
+  {AutoSize flips the banner between width-heuristic + shrink-to-fit
+   (True) and fixed-size + wrap (False). The dialogs rely on the
+   documented default shipping as True.}
+  Assert.AreEqual(DEF_BANNER_FONT_AUTO_SIZE, DefaultBannerStyle.AutoSize);
+end;
+
+procedure TTestCombinedImage.DefaultBannerStyle_PositionMatchesConstant;
+begin
+  Assert.AreEqual(Ord(DEF_BANNER_POSITION),
+    Ord(DefaultBannerStyle.Position));
+end;
+
+procedure TTestCombinedImage.DefaultCombinedGridStyle_AutoColumnsZero;
+var
+  S: TCombinedGridStyle;
+begin
+  {Columns = 0 is the "auto" sentinel — RenderCombinedImage picks
+   ceil(sqrt(n)). Any non-zero default would silently override that.}
+  S := DefaultCombinedGridStyle;
+  Assert.AreEqual<Integer>(0, S.Columns);
+  Assert.AreEqual<Integer>(0, S.CellGap);
+end;
+
+procedure TTestCombinedImage.DefaultCombinedGridStyle_BorderMatchesConstant;
+begin
+  Assert.AreEqual<Integer>(DEF_COMBINED_BORDER,
+    DefaultCombinedGridStyle.Border);
+end;
+
+procedure TTestCombinedImage.DefaultTimestampStyle_ShowDefaultsOff;
+var
+  S: TTimestampStyle;
+begin
+  {The timestamp overlay must ship OFF — users opt in via the Show
+   checkbox. A True default would slap timecodes on every rendered
+   image without consent.}
+  S := DefaultTimestampStyle;
+  Assert.IsFalse(S.Show, 'Timestamp default must be hidden');
+  Assert.AreEqual<Integer>(0, S.BackAlpha,
+    'BackAlpha=0 selects the legacy shadow-only path for back-compat');
+end;
+
+procedure TTestCombinedImage.DefaultTimestampStyle_FontAndSize;
+var
+  S: TTimestampStyle;
+begin
+  S := DefaultTimestampStyle;
+  Assert.AreNotEqual('', S.FontName,
+    'Timestamp font name must not be blank');
+  Assert.IsTrue(S.FontSize > 0, 'Timestamp font size must be positive');
+  Assert.AreEqual<Integer>(DEF_TIMESTAMP_TEXT_ALPHA, S.TextAlpha);
+  Assert.AreEqual(TColor(DEF_TC_BACK_COLOR), S.BackColor);
+  Assert.AreEqual(TColor(DEF_TIMESTAMP_TEXT_COLOR), S.TextColor);
+end;
+
+procedure TTestCombinedImage.DefaultTimestampStyle_CornerMatchesConstant;
+begin
+  Assert.AreEqual(Ord(DEF_TIMESTAMP_CORNER),
+    Ord(DefaultTimestampStyle.Corner));
 end;
 
 end.

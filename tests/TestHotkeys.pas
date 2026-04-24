@@ -50,8 +50,16 @@ type
     [Test] procedure FromIniStr_Empty_EmptyArray;
     [Test] procedure FromIniStr_MultipleChords_ParsedInOrder;
     [Test] procedure FromIniStr_OneGarbageAmongValid_GarbageSkipped;
+    [Test] procedure FromIniStr_AllGarbage_EmptyArray;
+    [Test] procedure ToIniStr_SkipsUnassignedEntries;
+    [Test] procedure ToDisplayStr_SkipsUnassignedEntries;
     [Test] procedure RoundTrip_PrevFileDefaults;
     [Test] procedure ToDisplayStr_JoinsWithComma;
+    [Test] procedure ActionIniKey_EveryNonNoneAction_IsNonEmpty;
+    [Test] procedure ActionIniKey_EveryNonNoneAction_IsUnique;
+    [Test] procedure ActionCaption_EveryNonNoneAction_IsNonEmpty;
+    [Test] procedure ActionIniKey_PaNone_IsEmpty;
+    [Test] procedure DefaultBinding_PaNone_IsEmpty;
   end;
 
   [TestFixture]
@@ -397,6 +405,98 @@ begin
   Assert.AreEqual<Integer>(2, Length(C));
   Assert.AreEqual<Integer>(VK_LEFT, C[0].Key);
   Assert.AreEqual<Integer>(VK_PRIOR, C[1].Key);
+end;
+
+procedure TTestChordArrayHelpers.FromIniStr_AllGarbage_EmptyArray;
+var
+  C: THotkeyChordArray;
+begin
+  {When every segment is unparseable (user typo or bitrot), the parser
+   returns an empty array rather than a list of unassigned chords.
+   Guarantees that a broken INI row doesn't expose sentinel chords to
+   callers that assume every array element IsAssigned.}
+  C := ChordsFromIniStr('Xyz|NopeNope|ThisIsNotAKey');
+  Assert.AreEqual<Integer>(0, Length(C));
+end;
+
+procedure TTestChordArrayHelpers.ToIniStr_SkipsUnassignedEntries;
+var
+  C: THotkeyChordArray;
+begin
+  {A sentinel THotkeyChord.None in the middle of the array must not emit
+   an empty segment like 'F2||F3' which would fail to parse symmetrically.
+   Keeps save/load idempotent even if a caller feeds mixed assigned/None.}
+  SetLength(C, 3);
+  C[0] := THotkeyChord.Make(VK_F2, []);
+  C[1] := THotkeyChord.None;
+  C[2] := THotkeyChord.Make(VK_F3, []);
+  Assert.AreEqual('F2|F3', ChordsToIniStr(C),
+    'Unassigned entries must be skipped, not rendered as empty segments');
+end;
+
+procedure TTestChordArrayHelpers.ToDisplayStr_SkipsUnassignedEntries;
+var
+  C: THotkeyChordArray;
+begin
+  SetLength(C, 3);
+  C[0] := THotkeyChord.Make(VK_F2, []);
+  C[1] := THotkeyChord.None;
+  C[2] := THotkeyChord.Make(VK_F3, []);
+  Assert.AreEqual('F2, F3', ChordsToDisplayStr(C),
+    'Unassigned entries must not produce an empty token between commas');
+end;
+
+procedure TTestChordArrayHelpers.ActionIniKey_EveryNonNoneAction_IsNonEmpty;
+var
+  A: TPluginAction;
+begin
+  {Load/Save key each action by ActionIniKey — a missing case would
+   silently collide under the empty string and both actions would share
+   the same INI row.}
+  for A := Succ(paNone) to High(TPluginAction) do
+    Assert.AreNotEqual('', ActionIniKey(A),
+      Format('Action ordinal %d has an empty INI key', [Ord(A)]));
+end;
+
+procedure TTestChordArrayHelpers.ActionIniKey_EveryNonNoneAction_IsUnique;
+var
+  A, B: TPluginAction;
+begin
+  {Two actions sharing the same ActionIniKey would overwrite each other
+   on Save and both read the same value on Load. Pin uniqueness to catch
+   copy-paste mistakes when a new action is added.}
+  for A := Succ(paNone) to High(TPluginAction) do
+    for B := Succ(A) to High(TPluginAction) do
+      Assert.AreNotEqual(ActionIniKey(A), ActionIniKey(B),
+        Format('Actions %d and %d share INI key "%s"',
+          [Ord(A), Ord(B), ActionIniKey(A)]));
+end;
+
+procedure TTestChordArrayHelpers.ActionCaption_EveryNonNoneAction_IsNonEmpty;
+var
+  A: TPluginAction;
+begin
+  {The settings dialog listview uses ActionCaption as the user-facing row
+   text. A blank caption means the user sees an empty row they cannot
+   identify.}
+  for A := Succ(paNone) to High(TPluginAction) do
+    Assert.AreNotEqual('', ActionCaption(A),
+      Format('Action ordinal %d has an empty caption', [Ord(A)]));
+end;
+
+procedure TTestChordArrayHelpers.ActionIniKey_PaNone_IsEmpty;
+begin
+  {paNone is the sentinel "no action" returned by Lookup on no match —
+   it must not serialise to anything, otherwise Save would emit a
+   phantom INI row for it.}
+  Assert.AreEqual('', ActionIniKey(paNone));
+end;
+
+procedure TTestChordArrayHelpers.DefaultBinding_PaNone_IsEmpty;
+begin
+  {Mirror of ActionIniKey_PaNone_IsEmpty: defaults table must treat
+   paNone as empty so ResetToDefaults doesn't accidentally reify it.}
+  Assert.AreEqual<Integer>(0, Length(DefaultBinding(paNone)));
 end;
 
 procedure TTestChordArrayHelpers.RoundTrip_PrevFileDefaults;
