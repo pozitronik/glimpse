@@ -609,7 +609,10 @@ begin
   State.VisibleCount := FVisibleElementCount;
   State.ActiveMode := FFrameView.ViewMode;
   State.ShowTimecode := FFrameView.ShowTimecode;
-  State.HasFrames := FExtractCtrl.FramesLoaded > 0;
+  {Source of truth: do any cells currently display a real frame? Reading this
+   off the extraction controller's FramesLoaded counter is wrong because a
+   soft refresh resets it to 0 while the cells stay on screen.}
+  State.HasFrames := FFrameView.HasLoadedCells;
   for VM := Low(TViewMode) to High(TViewMode) do
   begin
     State.ModeZooms[VM] := FSettings.ModeZoom[VM];
@@ -1614,7 +1617,7 @@ var
   I: Integer;
   HasFrames: Boolean;
 begin
-  HasFrames := Assigned(FExtractCtrl) and (FExtractCtrl.FramesLoaded > 0);
+  HasFrames := Assigned(FFrameView) and FFrameView.HasLoadedCells;
   for I := 0 to High(FToolbarButtons) do
     case FToolbarButtons[I].Tag of
       CM_SETTINGS:

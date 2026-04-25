@@ -86,6 +86,7 @@ type
     procedure SetCellError(AIndex: Integer);
     procedure ClearCells;
     function HasPlaceholders: Boolean;
+    function HasLoadedCells: Boolean;
     procedure AdvanceAnimation;
     procedure RecalcSize;
     function CalcFitColumns(AViewportW, AViewportH: Integer): Integer;
@@ -676,6 +677,16 @@ var
 begin
   for I := 0 to High(FCells) do
     if FCells[I].State = fcsPlaceholder then
+      Exit(True);
+  Result := False;
+end;
+
+function TFrameView.HasLoadedCells: Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCells) do
+    if FCells[I].State = fcsLoaded then
       Exit(True);
   Result := False;
 end;

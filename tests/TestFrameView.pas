@@ -111,6 +111,12 @@ type
     [Test] procedure TestHasPlaceholdersAllPlaceholders;
     [Test] procedure TestHasPlaceholdersNone;
     [Test] procedure TestHasPlaceholdersMixed;
+    [Test] procedure TestHasLoadedCellsEmpty;
+    [Test] procedure TestHasLoadedCellsAllPlaceholders;
+    [Test] procedure TestHasLoadedCellsAllErrors;
+    [Test] procedure TestHasLoadedCellsOneLoadedAmongPlaceholders;
+    [Test] procedure TestHasLoadedCellsOneLoadedAmongErrors;
+    [Test] procedure TestHasLoadedCellsAllLoaded;
     [Test] procedure TestSetFrameOutOfRange;
     [Test] procedure TestSetCellErrorOutOfRange;
     [Test] procedure TestSetCellCountResetsCurrentFrameIndex;
@@ -1654,6 +1660,108 @@ begin
     V.SetCellError(1);
     { Cell 2 is still a placeholder }
     Assert.IsTrue(V.HasPlaceholders, 'One placeholder remains');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestHasLoadedCellsEmpty;
+var
+  V: TFrameView;
+begin
+  { No cells at all: nothing to save or copy }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    Assert.IsFalse(V.HasLoadedCells);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestHasLoadedCellsAllPlaceholders;
+var
+  V: TFrameView;
+begin
+  { Cells exist but extraction has not delivered any frame yet }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    Assert.IsFalse(V.HasLoadedCells);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestHasLoadedCellsAllErrors;
+var
+  V: TFrameView;
+  I: Integer;
+begin
+  { Errored cells carry no bitmap: not exportable }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    for I := 0 to 2 do
+      V.SetCellError(I);
+    Assert.IsFalse(V.HasLoadedCells);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestHasLoadedCellsOneLoadedAmongPlaceholders;
+var
+  V: TFrameView;
+  Bmp: TBitmap;
+begin
+  { A single delivered frame is enough to enable Save/Copy }
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    Bmp := TBitmap.Create;
+    Bmp.SetSize(10, 10);
+    V.SetFrame(1, Bmp);
+    Assert.IsTrue(V.HasLoadedCells);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestHasLoadedCellsOneLoadedAmongErrors;
+var
+  V: TFrameView;
+  Bmp: TBitmap;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.SetCellError(0);
+    V.SetCellError(2);
+    Bmp := TBitmap.Create;
+    Bmp.SetSize(10, 10);
+    V.SetFrame(1, Bmp);
+    Assert.IsTrue(V.HasLoadedCells);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestHasLoadedCellsAllLoaded;
+var
+  V: TFrameView;
+  I: Integer;
+  Bmp: TBitmap;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    for I := 0 to 2 do
+    begin
+      Bmp := TBitmap.Create;
+      Bmp.SetSize(10, 10);
+      V.SetFrame(I, Bmp);
+    end;
+    Assert.IsTrue(V.HasLoadedCells);
   finally
     FreeTestFrameView(V);
   end;
