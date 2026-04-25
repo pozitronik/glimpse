@@ -74,7 +74,7 @@ type
     {Suppresses WM_CHAR after OnKeyDown consumed the keystroke}
     FKeyConsumed: Boolean;
     {Tick count when LoadFile started (for load time measurement)}
-    FLoadStartTick: UInt64;
+    FLoadStartTick: Cardinal;
     {Formatted load time string, populated when extraction completes}
     FLoadTimeStr: string;
     {Rolling snapshot used by ShowSettings to detect what changed since the
@@ -1035,7 +1035,7 @@ end;
 procedure TPluginForm.LoadFile(const AFileName: string);
 begin
   FormLog(Format('LoadFile: %s', [AFileName]));
-  FLoadStartTick := GetTickCount64;
+  FLoadStartTick := GetTickCount;
   FLoadTimeStr := '';
   FFileName := AFileName;
   SetWindowText(FParentWnd, PChar(Format('Lister (glimpse) - [%s]', [AFileName])));
@@ -1094,7 +1094,7 @@ var
   ViewportFrames: Integer;
 begin
   FExtractCtrl.Stop;
-  FLoadStartTick := GetTickCount64;
+  FLoadStartTick := GetTickCount;
   FLoadTimeStr := '';
   UpdateToolbarButtons;
 
@@ -1151,7 +1151,7 @@ end;
 
 procedure TPluginForm.FinalizeLoadTime;
 var
-  ElapsedMs: UInt64;
+  ElapsedMs: Cardinal;
   H, M, S, Ms: Integer;
 begin
   if FLoadStartTick = 0 then
@@ -1159,7 +1159,8 @@ begin
   if FLoadTimeStr <> '' then
     Exit; {already finalized}
 
-  ElapsedMs := GetTickCount64 - FLoadStartTick;
+  {Cast guards correct unsigned wraparound; GetTickCount avoids the Vista+ GetTickCount64 dependency that crashes on XP via delay-load}
+  ElapsedMs := Cardinal(GetTickCount - FLoadStartTick);
   H := ElapsedMs div 3600000;
   M := (ElapsedMs mod 3600000) div 60000;
   S := (ElapsedMs mod 60000) div 1000;
