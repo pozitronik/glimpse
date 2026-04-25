@@ -403,7 +403,7 @@ object SettingsForm: TSettingsForm
         Width = 17
         Height = 23
         Associate = EdtCellGap
-        Max = 0
+        Max = 32767
         TabOrder = 3
         Thousands = False
       end

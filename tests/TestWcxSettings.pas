@@ -33,7 +33,7 @@ type
     [Test] procedure TestBackgroundDefault;
     [Test] procedure TestBackgroundRoundTrip;
     [Test] procedure TestCellGapDefault;
-    [Test] procedure TestCellGapClamped;
+    [Test] procedure TestCellGapHighValuePreserved;
     [Test] procedure TestShowFileSizesDefault;
     [Test] procedure TestShowFileSizesRoundTrip;
     { Timestamp font }
@@ -81,7 +81,7 @@ type
     { Appearance parity with WLX }
     [Test] procedure TestAppearanceDefaults;
     [Test] procedure TestCombinedBorderRoundTrip;
-    [Test] procedure TestCombinedBorderClampedUpper;
+    [Test] procedure TestCombinedBorderHighValuePreserved;
     [Test] procedure TestCombinedBorderClampedLower;
     [Test] procedure TestTimestampCornerRoundTripAllCorners;
     [Test] procedure TestUnknownTimestampCornerDefaults;
@@ -520,7 +520,7 @@ begin
   end;
 end;
 
-procedure TTestWcxSettings.TestCellGapClamped;
+procedure TTestWcxSettings.TestCellGapHighValuePreserved;
 var
   S: TWcxSettings;
   IniPath: string;
@@ -537,7 +537,7 @@ begin
   S := TWcxSettings.Create(IniPath);
   try
     S.Load;
-    Assert.AreEqual(20, S.CellGap);
+    Assert.AreEqual(99, S.CellGap, 'CellGap has no upper cap; high values must be preserved');
   finally
     S.Free;
   end;
@@ -1402,7 +1402,7 @@ begin
   end;
 end;
 
-procedure TTestWcxSettings.TestCombinedBorderClampedUpper;
+procedure TTestWcxSettings.TestCombinedBorderHighValuePreserved;
 var
   S: TWcxSettings;
   IniPath: string;
@@ -1419,7 +1419,7 @@ begin
   S := TWcxSettings.Create(IniPath);
   try
     S.Load;
-    Assert.AreEqual(MAX_COMBINED_BORDER, S.CombinedBorder);
+    Assert.AreEqual(99999, S.CombinedBorder, 'CombinedBorder has no upper cap; high values must be preserved');
   finally
     S.Free;
   end;

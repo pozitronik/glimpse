@@ -303,8 +303,8 @@ begin
     FShowToolbar := Ini.ReadBool('view', 'ShowToolbar', DEF_SHOW_TOOLBAR);
     FShowStatusBar := Ini.ReadBool('view', 'ShowStatusBar', DEF_SHOW_STATUS_BAR);
     FTimestamp.LoadFrom(Ini, 'view', 'ShowTimecode');
-    FCellGap := EnsureRange(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
-    FCombinedBorder := EnsureRange(Ini.ReadInteger('view', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
+    FCellGap := Max(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP);
+    FCombinedBorder := Max(Ini.ReadInteger('view', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER);
 
     FExtensionList := Ini.ReadString('extensions', 'List', DEF_EXTENSION_LIST);
     if FExtensionList.Trim = '' then

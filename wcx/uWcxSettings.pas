@@ -175,8 +175,8 @@ begin
 
     FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
     FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
-    FCellGap := EnsureRange(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), MIN_CELL_GAP, MAX_CELL_GAP);
-    FCombinedBorder := EnsureRange(Ini.ReadInteger('combined', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER, MAX_COMBINED_BORDER);
+    FCellGap := Max(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), MIN_CELL_GAP);
+    FCombinedBorder := Max(Ini.ReadInteger('combined', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER);
     FTimestamp.LoadFrom(Ini, 'combined', 'ShowTimestamp');
     FBanner.LoadFrom(Ini, 'combined');
 

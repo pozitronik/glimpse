@@ -98,7 +98,7 @@ type
     [Test]
     procedure TestCellGapRoundTrip;
     [Test]
-    procedure TestCellGapClampedHigh;
+    procedure TestCellGapHighValuePreserved;
     [Test]
     procedure TestCellGapClampedLow;
     [Test]
@@ -106,7 +106,7 @@ type
     [Test]
     procedure TestCombinedBorderRoundTrip;
     [Test]
-    procedure TestCombinedBorderClampedHigh;
+    procedure TestCombinedBorderHighValuePreserved;
     [Test]
     procedure TestCombinedBorderClampedLow;
     [Test]
@@ -1220,7 +1220,7 @@ begin
   end;
 end;
 
-procedure TTestPluginSettings.TestCellGapClampedHigh;
+procedure TTestPluginSettings.TestCellGapHighValuePreserved;
 var
   S: TPluginSettings;
   Ini: TIniFile;
@@ -1237,8 +1237,8 @@ begin
   S := TPluginSettings.Create(IniPath);
   try
     S.Load;
-    Assert.AreEqual(MAX_CELL_GAP, S.CellGap,
-      'CellGap above maximum should be clamped');
+    Assert.AreEqual(999, S.CellGap,
+      'CellGap has no upper cap; high values must be preserved');
   finally
     S.Free;
   end;
@@ -1303,7 +1303,7 @@ begin
   end;
 end;
 
-procedure TTestPluginSettings.TestCombinedBorderClampedHigh;
+procedure TTestPluginSettings.TestCombinedBorderHighValuePreserved;
 var
   S: TPluginSettings;
   Ini: TIniFile;
@@ -1320,8 +1320,8 @@ begin
   S := TPluginSettings.Create(IniPath);
   try
     S.Load;
-    Assert.AreEqual(MAX_COMBINED_BORDER, S.CombinedBorder,
-      'CombinedBorder above maximum should be clamped');
+    Assert.AreEqual(9999, S.CombinedBorder,
+      'CombinedBorder has no upper cap; high values must be preserved');
   finally
     S.Free;
   end;

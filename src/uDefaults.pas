@@ -57,14 +57,14 @@ const
   DEF_TC_BACK_COLOR = TColor($002D2D2D);
   DEF_TC_BACK_ALPHA = 180;
 
-  {Cell gap range (shared by both plugins: WLX viewer and WCX combined image)}
+  {Cell gap floor (shared by both plugins: WLX viewer and WCX combined image).
+   No upper cap: negative pixel sizes are nonsense, but huge values are the
+   user's choice.}
   MIN_CELL_GAP = 0;
-  MAX_CELL_GAP = 20;
 
   {Outer border (margin) around the whole grid. Shared by WLX live view and combined image.}
   DEF_COMBINED_BORDER = 0;
   MIN_COMBINED_BORDER = 0;
-  MAX_COMBINED_BORDER = 200;
 
   {Default timestamp corner for both WLX cells and combined image cells.}
   DEF_TIMESTAMP_CORNER = tcBottomLeft;

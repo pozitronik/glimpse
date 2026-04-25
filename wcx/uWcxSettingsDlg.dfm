@@ -496,7 +496,7 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 17
         Height = 23
         Associate = EdtCellGap
-        Max = 0
+        Max = 32767
         TabOrder = 5
         Thousands = False
       end
@@ -515,7 +515,7 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 17
         Height = 23
         Associate = EdtBorder
-        Max = 0
+        Max = 32767
         TabOrder = 7
         Thousands = False
       end
