@@ -32,7 +32,10 @@ const
   CM_SETTINGS = 9;
   CM_REFRESH = 10;
 
-  MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll '#$2195, 'Scroll '#$2194, 'Single');
+  {Toolbar buttons differentiate the two scroll modes via icons (see
+   uPluginForm.CreateToolbar); menu items rely on the textually distinct
+   captions alone, which is why "Filmstrip" replaces the legacy "Scroll <->".}
+  MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Filmstrip', 'Single');
 
   {Per-mode sizing submode labels}
   SIZING_LABELS: array [TViewMode, TZoomMode] of string = (

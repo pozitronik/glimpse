@@ -21,6 +21,25 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Compile WLX icon resources. Delphi 12's cgrc 1.2.3 cannot find rc.exe
+REM via PATH; Delphi 11.3's cgrc 1.2.2 ships rc.exe co-located, so we use
+REM that. Adjust the path if Delphi 11.3 is not installed.
+set "CGRC=C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\cgrc.exe"
+REM In-block echo cannot expand %CGRC% because the (x86) parens would
+REM prematurely close the IF block.
+if not exist "%CGRC%" (
+    echo ERROR: cgrc.exe not found. Edit test.bat to point CGRC at a Delphi
+    echo        installation whose bin folder has both cgrc.exe and rc.exe.
+    pause
+    exit /b 1
+)
+"%CGRC%" -c65001 wlx\icons.rc -fowlx\icons.res
+if errorlevel 1 (
+    echo ERROR: Failed to compile wlx\icons.rc
+    pause
+    exit /b 1
+)
+
 if not exist "tests\GlimpseTests.dproj" (
     echo ERROR: Test project not found at tests\GlimpseTests.dproj
     pause

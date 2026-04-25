@@ -8,7 +8,7 @@ uses
   System.SysUtils, System.Classes, System.Types, System.Math,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons,
+  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
   uTypes, uSettings, uHotkeys, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
@@ -37,6 +37,9 @@ type
     FToolbarButtons: array of TButton;
     FBtnHamburger: TButton;
     FHamburgerMenu: TPopupMenu;
+    {Holds embedded PNG glyphs for toolbar buttons that have no good Unicode
+     equivalent; the hamburger is the first user. Owned by Self.}
+    FToolbarImages: TImageList;
     FProgressBar: TProgressBar;
     FProgressVisible: Boolean;
     {Per-element right pixel edges for collapse threshold checks}
@@ -161,8 +164,48 @@ type
 implementation
 
 uses
-  System.IOUtils, Winapi.ShellAPI,
+  System.IOUtils, Winapi.ShellAPI, Vcl.Imaging.pngimage,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage;
+
+{Embedded toolbar glyph resources; see CreateToolbar for use. The .res is
+ generated from icons.rc by cgrc as a pre-build step in build.bat and
+ test.bat — brcc32 (the default $R 'foo.rc' compiler) emits 16-bit-format
+ resources that the Win64 linker rejects.}
+{$R icons.res}
+
+{Decodes a PNG resource (RT_RCDATA) into a 32-bit alpha bitmap and adds it
+ to AImageList. Caller is responsible for sizing the image list before the
+ first Add: ImageList stretches subsequent additions to its first entry's
+ dimensions, so size and add must be consistent across calls.}
+procedure LoadPngResourceToImageList(AImageList: TImageList; const AResName: string);
+var
+  Stream: TResourceStream;
+  Png: TPngImage;
+  Bmp: TBitmap;
+begin
+  Stream := TResourceStream.Create(HInstance, AResName, RT_RCDATA);
+  try
+    Png := TPngImage.Create;
+    try
+      Png.LoadFromStream(Stream);
+      Bmp := TBitmap.Create;
+      try
+        Bmp.PixelFormat := pf32bit;
+        Bmp.AlphaFormat := afDefined;
+        Bmp.SetSize(Png.Width, Png.Height);
+        Bmp.Canvas.Brush.Style := bsClear;
+        Bmp.Canvas.Draw(0, 0, Png);
+        AImageList.Add(Bmp, nil);
+      finally
+        Bmp.Free;
+      end;
+    finally
+      Png.Free;
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
 
 procedure FormLog(const AMsg: string);
 begin
@@ -431,6 +474,11 @@ const
   BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
   SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
   PB_H = 16; {Progress bar height}
+  ICON_W = 16; {Toolbar icon width}
+  ICON_GAP = 4; {Space between icon and caption on iaLeft buttons}
+  IDX_ICON_HAMBURGER = 0;
+  IDX_ICON_ARROW_W = 1; {Vertical arrow for vmScroll}
+  IDX_ICON_ARROW_H = 2; {Horizontal arrow for vmFilmstrip}
 var
   X, CY, CtrlH, BW, I: Integer;
   VM: TViewMode;
@@ -476,6 +524,17 @@ begin
   {Collapsible elements: modes, timecodes, actions (left to right)}
   SetLength(FElementRights, ELEM_TOTAL_COUNT);
 
+  {Toolbar glyphs are loaded from embedded PNG resources rather than relying
+   on Unicode characters: the runtime font (Tahoma/MS Sans Serif under TC's
+   Lister window) does not reliably cover U+2261/U+2194/U+2195. Index order
+   here must match the IDX_ICON_* constants.}
+  FToolbarImages := TImageList.Create(Self);
+  FToolbarImages.SetSize(ICON_W, ICON_W);
+  FToolbarImages.ColorDepth := cd32Bit;
+  LoadPngResourceToImageList(FToolbarImages, 'MENU_16');
+  LoadPngResourceToImageList(FToolbarImages, 'ARROW_W_16');
+  LoadPngResourceToImageList(FToolbarImages, 'ARROW_H_16');
+
   {Create 5 mode buttons}
   TabIdx := 1;
   for VM := Low(TViewMode) to High(TViewMode) do
@@ -486,16 +545,34 @@ begin
     FModeButtons[VM] := TButton.Create(FToolbar);
     FModeButtons[VM].Parent := FToolbar;
 
-    {Auto-width: measure caption text and add padding}
+    {Auto-width: measure caption text and add padding. Scroll/Filmstrip
+     also reserve space for a directional arrow icon to the left of the
+     caption.}
     BW := Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
     if FModePopups[VM] <> nil then
       Inc(BW, SPLIT_ARROW_W);
+    if VM in [vmScroll, vmFilmstrip] then
+      Inc(BW, ICON_W + ICON_GAP);
 
     FModeButtons[VM].SetBounds(X, CY, BW, CtrlH);
     FModeButtons[VM].Caption := MODE_CAPTIONS[VM];
     FModeButtons[VM].Tag := Ord(VM);
     FModeButtons[VM].TabOrder := TabIdx;
     FModeButtons[VM].OnClick := OnModeButtonClick;
+
+    if VM = vmScroll then
+    begin
+      FModeButtons[VM].Images := FToolbarImages;
+      FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_W;
+      {Qualified — TIconArrangement (Vcl.ComCtrls) also defines iaLeft}
+      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaLeft;
+    end
+    else if VM = vmFilmstrip then
+    begin
+      FModeButtons[VM].Images := FToolbarImages;
+      FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_H;
+      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaLeft;
+    end;
 
     {Split button: click activates mode, arrow shows submodes}
     if FModePopups[VM] <> nil then
@@ -541,15 +618,20 @@ begin
     FToolbarButtons[High(FToolbarButtons)] := Btn;
   end;
 
-  {Hamburger overflow button: hidden until toolbar is too narrow}
+  {Hamburger overflow button: hidden until toolbar is too narrow. Glyph
+   comes from FToolbarImages (created earlier with the mode-button arrow
+   icons) so the toolbar does not depend on the runtime font's coverage
+   of U+2261.}
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := OnHamburgerMenuPopup;
 
   FBtnHamburger := TButton.Create(FToolbar);
   FBtnHamburger.Parent := FToolbar;
-  BW := Canvas.TextWidth(#$2261) + BTN_PAD;
-  FBtnHamburger.SetBounds(0, CY, BW, CtrlH);
-  FBtnHamburger.Caption := #$2261;
+  FBtnHamburger.Images := FToolbarImages;
+  FBtnHamburger.ImageIndex := IDX_ICON_HAMBURGER;
+  FBtnHamburger.ImageAlignment := iaCenter;
+  {Square button matched to the rest of the toolbar's height}
+  FBtnHamburger.SetBounds(0, CY, CtrlH, CtrlH);
   FBtnHamburger.OnClick := OnHamburgerClick;
   FBtnHamburger.Visible := False;
 end;
