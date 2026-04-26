@@ -14,7 +14,13 @@ type
     FileName: string;
     FileSizeBytes: Int64;
     DurationSec: Double;
+    {Storage pixel grid dimensions (what's actually encoded).}
     Width, Height: Integer;
+    {Display dimensions (storage * SAR). Equal to Width/Height for
+     non-anamorphic sources. When they differ, FormatBannerLines renders
+     "<sw>x<sh> -> <dw>x<dh>" so the banner reflects both the source's
+     stored geometry and the corrected geometry the saved frames carry.}
+    DisplayWidth, DisplayHeight: Integer;
     VideoCodec: string;
     VideoBitrateKbps: Integer;
     Fps: Double;
@@ -173,6 +179,8 @@ begin
   Result.DurationSec := AVideoInfo.Duration;
   Result.Width := AVideoInfo.Width;
   Result.Height := AVideoInfo.Height;
+  Result.DisplayWidth := AVideoInfo.DisplayWidth;
+  Result.DisplayHeight := AVideoInfo.DisplayHeight;
   Result.VideoCodec := AVideoInfo.VideoCodec;
   Result.VideoBitrateKbps := AVideoInfo.VideoBitrateKbps;
   Result.Fps := AVideoInfo.Fps;
@@ -201,7 +209,15 @@ begin
   begin
     if Line2 <> '' then
       Line2 := Line2 + '  |  ';
-    Line2 := Line2 + Format('%dx%d', [AInfo.Width, AInfo.Height]);
+    {Anamorphic: storage and display dimensions diverge. Show both so the
+     banner explains why the saved combined image is wider than the raw
+     "WxH" reported by mediainfo et al.}
+    if (AInfo.DisplayWidth > 0) and (AInfo.DisplayHeight > 0) and
+      ((AInfo.DisplayWidth <> AInfo.Width) or (AInfo.DisplayHeight <> AInfo.Height)) then
+      Line2 := Line2 + Format('%dx%d -> %dx%d',
+        [AInfo.Width, AInfo.Height, AInfo.DisplayWidth, AInfo.DisplayHeight])
+    else
+      Line2 := Line2 + Format('%dx%d', [AInfo.Width, AInfo.Height]);
   end;
   if AInfo.Fps > 0 then
   begin

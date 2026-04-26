@@ -85,6 +85,9 @@ type
     [Test] procedure BannerLines_AudioChannelsShown;
     [Test] procedure BannerLines_NoFileSize_OmitsSize;
     [Test] procedure BannerLines_GBFileSize;
+    [Test] procedure BannerLines_AnamorphicShowsArrow;
+    [Test] procedure BannerLines_DisplayMatchesStorage_NoArrow;
+    [Test] procedure BannerLines_DisplayZero_FallsBackToStorage;
     { BuildBannerInfo }
     [Test] procedure BuildBannerInfo_ExistingFile_CopiesAllFields;
     [Test] procedure BuildBannerInfo_MissingFile_FileSizeIsZero;
@@ -1154,6 +1157,69 @@ begin
     Format('3 GB file should show GB, got: [%s]', [Lines[0]]));
 end;
 
+procedure TTestCombinedImage.BannerLines_AnamorphicShowsArrow;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { When Display dims differ from storage (anamorphic source), the banner
+    must show both with an arrow so the user understands why the saved
+    image is wider than the "WxH" reported by mediainfo et al. }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'pal.mp4';
+  Info.Width := 720;
+  Info.Height := 576;
+  Info.DisplayWidth := 1024;
+  Info.DisplayHeight := 576;
+
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[1].Contains('720x576 -> 1024x576'),
+    Format('Anamorphic banner must show "Sw x Sh -> Dw x Dh", got: [%s]',
+      [Lines[1]]));
+end;
+
+procedure TTestCombinedImage.BannerLines_DisplayMatchesStorage_NoArrow;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { Square-pixel source (Display = Storage): banner must show plain "WxH"
+    with no arrow. Otherwise non-anamorphic videos would carry confusing
+    "1920x1080 -> 1920x1080" noise. }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'square.mp4';
+  Info.Width := 1920;
+  Info.Height := 1080;
+  Info.DisplayWidth := 1920;
+  Info.DisplayHeight := 1080;
+
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[1].Contains('1920x1080'), 'Resolution still printed');
+  Assert.IsFalse(Lines[1].Contains('->'),
+    Format('Arrow must be absent when storage = display, got: [%s]',
+      [Lines[1]]));
+end;
+
+procedure TTestCombinedImage.BannerLines_DisplayZero_FallsBackToStorage;
+var
+  Info: TBannerInfo;
+  Lines: TArray<string>;
+begin
+  { Older callers may still build TBannerInfo by hand without populating
+    Display dims. Falling back to plain "WxH" rather than emitting
+    "WxH -> 0x0" keeps the banner sane in that case. }
+  Info := Default(TBannerInfo);
+  Info.FileName := 'legacy.mp4';
+  Info.Width := 640;
+  Info.Height := 480;
+  { DisplayWidth/Height left at 0 }
+
+  Lines := FormatBannerLines(Info);
+  Assert.IsTrue(Lines[1].Contains('640x480'), 'Fallback shows storage dims');
+  Assert.IsFalse(Lines[1].Contains('->'),
+    'No arrow when display dims are unknown');
+end;
+
 procedure TTestCombinedImage.BuildBannerInfo_ExistingFile_CopiesAllFields;
 var
   TempFile: string;
@@ -1171,6 +1237,8 @@ begin
     VideoInfo.Duration := 123.5;
     VideoInfo.Width := 1920;
     VideoInfo.Height := 1080;
+    VideoInfo.DisplayWidth := 1920;
+    VideoInfo.DisplayHeight := 1080;
     VideoInfo.VideoCodec := 'h264';
     VideoInfo.VideoBitrateKbps := 4500;
     VideoInfo.Fps := 29.97;
@@ -1187,6 +1255,8 @@ begin
     Assert.AreEqual(123.5, Banner.DurationSec, 0.001);
     Assert.AreEqual(1920, Banner.Width);
     Assert.AreEqual(1080, Banner.Height);
+    Assert.AreEqual(1920, Banner.DisplayWidth);
+    Assert.AreEqual(1080, Banner.DisplayHeight);
     Assert.AreEqual('h264', Banner.VideoCodec);
     Assert.AreEqual(4500, Banner.VideoBitrateKbps);
     Assert.AreEqual(29.97, Banner.Fps, 0.001);
@@ -1244,6 +1314,8 @@ begin
   Assert.AreEqual(0.0, Banner.DurationSec, 0.001);
   Assert.AreEqual(0, Banner.Width);
   Assert.AreEqual(0, Banner.Height);
+  Assert.AreEqual(0, Banner.DisplayWidth);
+  Assert.AreEqual(0, Banner.DisplayHeight);
   Assert.AreEqual('', Banner.VideoCodec);
   Assert.AreEqual(0, Banner.VideoBitrateKbps);
   Assert.AreEqual(0.0, Banner.Fps, 0.001);
