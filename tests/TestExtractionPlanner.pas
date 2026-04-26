@@ -39,6 +39,7 @@ type
     [Test] procedure TestDetectSettingsChangesMinFrameSide;
     [Test] procedure TestDetectSettingsChangesMaxFrameSide;
     [Test] procedure TestDetectSettingsChangesUseKeyframes;
+    [Test] procedure TestDetectSettingsChangesRespectAnamorphic;
 
     { CalcExtractionMaxSide tests }
     [Test] procedure TestCalcMaxSideLandscape;
@@ -244,6 +245,7 @@ begin
     Assert.AreEqual(120, Snap.MinFrameSide);
     Assert.AreEqual(1920, Snap.MaxFrameSide);
     Assert.IsFalse(Snap.UseKeyframes);
+    Assert.IsTrue(Snap.RespectAnamorphic, 'Snapshot must capture default-on RespectAnamorphic');
   finally
     S.Free;
   end;
@@ -433,6 +435,25 @@ begin
     S.UseKeyframes := True;
     Changes := DetectSettingsChanges(Snap, S);
     Assert.IsTrue(scUseKeyframesChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesRespectAnamorphic;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  {Toggling RespectAnamorphic must surface as a change so the form can
+   re-extract and refresh the live-view aspect ratio.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.RespectAnamorphic := not Snap.RespectAnamorphic;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scRespectAnamorphicChanged in Changes);
   finally
     S.Free;
   end;

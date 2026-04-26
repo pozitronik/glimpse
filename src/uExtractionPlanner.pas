@@ -13,7 +13,7 @@ type
     Len: Integer; {number of frames in this chunk}
   end;
 
-  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged);
+  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged);
   TSettingsChanges = set of TSettingsChange;
 
   TSettingsSnapshot = record
@@ -26,6 +26,7 @@ type
     MinFrameSide: Integer;
     MaxFrameSide: Integer;
     UseKeyframes: Boolean;
+    RespectAnamorphic: Boolean;
   end;
 
   {Splits FrameCount frames into chunks for parallel extraction.
@@ -138,6 +139,7 @@ begin
   Result.MinFrameSide := ASettings.MinFrameSide;
   Result.MaxFrameSide := ASettings.MaxFrameSide;
   Result.UseKeyframes := ASettings.UseKeyframes;
+  Result.RespectAnamorphic := ASettings.RespectAnamorphic;
 end;
 
 function DetectSettingsChanges(const AOld: TSettingsSnapshot; ASettings: TPluginSettings): TSettingsChanges;
@@ -158,6 +160,9 @@ begin
 
   if ASettings.UseKeyframes <> AOld.UseKeyframes then
     Include(Result, scUseKeyframesChanged);
+
+  if ASettings.RespectAnamorphic <> AOld.RespectAnamorphic then
+    Include(Result, scRespectAnamorphicChanged);
 end;
 
 end.

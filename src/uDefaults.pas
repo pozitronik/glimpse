@@ -17,6 +17,10 @@ const
   DEF_USE_BMP_PIPE = True;
   DEF_HW_ACCEL = True;
   DEF_USE_KEYFRAMES = False;
+  {Default to ON: most users expect saved frames to look like the source
+   in a player. Anamorphic content is a minority but the cost of
+   "iw*sar:ih" on square-pixel sources is zero.}
+  DEF_RESPECT_ANAMORPHIC = True;
   DEF_SCALED_EXTRACTION = False;
   DEF_MIN_FRAME_SIDE = 120;
   DEF_MAX_FRAME_SIDE = 1920;

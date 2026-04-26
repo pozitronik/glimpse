@@ -98,6 +98,7 @@ type
     property UseBmpPipe: Boolean read FExtraction.UseBmpPipe write FExtraction.UseBmpPipe;
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
+    property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
     property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;

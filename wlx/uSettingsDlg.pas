@@ -30,6 +30,7 @@ type
     ChkUseBmpPipe: TCheckBox;
     ChkHwAccel: TCheckBox;
     ChkUseKeyframes: TCheckBox;
+    ChkRespectAnamorphic: TCheckBox;
     ChkScaledExtraction: TCheckBox;
     LblScaleTarget: TLabel;
     EdtMinFrameSide: TEdit;
@@ -236,6 +237,7 @@ begin
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
   ChkHwAccel.Checked := ASettings.HwAccel;
   ChkUseKeyframes.Checked := ASettings.UseKeyframes;
+  ChkRespectAnamorphic.Checked := ASettings.RespectAnamorphic;
   UdMaxThreads.Position := DecodeMaxThreadsControl(ASettings.MaxThreads);
   ChkScaledExtraction.Checked := ASettings.ScaledExtraction;
   UdMinFrameSide.Position := ASettings.MinFrameSide;
@@ -314,6 +316,7 @@ begin
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
   ASettings.UseKeyframes := ChkUseKeyframes.Checked;
+  ASettings.RespectAnamorphic := ChkRespectAnamorphic.Checked;
   ASettings.ScaledExtraction := ChkScaledExtraction.Checked;
   ASettings.MinFrameSide := UdMinFrameSide.Position;
   ASettings.MaxFrameSide := UdMaxFrameSide.Position;

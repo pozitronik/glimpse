@@ -186,6 +186,10 @@ type
     [Test]
     procedure TestHwAccelRoundTrip;
     [Test]
+    procedure TestRespectAnamorphicDefault;
+    [Test]
+    procedure TestRespectAnamorphicRoundTrip;
+    [Test]
     procedure TestUseKeyframesRoundTrip;
   end;
 
@@ -2129,6 +2133,36 @@ begin
     S.Load;
     Assert.AreEqual(not DEF_USE_KEYFRAMES, S.UseKeyframes,
       'Flipped UseKeyframes must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRespectAnamorphicDefault;
+var
+  S: TPluginSettings;
+begin
+  {Default ON: most users expect saved frames to match player display.}
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'fresh.ini'));
+  try
+    Assert.AreEqual(DEF_RESPECT_ANAMORPHIC, S.RespectAnamorphic);
+    Assert.IsTrue(S.RespectAnamorphic, 'Default must be ON');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRespectAnamorphicRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.RespectAnamorphic := not DEF_RESPECT_ANAMORPHIC;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_RESPECT_ANAMORPHIC, S.RespectAnamorphic,
+      'Flipped RespectAnamorphic must round-trip');
   finally
     S.Free;
   end;

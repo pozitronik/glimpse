@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 440
+  ClientHeight = 470
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 400
+    Height = 430
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -26,7 +26,7 @@ object SettingsForm: TSettingsForm
       Caption = 'General'
       DesignSize = (
         452
-        370)
+        400)
       object LblSkipEdges: TLabel
         Left = 12
         Top = 24
@@ -90,21 +90,21 @@ object SettingsForm: TSettingsForm
       end
       object LblExtensions: TLabel
         Left = 12
-        Top = 284
+        Top = 313
         Width = 58
         Height = 15
         Caption = 'Extensions:'
       end
       object LblFFmpegPath: TLabel
         Left = 12
-        Top = 314
+        Top = 343
         Width = 73
         Height = 15
         Caption = 'FFmpeg path:'
       end
       object LblFFmpegInfo: TLabel
         Left = 12
-        Top = 335
+        Top = 364
         Width = 3
         Height = 15
         Font.Charset = DEFAULT_CHARSET
@@ -265,41 +265,50 @@ object SettingsForm: TSettingsForm
         TabOrder = 14
         Thousands = False
       end
-      object ChkAutoRefreshViewport: TCheckBox
+      object ChkRespectAnamorphic: TCheckBox
         Left = 12
         Top = 252
         Width = 424
         Height = 17
         Anchors = [akLeft, akTop, akRight]
-        Caption = 'Re-extract automatically when the viewport changes'
+        Caption = 'Respect anamorphic dimensions'
         TabOrder = 15
+      end
+      object ChkAutoRefreshViewport: TCheckBox
+        Left = 12
+        Top = 281
+        Width = 424
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Re-extract automatically when the viewport changes'
+        TabOrder = 16
       end
       object EdtExtensions: TEdit
         Left = 115
-        Top = 281
+        Top = 310
         Width = 324
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 16
+        TabOrder = 17
       end
       object EdtFFmpegPath: TEdit
         Left = 115
-        Top = 310
+        Top = 339
         Width = 293
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 17
+        TabOrder = 18
         TextHint = 'Auto-detect'
         OnChange = EdtFFmpegPathChange
       end
       object BtnFFmpegPath: TButton
         Left = 414
-        Top = 310
+        Top = 339
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 18
+        TabOrder = 19
         OnClick = BtnFFmpegPathClick
       end
     end
@@ -308,7 +317,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 1
       DesignSize = (
         452
-        370)
+        400)
       object LblBackground: TLabel
         Left = 12
         Top = 24
@@ -568,7 +577,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 2
       DesignSize = (
         452
-        370)
+        400)
       object LblSaveFormat: TLabel
         Left = 12
         Top = 24
@@ -794,7 +803,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 3
       DesignSize = (
         452
-        370)
+        400)
       object LblCacheFolder: TLabel
         Left = 12
         Top = 53
@@ -1001,7 +1010,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 5
       DesignSize = (
         452
-        370)
+        400)
       object ChkQVDisableNavigation: TCheckBox
         Left = 12
         Top = 24
@@ -1035,7 +1044,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 6
       DesignSize = (
         452
-        370)
+        400)
       object LvwHotkeys: TListView
         Left = 12
         Top = 12
@@ -1092,7 +1101,7 @@ object SettingsForm: TSettingsForm
   end
   object PnlButtons: TPanel
     Left = 0
-    Top = 400
+    Top = 430
     Width = 460
     Height = 40
     Align = alBottom

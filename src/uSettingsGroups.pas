@@ -26,7 +26,7 @@ uses
   uTypes;
 
 type
-  {[extraction] group — seven fields shared verbatim between WLX and WCX.
+  {[extraction] group — eight fields shared verbatim between WLX and WCX.
    Both plugins write these under the INI section 'extraction'.}
   TExtractionSettingsGroup = record
     FramesCount: Integer;
@@ -36,6 +36,7 @@ type
     UseBmpPipe: Boolean;
     HwAccel: Boolean;
     UseKeyframes: Boolean;
+    RespectAnamorphic: Boolean;
 
     {Populates every field with the shared uDefaults constants.}
     class function Defaults: TExtractionSettingsGroup; static;
@@ -104,6 +105,7 @@ begin
   Result.UseBmpPipe := DEF_USE_BMP_PIPE;
   Result.HwAccel := DEF_HW_ACCEL;
   Result.UseKeyframes := DEF_USE_KEYFRAMES;
+  Result.RespectAnamorphic := DEF_RESPECT_ANAMORPHIC;
 end;
 
 procedure TExtractionSettingsGroup.LoadFrom(AIni: TIniFile; const ASection: string);
@@ -119,6 +121,7 @@ begin
   UseBmpPipe := AIni.ReadBool(ASection, 'UseBmpPipe', UseBmpPipe);
   HwAccel := AIni.ReadBool(ASection, 'HwAccel', HwAccel);
   UseKeyframes := AIni.ReadBool(ASection, 'UseKeyframes', UseKeyframes);
+  RespectAnamorphic := AIni.ReadBool(ASection, 'RespectAnamorphic', RespectAnamorphic);
 end;
 
 procedure TExtractionSettingsGroup.SaveTo(AIni: TIniFile; const ASection: string);
@@ -130,6 +133,7 @@ begin
   AIni.WriteBool(ASection, 'UseBmpPipe', UseBmpPipe);
   AIni.WriteBool(ASection, 'HwAccel', HwAccel);
   AIni.WriteBool(ASection, 'UseKeyframes', UseKeyframes);
+  AIni.WriteBool(ASection, 'RespectAnamorphic', RespectAnamorphic);
 end;
 
 {TBannerSettingsGroup}

@@ -103,6 +103,7 @@ type
     procedure CreateErrorLabel;
     function CreateModePopup(AMode: TViewMode): TPopupMenu;
     procedure ApplySettings;
+    procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
     procedure ShowError(const AMessage: string);
     procedure HideError;
@@ -1141,21 +1142,32 @@ begin
     Exit;
   end;
 
-  {Set actual dimensions and aspect ratio from video metadata}
+  {Set actual dimensions and aspect ratio from video metadata.}
+  ApplyVideoDimsToFrameView;
+
+  SetupPlaceholders;
+  HideError;
+  StartExtraction;
+end;
+
+{Pushes FVideoInfo's pixel dimensions to the frame view. RespectAnamorphic
+ selects between storage and display pixel grids for the live-view aspect
+ ratio so cells match the actually-extracted frame proportions.}
+procedure TPluginForm.ApplyVideoDimsToFrameView;
+begin
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
   begin
     FFrameView.NativeW := FVideoInfo.Width;
     FFrameView.NativeH := FVideoInfo.Height;
-    FFrameView.AspectRatio := FVideoInfo.Height / FVideoInfo.Width;
+    if FSettings.RespectAnamorphic and (FVideoInfo.DisplayWidth > 0) and (FVideoInfo.DisplayHeight > 0) then
+      FFrameView.AspectRatio := FVideoInfo.DisplayHeight / FVideoInfo.DisplayWidth
+    else
+      FFrameView.AspectRatio := FVideoInfo.Height / FVideoInfo.Width;
   end else begin
     FFrameView.NativeW := 0;
     FFrameView.NativeH := 0;
     FFrameView.AspectRatio := DEF_ASPECT_RATIO;
   end;
-
-  SetupPlaceholders;
-  HideError;
-  StartExtraction;
 end;
 
 procedure TPluginForm.SetupPlaceholders;
@@ -1191,6 +1203,7 @@ begin
   end;
   Options.HwAccel := FSettings.HwAccel;
   Options.UseKeyframes := FSettings.UseKeyframes;
+  Options.RespectAnamorphic := FSettings.RespectAnamorphic;
 
   {Remember the extraction size so OnViewportRefreshTimer can decide
    whether the next viewport-change event actually changed anything.}
@@ -1925,8 +1938,14 @@ begin
     Exit;
   end;
 
-  {Re-extract if skip edges, scaled extraction, or keyframes settings changed}
-  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged]) <> [] then
+  {Toggling RespectAnamorphic changes the live-view cell aspect ratio; do
+   it before the re-extract so SetupPlaceholders sees the new aspect.}
+  if scRespectAnamorphicChanged in Changes then
+    ApplyVideoDimsToFrameView;
+
+  {Re-extract if skip edges, scaled extraction, keyframes, or anamorphic
+   settings changed}
+  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged]) <> [] then
     RefreshExtraction;
 end;
 
