@@ -25,6 +25,11 @@ type
     [Test] procedure TestFloatLocaleIndependence;
     [Test] procedure TestTryGetOrProbeHitsCache;
     [Test] procedure TestTryGetOrProbeMissReturnsInvalidAndSkipsCache;
+    [Test] procedure TestGetTotalSizeEmpty;
+    [Test] procedure TestGetTotalSizeAfterPut;
+    [Test] procedure TestGetTotalSizeOnMissingDir;
+    [Test] procedure TestClearWipesEntries;
+    [Test] procedure TestClearOnMissingDirNoException;
   end;
 
 implementation
@@ -116,8 +121,12 @@ begin
     try
       Info := Default(TVideoInfo);
       Info.Duration := 3661.123;
-      Info.Width := 3840;
-      Info.Height := 2160;
+      Info.Width := 720;
+      Info.Height := 576;
+      Info.SampleAspectN := 64;
+      Info.SampleAspectD := 45;
+      Info.DisplayWidth := 1024;
+      Info.DisplayHeight := 576;
       Info.VideoCodec := 'h264';
       Info.VideoBitrateKbps := 5000;
       Info.Fps := 23.976;
@@ -132,8 +141,12 @@ begin
       Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
 
       Assert.AreEqual(Double(3661.123), Retrieved.Duration, 0.001);
-      Assert.AreEqual(3840, Retrieved.Width);
-      Assert.AreEqual(2160, Retrieved.Height);
+      Assert.AreEqual(720, Retrieved.Width);
+      Assert.AreEqual(576, Retrieved.Height);
+      Assert.AreEqual(64, Retrieved.SampleAspectN, 'SAR numerator must round-trip');
+      Assert.AreEqual(45, Retrieved.SampleAspectD, 'SAR denominator must round-trip');
+      Assert.AreEqual(1024, Retrieved.DisplayWidth, 'Display width must round-trip');
+      Assert.AreEqual(576, Retrieved.DisplayHeight, 'Display height must round-trip');
       Assert.AreEqual('h264', Retrieved.VideoCodec);
       Assert.AreEqual(5000, Retrieved.VideoBitrateKbps);
       Assert.AreEqual(Double(23.976), Retrieved.Fps, 0.001);
@@ -364,6 +377,104 @@ begin
     end;
   finally
     TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestProbeCache.TestGetTotalSizeEmpty;
+var
+  Cache: TProbeCache;
+begin
+  {Fresh cache dir, nothing put. Total must be zero.}
+  Cache := TProbeCache.Create(FCacheDir);
+  try
+    Assert.AreEqual<Int64>(0, Cache.GetTotalSize);
+  finally
+    Cache.Free;
+  end;
+end;
+
+procedure TTestProbeCache.TestGetTotalSizeAfterPut;
+var
+  Cache: TProbeCache;
+  Info: TVideoInfo;
+  TmpFile: string;
+begin
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_size_test.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      Info := Default(TVideoInfo);
+      Info.Duration := 60;
+      Info.Width := 1920;
+      Info.Height := 1080;
+      Info.IsValid := True;
+      Cache.Put(TmpFile, Info);
+      Assert.IsTrue(Cache.GetTotalSize > 0,
+        'After Put the total size must be non-zero');
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestProbeCache.TestGetTotalSizeOnMissingDir;
+var
+  Cache: TProbeCache;
+begin
+  {Missing dir is the normal "first run" state; must return 0 not raise.}
+  Cache := TProbeCache.Create(TPath.Combine(FCacheDir, 'never_created'));
+  try
+    Assert.AreEqual<Int64>(0, Cache.GetTotalSize);
+  finally
+    Cache.Free;
+  end;
+end;
+
+procedure TTestProbeCache.TestClearWipesEntries;
+var
+  Cache: TProbeCache;
+  Info, Retrieved: TVideoInfo;
+  TmpFile: string;
+begin
+  {Clear must drop every cached probe and leave subsequent TryGet missing.}
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_clear_test.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      Info := Default(TVideoInfo);
+      Info.Duration := 60;
+      Info.Width := 1920;
+      Info.Height := 1080;
+      Info.IsValid := True;
+      Cache.Put(TmpFile, Info);
+      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved), 'Pre-condition: cache hit');
+
+      Cache.Clear;
+      Assert.AreEqual<Int64>(0, Cache.GetTotalSize, 'Total size zero after Clear');
+      Assert.IsFalse(Cache.TryGet(TmpFile, Retrieved), 'Cache must miss after Clear');
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestProbeCache.TestClearOnMissingDirNoException;
+var
+  Cache: TProbeCache;
+begin
+  {Clear on a never-created dir must be a no-op, not a crash.}
+  Cache := TProbeCache.Create(TPath.Combine(FCacheDir, 'never_created'));
+  try
+    Cache.Clear;
+    Assert.Pass('Clear on missing dir did not raise');
+  finally
+    Cache.Free;
   end;
 end;
 

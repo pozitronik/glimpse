@@ -222,8 +222,8 @@ implementation
 
 uses
   System.IOUtils, System.Math,
-  uDefaults, uFFmpegExe, uCache, uBitmapSaver, uPathExpand, uSettingsDlgLogic,
-  uCaptureShortcutDlg;
+  uDefaults, uFFmpegExe, uCache, uProbeCache, uBitmapSaver, uPathExpand,
+  uSettingsDlgLogic, uCaptureShortcutDlg;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 var
@@ -544,20 +544,30 @@ procedure TSettingsForm.BtnClearCacheClick(Sender: TObject);
 var
   Dir: string;
   Mgr: ICacheManager;
+  ProbeC: TProbeCache;
 begin
   Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
 
-  if not TDirectory.Exists(Dir) then
-  begin
-    UpdateCacheSizeInfo;
+  if MessageBox(Handle, 'Delete all cached frames and probe metadata?',
+    'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
+
+  if TDirectory.Exists(Dir) then
+  begin
+    Mgr := CreateCacheManager(Dir, 0);
+    Mgr.Clear;
   end;
 
-  if MessageBox(Handle, PChar(Format('Delete all cached frames in %s?', [Dir])), 'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
-    Exit;
+  {Probe cache lives outside the user-configurable cache folder, in
+   %TEMP%\Glimpse\probes. Wiping it alongside the frame cache matches
+   user intent (one Cache button = all of Glimpse's on-disk caches).}
+  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
+  try
+    ProbeC.Clear;
+  finally
+    ProbeC.Free;
+  end;
 
-  Mgr := CreateCacheManager(Dir, 0);
-  Mgr.Clear;
   UpdateCacheSizeInfo;
 end;
 
@@ -875,18 +885,26 @@ procedure TSettingsForm.UpdateCacheSizeInfo;
 var
   Dir: string;
   Mgr: ICacheManager;
+  ProbeC: TProbeCache;
   Total: Int64;
 begin
-  Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
+  Total := 0;
 
-  if not TDirectory.Exists(Dir) then
+  Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
+  if TDirectory.Exists(Dir) then
   begin
-    LblCacheSizeInfo.Caption := '(current: empty)';
-    Exit;
+    Mgr := CreateCacheManager(Dir, 0);
+    Total := Total + Mgr.GetTotalSize;
   end;
 
-  Mgr := CreateCacheManager(Dir, 0);
-  Total := Mgr.GetTotalSize;
+  {Probe cache lives in a separate fixed directory; fold it into the total
+   so the readout reflects every byte the plugin keeps on disk.}
+  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
+  try
+    Total := Total + ProbeC.GetTotalSize;
+  finally
+    ProbeC.Free;
+  end;
 
   if Total > 0 then
     LblCacheSizeInfo.Caption := Format('(current: %.1f MB)', [Total / (1024 * 1024)])

@@ -26,6 +26,13 @@ type
     {Convenience: cache look-up, fall back to ffmpeg probe on miss, repopulate.
      Consolidates the cache-then-probe policy so WLX/WCX/thumbnail paths share it.}
     function TryGetOrProbe(const AFilePath, AFFmpegPath: string): TVideoInfo;
+    {Total bytes used by every .probe file under the cache dir. Used by the
+     settings dialog to fold the probe cache into the displayed cache size.}
+    function GetTotalSize: Int64;
+    {Removes every cached probe. Best-effort: directory locks are swallowed.
+     Used by the settings dialog's Clear cache button so probe entries are
+     wiped alongside frame cache entries.}
+    procedure Clear;
   end;
 
   {Default probe cache directory, separate from the frame cache.}
@@ -98,6 +105,16 @@ begin
     AInfo.Duration := StrToFloatDef(Lines.Values['Duration'], -1, InvFmt);
     AInfo.Width := StrToIntDef(Lines.Values['Width'], 0);
     AInfo.Height := StrToIntDef(Lines.Values['Height'], 0);
+    AInfo.SampleAspectN := StrToIntDef(Lines.Values['SampleAspectN'], 1);
+    AInfo.SampleAspectD := StrToIntDef(Lines.Values['SampleAspectD'], 1);
+    AInfo.DisplayWidth := StrToIntDef(Lines.Values['DisplayWidth'], 0);
+    AInfo.DisplayHeight := StrToIntDef(Lines.Values['DisplayHeight'], 0);
+    {Backfill display dims from storage for cache entries written before
+     the SAR-aware probe was added. New entries always have these keys.}
+    if AInfo.DisplayWidth <= 0 then
+      AInfo.DisplayWidth := AInfo.Width;
+    if AInfo.DisplayHeight <= 0 then
+      AInfo.DisplayHeight := AInfo.Height;
     AInfo.VideoCodec := Lines.Values['VideoCodec'];
     AInfo.VideoBitrateKbps := StrToIntDef(Lines.Values['VideoBitrateKbps'], 0);
     AInfo.Fps := StrToFloatDef(Lines.Values['Fps'], 0, InvFmt);
@@ -129,6 +146,38 @@ begin
   Put(AFilePath, Result);
 end;
 
+function TProbeCache.GetTotalSize: Int64;
+var
+  Files: TArray<string>;
+  F: string;
+begin
+  Result := 0;
+  if not TDirectory.Exists(FCacheDir) then
+    Exit;
+  try
+    Files := TDirectory.GetFiles(FCacheDir, '*.probe', TSearchOption.soAllDirectories);
+  except
+    Exit;
+  end;
+  for F in Files do
+    try
+      Result := Result + TFile.GetSize(F);
+    except
+      {File vanished mid-walk; skip}
+    end;
+end;
+
+procedure TProbeCache.Clear;
+begin
+  try
+    if TDirectory.Exists(FCacheDir) then
+      TDirectory.Delete(FCacheDir, True);
+    TDirectory.CreateDirectory(FCacheDir);
+  except
+    {Best-effort: directory may be locked}
+  end;
+end;
+
 procedure TProbeCache.Put(const AFilePath: string; const AInfo: TVideoInfo);
 var
   Key, Path, Dir: string;
@@ -149,6 +198,10 @@ begin
     Lines.Add('Duration=' + FloatToStr(AInfo.Duration, InvFmt));
     Lines.Add('Width=' + IntToStr(AInfo.Width));
     Lines.Add('Height=' + IntToStr(AInfo.Height));
+    Lines.Add('SampleAspectN=' + IntToStr(AInfo.SampleAspectN));
+    Lines.Add('SampleAspectD=' + IntToStr(AInfo.SampleAspectD));
+    Lines.Add('DisplayWidth=' + IntToStr(AInfo.DisplayWidth));
+    Lines.Add('DisplayHeight=' + IntToStr(AInfo.DisplayHeight));
     Lines.Add('VideoCodec=' + AInfo.VideoCodec);
     Lines.Add('VideoBitrateKbps=' + IntToStr(AInfo.VideoBitrateKbps));
     Lines.Add('Fps=' + FloatToStr(AInfo.Fps, InvFmt));
