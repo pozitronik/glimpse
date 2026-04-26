@@ -93,6 +93,23 @@ type
     [Test] procedure TestParseDurationSingleDigitFraction;
     [Test] procedure TestExtractStreamLineVideo;
     [Test] procedure TestExtractStreamLineNoMatch;
+    { Sample aspect ratio parsing }
+    [Test] procedure TestParseSampleAspectAnamorphic;
+    [Test] procedure TestParseSampleAspectSquare;
+    [Test] procedure TestParseSampleAspectMissing;
+    [Test] procedure TestParseSampleAspectZeroNumerator;
+    [Test] procedure TestParseSampleAspectZeroDenominator;
+    [Test] procedure TestParseSampleAspectNoVideoLine;
+    [Test] procedure TestParseSampleAspectFullOutput;
+  end;
+
+  [TestFixture]
+  TTestFFmpegProbeIntegration = class
+  public
+    {Real ffmpeg.exe + a real anamorphic file. Skipped when ffmpeg.exe is
+     not on the system PATH so the suite stays runnable on machines without
+     ffmpeg installed.}
+    [Test] procedure TestProbeAnamorphicVideo;
   end;
 
   [TestFixture]
@@ -117,6 +134,13 @@ uses
   System.SysUtils, System.IOUtils,
   Winapi.Windows,
   uFFmpegExe, uFFmpegLocator;
+
+function TestDataPath(const AFileName: string): string;
+begin
+  {Tests run from tests/Win64/Debug/GlimpseTests.exe; data lives in tests/data/}
+  Result := TPath.GetFullPath(TPath.Combine(ExtractFilePath(ParamStr(0)),
+    '..\..\data\' + AFileName));
+end;
 
 const
   { Realistic ffmpeg probe output for integration-style parsing tests }
@@ -589,6 +613,121 @@ begin
   Assert.AreEqual('', ExtractStreamLine('no streams here', 'Video:'));
 end;
 
+{ Sample aspect ratio parsing }
+
+procedure TTestFFmpegParsing.TestParseSampleAspectAnamorphic;
+var
+  N, D: Integer;
+begin
+  Assert.IsTrue(ParseSampleAspect(
+    '  Stream #0:0: Video: h264, yuv420p, 720x576 [SAR 64:45 DAR 16:9], 25 fps',
+    N, D));
+  Assert.AreEqual(64, N);
+  Assert.AreEqual(45, D);
+end;
+
+procedure TTestFFmpegParsing.TestParseSampleAspectSquare;
+var
+  N, D: Integer;
+begin
+  Assert.IsTrue(ParseSampleAspect(
+    '  Stream #0:0: Video: h264, yuv420p, 1920x1080 [SAR 1:1 DAR 16:9], 60 fps',
+    N, D));
+  Assert.AreEqual(1, N);
+  Assert.AreEqual(1, D);
+end;
+
+procedure TTestFFmpegParsing.TestParseSampleAspectMissing;
+var
+  N, D: Integer;
+begin
+  {Many encodes omit SAR/DAR brackets entirely; default to 1:1 and return False.}
+  Assert.IsFalse(ParseSampleAspect(
+    '  Stream #0:0: Video: h264, yuv420p, 1920x1080, 5000 kb/s, 30 fps',
+    N, D));
+  Assert.AreEqual(1, N);
+  Assert.AreEqual(1, D);
+end;
+
+procedure TTestFFmpegParsing.TestParseSampleAspectZeroNumerator;
+var
+  N, D: Integer;
+begin
+  {ffmpeg emits "[SAR 0:1 DAR 0:1]" when SAR is unknown; treat as 1:1.}
+  Assert.IsFalse(ParseSampleAspect(
+    '  Stream #0:0: Video: h264, 1920x1080 [SAR 0:1 DAR 0:1], 30 fps',
+    N, D));
+  Assert.AreEqual(1, N);
+  Assert.AreEqual(1, D);
+end;
+
+procedure TTestFFmpegParsing.TestParseSampleAspectZeroDenominator;
+var
+  N, D: Integer;
+begin
+  Assert.IsFalse(ParseSampleAspect(
+    '  Stream #0:0: Video: h264, 1920x1080 [SAR 1:0 DAR 16:9], 30 fps',
+    N, D));
+  Assert.AreEqual(1, N);
+  Assert.AreEqual(1, D);
+end;
+
+procedure TTestFFmpegParsing.TestParseSampleAspectNoVideoLine;
+var
+  N, D: Integer;
+begin
+  Assert.IsFalse(ParseSampleAspect('  Stream #0:0: Audio: aac, 44100 Hz, stereo', N, D));
+  Assert.AreEqual(1, N);
+  Assert.AreEqual(1, D);
+end;
+
+procedure TTestFFmpegParsing.TestParseSampleAspectFullOutput;
+var
+  N, D: Integer;
+begin
+  {SAMPLE_FFMPEG_OUTPUT carries [SAR 1:1 DAR 16:9] on its Video line.}
+  Assert.IsTrue(ParseSampleAspect(SAMPLE_FFMPEG_OUTPUT, N, D));
+  Assert.AreEqual(1, N);
+  Assert.AreEqual(1, D);
+end;
+
+{ TTestFFmpegProbeIntegration }
+
+procedure TTestFFmpegProbeIntegration.TestProbeAnamorphicVideo;
+var
+  FFmpegPath, VideoPath: string;
+  FFmpeg: TFFmpegExe;
+  Info: TVideoInfo;
+begin
+  FFmpegPath := FindFFmpegExe('', '');
+  if FFmpegPath = '' then
+  begin
+    {Pass-through when ffmpeg is not on PATH; the unit-level parse tests
+     still cover the parsing logic.}
+    Assert.Pass('ffmpeg.exe not on PATH; skipping integration test');
+    Exit;
+  end;
+
+  VideoPath := TestDataPath('test_anamorphic.mp4');
+  Assert.IsTrue(TFile.Exists(VideoPath),
+    'Test data missing: ' + VideoPath);
+
+  FFmpeg := TFFmpegExe.Create(FFmpegPath);
+  try
+    Info := FFmpeg.ProbeVideo(VideoPath);
+    Assert.IsTrue(Info.IsValid, 'Probe must succeed: ' + Info.ErrorMessage);
+    Assert.AreEqual(720, Info.Width, 'Storage width');
+    Assert.AreEqual(576, Info.Height, 'Storage height');
+    Assert.AreEqual(64, Info.SampleAspectN, 'SAR numerator');
+    Assert.AreEqual(45, Info.SampleAspectD, 'SAR denominator');
+    Assert.AreEqual(1024, Info.DisplayWidth,
+      'Display width = round(720 * 64/45) = 1024');
+    Assert.AreEqual(576, Info.DisplayHeight, 'SAR scales width, not height');
+  finally
+    FFmpeg.Free;
+  end;
+end;
+
 { TTestFFmpegLocator }
 
 procedure TTestFFmpegLocator.Setup;
@@ -704,6 +843,7 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestFFmpegParsing);
+  TDUnitX.RegisterTestFixture(TTestFFmpegProbeIntegration);
   TDUnitX.RegisterTestFixture(TTestFFmpegLocator);
 
 end.

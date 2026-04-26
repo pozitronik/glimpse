@@ -10,8 +10,18 @@ uses
 type
   TVideoInfo = record
     Duration: Double; {seconds; -1 if unknown}
-    Width: Integer;
-    Height: Integer;
+    Width: Integer; {storage pixel grid width}
+    Height: Integer; {storage pixel grid height}
+    {Sample aspect ratio (per-pixel display stretch) as a rational number.
+     1:1 means square pixels and is the default when the source carries no
+     SAR metadata. Anamorphic sources (DVD, broadcast, some camcorders)
+     have non-1:1 SAR; e.g. 720x576 SAR=64:45 displays as 16:9.}
+    SampleAspectN: Integer;
+    SampleAspectD: Integer;
+    {Pixel dimensions after applying SAR; equal to storage when SAR=1:1.
+     What every aspect-aware player shows on screen.}
+    DisplayWidth: Integer;
+    DisplayHeight: Integer;
     VideoCodec: string;
     VideoBitrateKbps: Integer; {0 if unknown}
     Fps: Double; {0 if unknown}
@@ -55,6 +65,12 @@ function ParseDuration(const AText: string): Double;
 
 {Parses video resolution from ffmpeg stderr output.}
 function ParseResolution(const AText: string; out AWidth, AHeight: Integer): Boolean;
+
+{Parses sample aspect ratio (SAR) numerator and denominator from ffmpeg
+ stderr output. Looks for the "[SAR <N>:<D> ..." marker on the Video: line.
+ When the marker is missing or the values are zero/invalid, AN/AD are set
+ to 1:1 (square pixels) and the function returns False.}
+function ParseSampleAspect(const AText: string; out AN, AD: Integer): Boolean;
 
 {Parses video codec name from ffmpeg stderr output.}
 function ParseVideoCodec(const AText: string): string;
@@ -221,6 +237,54 @@ begin
     end;
     Inc(P);
   end;
+end;
+
+function ParseSampleAspect(const AText: string; out AN, AD: Integer): Boolean;
+const
+  Marker = '[SAR ';
+var
+  VideoPos, MarkerPos, ColonPos, EndPos, NumStart: Integer;
+begin
+  Result := False;
+  AN := 1;
+  AD := 1;
+
+  VideoPos := Pos('Video:', AText);
+  if VideoPos = 0 then
+    Exit;
+
+  MarkerPos := Pos(Marker, AText, VideoPos);
+  if MarkerPos = 0 then
+    Exit;
+
+  {Walk digits up to ':' starting after the marker}
+  NumStart := MarkerPos + Length(Marker);
+  ColonPos := NumStart;
+  while (ColonPos <= Length(AText)) and CharInSet(AText[ColonPos], ['0' .. '9']) do
+    Inc(ColonPos);
+  if (ColonPos > Length(AText)) or (ColonPos = NumStart) or (AText[ColonPos] <> ':') then
+    Exit;
+  AN := StrToIntDef(Copy(AText, NumStart, ColonPos - NumStart), 0);
+
+  {Walk digits after ':'}
+  EndPos := ColonPos + 1;
+  while (EndPos <= Length(AText)) and CharInSet(AText[EndPos], ['0' .. '9']) do
+    Inc(EndPos);
+  if EndPos = ColonPos + 1 then
+  begin
+    AN := 1;
+    Exit;
+  end;
+  AD := StrToIntDef(Copy(AText, ColonPos + 1, EndPos - ColonPos - 1), 0);
+
+  if (AN <= 0) or (AD <= 0) then
+  begin
+    AN := 1;
+    AD := 1;
+    Exit;
+  end;
+
+  Result := True;
 end;
 
 function ParseVideoCodec(const AText: string): string;
@@ -499,6 +563,13 @@ begin
   StdErrStr := LenientUTF8Decode(StdErr);
   Result.Duration := ParseDuration(StdErrStr);
   ParseResolution(StdErrStr, Result.Width, Result.Height);
+  ParseSampleAspect(StdErrStr, Result.SampleAspectN, Result.SampleAspectD);
+  {Display dims = storage when SAR=1:1; SAR scales width, leaves height alone}
+  Result.DisplayHeight := Result.Height;
+  if (Result.Width > 0) and (Result.SampleAspectD > 0) then
+    Result.DisplayWidth := Round(Result.Width * Result.SampleAspectN / Result.SampleAspectD)
+  else
+    Result.DisplayWidth := Result.Width;
   Result.VideoCodec := ParseVideoCodec(StdErrStr);
   Result.Bitrate := ParseBitrate(StdErrStr);
   Result.Fps := ParseFps(StdErrStr);
