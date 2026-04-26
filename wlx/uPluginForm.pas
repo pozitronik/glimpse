@@ -464,7 +464,7 @@ const
   SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
   PB_H = 16; {Progress bar height}
   ICON_W = 16; {Toolbar icon width}
-  ICON_GAP = 4; {Space between icon and caption on iaLeft buttons}
+  ICON_GAP = 4; {Space between icon and caption on icon-bearing buttons}
 var
   X, CY, CtrlH, BW, I: Integer;
   VM: TViewMode;
