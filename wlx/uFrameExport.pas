@@ -18,7 +18,7 @@ type
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   protected
-    function RenderFrameView: TBitmap;
+    function RenderCombinedFromCells: TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
@@ -38,7 +38,8 @@ implementation
 
 uses
   System.SysUtils, System.Types,
-  Vcl.Clipbrd, Vcl.Dialogs, uFrameFileNames, uPathExpand;
+  Vcl.Clipbrd, Vcl.Dialogs,
+  uFrameFileNames, uFrameOffsets, uPathExpand, uTypes;
 
 {TFrameExporter}
 
@@ -63,13 +64,55 @@ begin
   Result := FFrameView.CellState(AIndex) = fcsLoaded;
 end;
 
-function TFrameExporter.RenderFrameView: TBitmap;
+{Renders the frames into a tightly-packed grid using the same renderer the
+ WCX plugin uses (uCombinedImage.RenderCombinedImage). View-mode-independent:
+ the user gets the same combined image regardless of whether the live view
+ is in Smart Grid, Grid, Scroll, Filmstrip, or Single mode. The previous
+ implementation screenshotted the live FrameView control, which baked the
+ view-mode's centering margins into the saved image as background bands.
+
+ Returns nil only when there are no cells; placeholder/error cells are
+ passed through as nil bitmaps and skipped by the renderer.}
+function TFrameExporter.RenderCombinedFromCells: TBitmap;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Ts: TTimestampStyle;
+  I, N: Integer;
 begin
-  Result := TBitmap.Create;
-  Result.SetSize(FFrameView.Width, FFrameView.Height);
-  Result.Canvas.Brush.Color := FFrameView.BackColor;
-  Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
-  FFrameView.PaintTo(Result.Canvas, 0, 0);
+  N := FFrameView.CellCount;
+  if N = 0 then
+    Exit(nil);
+
+  SetLength(Frames, N);
+  SetLength(Offsets, N);
+  for I := 0 to N - 1 do
+  begin
+    if FFrameView.CellState(I) = fcsLoaded then
+      Frames[I] := FFrameView.CellBitmap(I)
+    else
+      Frames[I] := nil;
+    Offsets[I].TimeOffset := FFrameView.CellTimeOffset(I);
+  end;
+
+  {Auto columns (= ceil(sqrt(N))), matching the WCX default.}
+  Grid.Columns := 0;
+  Grid.CellGap := FSettings.CellGap;
+  Grid.Border := FSettings.CombinedBorder;
+  Grid.Background := FSettings.Background;
+
+  Ts.Show := FFrameView.ShowTimecode;
+  Ts.Corner := FSettings.TimestampCorner;
+  Ts.FontName := FSettings.TimestampFontName;
+  Ts.FontSize := FSettings.TimestampFontSize;
+  Ts.FontStyles := []; {Match the WLX live view; WCX uses [fsBold]}
+  Ts.BackColor := FSettings.TimecodeBackColor;
+  Ts.BackAlpha := FSettings.TimecodeBackAlpha;
+  Ts.TextColor := FSettings.TimestampTextColor;
+  Ts.TextAlpha := FSettings.TimestampTextAlpha;
+
+  Result := RenderCombinedImage(Frames, Offsets, Grid, Ts);
 end;
 
 function TFrameExporter.RenderWithBanner(ABmp: TBitmap): TBitmap;
@@ -200,7 +243,7 @@ begin
   if not ShowSaveDialog('Save combined image', BaseName + '_combined.png', True, Path, Fmt) then
     Exit;
 
-  Bmp := RenderWithBanner(RenderFrameView);
+  Bmp := RenderWithBanner(RenderCombinedFromCells);
   try
     uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
   finally
@@ -237,7 +280,7 @@ var
 begin
   if FFrameView.CellCount = 0 then
     Exit;
-  Bmp := RenderWithBanner(RenderFrameView);
+  Bmp := RenderWithBanner(RenderCombinedFromCells);
   try
     Clipboard.Assign(Bmp);
   finally

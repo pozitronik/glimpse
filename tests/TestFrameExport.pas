@@ -21,9 +21,11 @@ type
   [TestFixture]
   TTestFrameExportRender = class
   public
-    { RenderFrameView }
-    [Test] procedure TestRenderFrameViewProducesBitmap;
-    [Test] procedure TestRenderFrameViewMatchesViewportSize;
+    { RenderCombinedFromCells }
+    [Test] procedure TestRenderCombinedProducesBitmap;
+    [Test] procedure TestRenderCombinedTightDimensions;
+    [Test] procedure TestRenderCombinedIgnoresViewport;
+    [Test] procedure TestRenderCombinedNoCellsReturnsNil;
 
     { RenderWithBanner }
     [Test] procedure TestRenderWithBannerDisabledReturnsSameSize;
@@ -55,13 +57,13 @@ type
   { Test subclass that exposes protected render methods }
   TTestableExporter = class(TFrameExporter)
   public
-    function TestRenderFrameView: TBitmap;
+    function TestRenderCombinedFromCells: TBitmap;
     function TestRenderWithBanner(ABmp: TBitmap): TBitmap;
   end;
 
-function TTestableExporter.TestRenderFrameView: TBitmap;
+function TTestableExporter.TestRenderCombinedFromCells: TBitmap;
 begin
-  Result := RenderFrameView;
+  Result := RenderCombinedFromCells;
 end;
 
 function TTestableExporter.TestRenderWithBanner(ABmp: TBitmap): TBitmap;
@@ -267,7 +269,7 @@ begin
   Result.ShowBanner := AShowBanner;
 end;
 
-procedure TTestFrameExportRender.TestRenderFrameViewProducesBitmap;
+procedure TTestFrameExportRender.TestRenderCombinedProducesBitmap;
 var
   Form: TForm;
   View: TFrameView;
@@ -278,15 +280,13 @@ begin
   Form := TForm.CreateNew(nil);
   try
     View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
-    View.Width := 800;
-    View.Height := 600;
     Settings := CreateSettingsWithBanner(False);
     try
       Exporter := TTestableExporter.Create(View, Settings);
       try
-        Bmp := Exporter.TestRenderFrameView;
+        Bmp := Exporter.TestRenderCombinedFromCells;
         try
-          Assert.IsNotNull(Bmp, 'RenderFrameView must return a bitmap');
+          Assert.IsNotNull(Bmp, 'RenderCombinedFromCells must return a bitmap');
           Assert.IsTrue(Bmp.Width > 0, 'Bitmap width must be positive');
           Assert.IsTrue(Bmp.Height > 0, 'Bitmap height must be positive');
         finally
@@ -303,7 +303,7 @@ begin
   end;
 end;
 
-procedure TTestFrameExportRender.TestRenderFrameViewMatchesViewportSize;
+procedure TTestFrameExportRender.TestRenderCombinedTightDimensions;
 var
   Form: TForm;
   View: TFrameView;
@@ -311,22 +311,110 @@ var
   Exporter: TTestableExporter;
   Bmp: TBitmap;
 begin
+  { Output dimensions must follow the grid math, NOT the FrameView control
+    size. With 4 frames of 160x90, default cell gap 0 and border 0,
+    auto columns = ceil(sqrt(4)) = 2 -> a 2x2 grid -> 320x180. Settling
+    this regression-pins the fix for the "background bands" bug: the old
+    PaintTo-the-control approach would produce a 640x480 image. }
   Form := TForm.CreateNew(nil);
   try
-    View := CreateTestFrameView(Form, 2, [0, 1]);
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
     View.Width := 640;
     View.Height := 480;
     Settings := CreateSettingsWithBanner(False);
     try
+      Settings.CellGap := 0;
+      Settings.CombinedBorder := 0;
       Exporter := TTestableExporter.Create(View, Settings);
       try
-        Bmp := Exporter.TestRenderFrameView;
+        Bmp := Exporter.TestRenderCombinedFromCells;
         try
-          Assert.AreEqual(640, Bmp.Width, 'Bitmap width must match control width');
-          Assert.AreEqual(480, Bmp.Height, 'Bitmap height must match control height');
+          Assert.AreEqual(320, Bmp.Width,
+            'Width must equal cols*frameW + gaps + 2*border, not control width');
+          Assert.AreEqual(180, Bmp.Height,
+            'Height must equal rows*frameH + gaps + 2*border, not control height');
         finally
           Bmp.Free;
         end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderCombinedIgnoresViewport;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  BmpA, BmpB: TBitmap;
+begin
+  { Two renderings of the same cells with wildly different control sizes
+    must produce identical output dimensions. This is the user-facing
+    promise behind moving away from PaintTo: "Combined" must be the same
+    image regardless of the live view's geometry. }
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        View.Width := 800;
+        View.Height := 600;
+        BmpA := Exporter.TestRenderCombinedFromCells;
+        try
+          View.Width := 100;
+          View.Height := 100;
+          BmpB := Exporter.TestRenderCombinedFromCells;
+          try
+            Assert.AreEqual(BmpA.Width, BmpB.Width,
+              'Combined output width must not depend on FrameView size');
+            Assert.AreEqual(BmpA.Height, BmpB.Height,
+              'Combined output height must not depend on FrameView size');
+          finally
+            BmpB.Free;
+          end;
+        finally
+          BmpA.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportRender.TestRenderCombinedNoCellsReturnsNil;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  { Zero cells -> nil result; callers (SaveCombinedFrame, CopyAllToClipboard)
+    are gated by CellCount = 0 today, but the renderer must hold the same
+    contract as RenderCombinedImage so the gating can simplify later. }
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 0, []);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderCombinedFromCells;
+        Assert.IsNull(Bmp, 'Empty view must return nil');
       finally
         Exporter.Free;
       end;
