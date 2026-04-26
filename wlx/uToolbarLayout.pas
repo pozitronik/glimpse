@@ -33,9 +33,8 @@ const
   CM_REFRESH = 10;
 
   {Toolbar buttons differentiate the two scroll modes via icons (see
-   uPluginForm.CreateToolbar); menu items rely on the textually distinct
-   captions alone, which is why "Filmstrip" replaces the legacy "Scroll <->".}
-  MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Filmstrip', 'Single');
+   uPluginForm.CreateToolbar); both modes share the textual caption.}
+  MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Scroll', 'Single');
 
   {Per-mode sizing submode labels}
   SIZING_LABELS: array [TViewMode, TZoomMode] of string = (
@@ -67,6 +66,10 @@ type
     ActiveMode: TViewMode;
     ModeZooms: array [TViewMode] of TZoomMode;
     ModeHasSubmenu: array [TViewMode] of Boolean;
+    {Image-list slot for each mode's glyph; -1 = no glyph. Caller owns the
+     image list and is expected to assign it to the menu before calling
+     PopulateHamburgerMenu so MI.ImageIndex resolves correctly.}
+    ModeImageIndex: array [TViewMode] of Integer;
     ShowTimecode: Boolean;
     HasFrames: Boolean;
   end;
@@ -127,6 +130,7 @@ begin
     MI := TMenuItem.Create(AMenu);
     MI.Caption := MODE_CAPTIONS[VM];
     MI.Tag := Ord(VM);
+    MI.ImageIndex := AState.ModeImageIndex[VM];
 
     if AState.ActiveMode = VM then
       MI.Default := True;

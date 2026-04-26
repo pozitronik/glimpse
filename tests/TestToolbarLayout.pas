@@ -169,6 +169,8 @@ begin
     Result.ModeZooms[VM] := zmFitWindow;
     { Smart and Grid have no submenu; Scroll, Filmstrip, Single do }
     Result.ModeHasSubmenu[VM] := not (VM in [vmSmartGrid, vmGrid]);
+    { No menu glyph by default; tests that care set this explicitly }
+    Result.ModeImageIndex[VM] := -1;
   end;
 end;
 

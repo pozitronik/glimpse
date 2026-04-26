@@ -164,7 +164,7 @@ type
 implementation
 
 uses
-  System.IOUtils, Winapi.ShellAPI, Vcl.Imaging.pngimage,
+  System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage;
 
 {Embedded toolbar glyph resources; see CreateToolbar for use. The .res is
@@ -173,37 +173,18 @@ uses
  resources that the Win64 linker rejects.}
 {$R icons.res}
 
-{Decodes a PNG resource (RT_RCDATA) into a 32-bit alpha bitmap and adds it
- to AImageList. Caller is responsible for sizing the image list before the
- first Add: ImageList stretches subsequent additions to its first entry's
- dimensions, so size and add must be consistent across calls.}
-procedure LoadPngResourceToImageList(AImageList: TImageList; const AResName: string);
+{Loads an icon resource into AImageList. Icons preserve their alpha channel
+ natively through TImageList.AddIcon; no manual scanline copy is needed.}
+procedure LoadIconResourceToImageList(AImageList: TImageList; const AResName: string);
 var
-  Stream: TResourceStream;
-  Png: TPngImage;
-  Bmp: TBitmap;
+  Icon: TIcon;
 begin
-  Stream := TResourceStream.Create(HInstance, AResName, RT_RCDATA);
+  Icon := TIcon.Create;
   try
-    Png := TPngImage.Create;
-    try
-      Png.LoadFromStream(Stream);
-      Bmp := TBitmap.Create;
-      try
-        Bmp.PixelFormat := pf32bit;
-        Bmp.AlphaFormat := afDefined;
-        Bmp.SetSize(Png.Width, Png.Height);
-        Bmp.Canvas.Brush.Style := bsClear;
-        Bmp.Canvas.Draw(0, 0, Png);
-        AImageList.Add(Bmp, nil);
-      finally
-        Bmp.Free;
-      end;
-    finally
-      Png.Free;
-    end;
+    Icon.LoadFromResourceName(HInstance, AResName);
+    AImageList.AddIcon(Icon);
   finally
-    Stream.Free;
+    Icon.Free;
   end;
 end;
 
@@ -257,6 +238,13 @@ begin
 end;
 
 const
+  {Toolbar icon list slots; loaded in CreateToolbar in this order and
+   referenced from OnHamburgerMenuPopup as well, so the indices live at
+   unit scope instead of inside CreateToolbar's local const block.}
+  IDX_ICON_HAMBURGER = 0;
+  IDX_ICON_ARROW_W = 1; {Vertical arrow for vmScroll}
+  IDX_ICON_ARROW_H = 2; {Horizontal arrow for vmFilmstrip}
+
   {Deferred self-subclass: installed after TC subclasses us so we fire first}
   FORM_SUBCLASS_ID = 2;
   WM_DEFERRED_INIT = WM_USER + 102; {Triggers self-subclass installation}
@@ -476,9 +464,6 @@ const
   PB_H = 16; {Progress bar height}
   ICON_W = 16; {Toolbar icon width}
   ICON_GAP = 4; {Space between icon and caption on iaLeft buttons}
-  IDX_ICON_HAMBURGER = 0;
-  IDX_ICON_ARROW_W = 1; {Vertical arrow for vmScroll}
-  IDX_ICON_ARROW_H = 2; {Horizontal arrow for vmFilmstrip}
 var
   X, CY, CtrlH, BW, I: Integer;
   VM: TViewMode;
@@ -524,16 +509,16 @@ begin
   {Collapsible elements: modes, timecodes, actions (left to right)}
   SetLength(FElementRights, ELEM_TOTAL_COUNT);
 
-  {Toolbar glyphs are loaded from embedded PNG resources rather than relying
+  {Toolbar glyphs are loaded from embedded ICON resources rather than relying
    on Unicode characters: the runtime font (Tahoma/MS Sans Serif under TC's
    Lister window) does not reliably cover U+2261/U+2194/U+2195. Index order
    here must match the IDX_ICON_* constants.}
   FToolbarImages := TImageList.Create(Self);
   FToolbarImages.SetSize(ICON_W, ICON_W);
   FToolbarImages.ColorDepth := cd32Bit;
-  LoadPngResourceToImageList(FToolbarImages, 'MENU_16');
-  LoadPngResourceToImageList(FToolbarImages, 'ARROW_W_16');
-  LoadPngResourceToImageList(FToolbarImages, 'ARROW_H_16');
+  LoadIconResourceToImageList(FToolbarImages, 'MENU');
+  LoadIconResourceToImageList(FToolbarImages, 'ARROW_W');
+  LoadIconResourceToImageList(FToolbarImages, 'ARROW_H');
 
   {Create 5 mode buttons}
   TabIdx := 1;
@@ -564,14 +549,16 @@ begin
     begin
       FModeButtons[VM].Images := FToolbarImages;
       FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_W;
-      {Qualified — TIconArrangement (Vcl.ComCtrls) also defines iaLeft}
-      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaLeft;
+      {Qualified — TIconArrangement (Vcl.ComCtrls) also defines iaRight.
+       Icon sits to the right of the caption, matching the original ↕/↔
+       glyph position.}
+      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end
     else if VM = vmFilmstrip then
     begin
       FModeButtons[VM].Images := FToolbarImages;
       FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_H;
-      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaLeft;
+      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end;
 
     {Split button: click activates mode, arrow shows submodes}
@@ -624,6 +611,10 @@ begin
    of U+2261.}
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := OnHamburgerMenuPopup;
+  {Sharing the toolbar's image list lets MI.ImageIndex paint the same arrow
+   glyphs next to the Scroll/Filmstrip menu items that the toolbar buttons
+   show — necessary because both modes share the textual caption.}
+  FHamburgerMenu.Images := FToolbarImages;
 
   FBtnHamburger := TButton.Create(FToolbar);
   FBtnHamburger.Parent := FToolbar;
@@ -699,7 +690,10 @@ begin
   begin
     State.ModeZooms[VM] := FSettings.ModeZoom[VM];
     State.ModeHasSubmenu[VM] := FModePopups[VM] <> nil;
+    State.ModeImageIndex[VM] := -1;
   end;
+  State.ModeImageIndex[vmScroll] := IDX_ICON_ARROW_W;
+  State.ModeImageIndex[vmFilmstrip] := IDX_ICON_ARROW_H;
 
   PopulateHamburgerMenu(FHamburgerMenu, State, OnHamburgerModeClick, OnHamburgerZoomClick, OnHamburgerTimecodeClick, OnHamburgerActionClick);
 end;

@@ -1,0 +1,14 @@
+// Embedded toolbar glyphs.
+//
+// icons.res is a build artifact and must be regenerated whenever the
+// referenced PNGs (or this file) change:
+//
+//     cgrc -c65001 icons.rc -foicons.res
+//
+// Run from this directory after rsvars.bat (or any cmd shell that has
+// rc.exe and cgrc.exe on PATH). brcc32 emits a 16-bit-format .res that
+// the Win64 linker rejects, so cgrc is required.
+
+MENU    ICON "..\\icons\\menu.ico"
+ARROW_W ICON "..\\icons\\arrow_w.ico"
+ARROW_H ICON "..\\icons\\arrow_h.ico"
