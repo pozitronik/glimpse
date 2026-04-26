@@ -108,6 +108,13 @@ function ParseFFmpegVersion(const AText: string): string;
  Returns empty string if the executable is not a valid ffmpeg.}
 function ValidateFFmpeg(const AExePath: string): string;
 
+{Builds the ffmpeg command line that ExtractFrame executes. Pure function:
+ no I/O, no globals. Exposed so the option-to-filter mapping (HwAccel,
+ UseKeyframes, MaxSide cap, RespectAnamorphic SAR scale) can be verified
+ independently of the actual extraction.}
+function BuildExtractCmdLine(const AExePath, AFileName: string;
+  ATimeOffset: Double; const AOptions: TExtractionOptions): string;
+
 implementation
 
 uses
@@ -584,24 +591,39 @@ begin
     Result.ErrorMessage := 'Could not parse video metadata';
 end;
 
-function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD; ACancelHandle: THandle): TBitmap;
+function BuildExtractCmdLine(const AExePath, AFileName: string;
+  ATimeOffset: Double; const AOptions: TExtractionOptions): string;
 var
-  CmdLine, Codec, ScaleFilter, HwAccelFlag, KeyframeFlag: string;
-  StdOut, StdErr: TBytes;
-  ExitCode: Integer;
-  Stream: TMemoryStream;
+  Codec, ScaleFilter, HwAccelFlag, KeyframeFlag, ChainFilters: string;
 begin
-  Result := nil;
-
   if AOptions.UseBmpPipe then
     Codec := '-f image2pipe -vcodec bmp'
   else
     Codec := '-q:v 2 -f image2pipe -vcodec png';
 
-  {Square box: ffmpeg's force_original_aspect_ratio=decrease fits the longer
-   dimension to MaxSide regardless of orientation.}
+  ChainFilters := '';
+
+  {SAR correction goes first: scale=iw*sar:ih turns the storage pixel grid
+   into square-pixel display dimensions; setsar=1 stamps SAR=1:1 on the
+   output so any downstream stage doesn't double-correct. No-op when the
+   source already has SAR=1:1.}
+  if AOptions.RespectAnamorphic then
+    ChainFilters := 'scale=iw*sar:ih,setsar=1';
+
+  {MaxSide cap: ffmpeg's force_original_aspect_ratio=decrease fits the longer
+   dimension to MaxSide regardless of orientation. Applied after the SAR
+   correction so the cap operates on display dims.}
   if AOptions.MaxSide > 0 then
-    ScaleFilter := Format('-vf scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2 ', [AOptions.MaxSide, AOptions.MaxSide])
+  begin
+    if ChainFilters <> '' then
+      ChainFilters := ChainFilters + ',';
+    ChainFilters := ChainFilters + Format(
+      'scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2',
+      [AOptions.MaxSide, AOptions.MaxSide]);
+  end;
+
+  if ChainFilters <> '' then
+    ScaleFilter := Format('-vf %s ', [ChainFilters])
   else
     ScaleFilter := '';
 
@@ -615,7 +637,23 @@ begin
   else
     KeyframeFlag := '';
 
-  CmdLine := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' + '-frames:v 1 %s%s pipe:1', [FExePath, KeyframeFlag, Format('%.3f', [ATimeOffset], TFormatSettings.Invariant), HwAccelFlag, AFileName, ScaleFilter, Codec]);
+  Result := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' +
+    '-frames:v 1 %s%s pipe:1',
+    [AExePath, KeyframeFlag,
+     Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
+     HwAccelFlag, AFileName, ScaleFilter, Codec]);
+end;
+
+function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD; ACancelHandle: THandle): TBitmap;
+var
+  CmdLine: string;
+  StdOut, StdErr: TBytes;
+  ExitCode: Integer;
+  Stream: TMemoryStream;
+begin
+  Result := nil;
+
+  CmdLine := BuildExtractCmdLine(FExePath, AFileName, ATimeOffset, AOptions);
 
   ExitCode := RunProcess(CmdLine, StdOut, StdErr, ATimeoutMs, ACancelHandle);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then

@@ -24,6 +24,11 @@ type
     MaxSide: Integer;
     HwAccel: Boolean;
     UseKeyframes: Boolean;
+    {When True, a leading scale=iw*sar:ih,setsar=1 is added to the ffmpeg
+     filter chain so anamorphic sources are output at display dimensions
+     instead of the raw storage pixel grid. No-op for SAR=1:1 sources.
+     Default False so callers must opt in; settings layers do.}
+    RespectAnamorphic: Boolean;
   end;
 
 {Enum <-> INI-string conversions for TTimestampCorner and TBannerPosition.
