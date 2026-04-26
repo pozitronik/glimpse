@@ -76,14 +76,14 @@ object WcxSettingsForm: TWcxSettingsForm
       end
       object LblFFmpegPath: TLabel
         Left = 12
-        Top = 231
+        Top = 260
         Width = 73
         Height = 15
         Caption = 'FFmpeg path:'
       end
       object LblFFmpegInfo: TLabel
         Left = 12
-        Top = 254
+        Top = 283
         Width = 424
         Height = 15
         Anchors = [akLeft, akTop, akRight]
@@ -213,24 +213,33 @@ object WcxSettingsForm: TWcxSettingsForm
         Caption = 'Use keyframes (faster seeking, less precise timecodes)'
         TabOrder = 11
       end
+      object ChkRespectAnamorphic: TCheckBox
+        Left = 12
+        Top = 227
+        Width = 424
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Respect anamorphic dimensions'
+        TabOrder = 12
+      end
       object EdtFFmpegPath: TEdit
         Left = 130
-        Top = 227
+        Top = 256
         Width = 278
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 12
+        TabOrder = 13
         TextHint = 'Auto-detect'
         OnChange = EdtFFmpegPathChange
       end
       object BtnFFmpegPath: TButton
         Left = 414
-        Top = 227
+        Top = 256
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 13
+        TabOrder = 14
         OnClick = BtnFFmpegPathClick
       end
     end

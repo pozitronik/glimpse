@@ -265,22 +265,22 @@ object SettingsForm: TSettingsForm
         TabOrder = 14
         Thousands = False
       end
-      object ChkRespectAnamorphic: TCheckBox
+      object ChkAutoRefreshViewport: TCheckBox
         Left = 12
         Top = 252
         Width = 424
         Height = 17
         Anchors = [akLeft, akTop, akRight]
-        Caption = 'Respect anamorphic dimensions'
+        Caption = 'Re-extract automatically when the viewport changes'
         TabOrder = 15
       end
-      object ChkAutoRefreshViewport: TCheckBox
+      object ChkRespectAnamorphic: TCheckBox
         Left = 12
         Top = 281
         Width = 424
         Height = 17
         Anchors = [akLeft, akTop, akRight]
-        Caption = 'Re-extract automatically when the viewport changes'
+        Caption = 'Respect anamorphic dimensions'
         TabOrder = 16
       end
       object EdtExtensions: TEdit

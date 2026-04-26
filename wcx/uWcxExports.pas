@@ -87,6 +87,7 @@ begin
   Result.UseBmpPipe := ASettings.UseBmpPipe;
   Result.HwAccel := ASettings.HwAccel;
   Result.UseKeyframes := ASettings.UseKeyframes;
+  Result.RespectAnamorphic := ASettings.RespectAnamorphic;
   Result.MaxSide := AMaxSide;
 end;
 

@@ -62,6 +62,9 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Scale target max (px)             | 1920        | Upper bound on the scale target (bigger side). Frames are left at native resolution when the target exceeds it           |
 | Re-extract on viewport change     | On          | Quietly re-extracts in the background when switching view modes or resizing Lister so frames stay at display resolution. |
 |                                   |             | Existing frames remain on screen until new ones arrive. No effect when *Extract frames at display size* is off           |
+| Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are non-square (DVD rips, broadcast, some cameras).  |
+|                                   |             | A 720x576 16:9 source comes out as 1024x576 instead of the squished raw 720x576. No-op for square-pixel videos.          |
+|                                   |             | Toggling this forces re-extraction so the live view matches the new pixel grid                                           |
 | Extensions                        | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                     |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                           |
 
@@ -156,6 +159,10 @@ Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin u
 | Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary files                       |
 | Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available. Falls back to software silently |
 | Use keyframes                     | Off         | Seeks to the nearest keyframe instead of exact timestamp. Faster seeking       |
+| Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are        |
+|                                   |             | non-square (DVD rips, broadcast, some cameras). A 720x576 16:9 source comes    |
+|                                   |             | out as 1024x576 instead of the squished raw 720x576. No-op for square-pixel    |
+|                                   |             | videos                                                                         |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect                      |
 
 #### Output

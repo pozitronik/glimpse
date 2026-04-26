@@ -72,6 +72,8 @@ type
     [Test] procedure TestUseBmpPipeRoundTrip;
     [Test] procedure TestHwAccelRoundTrip;
     [Test] procedure TestUseKeyframesRoundTrip;
+    [Test] procedure TestRespectAnamorphicDefault;
+    [Test] procedure TestRespectAnamorphicRoundTrip;
     { Output size limits }
     [Test] procedure TestOutputSizeLimitsDefault;
     [Test] procedure TestFrameMaxSideRoundTrip;
@@ -1242,6 +1244,43 @@ begin
     S2.Load;
     Assert.AreEqual(not DEF_USE_KEYFRAMES, S2.UseKeyframes,
       'Flipped UseKeyframes must round-trip through INI');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestRespectAnamorphicDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'fresh_wcx.ini'));
+  try
+    Assert.AreEqual(DEF_RESPECT_ANAMORPHIC, S.RespectAnamorphic);
+    Assert.IsTrue(S.RespectAnamorphic, 'WCX default must match WLX (ON)');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestRespectAnamorphicRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'anamorphic.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.RespectAnamorphic := not DEF_RESPECT_ANAMORPHIC;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_RESPECT_ANAMORPHIC, S2.RespectAnamorphic,
+      'Flipped RespectAnamorphic must round-trip through INI');
   finally
     S2.Free;
   end;

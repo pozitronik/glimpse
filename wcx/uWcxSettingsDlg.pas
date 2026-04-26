@@ -33,6 +33,7 @@ type
     ChkUseBmpPipe: TCheckBox;
     ChkHwAccel: TCheckBox;
     ChkUseKeyframes: TCheckBox;
+    ChkRespectAnamorphic: TCheckBox;
     LblFFmpegPath: TLabel;
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
@@ -176,6 +177,7 @@ begin
   ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
   ChkHwAccel.Checked := ASettings.HwAccel;
   ChkUseKeyframes.Checked := ASettings.UseKeyframes;
+  ChkRespectAnamorphic.Checked := ASettings.RespectAnamorphic;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
   if ASettings.OutputMode = womCombined then
@@ -234,6 +236,7 @@ begin
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
   ASettings.UseKeyframes := ChkUseKeyframes.Checked;
+  ASettings.RespectAnamorphic := ChkRespectAnamorphic.Checked;
   ASettings.FFmpegExePath := EdtFFmpegPath.Text;
 
   if CbxOutputMode.ItemIndex = 1 then

@@ -61,6 +61,7 @@ type
     property UseBmpPipe: Boolean read FExtraction.UseBmpPipe write FExtraction.UseBmpPipe;
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
+    property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
     property OutputMode: TWcxOutputMode read FOutputMode write FOutputMode;
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
