@@ -137,6 +137,7 @@ begin
     GridStyle.CellGap := H.Settings.CellGap;
     GridStyle.Border := H.Settings.CombinedBorder;
     GridStyle.Background := H.Settings.Background;
+    GridStyle.BackgroundAlpha := H.Settings.BackgroundAlpha;
 
     TimestampStyle.Show := H.Settings.ShowTimestamp;
     TimestampStyle.Corner := H.Settings.TimestampCorner;

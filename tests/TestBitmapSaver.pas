@@ -26,6 +26,7 @@ type
     [Test] procedure TestSavePNGPixelFidelity;
     [Test] procedure TestSaveFormatExtensionPNG;
     [Test] procedure TestSaveFormatExtensionJPEG;
+    [Test] procedure TestSavePNGAlphaRoundTrip;
   end;
 
 implementation
@@ -313,6 +314,90 @@ end;
 procedure TTestBitmapSaver.TestSaveFormatExtensionJPEG;
 begin
   Assert.AreEqual('.jpg', SaveFormatExtension(sfJPEG));
+end;
+
+procedure TTestBitmapSaver.TestSavePNGAlphaRoundTrip;
+var
+  Src: TBitmap;
+  Path: string;
+  Png: TPngImage;
+  X, Y: Integer;
+  RowSrc: PByte;
+  AlphaLine: PByteArray;
+  ExpectedAlpha: Byte;
+begin
+  {Build a pf32bit bitmap whose alpha varies per pixel, save as PNG,
+   load it back as a TPngImage, and verify the alpha bytes survived.
+   This pins the fix for the "background opacity 0 produced a fully
+   white image" regression caused by TPngImage.Assign(TBitmap) silently
+   stripping alpha for pf32bit sources.}
+  Src := TBitmap.Create;
+  try
+    Src.PixelFormat := pf32bit;
+    Src.AlphaFormat := afDefined;
+    Src.SetSize(8, 4);
+    {Top half opaque green, bottom half fully transparent red.}
+    for Y := 0 to Src.Height - 1 do
+    begin
+      RowSrc := PByte(Src.ScanLine[Y]);
+      for X := 0 to Src.Width - 1 do
+      begin
+        if Y < Src.Height div 2 then
+        begin
+          RowSrc^ := 0; Inc(RowSrc);     // B
+          RowSrc^ := 255; Inc(RowSrc);   // G
+          RowSrc^ := 0; Inc(RowSrc);     // R
+          RowSrc^ := 255; Inc(RowSrc);   // A
+        end
+        else
+        begin
+          RowSrc^ := 0; Inc(RowSrc);     // B
+          RowSrc^ := 0; Inc(RowSrc);     // G
+          RowSrc^ := 255; Inc(RowSrc);   // R
+          RowSrc^ := 0; Inc(RowSrc);     // A (fully transparent)
+        end;
+      end;
+    end;
+
+    Path := TPath.Combine(FTempDir, 'alpha_roundtrip.png');
+    SaveBitmapToFile(Src, Path, sfPNG, 90, 6);
+  finally
+    Src.Free;
+  end;
+
+  {Load via TPngImage and inspect alpha scanlines and pixel colours. The
+   colour assertions catch a TColor byte-order swap (R<->B) that could
+   silently slip past the alpha-only checks: clearly-asymmetric green
+   vs red lets a saved-as-blue regression scream.}
+  Png := TPngImage.Create;
+  try
+    Png.LoadFromFile(Path);
+    for Y := 0 to Png.Height - 1 do
+    begin
+      AlphaLine := Png.AlphaScanline[Y];
+      Assert.IsNotNull(AlphaLine,
+        Format('AlphaScanline must be non-nil (Y=%d): the PNG must be saved with alpha', [Y]));
+      if Y < Png.Height div 2 then
+        ExpectedAlpha := 255
+      else
+        ExpectedAlpha := 0;
+      for X := 0 to Png.Width - 1 do
+      begin
+        Assert.AreEqual(Integer(ExpectedAlpha), Integer(AlphaLine[X]),
+          Format('Alpha mismatch at (%d,%d)', [X, Y]));
+        if Y < Png.Height div 2 then
+          {Top: opaque green = (R=0, G=255, B=0)}
+          Assert.AreEqual<Integer>($0000FF00, Integer(Png.Pixels[X, Y]),
+            Format('Top half must be green at (%d,%d); R<->B swap would land here', [X, Y]))
+        else
+          {Bottom: red = (R=255, G=0, B=0). Alpha is 0 but RGB is still preserved.}
+          Assert.AreEqual<Integer>($000000FF, Integer(Png.Pixels[X, Y]),
+            Format('Bottom half must be red at (%d,%d); R<->B swap would land here', [X, Y]));
+      end;
+    end;
+  finally
+    Png.Free;
+  end;
 end;
 
 initialization

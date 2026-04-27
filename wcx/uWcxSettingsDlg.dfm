@@ -277,6 +277,13 @@ object WcxSettingsForm: TWcxSettingsForm
         Height = 15
         Caption = 'PNG compression:'
       end
+      object LblBackgroundAlpha: TLabel
+        Left = 12
+        Top = 140
+        Width = 110
+        Height = 15
+        Caption = 'Background opacity:'
+      end
       object CbxOutputMode: TComboBox
         Left = 130
         Top = 20
@@ -339,14 +346,34 @@ object WcxSettingsForm: TWcxSettingsForm
         TabOrder = 5
         Thousands = False
       end
+      object EdtBackgroundAlpha: TEdit
+        Left = 130
+        Top = 136
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 6
+        Text = '255'
+      end
+      object UdBackgroundAlpha: TUpDown
+        Left = 175
+        Top = 136
+        Width = 17
+        Height = 23
+        Associate = EdtBackgroundAlpha
+        Max = 255
+        Position = 255
+        TabOrder = 7
+        Thousands = False
+      end
       object ChkShowFileSizes: TCheckBox
         Left = 12
-        Top = 140
+        Top = 169
         Width = 424
         Height = 17
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Show file sizes (extracts all frames when entering archive)'
-        TabOrder = 6
+        TabOrder = 8
       end
     end
     object TshCombined: TTabSheet

@@ -49,6 +49,9 @@ type
     LblPngCompression: TLabel;
     EdtPngCompression: TEdit;
     UdPngCompression: TUpDown;
+    LblBackgroundAlpha: TLabel;
+    EdtBackgroundAlpha: TEdit;
+    UdBackgroundAlpha: TUpDown;
     ChkShowFileSizes: TCheckBox;
     TshCombined: TTabSheet;
     LblColumns: TLabel;
@@ -188,6 +191,7 @@ begin
   CbxFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
   UdPngCompression.Position := ASettings.PngCompression;
+  UdBackgroundAlpha.Position := ASettings.BackgroundAlpha;
   ChkShowFileSizes.Checked := ASettings.ShowFileSizes;
 
   UdColumns.Position := ASettings.CombinedColumns;
@@ -247,6 +251,7 @@ begin
   ASettings.SaveFormat := TSaveFormat(CbxFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
   ASettings.PngCompression := UdPngCompression.Position;
+  ASettings.BackgroundAlpha := UdBackgroundAlpha.Position;
   ASettings.ShowFileSizes := ChkShowFileSizes.Checked;
 
   ASettings.CombinedColumns := UdColumns.Position;

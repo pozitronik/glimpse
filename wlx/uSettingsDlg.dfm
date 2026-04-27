@@ -599,16 +599,23 @@ object SettingsForm: TSettingsForm
         Height = 15
         Caption = 'PNG compression:'
       end
-      object LblSaveFolder: TLabel
+      object LblBackgroundAlpha: TLabel
         Left = 12
         Top = 111
+        Width = 110
+        Height = 15
+        Caption = 'Background opacity:'
+      end
+      object LblSaveFolder: TLabel
+        Left = 12
+        Top = 140
         Width = 75
         Height = 15
         Caption = 'Default folder:'
       end
       object LblBannerBackground: TLabel
         Left = 12
-        Top = 173
+        Top = 202
         Width = 128
         Height = 15
         AutoSize = False
@@ -616,7 +623,7 @@ object SettingsForm: TSettingsForm
       end
       object LblBannerTextColor: TLabel
         Left = 12
-        Top = 202
+        Top = 231
         Width = 128
         Height = 15
         AutoSize = False
@@ -624,14 +631,14 @@ object SettingsForm: TSettingsForm
       end
       object LblBannerFont: TLabel
         Left = 12
-        Top = 231
+        Top = 260
         Width = 65
         Height = 15
         Caption = 'Banner font:'
       end
       object LblBannerPosition: TLabel
         Left = 12
-        Top = 289
+        Top = 318
         Width = 86
         Height = 15
         Caption = 'Banner position:'
@@ -687,56 +694,56 @@ object SettingsForm: TSettingsForm
         TabOrder = 4
         Thousands = False
       end
-      object EdtSaveFolder: TEdit
+      object EdtBackgroundAlpha: TEdit
         Left = 130
         Top = 107
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 5
+        Text = '255'
+      end
+      object UdBackgroundAlpha: TUpDown
+        Left = 175
+        Top = 107
+        Width = 17
+        Height = 23
+        Associate = EdtBackgroundAlpha
+        Max = 255
+        Position = 255
+        TabOrder = 6
+        Thousands = False
+      end
+      object EdtSaveFolder: TEdit
+        Left = 130
+        Top = 136
         Width = 278
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 5
+        TabOrder = 7
         TextHint = 'Leave empty for no default'
       end
       object BtnSaveFolder: TButton
         Left = 414
-        Top = 107
+        Top = 136
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 6
+        TabOrder = 8
         OnClick = BtnSaveFolderClick
       end
       object ChkShowBanner: TCheckBox
         Left = 12
-        Top = 140
+        Top = 169
         Width = 424
         Height = 17
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Include file info banner in combined image export'
-        TabOrder = 7
+        TabOrder = 9
         OnClick = ChkShowBannerClick
       end
       object PnlBannerBackground: TPanel
-        Left = 130
-        Top = 169
-        Width = 80
-        Height = 23
-        Cursor = crHandPoint
-        BevelOuter = bvLowered
-        ParentBackground = False
-        TabOrder = 8
-        OnClick = PnlBannerBackgroundClick
-      end
-      object BtnBannerBackground: TButton
-        Left = 214
-        Top = 169
-        Width = 25
-        Height = 23
-        Caption = '...'
-        TabOrder = 9
-        OnClick = PnlBannerBackgroundClick
-      end
-      object PnlBannerTextColor: TPanel
         Left = 130
         Top = 198
         Width = 80
@@ -745,54 +752,74 @@ object SettingsForm: TSettingsForm
         BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 10
-        OnClick = PnlBannerTextColorClick
+        OnClick = PnlBannerBackgroundClick
       end
-      object BtnBannerTextColor: TButton
+      object BtnBannerBackground: TButton
         Left = 214
         Top = 198
         Width = 25
         Height = 23
         Caption = '...'
         TabOrder = 11
+        OnClick = PnlBannerBackgroundClick
+      end
+      object PnlBannerTextColor: TPanel
+        Left = 130
+        Top = 227
+        Width = 80
+        Height = 23
+        Cursor = crHandPoint
+        BevelOuter = bvLowered
+        ParentBackground = False
+        TabOrder = 12
+        OnClick = PnlBannerTextColorClick
+      end
+      object BtnBannerTextColor: TButton
+        Left = 214
+        Top = 227
+        Width = 25
+        Height = 23
+        Caption = '...'
+        TabOrder = 13
         OnClick = PnlBannerTextColorClick
       end
       object EdtBannerFont: TEdit
         Left = 130
-        Top = 227
+        Top = 256
         Width = 278
         Height = 23
         TabStop = False
         Anchors = [akLeft, akTop, akRight]
         ReadOnly = True
-        TabOrder = 12
+        TabOrder = 14
       end
       object BtnBannerFont: TButton
         Left = 414
-        Top = 227
+        Top = 256
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 13
+        TabOrder = 15
         OnClick = BtnBannerFontClick
       end
       object ChkBannerAutoSize: TCheckBox
         Left = 130
-        Top = 258
+        Top = 287
         Width = 306
         Height = 17
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Auto-size banner font to image width'
-        TabOrder = 14
+        TabOrder = 16
         OnClick = ChkBannerAutoSizeClick
       end
       object CbxBannerPosition: TComboBox
         Left = 130
-        Top = 285
+        Top = 314
         Width = 105
         Height = 23
         Style = csDropDownList
-        TabOrder = 15
+        TabOrder = 17
         Items.Strings = (
           'Top'
           'Bottom')

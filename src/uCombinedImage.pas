@@ -364,12 +364,57 @@ begin
   Result.Position := DEF_BANNER_POSITION;
 end;
 
+{Forces every pixel in the banner band to alpha=255 so the GDI banner
+ background and text show up opaque. GDI canvas operations on a pf32bit
+ bitmap leave the alpha byte at whatever the destination held (zero for
+ freshly-allocated scan lines).}
+procedure StampBannerAlpha(ABmp: TBitmap; AY, AHeight: Integer);
+var
+  X, Y: Integer;
+  Row: PByte;
+begin
+  for Y := AY to AY + AHeight - 1 do
+  begin
+    if (Y < 0) or (Y >= ABmp.Height) then
+      Continue;
+    Row := PByte(ABmp.ScanLine[Y]);
+    Inc(Row, 3); {alpha byte of pixel 0}
+    for X := 0 to ABmp.Width - 1 do
+    begin
+      Row^ := 255;
+      Inc(Row, 4);
+    end;
+  end;
+end;
+
+{Byte-for-byte BGRA copy of ASrc into ABmp at vertical offset AY. Replaces
+ Canvas.Draw for the pf32bit→pf32bit case: Canvas.Draw on alpha-aware
+ sources routes through AlphaBlend, which expects pre-multiplied RGB and
+ corrupts colour values when the source is plain non-pre-multiplied
+ (which is what the saver and PNG format both want).}
+procedure CopySourceBgraIntoBanner(ABmp: TBitmap; AY: Integer; ASrc: TBitmap);
+var
+  Y, RowBytes: Integer;
+  DstRow, SrcRow: PByte;
+begin
+  RowBytes := ASrc.Width * 4;
+  for Y := 0 to ASrc.Height - 1 do
+  begin
+    if (AY + Y < 0) or (AY + Y >= ABmp.Height) then
+      Continue;
+    DstRow := PByte(ABmp.ScanLine[AY + Y]);
+    SrcRow := PByte(ASrc.ScanLine[Y]);
+    Move(SrcRow^, DstRow^, RowBytes);
+  end;
+end;
+
 function AttachBanner(ASrc: TBitmap; const ALines: TArray<string>; const AStyle: TBannerStyle): TBitmap;
 var
   FontSize, LineH, BannerH, MaxTextW, BannerY, SrcY, I: Integer;
   TempBmp: TBitmap;
   Wrapped, RenderLines: TArray<string>;
   FontName: string;
+  AlphaAware: Boolean;
 begin
   if (Length(ALines) = 0) or (ASrc = nil) then
   begin
@@ -416,8 +461,16 @@ begin
 
   BannerH := BANNER_PADDING_V + Length(RenderLines) * (LineH + BANNER_LINE_GAP) - BANNER_LINE_GAP + BANNER_PADDING_V;
 
+  AlphaAware := ASrc.PixelFormat = pf32bit;
   Result := TBitmap.Create;
-  Result.PixelFormat := pf24bit;
+  if AlphaAware then
+    {Defer setting AlphaFormat: while it is afDefined, GDI canvas
+     operations would route through AlphaBlend, which corrupts non-pre-
+     multiplied colour values. Set it at the end after every byte is
+     where we want it.}
+    Result.PixelFormat := pf32bit
+  else
+    Result.PixelFormat := pf24bit;
   Result.SetSize(ASrc.Width, BannerH + ASrc.Height);
 
   if AStyle.Position = bpBottom then
@@ -443,8 +496,18 @@ begin
   for I := 0 to High(RenderLines) do
     Result.Canvas.TextOut(BANNER_PADDING_H, BannerY + BANNER_PADDING_V + I * (LineH + BANNER_LINE_GAP), RenderLines[I]);
 
-  {Draw source image in the remaining region}
-  Result.Canvas.Draw(0, SrcY, ASrc);
+  if AlphaAware then
+  begin
+    {Manual BGRA copy keeps source colours and alpha bit-identical;
+     bypasses AlphaBlend's premultiplied-source assumption.}
+    CopySourceBgraIntoBanner(Result, SrcY, ASrc);
+    {GDI canvas left the banner band's alpha at zero; stamp it opaque.}
+    StampBannerAlpha(Result, BannerY, BannerH);
+    Result.AlphaFormat := afDefined;
+  end
+  else
+    {Existing pf24bit fast path}
+    Result.Canvas.Draw(0, SrcY, ASrc);
 end;
 
 procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect;

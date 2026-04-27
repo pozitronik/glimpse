@@ -105,6 +105,8 @@ type
     [Test] procedure RenderCombined_PartialAlpha_BecomesPf32Bit;
     [Test] procedure RenderCombined_GapPixelCarriesBackgroundAlpha;
     [Test] procedure RenderCombined_FramePixelStaysOpaque;
+    [Test] procedure AttachBanner_AlphaAwareSource_PreservesGapTransparency;
+    [Test] procedure AttachBanner_AlphaAwareSource_PreservesFrameColors;
     [Test] procedure DefaultCombinedGridStyle_BorderMatchesConstant;
     [Test] procedure DefaultTimestampStyle_ShowDefaultsOff;
     [Test] procedure DefaultTimestampStyle_FontAndSize;
@@ -124,6 +126,33 @@ var
 begin
   Row := PByte(ABmp.ScanLine[AY]);
   Inc(Row, AX * 4 + 3);
+  Result := Row^;
+end;
+
+function BlueByteAt(ABmp: TBitmap; AX, AY: Integer): Byte;
+var
+  Row: PByte;
+begin
+  Row := PByte(ABmp.ScanLine[AY]);
+  Inc(Row, AX * 4);
+  Result := Row^;
+end;
+
+function GreenByteAt(ABmp: TBitmap; AX, AY: Integer): Byte;
+var
+  Row: PByte;
+begin
+  Row := PByte(ABmp.ScanLine[AY]);
+  Inc(Row, AX * 4 + 1);
+  Result := Row^;
+end;
+
+function RedByteAt(ABmp: TBitmap; AX, AY: Integer): Byte;
+var
+  Row: PByte;
+begin
+  Row := PByte(ABmp.ScanLine[AY]);
+  Inc(Row, AX * 4 + 2);
   Result := Row^;
 end;
 
@@ -1848,6 +1877,106 @@ begin
     end;
   finally
     Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.AttachBanner_AlphaAwareSource_PreservesFrameColors;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Combined, WithBanner: TBitmap;
+  Style: TBannerStyle;
+  Lines: TArray<string>;
+  FrameY: Integer;
+begin
+  {Regression: AttachBanner used to route the pf32bit→pf32bit source
+   copy through GDI's AlphaBlend, which expects pre-multiplied RGB. Our
+   alpha is non-pre-multiplied, so frame colours came out modified
+   (effectively dst = src + dst*(1-srcA) instead of a flat copy). This
+   test pins that frame interior pixels carry the exact source colours
+   through the banner attachment.}
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(20, 20, Integer(clRed)); {clRed = $0000FF: B=0 G=0 R=255}
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 0.0;
+  try
+    Grid := MakeGrid(1, 0, clBlue, 0);
+    Grid.BackgroundAlpha := 0;
+    Combined := RenderCombinedImage(Frames, Offsets, Grid, MakeTs(False, 'Consolas', 9));
+    try
+      Style := DefaultBannerStyle;
+      SetLength(Lines, 1);
+      Lines[0] := 'Test banner';
+      WithBanner := AttachBanner(Combined, Lines, Style);
+      try
+        {Frame sits below the banner band: WithBanner.Height - Combined.Height
+         is the source band start. Sample the centre of the (only) frame.}
+        FrameY := WithBanner.Height - Combined.Height + 10;
+        Assert.AreEqual(0, Integer(BlueByteAt(WithBanner, 10, FrameY)),
+          'Frame blue must be 0 (clRed)');
+        Assert.AreEqual(0, Integer(GreenByteAt(WithBanner, 10, FrameY)),
+          'Frame green must be 0 (clRed)');
+        Assert.AreEqual(255, Integer(RedByteAt(WithBanner, 10, FrameY)),
+          'Frame red must be 255 (clRed); dimmer values mean AlphaBlend mangled colours');
+      finally
+        WithBanner.Free;
+      end;
+    finally
+      Combined.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.AttachBanner_AlphaAwareSource_PreservesGapTransparency;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Combined, WithBanner: TBitmap;
+  Style: TBannerStyle;
+  Lines: TArray<string>;
+begin
+  {Regression: when ShowBanner is enabled, AttachBanner used to produce a
+   pf24bit output and lose the gap transparency built into the combined
+   bitmap. Saved combined PNG looked uniformly opaque even at
+   BackgroundAlpha=0. The fix makes AttachBanner alpha-aware when its
+   source is pf32bit; this test pins the gap pixel's alpha through the
+   banner attachment.}
+  SetLength(Frames, 2);
+  Frames[0] := MakeFrame(20, 20, Integer(clRed));
+  Frames[1] := MakeFrame(20, 20, Integer(clGreen));
+  SetLength(Offsets, 2);
+  Offsets[0].TimeOffset := 0.0;
+  Offsets[1].TimeOffset := 1.0;
+  try
+    Grid := MakeGrid(2, 4, clBlue, 0);
+    Grid.BackgroundAlpha := 0;
+    Combined := RenderCombinedImage(Frames, Offsets, Grid, MakeTs(False, 'Consolas', 9));
+    try
+      Style := DefaultBannerStyle;
+      SetLength(Lines, 1);
+      Lines[0] := 'Test banner';
+      WithBanner := AttachBanner(Combined, Lines, Style);
+      try
+        Assert.AreEqual(Ord(pf32bit), Ord(WithBanner.PixelFormat),
+          'Banner output must inherit pf32bit when source is alpha-aware');
+        {Banner is at the top by default — gap pixel of source sits below
+         banner at Combined.Height + a few rows.}
+        Assert.AreEqual(0, Integer(AlphaByteAt(WithBanner, 21,
+          WithBanner.Height - Combined.Height + 10)),
+          'Gap pixel alpha must survive AttachBanner unchanged');
+      finally
+        WithBanner.Free;
+      end;
+    finally
+      Combined.Free;
+    end;
+  finally
+    Frames[0].Free;
+    Frames[1].Free;
   end;
 end;
 

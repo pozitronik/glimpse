@@ -101,6 +101,7 @@ begin
   Grid.CellGap := FSettings.CellGap;
   Grid.Border := FSettings.CombinedBorder;
   Grid.Background := FSettings.Background;
+  Grid.BackgroundAlpha := FSettings.BackgroundAlpha;
 
   Ts.Show := FFrameView.ShowTimecode;
   Ts.Corner := FSettings.TimestampCorner;

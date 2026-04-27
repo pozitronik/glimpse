@@ -84,6 +84,9 @@ type
     LblPngCompression: TLabel;
     EdtPngCompression: TEdit;
     UdPngCompression: TUpDown;
+    LblBackgroundAlpha: TLabel;
+    EdtBackgroundAlpha: TEdit;
+    UdBackgroundAlpha: TUpDown;
     LblSaveFolder: TLabel;
     EdtSaveFolder: TEdit;
     BtnSaveFolder: TButton;
@@ -268,6 +271,7 @@ begin
   CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
   UdPngCompression.Position := ASettings.PngCompression;
+  UdBackgroundAlpha.Position := ASettings.BackgroundAlpha;
   EdtSaveFolder.Text := ASettings.SaveFolder;
   ChkShowBanner.Checked := ASettings.ShowBanner;
   PnlBannerBackground.Color := ASettings.BannerBackground;
@@ -353,6 +357,7 @@ begin
   ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
   ASettings.PngCompression := UdPngCompression.Position;
+  ASettings.BackgroundAlpha := UdBackgroundAlpha.Position;
   ASettings.SaveFolder := EdtSaveFolder.Text;
   ASettings.ShowBanner := ChkShowBanner.Checked;
   ASettings.BannerBackground := PnlBannerBackground.Color;
@@ -770,6 +775,9 @@ begin
   LblPngCompression.Enabled := IsPNG;
   EdtPngCompression.Enabled := IsPNG;
   UdPngCompression.Enabled := IsPNG;
+  LblBackgroundAlpha.Enabled := IsPNG;
+  EdtBackgroundAlpha.Enabled := IsPNG;
+  UdBackgroundAlpha.Enabled := IsPNG;
 end;
 
 procedure TSettingsForm.UpdateBannerControls;
