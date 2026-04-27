@@ -17,6 +17,12 @@ const
   DEF_USE_BMP_PIPE = True;
   DEF_HW_ACCEL = True;
   DEF_USE_KEYFRAMES = False;
+  {Background opacity for the saved combined image (PNG only). 0 = fully
+   transparent gaps/border, 255 = fully opaque (existing behaviour).
+   Frames themselves are always opaque regardless of this value.}
+  DEF_BACKGROUND_ALPHA = 255;
+  MIN_BACKGROUND_ALPHA = 0;
+  MAX_BACKGROUND_ALPHA = 255;
   {Default to ON: most users expect saved frames to look like the source
    in a player. Anamorphic content is a minority but the cost of
    "iw*sar:ih" on square-pixel sources is zero.}

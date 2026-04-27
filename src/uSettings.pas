@@ -38,6 +38,7 @@ type
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
     FPngCompression: Integer;
+    FBackgroundAlpha: Byte;
     FSaveFolder: string;
     {[save] — banner group shared with WCX}
     FBanner: TBannerSettingsGroup;
@@ -133,6 +134,7 @@ type
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
+    property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
@@ -257,6 +259,7 @@ begin
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
   FPngCompression := DEF_PNG_COMPRESSION;
+  FBackgroundAlpha := DEF_BACKGROUND_ALPHA;
   FSaveFolder := DEF_SAVE_FOLDER;
   FBanner := TBannerSettingsGroup.Defaults;
   FBanner.Show := DEF_SHOW_BANNER;
@@ -314,6 +317,7 @@ begin
     FSaveFormat := StrToSaveFormat(Ini.ReadString('save', 'Format', ''));
     FJpegQuality := EnsureRange(Ini.ReadInteger('save', 'JpegQuality', DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
     FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+    FBackgroundAlpha := EnsureRange(Ini.ReadInteger('save', 'BackgroundAlpha', DEF_BACKGROUND_ALPHA), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
     FBanner.LoadFrom(Ini, 'save');
 
@@ -369,6 +373,7 @@ begin
     Ini.WriteString('save', 'Format', SaveFormatToStr(FSaveFormat));
     Ini.WriteInteger('save', 'JpegQuality', FJpegQuality);
     Ini.WriteInteger('save', 'PngCompression', FPngCompression);
+    Ini.WriteInteger('save', 'BackgroundAlpha', FBackgroundAlpha);
     Ini.WriteString('save', 'SaveFolder', FSaveFolder);
     FBanner.SaveTo(Ini, 'save');
 

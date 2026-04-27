@@ -74,6 +74,10 @@ type
     [Test] procedure TestUseKeyframesRoundTrip;
     [Test] procedure TestRespectAnamorphicDefault;
     [Test] procedure TestRespectAnamorphicRoundTrip;
+    [Test] procedure TestBackgroundAlphaDefault;
+    [Test] procedure TestBackgroundAlphaRoundTrip;
+    [Test] procedure TestBackgroundAlphaClampedHigh;
+    [Test] procedure TestBackgroundAlphaClampedLow;
     { Output size limits }
     [Test] procedure TestOutputSizeLimitsDefault;
     [Test] procedure TestFrameMaxSideRoundTrip;
@@ -1283,6 +1287,85 @@ begin
       'Flipped RespectAnamorphic must round-trip through INI');
   finally
     S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBackgroundAlphaDefault;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'fresh_alpha.ini'));
+  try
+    Assert.AreEqual(255, Integer(S.BackgroundAlpha),
+      'Default must be 255; matches WLX so users see consistent behaviour');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBackgroundAlphaRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_alpha.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.BackgroundAlpha := 64;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(64, Integer(S2.BackgroundAlpha));
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBackgroundAlphaClampedHigh;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_alpha_hi.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('output', 'BackgroundAlpha', 9999);
+  finally
+    Ini.Free;
+  end;
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestBackgroundAlphaClampedLow;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_alpha_lo.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('output', 'BackgroundAlpha', -10);
+  finally
+    Ini.Free;
+  end;
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha));
+  finally
+    S.Free;
   end;
 end;
 

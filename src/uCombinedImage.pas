@@ -44,12 +44,17 @@ type
   end;
 
   {Grid geometry for the combined image. Columns = 0 means "auto" (ceil(sqrt(n)));
-   Border is the outer margin painted with Background around the whole grid.}
+   Border is the outer margin painted with Background around the whole grid.
+   BackgroundAlpha controls how opaque the gap/border fill is in the rendered
+   bitmap: 255 keeps the historical pf24bit output unchanged; values < 255
+   produce a pf32bit bitmap whose gap/border pixels carry that alpha while
+   frame pixels stay fully opaque.}
   TCombinedGridStyle = record
     Columns: Integer;
     CellGap: Integer;
     Border: Integer;
     Background: TColor;
+    BackgroundAlpha: Byte;
   end;
 
   {Overlay style for per-cell timecodes. When Show=False nothing is drawn and
@@ -636,6 +641,78 @@ begin
   Result.CellGap := 0;
   Result.Border := DEF_COMBINED_BORDER;
   Result.Background := clBlack;
+  Result.BackgroundAlpha := DEF_BACKGROUND_ALPHA;
+end;
+
+{Lifts the rendered pf24bit grid into a pf32bit bitmap. Frame cell rects
+ get alpha=255 (opaque); everything else (gaps, border) carries
+ ABackgroundAlpha. Called by RenderCombinedImage when alpha < 255 so the
+ historical pf24bit fast path is unaffected for opaque output.}
+function LiftToAlphaAware(ASource: TBitmap; const AGrid: TCombinedGridStyle;
+  const AFrames: TArray<TBitmap>; ACols, ACellW, ACellH, ABorder: Integer): TBitmap;
+type
+  TQuadRow = array [0 .. 0] of TRGBQuad;
+  PQuadRow = ^TQuadRow;
+  TTripleRow = array [0 .. 0] of TRGBTriple;
+  PTripleRow = ^TTripleRow;
+var
+  Bg: TRGBQuad;
+  X, Y, I, Row, Col, FrameX, FrameY, Px, Py: Integer;
+  DstRow: PQuadRow;
+  SrcRow: PTripleRow;
+begin
+  Result := TBitmap.Create;
+  try
+    Result.PixelFormat := pf32bit;
+    Result.AlphaFormat := afDefined;
+    Result.SetSize(ASource.Width, ASource.Height);
+
+    Bg.rgbBlue := GetBValue(AGrid.Background);
+    Bg.rgbGreen := GetGValue(AGrid.Background);
+    Bg.rgbRed := GetRValue(AGrid.Background);
+    Bg.rgbReserved := AGrid.BackgroundAlpha;
+
+    {Initial fill: gap/border colour + BackgroundAlpha. Outside-cell pixels
+     never get touched again, so the gap/border becomes alpha-aware here.}
+    for Y := 0 to Result.Height - 1 do
+    begin
+      DstRow := PQuadRow(Result.ScanLine[Y]);
+      for X := 0 to Result.Width - 1 do
+        DstRow^[X] := Bg;
+    end;
+
+    {Each non-nil frame's cell rect: copy RGB from the pf24bit source,
+     alpha=255. Captures both the frame pixels and any timecode overlay
+     that was drawn within the cell rect.}
+    for I := 0 to High(AFrames) do
+    begin
+      if AFrames[I] = nil then
+        Continue;
+      Row := I div ACols;
+      Col := I mod ACols;
+      FrameX := ABorder + Col * (ACellW + AGrid.CellGap);
+      FrameY := ABorder + Row * (ACellH + AGrid.CellGap);
+      for Py := 0 to ACellH - 1 do
+      begin
+        if (FrameY + Py < 0) or (FrameY + Py >= Result.Height) then
+          Continue;
+        SrcRow := PTripleRow(ASource.ScanLine[FrameY + Py]);
+        DstRow := PQuadRow(Result.ScanLine[FrameY + Py]);
+        for Px := 0 to ACellW - 1 do
+        begin
+          if (FrameX + Px < 0) or (FrameX + Px >= Result.Width) then
+            Continue;
+          DstRow^[FrameX + Px].rgbBlue := SrcRow^[FrameX + Px].rgbtBlue;
+          DstRow^[FrameX + Px].rgbGreen := SrcRow^[FrameX + Px].rgbtGreen;
+          DstRow^[FrameX + Px].rgbRed := SrcRow^[FrameX + Px].rgbtRed;
+          DstRow^[FrameX + Px].rgbReserved := 255;
+        end;
+      end;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 function DefaultTimestampStyle: TTimestampStyle;
@@ -663,6 +740,7 @@ var
   TW, TH: Integer;
   Border: Integer;
   R: TRect;
+  Lifted: TBitmap;
 begin
   FrameCount := Length(AFrames);
   if FrameCount = 0 then
@@ -739,6 +817,18 @@ begin
           Rect(X, Y, X + CellW, Y + CellH), Tc, ATimestamp);
       end;
     end;
+  end;
+
+  {Optional alpha-aware output. When BackgroundAlpha is 255 the pf24bit
+   Result is exactly the historical output (no behaviour change). For
+   alpha < 255 we lift into pf32bit so PNG savers preserve the gap/border
+   transparency; frame pixels stay at alpha=255 because they are
+   conceptually opaque content.}
+  if AGrid.BackgroundAlpha < 255 then
+  begin
+    Lifted := LiftToAlphaAware(Result, AGrid, AFrames, Cols, CellW, CellH, Border);
+    Result.Free;
+    Result := Lifted;
   end;
 end;
 

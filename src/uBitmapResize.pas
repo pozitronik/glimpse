@@ -29,6 +29,71 @@ implementation
 uses
   System.Math, System.Types;
 
+{Manual bilinear downscale that preserves the alpha channel. Used when the
+ source is pf32bit; GDI's HALFTONE CopyRect path doesn't reliably write the
+ alpha byte across all driver/Windows combinations, so we sample explicitly.}
+function ResampleAlphaAwareBilinear(ASrc: TBitmap; ANewW, ANewH: Integer): TBitmap;
+type
+  TQuadRow = array [0 .. 0] of TRGBQuad;
+  PQuadRow = ^TQuadRow;
+var
+  X, Y, IX, IY: Integer;
+  SrcX, SrcY, FracX, FracY, W00, W10, W01, W11: Double;
+  R0, R1: PQuadRow;
+  Dst: PQuadRow;
+  RR, GG, BB, AA: Double;
+begin
+  Result := TBitmap.Create;
+  try
+    Result.PixelFormat := pf32bit;
+    Result.AlphaFormat := afDefined;
+    Result.SetSize(ANewW, ANewH);
+
+    for Y := 0 to ANewH - 1 do
+    begin
+      SrcY := (Y + 0.5) * ASrc.Height / ANewH - 0.5;
+      IY := Trunc(SrcY);
+      if IY < 0 then IY := 0;
+      if IY > ASrc.Height - 2 then IY := ASrc.Height - 2;
+      FracY := SrcY - IY;
+      if FracY < 0 then FracY := 0;
+      if FracY > 1 then FracY := 1;
+      R0 := PQuadRow(ASrc.ScanLine[IY]);
+      R1 := PQuadRow(ASrc.ScanLine[IY + 1]);
+      Dst := PQuadRow(Result.ScanLine[Y]);
+      for X := 0 to ANewW - 1 do
+      begin
+        SrcX := (X + 0.5) * ASrc.Width / ANewW - 0.5;
+        IX := Trunc(SrcX);
+        if IX < 0 then IX := 0;
+        if IX > ASrc.Width - 2 then IX := ASrc.Width - 2;
+        FracX := SrcX - IX;
+        if FracX < 0 then FracX := 0;
+        if FracX > 1 then FracX := 1;
+        W00 := (1 - FracX) * (1 - FracY);
+        W10 := FracX * (1 - FracY);
+        W01 := (1 - FracX) * FracY;
+        W11 := FracX * FracY;
+        RR := R0^[IX].rgbRed * W00 + R0^[IX + 1].rgbRed * W10 +
+              R1^[IX].rgbRed * W01 + R1^[IX + 1].rgbRed * W11;
+        GG := R0^[IX].rgbGreen * W00 + R0^[IX + 1].rgbGreen * W10 +
+              R1^[IX].rgbGreen * W01 + R1^[IX + 1].rgbGreen * W11;
+        BB := R0^[IX].rgbBlue * W00 + R0^[IX + 1].rgbBlue * W10 +
+              R1^[IX].rgbBlue * W01 + R1^[IX + 1].rgbBlue * W11;
+        AA := R0^[IX].rgbReserved * W00 + R0^[IX + 1].rgbReserved * W10 +
+              R1^[IX].rgbReserved * W01 + R1^[IX + 1].rgbReserved * W11;
+        Dst^[X].rgbRed := Round(RR);
+        Dst^[X].rgbGreen := Round(GG);
+        Dst^[X].rgbBlue := Round(BB);
+        Dst^[X].rgbReserved := Round(AA);
+      end;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
 function DownscaleBitmapToFit(ABmp: TBitmap; AMaxSide: Integer): TBitmap;
 var
   W, H, NewW, NewH, BmpLong: Integer;
@@ -53,6 +118,12 @@ begin
   Scale := AMaxSide / BmpLong;
   NewW := Max(1, Round(W * Scale));
   NewH := Max(1, Round(H * Scale));
+
+  if ABmp.PixelFormat = pf32bit then
+  begin
+    Result := ResampleAlphaAwareBilinear(ABmp, NewW, NewH);
+    Exit;
+  end;
 
   Result := TBitmap.Create;
   try

@@ -190,6 +190,14 @@ type
     [Test]
     procedure TestRespectAnamorphicRoundTrip;
     [Test]
+    procedure TestBackgroundAlphaDefault;
+    [Test]
+    procedure TestBackgroundAlphaRoundTrip;
+    [Test]
+    procedure TestBackgroundAlphaClampedHigh;
+    [Test]
+    procedure TestBackgroundAlphaClampedLow;
+    [Test]
     procedure TestUseKeyframesRoundTrip;
   end;
 
@@ -2163,6 +2171,82 @@ begin
     S.Load;
     Assert.AreEqual(not DEF_RESPECT_ANAMORPHIC, S.RespectAnamorphic,
       'Flipped RespectAnamorphic must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'fresh_alpha.ini'));
+  try
+    Assert.AreEqual(DEF_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha));
+    Assert.AreEqual(255, Integer(S.BackgroundAlpha),
+      'Default must be 255 (opaque) so existing users see no behaviour change');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.BackgroundAlpha := 128;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(128, Integer(S.BackgroundAlpha),
+      'BackgroundAlpha must round-trip through INI');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaClampedHigh;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'alpha_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'BackgroundAlpha', 9999);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha),
+      'Out-of-range high value must clamp to 255');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaClampedLow;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'alpha_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'BackgroundAlpha', -42);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha),
+      'Negative value must clamp to 0');
   finally
     S.Free;
   end;

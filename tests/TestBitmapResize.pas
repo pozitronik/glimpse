@@ -21,6 +21,8 @@ type
     [Test] procedure TestSquareSource;
     [Test] procedure TestPreservesAspectRatio;
     [Test] procedure TestResultMinimumDimension;
+    [Test] procedure TestPf32BitInputProducesPf32BitOutput;
+    [Test] procedure TestPf32BitDownscalePreservesAlpha;
   end;
 
 implementation
@@ -243,6 +245,79 @@ begin
       Assert.IsNotNull(Result);
       Assert.IsTrue(Result.Width >= 1);
       Assert.IsTrue(Result.Height >= 1);
+    finally
+      Result.Free;
+    end;
+  finally
+    Bmp.Free;
+  end;
+end;
+
+function MakeAlphaBitmap(AW, AH: Integer; AAlpha: Byte): TBitmap;
+var
+  X, Y: Integer;
+  Row: PByte;
+begin
+  Result := TBitmap.Create;
+  Result.PixelFormat := pf32bit;
+  Result.AlphaFormat := afDefined;
+  Result.SetSize(AW, AH);
+  for Y := 0 to AH - 1 do
+  begin
+    Row := PByte(Result.ScanLine[Y]);
+    for X := 0 to AW - 1 do
+    begin
+      Row^ := 0; Inc(Row);          // B
+      Row^ := 0; Inc(Row);          // G
+      Row^ := 255; Inc(Row);        // R
+      Row^ := AAlpha; Inc(Row);     // A
+    end;
+  end;
+end;
+
+function AlphaByteAt(ABmp: TBitmap; AX, AY: Integer): Byte;
+var
+  Row: PByte;
+begin
+  Row := PByte(ABmp.ScanLine[AY]);
+  Inc(Row, AX * 4 + 3);
+  Result := Row^;
+end;
+
+procedure TTestBitmapResize.TestPf32BitInputProducesPf32BitOutput;
+var
+  Bmp, Result: TBitmap;
+begin
+  {pf32bit source with alpha must take the bilinear path; output must
+   stay pf32bit so the saver writes a 32-bit PNG.}
+  Bmp := MakeAlphaBitmap(1024, 768, 200);
+  try
+    Result := DownscaleBitmapToFit(Bmp, 256);
+    try
+      Assert.IsNotNull(Result);
+      Assert.AreEqual(Ord(pf32bit), Ord(Result.PixelFormat));
+    finally
+      Result.Free;
+    end;
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestBitmapResize.TestPf32BitDownscalePreservesAlpha;
+var
+  Bmp, Result: TBitmap;
+begin
+  {Source is uniform alpha=128 across the whole bitmap; bilinear interpolation
+   between four equal samples must yield 128. Sample the centre pixel.}
+  Bmp := MakeAlphaBitmap(800, 600, 128);
+  try
+    Result := DownscaleBitmapToFit(Bmp, 200);
+    try
+      Assert.IsNotNull(Result);
+      Assert.AreEqual(128,
+        Integer(AlphaByteAt(Result, Result.Width div 2, Result.Height div 2)),
+        'Alpha must survive the downscale unchanged for a uniform-alpha source');
     finally
       Result.Free;
     end;

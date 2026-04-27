@@ -100,6 +100,11 @@ type
     [Test] procedure DefaultBannerStyle_AutoSizeMatchesConstant;
     [Test] procedure DefaultBannerStyle_PositionMatchesConstant;
     [Test] procedure DefaultCombinedGridStyle_AutoColumnsZero;
+    [Test] procedure DefaultCombinedGridStyle_BackgroundAlphaIs255;
+    [Test] procedure RenderCombined_FullAlpha_StaysPf24Bit;
+    [Test] procedure RenderCombined_PartialAlpha_BecomesPf32Bit;
+    [Test] procedure RenderCombined_GapPixelCarriesBackgroundAlpha;
+    [Test] procedure RenderCombined_FramePixelStaysOpaque;
     [Test] procedure DefaultCombinedGridStyle_BorderMatchesConstant;
     [Test] procedure DefaultTimestampStyle_ShowDefaultsOff;
     [Test] procedure DefaultTimestampStyle_FontAndSize;
@@ -111,6 +116,16 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
   uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uDefaults;
+
+{Pixel layout for pf32bit scan lines: byte order is BGRA per Win32 DIB}
+function AlphaByteAt(ABmp: TBitmap; AX, AY: Integer): Byte;
+var
+  Row: PByte;
+begin
+  Row := PByte(ABmp.ScanLine[AY]);
+  Inc(Row, AX * 4 + 3);
+  Result := Row^;
+end;
 
 { Helper }
 
@@ -132,6 +147,9 @@ begin
   Result.CellGap := AGap;
   Result.Border := ABorder;
   Result.Background := ABg;
+  {Default to opaque so existing tests pin the historical pf24bit fast
+   path; alpha-aware tests set BackgroundAlpha explicitly.}
+  Result.BackgroundAlpha := 255;
 end;
 
 function MakeTs(AShow: Boolean; const AFontName: string; AFontSize: Integer;
@@ -1711,6 +1729,126 @@ begin
   S := DefaultCombinedGridStyle;
   Assert.AreEqual<Integer>(0, S.Columns);
   Assert.AreEqual<Integer>(0, S.CellGap);
+end;
+
+procedure TTestCombinedImage.DefaultCombinedGridStyle_BackgroundAlphaIs255;
+begin
+  {Default to fully opaque so existing call sites keep the historical
+   pf24bit fast path with no behaviour change.}
+  Assert.AreEqual(255, Integer(DefaultCombinedGridStyle.BackgroundAlpha));
+end;
+
+procedure TTestCombinedImage.RenderCombined_FullAlpha_StaysPf24Bit;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Bmp: TBitmap;
+begin
+  {BackgroundAlpha = 255 is the no-regression branch. Pixel format must
+   stay pf24bit so the saver picks the existing 24-bit PNG path and
+   anyone who layered behaviour on output format keeps working.}
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(40, 30, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 1.0;
+  try
+    Grid := MakeGrid(1, 0, clBlue, 0);
+    Bmp := RenderCombinedImage(Frames, Offsets, Grid, MakeTs(False, 'Consolas', 9));
+    try
+      Assert.AreEqual(Ord(pf24bit), Ord(Bmp.PixelFormat));
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.RenderCombined_PartialAlpha_BecomesPf32Bit;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Bmp: TBitmap;
+begin
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(40, 30, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 1.0;
+  try
+    Grid := MakeGrid(1, 0, clBlue, 0);
+    Grid.BackgroundAlpha := 128;
+    Bmp := RenderCombinedImage(Frames, Offsets, Grid, MakeTs(False, 'Consolas', 9));
+    try
+      Assert.AreEqual(Ord(pf32bit), Ord(Bmp.PixelFormat));
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.RenderCombined_GapPixelCarriesBackgroundAlpha;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Bmp: TBitmap;
+begin
+  {2x1 layout with a 4px gap. Sample the gap region and assert its alpha
+   matches BackgroundAlpha; non-frame areas must be transparent-aware.}
+  SetLength(Frames, 2);
+  Frames[0] := MakeFrame(20, 20, Integer(clRed));
+  Frames[1] := MakeFrame(20, 20, Integer(clGreen));
+  SetLength(Offsets, 2);
+  Offsets[0].TimeOffset := 0.0;
+  Offsets[1].TimeOffset := 1.0;
+  try
+    Grid := MakeGrid(2, 4, clBlue, 0);
+    Grid.BackgroundAlpha := 64;
+    Bmp := RenderCombinedImage(Frames, Offsets, Grid, MakeTs(False, 'Consolas', 9));
+    try
+      Assert.AreEqual(Ord(pf32bit), Ord(Bmp.PixelFormat));
+      {Gap pixel sits between cells: x in [20..23], y any}
+      Assert.AreEqual(64, Integer(AlphaByteAt(Bmp, 21, 10)),
+        'Gap pixel must carry BackgroundAlpha');
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Frames[0].Free;
+    Frames[1].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.RenderCombined_FramePixelStaysOpaque;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  Grid: TCombinedGridStyle;
+  Bmp: TBitmap;
+begin
+  {Frame interior pixel must keep alpha=255 even when BackgroundAlpha is
+   low. Confirms the lift step distinguishes cell rects from gap area.}
+  SetLength(Frames, 1);
+  Frames[0] := MakeFrame(20, 20, Integer(clRed));
+  SetLength(Offsets, 1);
+  Offsets[0].TimeOffset := 0.0;
+  try
+    Grid := MakeGrid(1, 0, clBlue, 0);
+    Grid.BackgroundAlpha := 0;
+    Bmp := RenderCombinedImage(Frames, Offsets, Grid, MakeTs(False, 'Consolas', 9));
+    try
+      Assert.AreEqual(255, Integer(AlphaByteAt(Bmp, 10, 10)),
+        'Frame pixel alpha must always be 255 (frames are opaque)');
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Frames[0].Free;
+  end;
 end;
 
 procedure TTestCombinedImage.DefaultCombinedGridStyle_BorderMatchesConstant;

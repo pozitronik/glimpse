@@ -24,6 +24,7 @@ type
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
     FPngCompression: Integer;
+    FBackgroundAlpha: Byte;
     {[combined]}
     FCombinedColumns: Integer;
     FBackground: TColor;
@@ -66,6 +67,7 @@ type
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
+    property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property CombinedColumns: Integer read FCombinedColumns write FCombinedColumns;
     {ShowTimestamp is the WCX name for the timestamp group's Show toggle;
      WLX exposes the same field as ShowTimecode.}
@@ -131,6 +133,7 @@ begin
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
   FPngCompression := DEF_PNG_COMPRESSION;
+  FBackgroundAlpha := DEF_BACKGROUND_ALPHA;
   FCombinedColumns := WCX_DEF_COMBINED_COLS;
   FBackground := WCX_DEF_BACKGROUND;
   FCellGap := WCX_DEF_CELL_GAP;
@@ -173,6 +176,7 @@ begin
       FSaveFormat := sfPNG;
     FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality', DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
     FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+    FBackgroundAlpha := EnsureRange(Ini.ReadInteger('output', 'BackgroundAlpha', DEF_BACKGROUND_ALPHA), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
 
     FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
     FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
@@ -211,6 +215,7 @@ begin
       Ini.WriteString('output', 'Format', 'PNG');
     Ini.WriteInteger('output', 'JpegQuality', FJpegQuality);
     Ini.WriteInteger('output', 'PngCompression', FPngCompression);
+    Ini.WriteInteger('output', 'BackgroundAlpha', FBackgroundAlpha);
 
     Ini.WriteInteger('combined', 'Columns', FCombinedColumns);
     Ini.WriteString('combined', 'Background', ColorToHex(FBackground));
