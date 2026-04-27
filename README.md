@@ -89,6 +89,7 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                            |
 | JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)      |
 | PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)             |
+| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save All output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG. |
 | Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                 |
 | Include file info banner | Off     | Adds a header with video file name, resolution, and duration to combined image exports |
 
@@ -167,13 +168,14 @@ Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin u
 
 #### Output
 
-| Setting         | Default         | Description                                                                                                  |
-|-----------------|-----------------|--------------------------------------------------------------------------------------------------------------|
-| Output mode     | Separate frames | `Separate frames` shows individual image files in the archive; `Combined image` produces a single grid image |
-| Image format    | PNG             | Image format for extracted frames (PNG or JPEG)                                                              |
-| JPEG quality    | 90              | Compression quality for JPEG output (1-100)                                                                  |
-| PNG compression | 6               | Compression level for PNG output (0-9)                                                                       |
-| Show file sizes | Off             | Displays actual file sizes in the archive listing. Requires extracting all frames when entering the archive  |
+| Setting            | Default         | Description                                                                                                                          |
+|--------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| Output mode        | Separate frames | `Separate frames` shows individual image files in the archive; `Combined image` produces a single grid image                         |
+| Image format       | PNG             | Image format for extracted frames (PNG or JPEG)                                                                                      |
+| JPEG quality       | 90              | Compression quality for JPEG output (1-100)                                                                                          |
+| PNG compression    | 6               | Compression level for PNG output (0-9)                                                                                               |
+| Background opacity | 255             | Opacity of cell gaps, border, and combined-image background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG. |
+| Show file sizes    | Off             | Displays actual file sizes in the archive listing. Requires extracting all frames when entering the archive                          |
 
 #### Combined
 

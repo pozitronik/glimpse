@@ -96,6 +96,8 @@
         <DCCReference Include="TestFrameFileNames.pas"/>
         <DCCReference Include="..\src\uBitmapSaver.pas"/>
         <DCCReference Include="TestBitmapSaver.pas"/>
+        <DCCReference Include="..\src\uClipboardImage.pas"/>
+        <DCCReference Include="TestClipboardImage.pas"/>
         <DCCReference Include="..\wlx\uZoomController.pas"/>
         <DCCReference Include="TestZoomController.pas"/>
         <DCCReference Include="..\wlx\uViewModeLogic.pas"/>

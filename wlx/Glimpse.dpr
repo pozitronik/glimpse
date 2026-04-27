@@ -27,6 +27,7 @@ uses
   uCaptureShortcutDlg in 'uCaptureShortcutDlg.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',
   uBitmapSaver in '..\src\uBitmapSaver.pas',
+  uClipboardImage in '..\src\uClipboardImage.pas',
   uZoomController in 'uZoomController.pas',
   uViewModeLogic in 'uViewModeLogic.pas',
   uExtractionPlanner in '..\src\uExtractionPlanner.pas',

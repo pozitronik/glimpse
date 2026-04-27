@@ -39,7 +39,7 @@ implementation
 uses
   System.SysUtils, System.Types,
   Vcl.Clipbrd, Vcl.Dialogs,
-  uFrameFileNames, uFrameOffsets, uPathExpand, uTypes;
+  uClipboardImage, uFrameFileNames, uFrameOffsets, uPathExpand, uTypes;
 
 {TFrameExporter}
 
@@ -283,7 +283,10 @@ begin
     Exit;
   Bmp := RenderWithBanner(RenderCombinedFromCells);
   try
-    Clipboard.Assign(Bmp);
+    {Push as CF_DIBV5 when the rendered bitmap carries alpha so paste
+     targets that honour ARGB receive transparent gaps; falls through to
+     standard CF_DIB / CF_BITMAP for opaque sources.}
+    CopyBitmapToClipboard(Bmp);
   finally
     Bmp.Free;
   end;

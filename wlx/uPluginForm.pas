@@ -1,4 +1,4 @@
-{Main plugin form: toolbar, frame display, and extraction coordination.
+﻿{Main plugin form: toolbar, frame display, and extraction coordination.
  The form is parented to TC's Lister window.}
 unit uPluginForm;
 
@@ -407,9 +407,9 @@ begin
    first and can intercept keys TC would otherwise consume (F2/F3).}
   PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
 
-{$IFDEF DEBUG}
+
   uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
-{$ENDIF}
+
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
 
   FProbeCache := TProbeCache.Create(DefaultProbeCacheDir);

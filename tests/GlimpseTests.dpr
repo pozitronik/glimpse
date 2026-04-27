@@ -35,6 +35,8 @@ uses
   TestFrameFileNames in 'TestFrameFileNames.pas',
   uBitmapSaver in '..\src\uBitmapSaver.pas',
   TestBitmapSaver in 'TestBitmapSaver.pas',
+  uClipboardImage in '..\src\uClipboardImage.pas',
+  TestClipboardImage in 'TestClipboardImage.pas',
   uZoomController in '..\wlx\uZoomController.pas',
   TestZoomController in 'TestZoomController.pas',
   uViewModeLogic in '..\wlx\uViewModeLogic.pas',
