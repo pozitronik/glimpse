@@ -556,9 +556,12 @@ end;
 
 function GetPackerCaps: Integer; stdcall;
 begin
-  {PK_CAPS_NEW is a stub to make the Pack dialog (and its Configure button)
-   accessible; PackFiles always returns E_NOT_SUPPORTED}
-  Result := PK_CAPS_NEW or PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
+  {Read-only "video as virtual archive" plugin: no PK_CAPS_NEW (cannot create
+   archives), no PK_CAPS_MODIFY/DELETE. PK_CAPS_OPTIONS gives users a
+   Configure button in TC's Configuration > Options > Plugins > Packer
+   plugins UI; PK_CAPS_BY_CONTENT lets TC probe by content; PK_CAPS_HIDE
+   keeps videos shown as ordinary files in the file panel.}
+  Result := PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
 end;
 
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
