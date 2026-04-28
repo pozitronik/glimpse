@@ -560,8 +560,10 @@ begin
    archives), no PK_CAPS_MODIFY/DELETE. PK_CAPS_OPTIONS gives users a
    Configure button in TC's Configuration > Options > Plugins > Packer
    plugins UI; PK_CAPS_BY_CONTENT lets TC probe by content; PK_CAPS_HIDE
-   keeps videos shown as ordinary files in the file panel.}
-  Result := PK_CAPS_BY_CONTENT or PK_CAPS_SEARCHTEXT or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
+   keeps videos shown as ordinary files in the file panel. PK_CAPS_SEARCHTEXT
+   is intentionally not set - the virtual archive entries are binary PNG/JPEG
+   frames with no text content to search.}
+  Result := PK_CAPS_BY_CONTENT or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
 end;
 
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
