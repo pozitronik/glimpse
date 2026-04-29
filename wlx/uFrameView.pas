@@ -314,17 +314,19 @@ end;
 
 function TFrameView.CalcFitColumns(AViewportW, AViewportH: Integer): Integer;
 var
-  C, Rows, CellW, CellH, RowH, TotalH: Integer;
+  C, Rows, CellW, CellH, TotalH: Integer;
 begin
   if (Length(FCells) <= 1) or (AViewportW <= 0) or (AViewportH <= 0) then
     Exit(1);
   for C := 1 to Length(FCells) do
   begin
-    CellW := Max(1, (AViewportW - (C + 1) * FCellGap) div C);
+    {Gaps live between cells only: C cells share (C-1) gaps. Outer margin
+     is the caller's job (CellMargin), so the viewport handed in here is
+     already the margin-shrunk usable area.}
+    CellW := Max(1, (AViewportW - Max(C - 1, 0) * FCellGap) div C);
     CellH := Max(1, Round(CellW * FAspectRatio));
-    RowH := CellH + FCellGap;
     Rows := (Length(FCells) + C - 1) div C;
-    TotalH := FCellGap + Rows * RowH;
+    TotalH := Rows * CellH + Max(Rows - 1, 0) * FCellGap;
     if TotalH <= AViewportH then
       Exit(C);
   end;

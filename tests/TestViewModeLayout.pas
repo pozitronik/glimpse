@@ -188,7 +188,13 @@ var
 begin
   L := TGridLayout.Create;
   try
-    Ctx := MakeCtx(1, 800, 600);
+    {Simulate the zoomed-out / shrunk-base case: the layout's content box
+     (BaseW) is narrower than the actual control (ClientWidth), so the
+     grid must center horizontally inside the control. Outer margin is no
+     longer the layout's job, so a cell that fills BaseW exactly will sit
+     at Left=0 unless ClientWidth is wider.}
+    Ctx := MakeCtx(1, 400, 600);
+    Ctx.ClientWidth := 800;
     R := L.GetCellRect(0, Ctx);
     Assert.IsTrue(R.Left > 0, 'Single cell should be centered, not at left edge');
     Assert.IsTrue(Abs(R.Left - (800 - R.Right)) <= 1, 'Should be centered');
@@ -446,7 +452,9 @@ begin
     Ctx.AspectRatio := 360 / 640;
     Sz := L.RecalcSize(Ctx);
     R0 := L.GetCellRect(0, Ctx);
-    Assert.AreEqual(Max(800, 4 + 5 * (R0.Width + 4)), Sz.cx,
+    {5 cells share 4 inter-cell gaps; no outer gap since CellMargin is
+     the caller's responsibility now.}
+    Assert.AreEqual(Max(800, 5 * R0.Width + 4 * 4), Sz.cx,
       'Width must match cell geometry');
   finally
     L.Free;

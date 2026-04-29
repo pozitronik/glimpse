@@ -820,8 +820,9 @@ begin
     V.SetViewport(800, 400);
     V.RecalcSize;
     R := V.GetCellRect(0);
-    { Available height = viewport - 2*gap (timecodes are overlaid, not reserved) }
-    AvailH := 400 - 2 * 4;
+    { Available height = full viewport: outer margin is now CellMargin's job,
+      so the layout consumes the entire viewport height. }
+    AvailH := 400;
     Assert.AreEqual(AvailH, R.Height,
       'FitIfLarger should use viewport height when native > viewport');
   finally
@@ -847,8 +848,9 @@ begin
     V.SetViewport(800, 400);
     V.RecalcSize;
     R0 := V.GetCellRect(0);
-    { Width = max(viewport, gap + N * (cellW + gap)) }
-    Assert.AreEqual(Max(800, 4 + N * (R0.Width + 4)), V.Width,
+    { Width = max(viewport, N * cellW + (N-1) * gap):
+      gaps live between cells only, outer margin is CellMargin's job. }
+    Assert.AreEqual(Max(800, N * R0.Width + (N - 1) * 4), V.Width,
       'RecalcSize width should match cell rect geometry');
   finally
     FreeTestFrameView(V);
@@ -1975,17 +1977,21 @@ var
   V: TFrameView;
   R: TRect;
 begin
-  { When grid is narrower than viewport, it should be centered }
+  { When grid is narrower than viewport, it should be centered. Outer
+    margin is no longer the layout's job, so a cell that fills BaseW
+    sits flush at Left=0 unless the control is wider than BaseW. Force
+    that asymmetry by giving the control more ClientWidth than the
+    layout's base viewport. }
   V := CreateTestFrameView(800, vmGrid);
   try
-    V.SetViewport(800, 600);
+    V.SetViewport(400, 600);
+    V.Width := 800;
     V.SetCellCount(1, MakeOffsets(1));
     V.RecalcSize;
+    V.Width := 800;
     R := V.GetCellRect(0);
-    { With 1 column, the single cell should be roughly centered }
     Assert.IsTrue(R.Left > 0, 'Cell should not be at left edge (should be centered)');
     Assert.IsTrue(R.Left < 400, 'Cell should not be beyond center');
-    { Left offset should roughly equal the gap from right edge }
     Assert.IsTrue(Abs(R.Left - (800 - R.Right)) <= 1,
       Format('Cell should be centered: Left=%d, Right gap=%d', [R.Left, 800 - R.Right]));
   finally

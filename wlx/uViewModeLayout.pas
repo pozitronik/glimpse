@@ -131,7 +131,9 @@ var
   Cols, AvailW: Integer;
 begin
   Cols := GetColumnCount(ACtx);
-  AvailW := ACtx.BaseW - (Cols + 1) * ACtx.CellGap;
+  {Gaps live between cells only: N cells share (N-1) gaps. Outer padding
+   is the caller's job (TFrameView applies CellMargin around the layout).}
+  AvailW := ACtx.BaseW - Max(Cols - 1, 0) * ACtx.CellGap;
   Result.cx := Max(1, Round(AvailW / Cols * ACtx.ZoomFactor));
   Result.cy := Max(1, Round(Result.cx * ACtx.AspectRatio));
 end;
@@ -140,17 +142,16 @@ function TGridLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext
 var
   Cols, Col, Row, Rows: Integer;
   Sz: TSize;
-  RowH, GridW, GridH, OffsetX, OffsetY: Integer;
+  GridW, GridH, OffsetX, OffsetY: Integer;
 begin
   Cols := GetColumnCount(ACtx);
   Sz := CalcCellImageSize(ACtx);
   Col := AIndex mod Cols;
   Row := AIndex div Cols;
   Rows := Ceil(ACtx.CellCount / Max(1, Cols));
-  RowH := Sz.cy + ACtx.CellGap;
 
-  GridW := Cols * (Sz.cx + ACtx.CellGap) + ACtx.CellGap;
-  GridH := ACtx.CellGap + Rows * RowH;
+  GridW := Cols * Sz.cx + Max(Cols - 1, 0) * ACtx.CellGap;
+  GridH := Rows * Sz.cy + Max(Rows - 1, 0) * ACtx.CellGap;
 
   {Center grid horizontally}
   if GridW < ACtx.ClientWidth then
@@ -164,23 +165,24 @@ begin
   else
     OffsetY := 0;
 
-  Result.Left := OffsetX + ACtx.CellGap + Col * (Sz.cx + ACtx.CellGap);
-  Result.Top := OffsetY + ACtx.CellGap + Row * RowH;
+  Result.Left := OffsetX + Col * (Sz.cx + ACtx.CellGap);
+  Result.Top := OffsetY + Row * (Sz.cy + ACtx.CellGap);
   Result.Right := Result.Left + Sz.cx;
   Result.Bottom := Result.Top + Sz.cy;
 end;
 
 function TGridLayout.RecalcSize(const ACtx: TViewLayoutContext): TSize;
 var
-  Cols, Rows, GridW: Integer;
+  Cols, Rows, GridW, GridH: Integer;
   Sz: TSize;
 begin
   Cols := GetColumnCount(ACtx);
   Sz := CalcCellImageSize(ACtx);
   Rows := Ceil(ACtx.CellCount / Cols);
-  GridW := Cols * (Sz.cx + ACtx.CellGap) + ACtx.CellGap;
+  GridW := Cols * Sz.cx + Max(Cols - 1, 0) * ACtx.CellGap;
+  GridH := Rows * Sz.cy + Max(Rows - 1, 0) * ACtx.CellGap;
   Result.cx := Max(ACtx.ViewportW, GridW);
-  Result.cy := Max(ACtx.ViewportH, ACtx.CellGap + Rows * (Sz.cy + ACtx.CellGap));
+  Result.cy := Max(ACtx.ViewportH, GridH);
 end;
 
 function TGridLayout.WheelScrollKind: TLayoutWheelAction;
@@ -197,7 +199,7 @@ end;
 
 function TScrollLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutContext): TRect;
 var
-  CellW, CellH, RowH, LeftX: Integer;
+  CellW, CellH, LeftX: Integer;
 begin
   case ACtx.ZoomMode of
     zmActual:
@@ -207,14 +209,14 @@ begin
       end;
     zmFitIfLarger:
       begin
-        CellW := Max(1, ACtx.BaseW - 2 * ACtx.CellGap);
+        CellW := Max(1, ACtx.BaseW);
         if (ACtx.NativeW > 0) and (ACtx.NativeW < CellW) then
           CellW := ACtx.NativeW;
         CellH := Max(1, Round(CellW * ACtx.AspectRatio));
       end;
     else {zmFitWindow}
       begin
-        CellW := Max(1, ACtx.BaseW - 2 * ACtx.CellGap);
+        CellW := Max(1, ACtx.BaseW);
         CellH := Max(1, Round(CellW * ACtx.AspectRatio));
       end;
   end;
@@ -223,15 +225,16 @@ begin
   CellW := Max(1, Round(CellW * ACtx.ZoomFactor));
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
 
-  {Center horizontally when cell is narrower than control}
-  if CellW + 2 * ACtx.CellGap < ACtx.ClientWidth then
+  {Center horizontally when cell is narrower than control. Outer margin
+   is added by TFrameView via CellMargin, so the layout itself starts
+   cells at column 0 / row 0.}
+  if CellW < ACtx.ClientWidth then
     LeftX := (ACtx.ClientWidth - CellW) div 2
   else
-    LeftX := ACtx.CellGap;
+    LeftX := 0;
 
-  RowH := CellH + ACtx.CellGap;
   Result.Left := LeftX;
-  Result.Top := ACtx.CellGap + AIndex * RowH;
+  Result.Top := AIndex * (CellH + ACtx.CellGap);
   Result.Right := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
@@ -241,8 +244,8 @@ var
   R0: TRect;
 begin
   R0 := GetCellRect(0, ACtx);
-  Result.cx := Max(ACtx.ViewportW, R0.Width + 2 * ACtx.CellGap);
-  Result.cy := Max(ACtx.ViewportH, ACtx.CellGap + ACtx.CellCount * (R0.Height + ACtx.CellGap));
+  Result.cx := Max(ACtx.ViewportW, R0.Width);
+  Result.cy := Max(ACtx.ViewportH, ACtx.CellCount * R0.Height + Max(ACtx.CellCount - 1, 0) * ACtx.CellGap);
 end;
 
 function TScrollLayout.WheelScrollKind: TLayoutWheelAction;
@@ -261,7 +264,7 @@ function TFilmstripLayout.GetCellRect(AIndex: Integer; const ACtx: TViewLayoutCo
 var
   CellH, CellW, AvailH, TopY: Integer;
 begin
-  AvailH := Max(1, ACtx.BaseH - 2 * ACtx.CellGap);
+  AvailH := Max(1, ACtx.BaseH);
 
   case ACtx.ZoomMode of
     zmActual:
@@ -280,13 +283,15 @@ begin
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
   CellW := Max(1, Round(CellH / Max(ACtx.AspectRatio, DEF_ASPECT_RATIO)));
 
-  {Center vertically within control}
+  {Center vertically within control. Outer margin is added by TFrameView
+   via CellMargin, so the layout itself starts at top 0 when the strip
+   spans the full height.}
   if CellH < AvailH then
     TopY := (ACtx.ClientHeight - CellH) div 2
   else
-    TopY := ACtx.CellGap;
+    TopY := 0;
 
-  Result.Left := ACtx.CellGap + AIndex * (CellW + ACtx.CellGap);
+  Result.Left := AIndex * (CellW + ACtx.CellGap);
   Result.Top := TopY;
   Result.Right := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
@@ -297,8 +302,8 @@ var
   R0: TRect;
 begin
   R0 := GetCellRect(0, ACtx);
-  Result.cx := Max(ACtx.ViewportW, ACtx.CellGap + ACtx.CellCount * (R0.Width + ACtx.CellGap));
-  Result.cy := Max(ACtx.ViewportH, R0.Height + 2 * ACtx.CellGap);
+  Result.cx := Max(ACtx.ViewportW, ACtx.CellCount * R0.Width + Max(ACtx.CellCount - 1, 0) * ACtx.CellGap);
+  Result.cy := Max(ACtx.ViewportH, R0.Height);
 end;
 
 function TFilmstripLayout.WheelScrollKind: TLayoutWheelAction;
@@ -318,9 +323,11 @@ var
   CellW, CellH: Integer;
   AvailW, AvailH: Integer;
 begin
-  {Base available space from frozen viewport, not control size}
-  AvailW := Max(1, ACtx.BaseW - 2 * ACtx.CellGap);
-  AvailH := Max(1, ACtx.BaseH - 2 * ACtx.CellGap);
+  {Base available space from frozen viewport, not control size. Outer
+   margin is added by TFrameView via CellMargin; the layout consumes the
+   full BaseW/BaseH it was handed.}
+  AvailW := Max(1, ACtx.BaseW);
+  AvailH := Max(1, ACtx.BaseH);
 
   case ACtx.ZoomMode of
     zmActual:
@@ -362,7 +369,7 @@ begin
 
   {Center in control}
   Result.Left := (ACtx.ClientWidth - CellW) div 2;
-  Result.Top := ACtx.CellGap + (Max(1, ACtx.ClientHeight - 2 * ACtx.CellGap) - CellH) div 2;
+  Result.Top := (ACtx.ClientHeight - CellH) div 2;
   Result.Right := Result.Left + CellW;
   Result.Bottom := Result.Top + CellH;
 end;
@@ -372,8 +379,8 @@ var
   R0: TRect;
 begin
   R0 := GetCellRect(ACtx.CurrentFrameIndex, ACtx);
-  Result.cx := Max(ACtx.ViewportW, R0.Width + 2 * ACtx.CellGap);
-  Result.cy := Max(ACtx.ViewportH, R0.Height + 2 * ACtx.CellGap);
+  Result.cx := Max(ACtx.ViewportW, R0.Width);
+  Result.cy := Max(ACtx.ViewportH, R0.Height);
 end;
 
 function TSingleLayout.WheelScrollKind: TLayoutWheelAction;
