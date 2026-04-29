@@ -106,6 +106,7 @@ type
     [Test] procedure TestBuildExtractCmdLineMaxSideOnly;
     [Test] procedure TestBuildExtractCmdLineRespectAnamorphicOnly;
     [Test] procedure TestBuildExtractCmdLineRespectAnamorphicWithMaxSide;
+    [Test] procedure TestBuildExtractCmdLineMaxSideUsesMinExpressionToPreventUpscale;
     [Test] procedure TestBuildExtractCmdLineHwAccel;
     [Test] procedure TestBuildExtractCmdLineUseKeyframes;
     [Test] procedure TestBuildExtractCmdLinePngCodec;
@@ -740,7 +741,7 @@ begin
   CmdLine := BuildExtractCmdLine('ffmpeg', 'v.mp4', 0, Opts);
 
   Assert.Contains(CmdLine,
-    '-vf scale=256:256:force_original_aspect_ratio=decrease:force_divisible_by=2 ');
+    '-vf scale=min(iw\,256):min(ih\,256):force_original_aspect_ratio=decrease:force_divisible_by=2 ');
   Assert.IsFalse(CmdLine.Contains('iw*sar'),
     'SAR scale must not appear when RespectAnamorphic is off');
 end;
@@ -773,7 +774,31 @@ begin
   CmdLine := BuildExtractCmdLine('ffmpeg', 'v.mp4', 0, Opts);
 
   Assert.Contains(CmdLine,
-    '-vf scale=iw*sar:ih,setsar=1,scale=512:512:force_original_aspect_ratio=decrease:force_divisible_by=2 ');
+    '-vf scale=iw*sar:ih,setsar=1,scale=min(iw\,512):min(ih\,512):force_original_aspect_ratio=decrease:force_divisible_by=2 ');
+end;
+
+procedure TTestFFmpegParsing.TestBuildExtractCmdLineMaxSideUsesMinExpressionToPreventUpscale;
+var
+  Opts: TExtractionOptions;
+  CmdLine: string;
+begin
+  {Regression test for a real bug: a 720x578 anamorphic source extracted with
+   MaxSide=1920 was being upscaled to 1920x1080 because the bare
+   'scale=W:W:force_original_aspect_ratio=decrease' form treats W as the
+   target box, not a ceiling. The fix is to wrap each target dimension in
+   min(iw,W) / min(ih,W) so undersized inputs become a no-op for the scale
+   filter. This test pins both halves of the contract so the bug cannot
+   silently regress.}
+  Opts := MakeBaseOptions;
+  Opts.MaxSide := 1920;
+  CmdLine := BuildExtractCmdLine('ffmpeg', 'v.mp4', 0, Opts);
+
+  Assert.Contains(CmdLine, 'min(iw\,1920)',
+    'Width target must be capped via min(iw,MAX) so smaller sources are not upscaled');
+  Assert.Contains(CmdLine, 'min(ih\,1920)',
+    'Height target must be capped via min(ih,MAX) so smaller sources are not upscaled');
+  Assert.IsFalse(CmdLine.Contains('scale=1920:1920'),
+    'The bare "scale=MAX:MAX" form must not appear — it would upscale undersized sources');
 end;
 
 procedure TTestFFmpegParsing.TestBuildExtractCmdLineHwAccel;

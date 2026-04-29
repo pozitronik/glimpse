@@ -610,15 +610,25 @@ begin
   if AOptions.RespectAnamorphic then
     ChainFilters := 'scale=iw*sar:ih,setsar=1';
 
-  {MaxSide cap: ffmpeg's force_original_aspect_ratio=decrease fits the longer
-   dimension to MaxSide regardless of orientation. Applied after the SAR
-   correction so the cap operates on display dims.}
+  {MaxSide cap: act as a one-way ceiling — sources whose longer side already
+   fits pass through at native size; oversized sources get downscaled with
+   aspect preserved. The expression min(iw,MAX) caps each target dimension
+   at the input's actual size, so when both iw and ih are below MAX the
+   filter is a no-op (no upscale). When the source is larger,
+   force_original_aspect_ratio=decrease then trims one of the MAX-sized
+   target dimensions to preserve aspect.
+   The bare 'scale=MAX:MAX:force_original_aspect_ratio=decrease' form would
+   upscale smaller sources (e.g. 720x576 anamorphic → 1920x1080) because
+   force_original_aspect_ratio=decrease is about preserving aspect, not
+   limiting scale direction. Commas inside the expressions need backslash
+   escaping so the filter-graph parser does not split the chain on them.
+   Applied after SAR correction so the cap operates on display dims.}
   if AOptions.MaxSide > 0 then
   begin
     if ChainFilters <> '' then
       ChainFilters := ChainFilters + ',';
     ChainFilters := ChainFilters + Format(
-      'scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2',
+      'scale=min(iw\,%d):min(ih\,%d):force_original_aspect_ratio=decrease:force_divisible_by=2',
       [AOptions.MaxSide, AOptions.MaxSide]);
   end;
 
