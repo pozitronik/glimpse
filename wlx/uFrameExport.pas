@@ -783,10 +783,13 @@ begin
   end;
   Bmp := RenderWithBanner(RenderCombinedFromCells);
   try
-    {Push as CF_DIBV5 when the rendered bitmap carries alpha so paste
-     targets that honour ARGB receive transparent gaps; falls through to
-     standard CF_DIB / CF_BITMAP for opaque sources.}
-    CopyBitmapToClipboard(Bmp);
+    {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
+     onto FSettings.Background) side-by-side, so modern paste targets
+     keep the transparent gaps and legacy targets see a working opaque
+     image instead of the broken paste they get from the OS's default
+     CF_DIB synthesis. ABackground only matters when the rendered
+     bitmap carries alpha; for opaque sources it is ignored.}
+    CopyBitmapToClipboard(Bmp, FSettings.Background);
   finally
     Bmp.Free;
   end;

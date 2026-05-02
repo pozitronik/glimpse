@@ -13,6 +13,8 @@ type
     [Test] procedure CopyBitmap_Pf24Bit_DoesNotRaise;
     [Test] procedure CopyBitmap_Pf32Bit_RoundTripPreservesAlpha;
     [Test] procedure CopyBitmap_Pf32Bit_RoundTripPreservesColors;
+    [Test] procedure CopyBitmap_Pf32Bit_PublishesCfDibSibling;
+    [Test] procedure CopyBitmap_Pf32Bit_CfDibCompositesAlphaOntoBackground;
   end;
 
 implementation
@@ -167,6 +169,87 @@ begin
       Assert.AreEqual(255, Integer(B), 'Blue byte must be 255 (no R<->B swap)');
       Assert.AreEqual(0, Integer(G), 'Green byte must be 0');
       Assert.AreEqual(0, Integer(R), 'Red byte must be 0');
+    finally
+      GlobalUnlock(Mem);
+    end;
+  finally
+    Clipboard.Close;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf32Bit_PublishesCfDibSibling;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  MemV5, MemFlat: HGLOBAL;
+begin
+  {Both CF_DIBV5 and CF_DIB must be on the clipboard after copying a
+   pf32bit source. The CF_DIB sibling is what makes paste work in
+   legacy targets that do not understand CF_DIBV5; without it they
+   either show a broken image or refuse the paste entirely.}
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 255, 0, 0, 128);
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack));
+  finally
+    Bmp.Free;
+  end;
+
+  ClipboardOpenWithRetry;
+  try
+    MemV5 := GetClipboardData(CF_DIBV5);
+    MemFlat := GetClipboardData(CF_DIB);
+    Assert.IsTrue(MemV5 <> 0, 'CF_DIBV5 missing (alpha-aware paste broken)');
+    Assert.IsTrue(MemFlat <> 0, 'CF_DIB sibling missing (legacy paste broken)');
+  finally
+    Clipboard.Close;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf32Bit_CfDibCompositesAlphaOntoBackground;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Mem: HGLOBAL;
+  Header: PBitmapInfoHeader;
+  Pixels, P: PByte;
+  RowBytesPadded: Integer;
+  B, G, R: Byte;
+begin
+  {Source: pure blue (B=255, G=0, R=0) at alpha=128.
+   Background: pure red (clRed = R=255, G=0, B=0).
+   Expected straight-alpha composite per channel:
+     B = (255*128 + 0  *127 + 127) div 255 = 32767 div 255 = 128
+     G = (0  *128 + 0  *127 + 127) div 255 = 127  div 255 = 0
+     R = (0  *128 + 255*127 + 127) div 255 = 32512 div 255 = 127
+   Pinning these exact values catches both R<->B swaps and rounding
+   regressions in BuildFlatDIB.}
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 255, 0, 0, 128);
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clRed));
+  finally
+    Bmp.Free;
+  end;
+
+  ClipboardOpenWithRetry;
+  try
+    Mem := GetClipboardData(CF_DIB);
+    Assert.IsTrue(Mem <> 0);
+    Header := PBitmapInfoHeader(GlobalLock(Mem));
+    Assert.IsNotNull(Header);
+    try
+      Pixels := PByte(Header);
+      Inc(Pixels, Header^.biSize);
+      RowBytesPadded := ((4 * 3 + 3) div 4) * 4; {12 bytes for W=4, no padding needed}
+      P := Pixels;
+      Inc(P, 1 * RowBytesPadded + 1 * 3); {sample at (1,1)}
+      B := P^; Inc(P);
+      G := P^; Inc(P);
+      R := P^;
+      Assert.AreEqual(128, Integer(B), 'B should be src.B * A/255 = 128');
+      Assert.AreEqual(0, Integer(G), 'G should be 0 (src.G and bg.G both 0)');
+      Assert.AreEqual(127, Integer(R), 'R should be bg.R * (255-A)/255 = 127');
     finally
       GlobalUnlock(Mem);
     end;
