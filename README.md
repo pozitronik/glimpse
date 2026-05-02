@@ -26,11 +26,11 @@ All shortcuts below are defaults. Every row is user-configurable via the **Hotke
 | Ctrl+Up/Down    | Increase / decrease frame count                                                                   |
 | Ctrl+A          | Select all                                                                                        |
 | Ctrl+Click      | Toggle frame selection                                                                            |
-| Ctrl+S          | Save focused frame                                                                                |
-| Ctrl+Alt+S      | Save all frames                                                                                   |
-| Ctrl+Shift+S    | Save combined image                                                                               |
-| Ctrl+C          | Copy focused frame to clipboard                                                                   |
-| Ctrl+Shift+C    | Copy combined image to clipboard                                                                  |
+| Ctrl+S          | Save frame (the focused or right-clicked one)                                                     |
+| Ctrl+Shift+S    | Save view (combined image matching the current view mode: grid, smart, filmstrip, or scroll)      |
+| Ctrl+Alt+Shift+S| Save frames (selected if any are selected, otherwise all loaded frames)                           |
+| Ctrl+C          | Copy frame to clipboard                                                                           |
+| Ctrl+Shift+C    | Copy view to clipboard                                                                            |
 | Enter           | Open the current file in the OS default player                                                    |
 | F11             | Toggle Lister maximize                                                                            |
 | Alt+Enter       | Toggle Lister full-screen (maximize without the window caption)                                   |
@@ -77,7 +77,7 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Timecode opacity  | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)    |
 | Timestamp font    | Segoe UI, 8pt | Font face and size for timecode labels on frames                                  |
 | Cell gap (px)     | 0             | Spacing in pixels between frame cells in the viewer (0-20)                        |
-| Border (px)       | 0             | Outer margin around the grid, shared by the viewer and the combined image (0-200) |
+| Border (px)       | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200)  |
 | Timestamp corner  | Bottom left   | Corner of each cell where the timecode label is drawn                             |
 | Show toolbar      | On            | Display the toolbar at the top of the lister window (F4 to toggle)                |
 | Show status bar   | On            | Display the status bar at the bottom of the lister window (F3 to toggle)          |
@@ -89,9 +89,12 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                            |
 | JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)      |
 | PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)             |
-| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save All output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG. |
+| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save view output background                     |
+|                          |         | (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG.               |
 | Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                 |
-| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to combined image exports |
+| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to Save view exports      |
+| Save at view resolution  | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses   |
+|                          |         | native frame resolution. Also available as a checkbox in the file save dialog.         |
 
 #### Cache
 
