@@ -202,11 +202,14 @@ begin
   ATs.TextAlpha := FSettings.TimestampTextAlpha;
 end;
 
-{Counts the columns the live grid layout is currently using by iterating
- cells and counting those that share row 0's top coordinate. Reliable for
- vmGrid because row tops are uniform there. Used only by the live-res
- grid save path, so it is never called for smart, single, filmstrip, or
- scroll modes.}
+{Counts the columns the live layout is currently using by iterating
+ cells and counting those that share cell 0's top coordinate.
+ Generalises across the three uniform-row modes:
+   vmGrid      - cells in row 0 share Top, returns column count.
+   vmFilmstrip - all cells share Top (one row), returns FrameCount.
+   vmScroll    - only cell 0 has that Top (one column), returns 1.
+ Used by the live-resolution save path; not called for vmSmartGrid
+ (which has its own renderer) or vmSingle (which routes to SaveFrame).}
 function TFrameExporter.CountLiveGridColumns: Integer;
 var
   R0: TRect;
@@ -312,11 +315,13 @@ begin
     Result := ScaleBitmapLetterbox(Src, W, H, FSettings.Background);
 end;
 
-{Live-resolution variant of the grid render: cell pixel size matches what
- vmGrid is currently showing on screen, and the column count tracks the
- live layout. Frames are pre-letterboxed to the live cell dimensions, then
- fed to the same uniform-grid renderer the native path uses. This keeps
- alpha lifting, timecode rendering, and border/gap math centralised.}
+{Live-resolution variant of the uniform-grid render: cell pixel size
+ matches what the live view is currently showing on screen, and the
+ column count tracks the live layout. Used by vmGrid, vmFilmstrip, and
+ vmScroll save/copy when SaveAtLiveResolution is on. Frames are
+ pre-letterboxed to the live cell dimensions, then fed to the same
+ uniform-grid renderer the native path uses. This keeps alpha lifting,
+ timecode rendering, and border/gap math centralised.}
 function TFrameExporter.RenderGridCombinedAtLiveResolution: TBitmap;
 var
   Frames, Scaled: TArray<TBitmap>;
@@ -441,14 +446,18 @@ begin
 end;
 
 {Renders the frames into a single combined image laid out per the
- live view mode. The pixel size of the cells follows the
- SaveAtLiveResolution toggle:
+ live view mode. Cell pixel size follows the SaveAtLiveResolution
+ toggle in every mode:
 
- - vmSmartGrid: smart layout (panel-aspect-driven row counts).
- - vmGrid: regular grid; live column count, live cell size when the
-   toggle is on; auto column count and native cell size otherwise.
- - vmFilmstrip: a single horizontal row (Cols = FrameCount).
- - vmScroll: a single vertical column (Cols = 1).
+ - vmSmartGrid: smart layout (panel-aspect-driven row counts);
+   panel-pixel cells when the toggle is on, anchor-to-widest native
+   cells when off. Handled by RenderSmartCombinedFromCells.
+ - vmGrid / vmFilmstrip / vmScroll: uniform-row grid. When the toggle
+   is on, all three route through RenderGridCombinedAtLiveResolution
+   so cell pixels match the on-screen layout (vmFilmstrip = one wide
+   row, vmScroll = one tall column, vmGrid = current column count).
+   When off, they render at native cell size with Columns pinned to
+   the view's natural shape.
  - vmSingle: caller (SaveView/CopyView) routes to single-frame paths
    before reaching this function, so vmSingle never reaches the
    regular grid renderer here.
@@ -466,7 +475,10 @@ begin
   if FFrameView.ViewMode = vmSmartGrid then
     Exit(RenderSmartCombinedFromCells);
 
-  if FSettings.SaveAtLiveResolution and (FFrameView.ViewMode = vmGrid) then
+  {The uniform-row modes (vmGrid, vmFilmstrip, vmScroll) all share the
+   same live-resolution path: it picks Columns from the live layout
+   via CountLiveGridColumns, which generalises across the three.}
+  if FSettings.SaveAtLiveResolution and (FFrameView.ViewMode in [vmGrid, vmFilmstrip, vmScroll]) then
     Exit(RenderGridCombinedAtLiveResolution);
 
   N := CollectFramesAndOffsets(Frames, Offsets);
@@ -476,9 +488,10 @@ begin
   BuildGridStyle(Grid);
   BuildTimestampStyle(Ts);
 
-  {Filmstrip and Scroll are degenerate grids: filmstrip is one wide
-   row, scroll is one tall column. Pin Columns explicitly so the saved
-   image matches what the user sees.}
+  {Native-resolution path for the uniform-row modes. Filmstrip and
+   Scroll are degenerate grids: filmstrip is one wide row, scroll is
+   one tall column. Pin Columns explicitly so the saved image matches
+   what the user sees in those layouts.}
   case FFrameView.ViewMode of
     vmFilmstrip:
       Grid.Columns := N;
