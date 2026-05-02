@@ -136,7 +136,14 @@ end;
 {Builds an HGLOBAL holding a CF_DIB buffer (BITMAPINFOHEADER + 24-bit
  BGR pixels) for ASrc, with alpha pre-composited onto ABackground using
  the straight-alpha formula  out = src*A + bg*(255-A)  per channel.
- Returns 0 on allocation failure. Same ownership rules as the V5 path.}
+ Returns 0 on allocation failure. Same ownership rules as the V5 path.
+
+ The DIB is laid out bottom-up (positive biHeight): row 0 of the pixel
+ buffer is the bottom row of the image. This is the historical CF_DIB
+ convention; legacy / conservative consumers (older Win32 image
+ viewers like Imagine) sometimes refuse top-down CF_DIB or render it
+ flipped. Modern consumers handle both, so bottom-up is the safe
+ default for the legacy-fallback format.}
 function BuildFlatDIB(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): HGLOBAL;
 var
   HeaderSize, RowBytesPadded, ImageBytes, TotalBytes, X, Y: Integer;
@@ -173,7 +180,7 @@ begin
     FillChar(Header^, HeaderSize, 0);
     Header^.biSize := HeaderSize;
     Header^.biWidth := W;
-    Header^.biHeight := -H; {top-down}
+    Header^.biHeight := H; {bottom-up — see header comment}
     Header^.biPlanes := 1;
     Header^.biBitCount := 24;
     Header^.biCompression := BI_RGB;
@@ -184,7 +191,8 @@ begin
       RowStart := PByte(Header);
       Inc(RowStart, HeaderSize + Y * RowBytesPadded);
       PixelDest := RowStart;
-      ScanSrc := PByte(ASrc.ScanLine[Y]);
+      {Bottom-up DIB: dest row Y maps to source row (H-1-Y).}
+      ScanSrc := PByte(ASrc.ScanLine[H - 1 - Y]);
       for X := 0 to W - 1 do
       begin
         SrcB := ScanSrc^; Inc(ScanSrc);
@@ -209,9 +217,57 @@ begin
   end;
 end;
 
+{Creates a Windows HBITMAP from the pixel data inside ABitmap, with
+ alpha composited onto ABackground (same compositing as BuildFlatDIB).
+ Returns 0 on failure. The clipboard takes ownership when the handle
+ is passed to SetClipboardData; on any other path the caller must
+ DeleteObject the result.
+
+ Published as CF_BITMAP alongside CF_DIBV5/CF_DIB so paste targets that
+ distrust Windows-synthesised handles (some older Win32 image viewers)
+ see a real device-dependent bitmap directly.}
+function BuildFlatHBITMAP(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): HBITMAP;
+var
+  Mem: HGLOBAL;
+  Header: PBitmapInfoHeader;
+  PixelBits: PByte;
+  ScreenDC: HDC;
+begin
+  Result := 0;
+  Mem := BuildFlatDIB(ASrc, ABackground);
+  if Mem = 0 then
+    Exit;
+
+  Header := PBitmapInfoHeader(GlobalLock(Mem));
+  if Header = nil then
+  begin
+    GlobalFree(Mem);
+    Exit;
+  end;
+
+  try
+    PixelBits := PByte(Header);
+    Inc(PixelBits, Header^.biSize);
+    ScreenDC := GetDC(0);
+    if ScreenDC <> 0 then
+    try
+      Result := CreateDIBitmap(ScreenDC, Header^, CBM_INIT, PixelBits,
+        PBitmapInfo(Header)^, DIB_RGB_COLORS);
+    finally
+      ReleaseDC(0, ScreenDC);
+    end;
+  finally
+    GlobalUnlock(Mem);
+    {The DIB buffer was a temporary input to CreateDIBitmap; the HBITMAP
+     it produced owns its own pixel storage. Always free the source.}
+    GlobalFree(Mem);
+  end;
+end;
+
 function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap; ABackground: TColor = TColor($000000)): Boolean;
 var
   MemV5, MemFlat: HGLOBAL;
+  HbmFlat: HBITMAP;
 begin
   Result := False;
   if ABitmap = nil then
@@ -237,6 +293,12 @@ begin
     Exit;
   end;
 
+  {The HBITMAP is built up-front so we can publish it as CF_BITMAP
+   alongside the DIB formats. CreateDIBitmap can fail in low-resource
+   conditions; if it does we silently skip the CF_BITMAP publish and
+   rely on the OS to synthesise one from CF_DIB on demand.}
+  HbmFlat := BuildFlatHBITMAP(ABitmap, ABackground);
+
   {Route through Vcl.Clipbrd.Clipboard.Open/Close so the clipboard owner
    is VCL's persistent hidden HWND. OpenClipboard(0) with a null owner
    window leaves the clipboard ownerless after EmptyClipboard, which
@@ -246,6 +308,8 @@ begin
   begin
     GlobalFree(MemV5);
     GlobalFree(MemFlat);
+    if HbmFlat <> 0 then
+      DeleteObject(HbmFlat);
     Exit;
   end;
   try
@@ -254,6 +318,8 @@ begin
     begin
       GlobalFree(MemV5);
       GlobalFree(MemFlat);
+      if HbmFlat <> 0 then
+        DeleteObject(HbmFlat);
       Exit;
     end;
     {SetClipboardData transferred ownership of MemV5 to the system.}
@@ -261,10 +327,11 @@ begin
     begin
       {CF_DIBV5 is already on the clipboard; failing to add the legacy
        sibling just means legacy paste will fall back to whatever the
-       OS synthesises. Keep Result=True for the partially-populated
-       case so the caller does not retry.}
+       OS synthesises. Keep going so we still try CF_BITMAP.}
       GlobalFree(MemFlat);
     end;
+    if (HbmFlat <> 0) and (SetClipboardData(CF_BITMAP, HbmFlat) = 0) then
+      DeleteObject(HbmFlat);
     Result := True;
   finally
     Clipboard.Close;

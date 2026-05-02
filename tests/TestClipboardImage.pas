@@ -15,6 +15,8 @@ type
     [Test] procedure CopyBitmap_Pf32Bit_RoundTripPreservesColors;
     [Test] procedure CopyBitmap_Pf32Bit_PublishesCfDibSibling;
     [Test] procedure CopyBitmap_Pf32Bit_CfDibCompositesAlphaOntoBackground;
+    [Test] procedure CopyBitmap_Pf32Bit_CfDibIsBottomUp;
+    [Test] procedure CopyBitmap_Pf32Bit_PublishesCfBitmapSibling;
   end;
 
 implementation
@@ -222,7 +224,11 @@ begin
      G = (0  *128 + 0  *127 + 127) div 255 = 127  div 255 = 0
      R = (0  *128 + 255*127 + 127) div 255 = 32512 div 255 = 127
    Pinning these exact values catches both R<->B swaps and rounding
-   regressions in BuildFlatDIB.}
+   regressions in BuildFlatDIB.
+
+   Source pixels are uniform, so the bottom-up DIB orientation does
+   not affect the sample values; the orientation invariant is checked
+   separately by CopyBitmap_Pf32Bit_CfDibIsBottomUp.}
   Bmp := Vcl.Graphics.TBitmap.Create;
   try
     Bmp.SetSize(4, 4);
@@ -243,7 +249,7 @@ begin
       Inc(Pixels, Header^.biSize);
       RowBytesPadded := ((4 * 3 + 3) div 4) * 4; {12 bytes for W=4, no padding needed}
       P := Pixels;
-      Inc(P, 1 * RowBytesPadded + 1 * 3); {sample at (1,1)}
+      Inc(P, 1 * RowBytesPadded + 1 * 3); {sample at buffer offset (row 1, col 1)}
       B := P^; Inc(P);
       G := P^; Inc(P);
       R := P^;
@@ -253,6 +259,106 @@ begin
     finally
       GlobalUnlock(Mem);
     end;
+  finally
+    Clipboard.Close;
+  end;
+end;
+
+{Helper: writes a single distinguishing pixel at (X, Y) in the source so
+ the bottom-up orientation test can verify which row of the DIB buffer
+ holds which source row. Existing FillPf32Bit produces a uniform color
+ which cannot detect orientation.}
+procedure SetPf32Pixel(ABmp: Vcl.Graphics.TBitmap; AX, AY: Integer; AB, AG, AR, AAlpha: Byte);
+var
+  P: PByte;
+begin
+  P := PByte(ABmp.ScanLine[AY]);
+  Inc(P, AX * 4);
+  P^ := AB; Inc(P);
+  P^ := AG; Inc(P);
+  P^ := AR; Inc(P);
+  P^ := AAlpha;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf32Bit_CfDibIsBottomUp;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Mem: HGLOBAL;
+  Header: PBitmapInfoHeader;
+  Pixels, P: PByte;
+  RowBytesPadded: Integer;
+  TopMarkerB, BottomMarkerB: Byte;
+begin
+  {Plant distinguishable markers at source rows 0 (top) and H-1 (bottom),
+   then verify CF_DIB layout is bottom-up: pixel-buffer row 0 holds the
+   bottom of the image and pixel-buffer row H-1 holds the top.
+
+   biHeight must be positive (>0) for the bottom-up convention; older
+   image viewers can refuse top-down CF_DIB or render it flipped.}
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf32bit;
+    Bmp.AlphaFormat := afDefined;
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 0, 0, 0, 255); {start opaque black}
+    SetPf32Pixel(Bmp, 0, 0, 200, 0, 0, 255); {top-left pixel: B=200}
+    SetPf32Pixel(Bmp, 0, 3, 50, 0, 0, 255);  {bottom-left pixel: B=50}
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack));
+  finally
+    Bmp.Free;
+  end;
+
+  ClipboardOpenWithRetry;
+  try
+    Mem := GetClipboardData(CF_DIB);
+    Assert.IsTrue(Mem <> 0);
+    Header := PBitmapInfoHeader(GlobalLock(Mem));
+    try
+      Assert.IsTrue(Header^.biHeight > 0,
+        'biHeight must be positive (bottom-up DIB) for legacy compatibility');
+      Pixels := PByte(Header);
+      Inc(Pixels, Header^.biSize);
+      RowBytesPadded := ((4 * 3 + 3) div 4) * 4;
+      {Buffer row 0 = bottom of source = B=50}
+      P := Pixels;
+      BottomMarkerB := P^;
+      {Buffer row H-1 = top of source = B=200}
+      P := Pixels;
+      Inc(P, 3 * RowBytesPadded);
+      TopMarkerB := P^;
+      Assert.AreEqual(50, Integer(BottomMarkerB),
+        'Pixel-buffer row 0 should hold the SOURCE bottom row (B=50)');
+      Assert.AreEqual(200, Integer(TopMarkerB),
+        'Pixel-buffer row H-1 should hold the SOURCE top row (B=200)');
+    finally
+      GlobalUnlock(Mem);
+    end;
+  finally
+    Clipboard.Close;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf32Bit_PublishesCfBitmapSibling;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Hbm: HBITMAP;
+begin
+  {Apps that distrust the OS's CF_DIB->CF_BITMAP synthesis (a small set
+   of older Win32 image viewers) need the HBITMAP published explicitly.}
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 255, 0, 0, 200);
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack));
+  finally
+    Bmp.Free;
+  end;
+
+  ClipboardOpenWithRetry;
+  try
+    Hbm := HBITMAP(GetClipboardData(CF_BITMAP));
+    Assert.IsTrue(Hbm <> 0,
+      'CF_BITMAP missing (apps that distrust DIB synthesis would refuse paste)');
   finally
     Clipboard.Close;
   end;
