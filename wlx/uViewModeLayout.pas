@@ -93,6 +93,17 @@ type
     function CellIndexAt(const APoint: TPoint; const ACtx: TViewLayoutContext): Integer; override;
   end;
 
+{Computes the cells-per-row arrangement for a smart grid that minimises
+ aspect-ratio mismatch between the displayed cells and the source frame.
+ ACellCount frames are distributed over rows; the row count that yields
+ the lowest total mismatch wins. Returns the per-row cell counts (sum
+ equals ACellCount).
+
+ Shared between TSmartGridLayout (live view) and the file/clipboard save
+ path so a saved smart-combined image uses the exact same arrangement
+ the user is looking at when they trigger the save.}
+function ComputeSmartGridRows(ACellCount, ABaseW, ABaseH, ACellGap: Integer; AAspectRatio: Double): TArray<Integer>;
+
 function CreateViewModeLayout(AMode: TViewMode): TViewModeLayout;
 
 implementation
@@ -405,64 +416,20 @@ end;
 
 procedure TSmartGridLayout.CalcRows(const ACtx: TViewLayoutContext);
 var
-  N, R, BestR, Base, Extra, I, CellsInRow: Integer;
-  BestScore, Score, DisplayedAR, OrigAR: Double;
-  CellH, CellW: Double;
+  RowCounts: TArray<Integer>;
   Rows: TArray<TSmartRow>;
+  I: Integer;
 begin
-  N := ACtx.CellCount;
-  if (N = 0) or (ACtx.BaseW <= 0) or (ACtx.BaseH <= 0) then
+  if (ACtx.CellCount = 0) or (ACtx.BaseW <= 0) or (ACtx.BaseH <= 0) then
   begin
     SetLength(FSmartRows, 0);
     Exit;
   end;
 
-  OrigAR := ACtx.AspectRatio;
-  if OrigAR <= 0 then
-    OrigAR := DEF_ASPECT_RATIO;
-
-  BestR := 1;
-  BestScore := MaxDouble;
-
-  {Try each possible row count and find the one with least cropping.
-   Cell dimensions include gap subtraction so the scoring reflects how the
-   cells will actually render -- otherwise gap>0 would bias the score
-   toward row counts that cram more cells per row than they can fit cleanly.}
-  for R := 1 to N do
-  begin
-    Score := 0;
-    Base := N div R;
-    Extra := N mod R;
-    CellH := Max(1.0, (ACtx.BaseH - (R - 1) * ACtx.CellGap) / R);
-    for I := 0 to R - 1 do
-    begin
-      if I < Extra then
-        CellsInRow := Base + 1
-      else
-        CellsInRow := Max(1, Base);
-      CellW := Max(1.0, (ACtx.BaseW - (CellsInRow - 1) * ACtx.CellGap) / CellsInRow);
-      DisplayedAR := CellH / CellW;
-      Score := Score + Abs(DisplayedAR - OrigAR);
-    end;
-
-    if Score < BestScore then
-    begin
-      BestScore := Score;
-      BestR := R;
-    end;
-  end;
-
-  {Build row array with BestR rows}
-  SetLength(Rows, BestR);
-  Base := N div BestR;
-  Extra := N mod BestR;
-  for I := 0 to BestR - 1 do
-  begin
-    if I < Extra then
-      Rows[I].Count := Base + 1
-    else
-      Rows[I].Count := Base;
-  end;
+  RowCounts := ComputeSmartGridRows(ACtx.CellCount, ACtx.BaseW, ACtx.BaseH, ACtx.CellGap, ACtx.AspectRatio);
+  SetLength(Rows, Length(RowCounts));
+  for I := 0 to High(RowCounts) do
+    Rows[I].Count := RowCounts[I];
 
   FSmartRows := Rows;
 end;
@@ -536,6 +503,64 @@ end;
 function TSmartGridLayout.WheelScrollKind: TLayoutWheelAction;
 begin
   Result := lwaVerticalScroll;
+end;
+
+function ComputeSmartGridRows(ACellCount, ABaseW, ABaseH, ACellGap: Integer; AAspectRatio: Double): TArray<Integer>;
+var
+  N, R, BestR, Base, Extra, I, CellsInRow: Integer;
+  BestScore, Score, DisplayedAR, OrigAR: Double;
+  CellH, CellW: Double;
+begin
+  N := ACellCount;
+  if (N <= 0) or (ABaseW <= 0) or (ABaseH <= 0) then
+    Exit(nil);
+
+  OrigAR := AAspectRatio;
+  if OrigAR <= 0 then
+    OrigAR := DEF_ASPECT_RATIO;
+
+  BestR := 1;
+  BestScore := MaxDouble;
+
+  {Try each possible row count and find the one with least cropping.
+   Cell dimensions include gap subtraction so the scoring reflects how
+   the cells will actually render -- otherwise gap>0 would bias the
+   score toward row counts that cram more cells per row than they can
+   fit cleanly.}
+  for R := 1 to N do
+  begin
+    Score := 0;
+    Base := N div R;
+    Extra := N mod R;
+    CellH := Max(1.0, (ABaseH - (R - 1) * ACellGap) / R);
+    for I := 0 to R - 1 do
+    begin
+      if I < Extra then
+        CellsInRow := Base + 1
+      else
+        CellsInRow := Max(1, Base);
+      CellW := Max(1.0, (ABaseW - (CellsInRow - 1) * ACellGap) / CellsInRow);
+      DisplayedAR := CellH / CellW;
+      Score := Score + Abs(DisplayedAR - OrigAR);
+    end;
+
+    if Score < BestScore then
+    begin
+      BestScore := Score;
+      BestR := R;
+    end;
+  end;
+
+  SetLength(Result, BestR);
+  Base := N div BestR;
+  Extra := N mod BestR;
+  for I := 0 to BestR - 1 do
+  begin
+    if I < Extra then
+      Result[I] := Base + 1
+    else
+      Result[I] := Base;
+  end;
 end;
 
 {Factory}

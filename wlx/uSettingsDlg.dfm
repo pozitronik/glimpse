@@ -824,6 +824,15 @@ object SettingsForm: TSettingsForm
           'Top'
           'Bottom')
       end
+      object ChkSaveAtLiveResolution: TCheckBox
+        Left = 12
+        Top = 350
+        Width = 424
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Save at view resolution (uses native frame size when off)'
+        TabOrder = 18
+      end
     end
     object TshCache: TTabSheet
       Caption = 'Cache'

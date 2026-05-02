@@ -103,6 +103,7 @@ type
     ChkBannerAutoSize: TCheckBox;
     LblBannerPosition: TLabel;
     CbxBannerPosition: TComboBox;
+    ChkSaveAtLiveResolution: TCheckBox;
     TshCache: TTabSheet;
     ChkCacheEnabled: TCheckBox;
     BtnClearCache: TButton;
@@ -281,6 +282,7 @@ begin
   ChkBannerAutoSize.Checked := ASettings.BannerFontAutoSize;
   UpdateBannerFontDisplay;
   CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
+  ChkSaveAtLiveResolution.Checked := ASettings.SaveAtLiveResolution;
 
   ChkCacheEnabled.Checked := ASettings.CacheEnabled;
   EdtCacheFolder.Text := ASettings.CacheFolder;
@@ -366,6 +368,7 @@ begin
   ASettings.BannerFontSize := FBannerFontSize;
   ASettings.BannerFontAutoSize := ChkBannerAutoSize.Checked;
   ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
+  ASettings.SaveAtLiveResolution := ChkSaveAtLiveResolution.Checked;
 
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;
   ASettings.CacheFolder := EdtCacheFolder.Text;

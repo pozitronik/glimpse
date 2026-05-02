@@ -40,6 +40,7 @@ type
     FPngCompression: Integer;
     FBackgroundAlpha: Byte;
     FSaveFolder: string;
+    FSaveAtLiveResolution: Boolean;
     {[save] — banner group shared with WCX}
     FBanner: TBannerSettingsGroup;
     {[cache]}
@@ -136,6 +137,7 @@ type
     property PngCompression: Integer read FPngCompression write FPngCompression;
     property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
+    property SaveAtLiveResolution: Boolean read FSaveAtLiveResolution write FSaveAtLiveResolution;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
     property BannerTextColor: TColor read FBanner.TextColor write FBanner.TextColor;
@@ -261,6 +263,7 @@ begin
   FPngCompression := DEF_PNG_COMPRESSION;
   FBackgroundAlpha := DEF_BACKGROUND_ALPHA;
   FSaveFolder := DEF_SAVE_FOLDER;
+  FSaveAtLiveResolution := DEF_SAVE_AT_LIVE_RESOLUTION;
   FBanner := TBannerSettingsGroup.Defaults;
   FBanner.Show := DEF_SHOW_BANNER;
   FCacheEnabled := DEF_CACHE_ENABLED;
@@ -319,6 +322,7 @@ begin
     FPngCompression := EnsureRange(Ini.ReadInteger('save', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
     FBackgroundAlpha := EnsureRange(Ini.ReadInteger('save', 'BackgroundAlpha', DEF_BACKGROUND_ALPHA), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
+    FSaveAtLiveResolution := Ini.ReadBool('save', 'AtLiveResolution', DEF_SAVE_AT_LIVE_RESOLUTION);
     FBanner.LoadFrom(Ini, 'save');
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
@@ -375,6 +379,7 @@ begin
     Ini.WriteInteger('save', 'PngCompression', FPngCompression);
     Ini.WriteInteger('save', 'BackgroundAlpha', FBackgroundAlpha);
     Ini.WriteString('save', 'SaveFolder', FSaveFolder);
+    Ini.WriteBool('save', 'AtLiveResolution', FSaveAtLiveResolution);
     FBanner.SaveTo(Ini, 'save');
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);

@@ -144,6 +144,23 @@ function DefaultTimestampStyle: TTimestampStyle;
 function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
   const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 
+{Renders frames into a smart-grid combined image. Cells per row come from
+ ARowCounts (sum must equal Length(AFrames)); within each row cells are
+ uniform-width, between rows widths can differ. Frames are crop-to-filled
+ into their cells so aspect ratio is preserved without letterbox bands.
+
+ @param AFrames Array of frame bitmaps (nil entries are skipped)
+ @param AOffsets Frame time offsets (used for the timestamp overlay)
+ @param ARowCounts Cells per row (sum must equal Length(AFrames))
+ @param AOutputW Total output width including 2*AGrid.Border
+ @param AOutputH Total output height including 2*AGrid.Border
+ @param AGrid Border, gap, and background colour/alpha
+ @param ATimestamp Per-cell timecode overlay style
+ @return Combined bitmap. Caller owns result.}
+function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
+  const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer;
+  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
+
 implementation
 
 uses
@@ -892,6 +909,215 @@ begin
     Lifted := LiftToAlphaAware(Result, AGrid, AFrames, Cols, CellW, CellH, Border);
     Result.Free;
     Result := Lifted;
+  end;
+end;
+
+{Lifts a smart-grid combined render into a pf32bit bitmap so PNG savers
+ preserve gap/border transparency. Mirrors LiftToAlphaAware but takes a
+ caller-provided list of frame cell rects rather than uniform grid math,
+ because smart-grid cells have row-dependent widths.
+
+ TODO: factor a shared "lift by rects" core out of this and
+ LiftToAlphaAware once both call sites have settled (they each carry
+ their own cell-rect computation that is mildly inconvenient to unify).}
+function LiftToAlphaAwareSmart(ASource: TBitmap; const AGrid: TCombinedGridStyle;
+  const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
+type
+  TQuadRow = array [0 .. 0] of TRGBQuad;
+  PQuadRow = ^TQuadRow;
+  TTripleRow = array [0 .. 0] of TRGBTriple;
+  PTripleRow = ^TTripleRow;
+var
+  Bg: TRGBQuad;
+  X, Y, I, Px, Py: Integer;
+  R: TRect;
+  DstRow: PQuadRow;
+  SrcRow: PTripleRow;
+begin
+  Result := TBitmap.Create;
+  try
+    Result.PixelFormat := pf32bit;
+    Result.AlphaFormat := afDefined;
+    Result.SetSize(ASource.Width, ASource.Height);
+
+    Bg.rgbBlue := GetBValue(AGrid.Background);
+    Bg.rgbGreen := GetGValue(AGrid.Background);
+    Bg.rgbRed := GetRValue(AGrid.Background);
+    Bg.rgbReserved := AGrid.BackgroundAlpha;
+
+    {Initial fill: gap/border colour at BackgroundAlpha. Pixels inside
+     cell rects are overwritten next; everything else keeps the alpha.}
+    for Y := 0 to Result.Height - 1 do
+    begin
+      DstRow := PQuadRow(Result.ScanLine[Y]);
+      for X := 0 to Result.Width - 1 do
+        DstRow^[X] := Bg;
+    end;
+
+    for I := 0 to High(AFrames) do
+    begin
+      if AFrames[I] = nil then
+        Continue;
+      if I >= Length(ACellRects) then
+        Continue;
+      R := ACellRects[I];
+      for Py := R.Top to R.Bottom - 1 do
+      begin
+        if (Py < 0) or (Py >= Result.Height) then
+          Continue;
+        SrcRow := PTripleRow(ASource.ScanLine[Py]);
+        DstRow := PQuadRow(Result.ScanLine[Py]);
+        for Px := R.Left to R.Right - 1 do
+        begin
+          if (Px < 0) or (Px >= Result.Width) then
+            Continue;
+          DstRow^[Px].rgbBlue := SrcRow^[Px].rgbtBlue;
+          DstRow^[Px].rgbGreen := SrcRow^[Px].rgbtGreen;
+          DstRow^[Px].rgbRed := SrcRow^[Px].rgbtRed;
+          DstRow^[Px].rgbReserved := 255;
+        end;
+      end;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
+  const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer;
+  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
+const
+  TC_PADDING_H = 8;
+  TC_MIN_H = 20;
+var
+  Border, InnerW, InnerH, Gap: Integer;
+  NRows, FrameCount, MaxCells: Integer;
+  RowH, CellW, CellsInRow, CellsBefore, FrameIdx, RowIdx, CellInRow: Integer;
+  RowTop, CellLeft: Integer;
+  Bmp: TBitmap;
+  CellRect, SrcR, TcR: TRect;
+  CellRects: TArray<TRect>;
+  Scale: Double;
+  SrcW, SrcH: Integer;
+  Tc: string;
+  TW, TH: Integer;
+  Lifted: TBitmap;
+begin
+  FrameCount := Length(AFrames);
+  if (FrameCount = 0) or (Length(ARowCounts) = 0) then
+    Exit(nil);
+
+  Border := AGrid.Border;
+  if Border < 0 then
+    Border := 0;
+  Gap := AGrid.CellGap;
+  if Gap < 0 then
+    Gap := 0;
+
+  NRows := Length(ARowCounts);
+  InnerW := Max(1, AOutputW - 2 * Border);
+  InnerH := Max(1, AOutputH - 2 * Border);
+  RowH := Max(1, (InnerH - (NRows - 1) * Gap) div NRows);
+
+  MaxCells := 1;
+  for RowIdx := 0 to NRows - 1 do
+    if ARowCounts[RowIdx] > MaxCells then
+      MaxCells := ARowCounts[RowIdx];
+
+  Result := TBitmap.Create;
+  try
+    Result.PixelFormat := pf24bit;
+    Result.SetSize(AOutputW, AOutputH);
+    Result.Canvas.Brush.Color := AGrid.Background;
+    Result.Canvas.FillRect(Rect(0, 0, AOutputW, AOutputH));
+
+    SetLength(CellRects, FrameCount);
+
+    {Walk rows, then cells within each row. Crop-to-fill each frame into
+     its cell so aspect ratio is preserved without letterbox bands. The
+     algorithm matches TFrameView.PaintCropToFill so saved smart-combined
+     output looks exactly like the live view.}
+    CellsBefore := 0;
+    for RowIdx := 0 to NRows - 1 do
+    begin
+      CellsInRow := Max(1, ARowCounts[RowIdx]);
+      CellW := Max(1, (InnerW - (CellsInRow - 1) * Gap) div CellsInRow);
+      RowTop := Border + RowIdx * (RowH + Gap);
+
+      for CellInRow := 0 to CellsInRow - 1 do
+      begin
+        FrameIdx := CellsBefore + CellInRow;
+        if FrameIdx >= FrameCount then
+          Break;
+
+        CellLeft := Border + CellInRow * (CellW + Gap);
+        CellRect := Rect(CellLeft, RowTop, CellLeft + CellW, RowTop + RowH);
+        CellRects[FrameIdx] := CellRect;
+
+        Bmp := AFrames[FrameIdx];
+        if Bmp = nil then
+          Continue;
+
+        Scale := Max(CellW / Max(1, Bmp.Width), RowH / Max(1, Bmp.Height));
+        SrcW := Min(Bmp.Width, Round(CellW / Scale));
+        SrcH := Min(Bmp.Height, Round(RowH / Scale));
+        SrcR.Left := (Bmp.Width - SrcW) div 2;
+        SrcR.Top := (Bmp.Height - SrcH) div 2;
+        SrcR.Right := SrcR.Left + SrcW;
+        SrcR.Bottom := SrcR.Top + SrcH;
+
+        SetStretchBltMode(Result.Canvas.Handle, HALFTONE);
+        SetBrushOrgEx(Result.Canvas.Handle, 0, 0, nil);
+        Result.Canvas.CopyRect(CellRect, Bmp.Canvas, SrcR);
+
+        {Per-cell timecode overlay. TODO: this block is a near-duplicate
+         of the equivalent loop in RenderCombinedImage; once both renders
+         have stabilised, factor it into a shared
+         "DrawTimecodeForCell(canvas, cellRect, text, style)" helper.}
+        if ATimestamp.Show and (ATimestamp.Corner <> tcNone) and (FrameIdx < Length(AOffsets)) then
+        begin
+          Tc := FormatTimecode(AOffsets[FrameIdx].TimeOffset);
+          Result.Canvas.Font.Name := ATimestamp.FontName;
+          Result.Canvas.Font.Size := ATimestamp.FontSize;
+          Result.Canvas.Font.Style := ATimestamp.FontStyles;
+
+          if ATimestamp.BackAlpha > 0 then
+          begin
+            TW := Result.Canvas.TextWidth(Tc) + TC_PADDING_H;
+            TH := Max(Result.Canvas.TextHeight(Tc) + 4, TC_MIN_H);
+            case ATimestamp.Corner of
+              tcTopLeft:
+                TcR := Rect(CellRect.Left, CellRect.Top, CellRect.Left + TW, CellRect.Top + TH);
+              tcTopRight:
+                TcR := Rect(CellRect.Right - TW, CellRect.Top, CellRect.Right, CellRect.Top + TH);
+              tcBottomRight:
+                TcR := Rect(CellRect.Right - TW, CellRect.Bottom - TH, CellRect.Right, CellRect.Bottom);
+              else {tcBottomLeft}
+                TcR := Rect(CellRect.Left, CellRect.Bottom - TH, CellRect.Left + TW, CellRect.Bottom);
+            end;
+            DrawTimecodeOverlay(Result.Canvas, TcR, Tc, ATimestamp);
+          end else begin
+            DrawLegacyTimecodeOverlay(Result.Canvas, CellRect, Tc, ATimestamp);
+          end;
+        end;
+      end;
+      Inc(CellsBefore, CellsInRow);
+    end;
+
+    {Optional alpha-aware output. Same policy as RenderCombinedImage:
+     when BackgroundAlpha is 255 the pf24bit Result is the final output;
+     otherwise we lift to pf32bit so the gap/border carries the chosen
+     alpha while frame pixels stay opaque.}
+    if AGrid.BackgroundAlpha < 255 then
+    begin
+      Lifted := LiftToAlphaAwareSmart(Result, AGrid, AFrames, CellRects);
+      Result.Free;
+      Result := Lifted;
+    end;
+  except
+    Result.Free;
+    raise;
   end;
 end;
 

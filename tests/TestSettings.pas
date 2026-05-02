@@ -110,6 +110,10 @@ type
     [Test]
     procedure TestCombinedBorderClampedLow;
     [Test]
+    procedure TestSaveAtLiveResolutionDefault;
+    [Test]
+    procedure TestSaveAtLiveResolutionRoundTrip;
+    [Test]
     procedure TestTimestampCornerDefault;
     [Test]
     procedure TestTimestampCornerRoundTripAllValues;
@@ -1360,6 +1364,45 @@ begin
       'Negative CombinedBorder should be clamped to 0');
   finally
     S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveAtLiveResolutionDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_SAVE_AT_LIVE_RESOLUTION, S.SaveAtLiveResolution,
+      'Default for SaveAtLiveResolution preserves native-resolution save behaviour');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveAtLiveResolutionRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  {Toggle to the non-default value, persist, reload, and verify the
+   non-default value survived. Catches accidental drops in Load/Save.}
+  IniPath := TPath.Combine(FTempDir, 'live_res.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.SaveAtLiveResolution := not DEF_SAVE_AT_LIVE_RESOLUTION;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_SAVE_AT_LIVE_RESOLUTION, S2.SaveAtLiveResolution);
+  finally
+    S2.Free;
   end;
 end;
 

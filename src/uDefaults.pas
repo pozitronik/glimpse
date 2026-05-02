@@ -40,6 +40,13 @@ const
   DEF_JPEG_QUALITY = 90;
   DEF_PNG_COMPRESSION = 6;
 
+  {When True, file save and clipboard copy render the output at the size
+   the live view currently shows on screen (cell pixel dimensions taken
+   from the layout). When False, output uses native frame resolution.
+   Default False to preserve the long-standing "frame-resolution combined
+   image" behaviour for users who do not opt in.}
+  DEF_SAVE_AT_LIVE_RESOLUTION = False;
+
   {Extension list}
   DEF_EXTENSION_LIST = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
 

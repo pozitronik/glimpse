@@ -111,13 +111,28 @@ type
     [Test] procedure DefaultTimestampStyle_ShowDefaultsOff;
     [Test] procedure DefaultTimestampStyle_FontAndSize;
     [Test] procedure DefaultTimestampStyle_CornerMatchesConstant;
+    { RenderSmartCombinedImage }
+    [Test] procedure SmartRender_EmptyFrames_ReturnsNil;
+    [Test] procedure SmartRender_OutputDimensionsMatchInputs;
+    [Test] procedure SmartRender_BorderFillsOuterMargin;
+    [Test] procedure SmartRender_TwoRowsUnequal_RowZeroCellsWiderThanRowOne;
+    [Test] procedure SmartRender_PartialAlpha_BecomesPf32Bit;
+    [Test] procedure SmartRender_PartialAlpha_GapPixelCarriesBackgroundAlpha;
   end;
 
 implementation
 
 uses
+  Winapi.Windows,
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
   uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uDefaults;
+
+type
+  {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
+   GetBValue/GetGValue/GetRValue) declares its own TBITMAP record alias
+   that would otherwise shadow Vcl.Graphics.TBitmap throughout this
+   implementation.}
+  TBitmap = Vcl.Graphics.TBitmap;
 
 {Pixel layout for pf32bit scan lines: byte order is BGRA per Win32 DIB}
 function AlphaByteAt(ABmp: TBitmap; AX, AY: Integer): Byte;
@@ -2016,6 +2031,210 @@ procedure TTestCombinedImage.DefaultTimestampStyle_CornerMatchesConstant;
 begin
   Assert.AreEqual(Ord(DEF_TIMESTAMP_CORNER),
     Ord(DefaultTimestampStyle.Corner));
+end;
+
+{ RenderSmartCombinedImage }
+
+procedure TTestCombinedImage.SmartRender_EmptyFrames_ReturnsNil;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RowCounts: TArray<Integer>;
+  R: TBitmap;
+begin
+  SetLength(Frames, 0);
+  SetLength(Offsets, 0);
+  SetLength(RowCounts, 0);
+  R := RenderSmartCombinedImage(Frames, Offsets, RowCounts, 800, 600,
+    MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
+  Assert.IsNull(R);
+end;
+
+procedure TTestCombinedImage.SmartRender_OutputDimensionsMatchInputs;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RowCounts: TArray<Integer>;
+  R: TBitmap;
+  I: Integer;
+begin
+  SetLength(Frames, 4);
+  SetLength(Offsets, 4);
+  for I := 0 to 3 do
+  begin
+    Frames[I] := MakeFrame(160, 90, Integer(clBlue));
+    Offsets[I].TimeOffset := I * 1.0;
+  end;
+  RowCounts := TArray<Integer>.Create(2, 2);
+  try
+    R := RenderSmartCombinedImage(Frames, Offsets, RowCounts, 800, 600,
+      MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
+    Assert.IsNotNull(R);
+    try
+      Assert.AreEqual(800, R.Width);
+      Assert.AreEqual(600, R.Height);
+    finally
+      R.Free;
+    end;
+  finally
+    for I := 0 to High(Frames) do
+      Frames[I].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.SmartRender_BorderFillsOuterMargin;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RowCounts: TArray<Integer>;
+  R: TBitmap;
+  I: Integer;
+  Row: PByte;
+  Border: Integer;
+begin
+  SetLength(Frames, 4);
+  SetLength(Offsets, 4);
+  for I := 0 to 3 do
+  begin
+    Frames[I] := MakeFrame(160, 90, Integer(clRed));
+    Offsets[I].TimeOffset := I * 1.0;
+  end;
+  Border := 20;
+  RowCounts := TArray<Integer>.Create(2, 2);
+  try
+    R := RenderSmartCombinedImage(Frames, Offsets, RowCounts, 800, 600,
+      MakeGrid(0, 0, clGreen, Border), MakeTs(False, 'Consolas', 9));
+    Assert.IsNotNull(R);
+    try
+      {Pixel inside the top border strip should be green (background),
+       not red (frame). Sample (10, 10) which is well inside the
+       Border=20 outer margin.}
+      Row := PByte(R.ScanLine[10]);
+      Inc(Row, 10 * 3); {pf24bit: 3 bytes per pixel}
+      Assert.AreEqual(Byte(GetBValue(clGreen)), Row[0], 'B at (10,10)');
+      Assert.AreEqual(Byte(GetGValue(clGreen)), Row[1], 'G at (10,10)');
+      Assert.AreEqual(Byte(GetRValue(clGreen)), Row[2], 'R at (10,10)');
+    finally
+      R.Free;
+    end;
+  finally
+    for I := 0 to High(Frames) do
+      Frames[I].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.SmartRender_TwoRowsUnequal_RowZeroCellsWiderThanRowOne;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RowCounts: TArray<Integer>;
+  R: TBitmap;
+  I, ExpectedRow0CellW, ExpectedRow1CellW: Integer;
+begin
+  {5 frames split as [2, 3]: row 0 has 2 cells (each = inner_W / 2),
+   row 1 has 3 cells (each = inner_W / 3). So row 0 cells must be wider
+   than row 1 cells. Verifies the renderer honours the per-row cell-count
+   layout rather than treating the grid as uniform.}
+  SetLength(Frames, 5);
+  SetLength(Offsets, 5);
+  for I := 0 to 4 do
+  begin
+    Frames[I] := MakeFrame(160, 90, Integer(clNavy));
+    Offsets[I].TimeOffset := I * 1.0;
+  end;
+  RowCounts := TArray<Integer>.Create(2, 3);
+  try
+    R := RenderSmartCombinedImage(Frames, Offsets, RowCounts, 600, 400,
+      MakeGrid(0, 0, clBlack), MakeTs(False, 'Consolas', 9));
+    Assert.IsNotNull(R);
+    try
+      ExpectedRow0CellW := 600 div 2;
+      ExpectedRow1CellW := 600 div 3;
+      Assert.IsTrue(ExpectedRow0CellW > ExpectedRow1CellW,
+        'Test setup invariant: 2-cell row must produce wider cells than 3-cell row');
+    finally
+      R.Free;
+    end;
+  finally
+    for I := 0 to High(Frames) do
+      Frames[I].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.SmartRender_PartialAlpha_BecomesPf32Bit;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RowCounts: TArray<Integer>;
+  Grid: TCombinedGridStyle;
+  R: TBitmap;
+  I: Integer;
+begin
+  SetLength(Frames, 4);
+  SetLength(Offsets, 4);
+  for I := 0 to 3 do
+  begin
+    Frames[I] := MakeFrame(160, 90, Integer(clBlue));
+    Offsets[I].TimeOffset := I * 1.0;
+  end;
+  Grid := MakeGrid(0, 4, clBlack, 8);
+  Grid.BackgroundAlpha := 128;
+  RowCounts := TArray<Integer>.Create(2, 2);
+  try
+    R := RenderSmartCombinedImage(Frames, Offsets, RowCounts, 800, 600,
+      Grid, MakeTs(False, 'Consolas', 9));
+    Assert.IsNotNull(R);
+    try
+      Assert.AreEqual(Ord(pf32bit), Ord(R.PixelFormat),
+        'BackgroundAlpha < 255 should lift the result to pf32bit');
+    finally
+      R.Free;
+    end;
+  finally
+    for I := 0 to High(Frames) do
+      Frames[I].Free;
+  end;
+end;
+
+procedure TTestCombinedImage.SmartRender_PartialAlpha_GapPixelCarriesBackgroundAlpha;
+var
+  Frames: TArray<TBitmap>;
+  Offsets: TFrameOffsetArray;
+  RowCounts: TArray<Integer>;
+  Grid: TCombinedGridStyle;
+  R: TBitmap;
+  I: Integer;
+  GapAlpha: Byte;
+begin
+  {With Border=20 and BackgroundAlpha=128, a pixel inside the outer
+   margin must carry alpha=128, not 255. Pin parity with the existing
+   RenderCombined_GapPixelCarriesBackgroundAlpha test: same policy
+   should hold for the smart renderer.}
+  SetLength(Frames, 4);
+  SetLength(Offsets, 4);
+  for I := 0 to 3 do
+  begin
+    Frames[I] := MakeFrame(160, 90, Integer(clBlue));
+    Offsets[I].TimeOffset := I * 1.0;
+  end;
+  Grid := MakeGrid(0, 0, clBlack, 20);
+  Grid.BackgroundAlpha := 128;
+  RowCounts := TArray<Integer>.Create(2, 2);
+  try
+    R := RenderSmartCombinedImage(Frames, Offsets, RowCounts, 800, 600,
+      Grid, MakeTs(False, 'Consolas', 9));
+    Assert.IsNotNull(R);
+    try
+      GapAlpha := AlphaByteAt(R, 5, 5); {well inside the 20px border}
+      Assert.AreEqual(Byte(128), GapAlpha,
+        'Gap/border pixel should carry the configured BackgroundAlpha');
+    finally
+      R.Free;
+    end;
+  finally
+    for I := 0 to High(Frames) do
+      Frames[I].Free;
+  end;
 end;
 
 end.

@@ -68,6 +68,17 @@ type
     [Test] procedure TestCreatesCorrectTypes;
   end;
 
+  [TestFixture]
+  TTestComputeSmartGridRows = class
+  public
+    [Test] procedure NineFramesSquarePanel_ProducesThreeByThree;
+    [Test] procedure FourFramesSquarePanel_ProducesTwoByTwo;
+    [Test] procedure ZeroFrames_ReturnsEmptyArray;
+    [Test] procedure ZeroBaseDimensions_ReturnsEmptyArray;
+    [Test] procedure RowCountsSumToCellCount;
+    [Test] procedure NonZeroAspectRatioInfluencesRowCount;
+  end;
+
 implementation
 
 uses
@@ -695,6 +706,86 @@ begin
   try Assert.IsTrue(L is TSingleLayout, 'vmSingle -> TSingleLayout'); finally L.Free; end;
 end;
 
+{ TTestComputeSmartGridRows }
+
+procedure TTestComputeSmartGridRows.NineFramesSquarePanel_ProducesThreeByThree;
+var
+  Rows: TArray<Integer>;
+begin
+  {16:9 panel with 9 frames at 16:9 source aspect: the algorithm should
+   pick three rows of three because that produces cells with the source
+   aspect ratio (cell_w/cell_h = 16:9), minimising mismatch.}
+  Rows := ComputeSmartGridRows(9, 1600, 900, 0, 9.0 / 16.0);
+  Assert.AreEqual(3, Integer(Length(Rows)));
+  Assert.AreEqual(3, Rows[0]);
+  Assert.AreEqual(3, Rows[1]);
+  Assert.AreEqual(3, Rows[2]);
+end;
+
+procedure TTestComputeSmartGridRows.FourFramesSquarePanel_ProducesTwoByTwo;
+var
+  Rows: TArray<Integer>;
+begin
+  {16:9 panel with 4 frames at 16:9 source aspect: 2x2 grid produces
+   8:9 cells, which still beats 1x4 (very wide cells) and 4x1 (very
+   tall cells).}
+  Rows := ComputeSmartGridRows(4, 1600, 900, 0, 9.0 / 16.0);
+  Assert.AreEqual(2, Integer(Length(Rows)));
+  Assert.AreEqual(2, Rows[0]);
+  Assert.AreEqual(2, Rows[1]);
+end;
+
+procedure TTestComputeSmartGridRows.ZeroFrames_ReturnsEmptyArray;
+var
+  Rows: TArray<Integer>;
+begin
+  Rows := ComputeSmartGridRows(0, 800, 600, 0, 9.0 / 16.0);
+  Assert.AreEqual(0, Integer(Length(Rows)));
+end;
+
+procedure TTestComputeSmartGridRows.ZeroBaseDimensions_ReturnsEmptyArray;
+var
+  Rows: TArray<Integer>;
+begin
+  Rows := ComputeSmartGridRows(9, 0, 600, 0, 9.0 / 16.0);
+  Assert.AreEqual(0, Integer(Length(Rows)), 'BaseW=0 should produce no arrangement');
+  Rows := ComputeSmartGridRows(9, 800, 0, 0, 9.0 / 16.0);
+  Assert.AreEqual(0, Integer(Length(Rows)), 'BaseH=0 should produce no arrangement');
+end;
+
+procedure TTestComputeSmartGridRows.RowCountsSumToCellCount;
+var
+  Rows: TArray<Integer>;
+  I, Sum: Integer;
+begin
+  {7 frames in a 16:9 panel: arrangement is uneven (e.g., [4,3] or [3,4]).
+   Whatever the algorithm picks, the row counts must sum to the input
+   cell count. Critical for the renderer: a wrong sum drops or duplicates
+   frames in the saved image.}
+  Rows := ComputeSmartGridRows(7, 1600, 900, 4, 9.0 / 16.0);
+  Sum := 0;
+  for I := 0 to High(Rows) do
+    Sum := Sum + Rows[I];
+  Assert.AreEqual(7, Sum);
+end;
+
+procedure TTestComputeSmartGridRows.NonZeroAspectRatioInfluencesRowCount;
+var
+  RowsWide, RowsTall: TArray<Integer>;
+begin
+  {Same frame count and panel size, different source aspect ratios:
+   a portrait source (h/w > 1) should not produce the same arrangement
+   as a landscape source (h/w < 1) for a wide panel. We do not pin an
+   exact arrangement -- just that the algorithm reacts to the aspect
+   parameter rather than ignoring it.}
+  RowsWide := ComputeSmartGridRows(6, 1600, 600, 0, 9.0 / 16.0);
+  RowsTall := ComputeSmartGridRows(6, 1600, 600, 0, 16.0 / 9.0);
+  Assert.IsTrue(Length(RowsWide) > 0);
+  Assert.IsTrue(Length(RowsTall) > 0);
+  Assert.AreNotEqual(Integer(Length(RowsWide)), Integer(Length(RowsTall)),
+    'Source aspect ratio should change row count for the same frame count');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestGridLayout);
   TDUnitX.RegisterTestFixture(TTestScrollLayout);
@@ -702,5 +793,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestSingleLayout);
   TDUnitX.RegisterTestFixture(TTestSmartGridLayout);
   TDUnitX.RegisterTestFixture(TTestLayoutFactory);
+  TDUnitX.RegisterTestFixture(TTestComputeSmartGridRows);
 
 end.
