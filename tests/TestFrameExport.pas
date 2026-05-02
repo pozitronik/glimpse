@@ -620,8 +620,8 @@ begin
     try
       Exporter := TFrameExporter.Create(View, Settings);
       try
-        Exporter.CopyFrameToClipboard(-1);
-        Exporter.CopyFrameToClipboard(0);
+        Exporter.CopyFrame(-1);
+        Exporter.CopyFrame(0);
       finally
         Exporter.Free;
       end;
@@ -650,7 +650,7 @@ begin
     try
       Exporter := TFrameExporter.Create(View, Settings);
       try
-        Exporter.CopyFrameToClipboard(1);
+        Exporter.CopyFrame(1);
       finally
         Exporter.Free;
       end;
@@ -676,7 +676,7 @@ begin
     try
       Exporter := TFrameExporter.Create(View, Settings);
       try
-        Exporter.CopyAllToClipboard;
+        Exporter.CopyView;
       finally
         Exporter.Free;
       end;

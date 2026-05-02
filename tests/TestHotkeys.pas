@@ -71,7 +71,9 @@ type
     [TearDown] procedure TearDown;
 
     [Test] procedure Defaults_PaNoneIsEmpty;
-    [Test] procedure Defaults_SaveSelectedIsUnbound;
+    {Defaults_SaveSelectedIsUnbound was removed when the SaveSelected action
+     was consolidated into SaveFrames; every action now has a default chord,
+     so there is no longer an "intentionally unbound" case to pin.}
     [Test] procedure Defaults_PrevFileHasThreeChords;
     [Test] procedure Defaults_NextFileHasTwoChords;
     [Test] procedure Defaults_PrevFrameHasBareAndCtrlLeft;
@@ -552,17 +554,7 @@ begin
   end;
 end;
 
-procedure TTestHotkeyBindings.Defaults_SaveSelectedIsUnbound;
-var
-  B: THotkeyBindings;
-begin
-  B := THotkeyBindings.Create;
-  try
-    Assert.AreEqual<Integer>(0, Length(B.Get(paSaveSelected)));
-  finally
-    B.Free;
-  end;
-end;
+{Defaults_SaveSelectedIsUnbound was removed: see declaration above.}
 
 procedure TTestHotkeyBindings.Defaults_PrevFileHasThreeChords;
 var
@@ -746,8 +738,11 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    Assert.IsTrue(B.AddChord(paSaveSelected, THotkeyChord.Make(VK_F9, [ssCtrl])));
-    Assert.AreEqual<Integer>(1, Length(B.Get(paSaveSelected)));
+    {Clear the default chords first so the test can pin "0 -> 1 after add"
+     without depending on whatever default the picked action carries.}
+    B.Put(paSaveFrames, nil);
+    Assert.IsTrue(B.AddChord(paSaveFrames, THotkeyChord.Make(VK_F9, [ssCtrl])));
+    Assert.AreEqual<Integer>(1, Length(B.Get(paSaveFrames)));
   finally
     B.Free;
   end;
@@ -760,11 +755,13 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    {Adding the same chord twice is a no-op, not a conflict prompt.}
+    {Adding the same chord twice is a no-op, not a conflict prompt.
+     Clear the default first so the count is unambiguous.}
+    B.Put(paSaveFrames, nil);
     Chord := THotkeyChord.Make(VK_F9, [ssCtrl]);
-    Assert.IsTrue(B.AddChord(paSaveSelected, Chord));
-    Assert.IsFalse(B.AddChord(paSaveSelected, Chord));
-    Assert.AreEqual<Integer>(1, Length(B.Get(paSaveSelected)));
+    Assert.IsTrue(B.AddChord(paSaveFrames, Chord));
+    Assert.IsFalse(B.AddChord(paSaveFrames, Chord));
+    Assert.AreEqual<Integer>(1, Length(B.Get(paSaveFrames)));
   finally
     B.Free;
   end;
@@ -776,7 +773,7 @@ var
 begin
   B := THotkeyBindings.Create;
   try
-    Assert.IsFalse(B.AddChord(paSaveSelected, THotkeyChord.None));
+    Assert.IsFalse(B.AddChord(paSaveFrames, THotkeyChord.None));
   finally
     B.Free;
   end;

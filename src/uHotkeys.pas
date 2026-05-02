@@ -34,8 +34,8 @@ type
     paPrevFrame, paNextFrame,
     paFrameCountInc, paFrameCountDec,
     {Frame output}
-    paSaveSingleFrame, paSaveAllFrames, paSaveCombined, paSaveSelected,
-    paSelectAllFrames, paCopyToClipboard, paCopyAllToClipboard,
+    paSaveFrame, paSaveFrames, paSaveView,
+    paSelectAllFrames, paCopyFrame, paCopyView,
     {Zoom}
     paZoomIn, paZoomOut, paZoomReset,
     {View mode}
@@ -498,19 +498,17 @@ begin
       Result := [THotkeyChord.Make(VK_UP, [ssCtrl])];
     paFrameCountDec:
       Result := [THotkeyChord.Make(VK_DOWN, [ssCtrl])];
-    paSaveSingleFrame:
+    paSaveFrame:
       Result := [THotkeyChord.Make(Ord('S'), [ssCtrl])];
-    paSaveAllFrames:
-      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt])];
-    paSaveCombined:
+    paSaveView:
       Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift])];
-    paSaveSelected:
-      Result := nil;
+    paSaveFrames:
+      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt, ssShift])];
     paSelectAllFrames:
       Result := [THotkeyChord.Make(Ord('A'), [ssCtrl])];
-    paCopyToClipboard:
+    paCopyFrame:
       Result := [THotkeyChord.Make(Ord('C'), [ssCtrl])];
-    paCopyAllToClipboard:
+    paCopyView:
       Result := [THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift])];
     paZoomIn:
       Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];
@@ -552,13 +550,12 @@ begin
     paNextFrame: Result := 'NextFrame';
     paFrameCountInc: Result := 'FrameCountInc';
     paFrameCountDec: Result := 'FrameCountDec';
-    paSaveSingleFrame: Result := 'SaveSingleFrame';
-    paSaveAllFrames: Result := 'SaveAllFrames';
-    paSaveCombined: Result := 'SaveCombined';
-    paSaveSelected: Result := 'SaveSelected';
+    paSaveFrame: Result := 'SaveFrame';
+    paSaveFrames: Result := 'SaveFrames';
+    paSaveView: Result := 'SaveView';
     paSelectAllFrames: Result := 'SelectAllFrames';
-    paCopyToClipboard: Result := 'CopyToClipboard';
-    paCopyAllToClipboard: Result := 'CopyAllToClipboard';
+    paCopyFrame: Result := 'CopyFrame';
+    paCopyView: Result := 'CopyView';
     paZoomIn: Result := 'ZoomIn';
     paZoomOut: Result := 'ZoomOut';
     paZoomReset: Result := 'ZoomReset';
@@ -591,13 +588,12 @@ begin
     paNextFrame: Result := 'Next frame (single view)';
     paFrameCountInc: Result := 'Increase frame count';
     paFrameCountDec: Result := 'Decrease frame count';
-    paSaveSingleFrame: Result := 'Save frame';
-    paSaveAllFrames: Result := 'Save all frames';
-    paSaveCombined: Result := 'Save combined image';
-    paSaveSelected: Result := 'Save selected frames';
+    paSaveFrame: Result := 'Save frame';
+    paSaveFrames: Result := 'Save frames';
+    paSaveView: Result := 'Save view';
     paSelectAllFrames: Result := 'Select all frames';
-    paCopyToClipboard: Result := 'Copy frame to clipboard';
-    paCopyAllToClipboard: Result := 'Copy all frames to clipboard';
+    paCopyFrame: Result := 'Copy frame to clipboard';
+    paCopyView: Result := 'Copy view to clipboard';
     paZoomIn: Result := 'Zoom in';
     paZoomOut: Result := 'Zoom out';
     paZoomReset: Result := 'Reset zoom';

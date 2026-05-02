@@ -34,12 +34,26 @@ type
     {Resolves which frame to act on: prefers AContextCellIndex, falls back
      to current frame index, then 0. Returns False if no loaded frame found.}
     function ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
-    procedure SaveSingleFrame(const AFileName: string; AContextCellIndex: Integer);
-    procedure SaveSelectedFrames(const AFileName: string);
-    procedure SaveCombinedFrame(const AFileName: string);
-    procedure SaveAllFrames(const AFileName: string);
-    procedure CopyFrameToClipboard(AContextCellIndex: Integer);
-    procedure CopyAllToClipboard;
+    {Saves a single frame to a user-chosen file. Honours
+     SaveAtLiveResolution: native frame size when off, on-screen cell
+     size when on (letterbox in vmGrid/Filmstrip/Scroll/Single,
+     crop-to-fill in vmSmartGrid).}
+    procedure SaveFrame(const AFileName: string; AContextCellIndex: Integer);
+    {Saves multiple frames as separate files. Selection-aware: when at
+     least one frame is selected only those are written, otherwise every
+     loaded frame is written. Per-frame resolution policy mirrors
+     SaveFrame.}
+    procedure SaveFrames(const AFileName: string);
+    {Saves a combined image laid out per the live view mode:
+     - vmGrid: regular grid, columns from live layout.
+     - vmSmartGrid: smart layout (panel-aspect-driven row counts).
+     - vmFilmstrip: one row of all cells.
+     - vmScroll: one column of all cells.
+     - vmSingle: degenerates to SaveFrame for the focused cell.
+     Honours SaveAtLiveResolution.}
+    procedure SaveView(const AFileName: string);
+    procedure CopyFrame(AContextCellIndex: Integer);
+    procedure CopyView;
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
   end;
 
@@ -426,18 +440,18 @@ begin
   Result := RenderSmartCombinedImage(Frames, Offsets, RowCounts, OutputW, OutputH, Grid, Ts);
 end;
 
-{Renders the frames into a single combined image. The exact layout
- depends on the live view mode and the SaveAtLiveResolution setting:
+{Renders the frames into a single combined image laid out per the
+ live view mode. The pixel size of the cells follows the
+ SaveAtLiveResolution toggle:
 
- - vmSmartGrid: smart layout, arrangement matches what the user sees;
-   pixel size follows SaveAtLiveResolution (panel size when on, native
-   anchored to widest row when off).
- - vmGrid: regular grid; cell size and column count follow the live
-   layout when SaveAtLiveResolution is on, native otherwise.
- - vmFilmstrip / vmScroll / vmSingle: regular grid at native frame
-   size, irrespective of the toggle. These layouts do not have a
-   meaningful "combined image" interpretation, so the historical
-   view-mode-independent behaviour is preserved for them.
+ - vmSmartGrid: smart layout (panel-aspect-driven row counts).
+ - vmGrid: regular grid; live column count, live cell size when the
+   toggle is on; auto column count and native cell size otherwise.
+ - vmFilmstrip: a single horizontal row (Cols = FrameCount).
+ - vmScroll: a single vertical column (Cols = 1).
+ - vmSingle: caller (SaveView/CopyView) routes to single-frame paths
+   before reaching this function, so vmSingle never reaches the
+   regular grid renderer here.
 
  Returns nil only when there are no cells; placeholder/error cells are
  passed through as nil bitmaps and skipped by the renderer.}
@@ -461,6 +475,16 @@ begin
 
   BuildGridStyle(Grid);
   BuildTimestampStyle(Ts);
+
+  {Filmstrip and Scroll are degenerate grids: filmstrip is one wide
+   row, scroll is one tall column. Pin Columns explicitly so the saved
+   image matches what the user sees.}
+  case FFrameView.ViewMode of
+    vmFilmstrip:
+      Grid.Columns := N;
+    vmScroll:
+      Grid.Columns := 1;
+  end;
 
   Result := RenderCombinedImage(Frames, Offsets, Grid, Ts);
 end;
@@ -626,7 +650,7 @@ begin
   end;
 end;
 
-procedure TFrameExporter.SaveSingleFrame(const AFileName: string; AContextCellIndex: Integer);
+procedure TFrameExporter.SaveFrame(const AFileName: string; AContextCellIndex: Integer);
 var
   Idx: Integer;
   Fmt: TSaveFormat;
@@ -652,31 +676,39 @@ begin
     uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(Idx), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
 end;
 
-procedure TFrameExporter.SaveSelectedFrames(const AFileName: string);
+procedure TFrameExporter.SaveFrames(const AFileName: string);
 var
-  I, FirstSel: Integer;
+  I, FirstIdx: Integer;
   Path: string;
   Fmt: TSaveFormat;
+  SelectedOnly: Boolean;
 begin
-  if FFrameView.SelectedCount < 2 then
+  if FFrameView.CellCount = 0 then
     Exit;
 
-  {Find first selected frame for the sample filename}
-  FirstSel := 0;
-  for I := 0 to FFrameView.CellCount - 1 do
-    if FFrameView.CellSelected(I) then
-    begin
-      FirstSel := I;
-      Break;
-    end;
+  {Selection-aware: any selection at all means "save just those";
+   otherwise every loaded frame goes out. Replaces the historical
+   pair (SaveAllFrames + SaveSelectedFrames) with one action.}
+  SelectedOnly := FFrameView.SelectedCount > 0;
 
-  if not ShowSaveDialog('Save selected frames', GenerateFrameFileName(AFileName, FirstSel, FFrameView.CellTimeOffset(FirstSel), FSettings.SaveFormat), False, Path, Fmt) then
+  {Sample filename uses the first frame that will actually be written
+   so the user sees a meaningful default in the dialog.}
+  FirstIdx := 0;
+  if SelectedOnly then
+    for I := 0 to FFrameView.CellCount - 1 do
+      if FFrameView.CellSelected(I) then
+      begin
+        FirstIdx := I;
+        Break;
+      end;
+
+  if not ShowSaveDialog('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.SaveFormat), False, Path, Fmt) then
     Exit;
 
-  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, True, AFileName);
+  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, SelectedOnly, AFileName);
 end;
 
-procedure TFrameExporter.SaveCombinedFrame(const AFileName: string);
+procedure TFrameExporter.SaveView(const AFileName: string);
 var
   Bmp: TBitmap;
   Fmt: TSaveFormat;
@@ -685,8 +717,16 @@ begin
   if FFrameView.CellCount = 0 then
     Exit;
 
+  {vmSingle's "view" is a single frame; route to SaveFrame so the user
+   gets a single-frame artefact rather than a wasteful 1-cell combined.}
+  if FFrameView.ViewMode = vmSingle then
+  begin
+    SaveFrame(AFileName, FFrameView.CurrentFrameIndex);
+    Exit;
+  end;
+
   BaseName := ChangeFileExt(ExtractFileName(AFileName), '');
-  if not ShowSaveDialog('Save combined image', BaseName + '_combined.png', True, Path, Fmt) then
+  if not ShowSaveDialog('Save view', BaseName + '_view.png', True, Path, Fmt) then
     Exit;
 
   Bmp := RenderWithBanner(RenderCombinedFromCells);
@@ -697,21 +737,7 @@ begin
   end;
 end;
 
-procedure TFrameExporter.SaveAllFrames(const AFileName: string);
-var
-  Path: string;
-  Fmt: TSaveFormat;
-begin
-  if FFrameView.CellCount = 0 then
-    Exit;
-
-  if not ShowSaveDialog('Save all frames', GenerateFrameFileName(AFileName, 0, FFrameView.CellTimeOffset(0), FSettings.SaveFormat), False, Path, Fmt) then
-    Exit;
-
-  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, False, AFileName);
-end;
-
-procedure TFrameExporter.CopyFrameToClipboard(AContextCellIndex: Integer);
+procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer);
 var
   Idx: Integer;
   Tmp: TBitmap;
@@ -731,12 +757,17 @@ begin
     Clipboard.Assign(FFrameView.CellBitmap(Idx));
 end;
 
-procedure TFrameExporter.CopyAllToClipboard;
+procedure TFrameExporter.CopyView;
 var
   Bmp: TBitmap;
 begin
   if FFrameView.CellCount = 0 then
     Exit;
+  if FFrameView.ViewMode = vmSingle then
+  begin
+    CopyFrame(FFrameView.CurrentFrameIndex);
+    Exit;
+  end;
   Bmp := RenderWithBanner(RenderCombinedFromCells);
   try
     {Push as CF_DIBV5 when the rendered bitmap carries alpha so paste

@@ -801,12 +801,11 @@ begin
   FContextMenu.OnPopup := OnContextMenuPopup;
 
   AddItem('Save frame...'#9'Ctrl+S', CM_SAVE_FRAME);
-  AddItem('Save selected...', CM_SAVE_SELECTED);
-  AddItem('Save combined...'#9'Ctrl+Shift+S', CM_SAVE_COMBINED);
-  AddItem('Save all...'#9'Ctrl+Alt+S', CM_SAVE_ALL);
+  AddItem('Save view...'#9'Ctrl+Shift+S', CM_SAVE_VIEW);
+  AddItem('Save frames...'#9'Ctrl+Alt+Shift+S', CM_SAVE_FRAMES);
   AddSeparator;
   AddItem('Copy frame'#9'Ctrl+C', CM_COPY_FRAME);
-  AddItem('Copy all'#9'Ctrl+Shift+C', CM_COPY_ALL);
+  AddItem('Copy view'#9'Ctrl+Shift+C', CM_COPY_VIEW);
   AddSeparator;
   AddItem('Select all'#9'Ctrl+A', CM_SELECT_ALL);
   AddItem('Deselect all', CM_DESELECT_ALL);
@@ -1093,7 +1092,7 @@ end;
 
 procedure TPluginForm.CopyFrameToClipboard;
 begin
-  FExporter.CopyFrameToClipboard(FContextCellIndex);
+  FExporter.CopyFrame(FContextCellIndex);
 end;
 
 procedure TPluginForm.ApplyListerParams(AParams: Integer);
@@ -1408,23 +1407,21 @@ begin
         Result := False;
     paRefreshExtraction:
       RefreshExtraction;
-    paSaveSingleFrame:
+    paSaveFrame:
       begin
         FContextCellIndex := -1;
-        FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
+        FExporter.SaveFrame(FFileName, FContextCellIndex);
       end;
-    paSaveAllFrames:
-      FExporter.SaveAllFrames(FFileName);
-    paSaveCombined:
-      FExporter.SaveCombinedFrame(FFileName);
-    paSaveSelected:
-      FExporter.SaveSelectedFrames(FFileName);
+    paSaveFrames:
+      FExporter.SaveFrames(FFileName);
+    paSaveView:
+      FExporter.SaveView(FFileName);
     paSelectAllFrames:
       FFrameView.SelectAll;
-    paCopyToClipboard:
+    paCopyFrame:
       CopyFrameToClipboard;
-    paCopyAllToClipboard:
-      FExporter.CopyAllToClipboard;
+    paCopyView:
+      FExporter.CopyView;
     paZoomIn:
       ZoomBy(ZOOM_IN_FACTOR);
     paZoomOut:
@@ -1674,17 +1671,15 @@ procedure TPluginForm.DispatchCommand(ATag: Integer);
 begin
   case ATag of
     CM_SAVE_FRAME:
-      FExporter.SaveSingleFrame(FFileName, FContextCellIndex);
-    CM_SAVE_SELECTED:
-      FExporter.SaveSelectedFrames(FFileName);
-    CM_SAVE_COMBINED:
-      FExporter.SaveCombinedFrame(FFileName);
-    CM_SAVE_ALL:
-      FExporter.SaveAllFrames(FFileName);
+      FExporter.SaveFrame(FFileName, FContextCellIndex);
+    CM_SAVE_FRAMES:
+      FExporter.SaveFrames(FFileName);
+    CM_SAVE_VIEW:
+      FExporter.SaveView(FFileName);
     CM_COPY_FRAME:
-      FExporter.CopyFrameToClipboard(FContextCellIndex);
-    CM_COPY_ALL:
-      FExporter.CopyAllToClipboard;
+      FExporter.CopyFrame(FContextCellIndex);
+    CM_COPY_VIEW:
+      FExporter.CopyView;
     CM_SELECT_ALL:
       FFrameView.SelectAll;
     CM_DESELECT_ALL:
@@ -1852,21 +1847,25 @@ begin
     case MI.Tag of
       CM_SAVE_FRAME:
         MI.Enabled := HasClickedFrame;
-      CM_SAVE_COMBINED:
+      CM_SAVE_VIEW:
         MI.Enabled := HasFrames;
-      CM_SAVE_ALL:
-        MI.Enabled := HasFrames;
+      CM_SAVE_FRAMES:
+        begin
+          {Selection-aware caption: when frames are selected the action
+           saves only those, otherwise it saves all loaded frames. The
+           caption echoes the selected count so the user knows which set
+           is about to be written before the file dialog opens.}
+          MI.Enabled := HasFrames;
+          SelCount := FFrameView.SelectedCount;
+          if SelCount > 0 then
+            MI.Caption := Format('Save frames (%d selected)...'#9'Ctrl+Alt+Shift+S', [SelCount])
+          else
+            MI.Caption := 'Save frames (all)...'#9'Ctrl+Alt+Shift+S';
+        end;
       CM_COPY_FRAME:
         MI.Enabled := HasClickedFrame;
-      CM_COPY_ALL:
+      CM_COPY_VIEW:
         MI.Enabled := HasFrames;
-      CM_SAVE_SELECTED:
-        begin
-          SelCount := FFrameView.SelectedCount;
-          MI.Visible := SelCount >= 2;
-          if MI.Visible then
-            MI.Caption := Format('Save selected (%d)...', [SelCount]);
-        end;
       CM_SELECT_ALL:
         MI.Enabled := HasFrames;
       CM_DESELECT_ALL:

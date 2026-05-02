@@ -22,11 +22,13 @@ type
 const
   {Command tags shared by toolbar buttons, context menu, and keyboard handler}
   CM_SAVE_FRAME = 1;
-  CM_SAVE_SELECTED = 2;
-  CM_SAVE_ALL = 3;
-  CM_SAVE_COMBINED = 4;
+  CM_SAVE_FRAMES = 2;
+  {Tags 3 and 4 were the historical CM_SAVE_ALL and CM_SAVE_COMBINED.
+   They are intentionally left as gaps after the action consolidation
+   into Save frame / Save frames / Save view.}
+  CM_SAVE_VIEW = 11;
   CM_COPY_FRAME = 5;
-  CM_COPY_ALL = 6;
+  CM_COPY_VIEW = 6;
   CM_SELECT_ALL = 7;
   CM_DESELECT_ALL = 8;
   CM_SETTINGS = 9;
@@ -44,8 +46,11 @@ const
     {vmFilmstrip}('Fit height', 'Fit if larger', 'Original size'),
     {vmSingle}('Fit', 'Fit if larger', 'Original size'));
 
-  {Toolbar action buttons (excluding selection-dependent commands)}
-  TB_ACTIONS: array [0 .. 6] of TToolbarActionDef = ((Caption: 'Save'; Tag: CM_SAVE_FRAME), (Caption: 'Save All'; Tag: CM_SAVE_ALL), (Caption: 'Combined'; Tag: CM_SAVE_COMBINED), (Caption: 'Copy'; Tag: CM_COPY_FRAME), (Caption: 'Copy All'; Tag: CM_COPY_ALL), (Caption: 'Refresh'; Tag: CM_REFRESH), (Caption: 'Settings'; Tag: CM_SETTINGS));
+  {Toolbar action buttons.
+   "Save frames" is selection-aware at runtime (the context menu
+   updates its caption with the selected count); on the toolbar it
+   keeps a stable caption.}
+  TB_ACTIONS: array [0 .. 6] of TToolbarActionDef = ((Caption: 'Save frame'; Tag: CM_SAVE_FRAME), (Caption: 'Save frames'; Tag: CM_SAVE_FRAMES), (Caption: 'Save view'; Tag: CM_SAVE_VIEW), (Caption: 'Copy frame'; Tag: CM_COPY_FRAME), (Caption: 'Copy view'; Tag: CM_COPY_VIEW), (Caption: 'Refresh'; Tag: CM_REFRESH), (Caption: 'Settings'; Tag: CM_SETTINGS));
 
   {Element indices within the ordered collapsible element array.
    Order: mode buttons, timecodes toggle, action buttons (left to right).}
