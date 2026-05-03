@@ -778,20 +778,22 @@ begin
   Result.BackgroundAlpha := DEF_BACKGROUND_ALPHA;
 end;
 
-{Lifts the rendered pf24bit grid into a pf32bit bitmap. Frame cell rects
- get alpha=255 (opaque); everything else (gaps, border) carries
- ABackgroundAlpha. Called by RenderCombinedImage when alpha < 255 so the
- historical pf24bit fast path is unaffected for opaque output.}
-function LiftToAlphaAware(ASource: TBitmap; const AGrid: TCombinedGridStyle;
-  const AFrames: TArray<TBitmap>; ACols, ACellW, ACellH, ABorder: Integer): TBitmap;
+{Rect-driven alpha-aware lift core. Allocates a pf32bit bitmap matching
+ ASource, fills it with ABg (gap/border colour + alpha), then re-stamps
+ each cell rect with the source RGB at alpha=255. Used by both the
+ uniform-grid and smart-grid lift wrappers, which differ only in how
+ they compute the cell rects. Rect entries paired with nil frame slots
+ are skipped so partial coverage degrades gracefully.}
+function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad;
+  const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
 type
   TQuadRow = array [0 .. 0] of TRGBQuad;
   PQuadRow = ^TQuadRow;
   TTripleRow = array [0 .. 0] of TRGBTriple;
   PTripleRow = ^TTripleRow;
 var
-  Bg: TRGBQuad;
-  X, Y, I, Row, Col, FrameX, FrameY, Px, Py: Integer;
+  X, Y, I, Px, Py: Integer;
+  R: TRect;
   DstRow: PQuadRow;
   SrcRow: PTripleRow;
 begin
@@ -801,18 +803,13 @@ begin
     Result.AlphaFormat := afDefined;
     Result.SetSize(ASource.Width, ASource.Height);
 
-    Bg.rgbBlue := GetBValue(AGrid.Background);
-    Bg.rgbGreen := GetGValue(AGrid.Background);
-    Bg.rgbRed := GetRValue(AGrid.Background);
-    Bg.rgbReserved := AGrid.BackgroundAlpha;
-
     {Initial fill: gap/border colour + BackgroundAlpha. Outside-cell pixels
      never get touched again, so the gap/border becomes alpha-aware here.}
     for Y := 0 to Result.Height - 1 do
     begin
       DstRow := PQuadRow(Result.ScanLine[Y]);
       for X := 0 to Result.Width - 1 do
-        DstRow^[X] := Bg;
+        DstRow^[X] := ABg;
     end;
 
     {Each non-nil frame's cell rect: copy RGB from the pf24bit source,
@@ -822,24 +819,23 @@ begin
     begin
       if AFrames[I] = nil then
         Continue;
-      Row := I div ACols;
-      Col := I mod ACols;
-      FrameX := ABorder + Col * (ACellW + AGrid.CellGap);
-      FrameY := ABorder + Row * (ACellH + AGrid.CellGap);
-      for Py := 0 to ACellH - 1 do
+      if I >= Length(ACellRects) then
+        Continue;
+      R := ACellRects[I];
+      for Py := R.Top to R.Bottom - 1 do
       begin
-        if (FrameY + Py < 0) or (FrameY + Py >= Result.Height) then
+        if (Py < 0) or (Py >= Result.Height) then
           Continue;
-        SrcRow := PTripleRow(ASource.ScanLine[FrameY + Py]);
-        DstRow := PQuadRow(Result.ScanLine[FrameY + Py]);
-        for Px := 0 to ACellW - 1 do
+        SrcRow := PTripleRow(ASource.ScanLine[Py]);
+        DstRow := PQuadRow(Result.ScanLine[Py]);
+        for Px := R.Left to R.Right - 1 do
         begin
-          if (FrameX + Px < 0) or (FrameX + Px >= Result.Width) then
+          if (Px < 0) or (Px >= Result.Width) then
             Continue;
-          DstRow^[FrameX + Px].rgbBlue := SrcRow^[FrameX + Px].rgbtBlue;
-          DstRow^[FrameX + Px].rgbGreen := SrcRow^[FrameX + Px].rgbtGreen;
-          DstRow^[FrameX + Px].rgbRed := SrcRow^[FrameX + Px].rgbtRed;
-          DstRow^[FrameX + Px].rgbReserved := 255;
+          DstRow^[Px].rgbBlue := SrcRow^[Px].rgbtBlue;
+          DstRow^[Px].rgbGreen := SrcRow^[Px].rgbtGreen;
+          DstRow^[Px].rgbRed := SrcRow^[Px].rgbtRed;
+          DstRow^[Px].rgbReserved := 255;
         end;
       end;
     end;
@@ -847,6 +843,42 @@ begin
     Result.Free;
     raise;
   end;
+end;
+
+{Builds a TRGBQuad from AGrid.Background + AGrid.BackgroundAlpha for
+ the lift core's gap/border fill.}
+function GridBackgroundQuad(const AGrid: TCombinedGridStyle): TRGBQuad;
+begin
+  Result.rgbBlue := GetBValue(AGrid.Background);
+  Result.rgbGreen := GetGValue(AGrid.Background);
+  Result.rgbRed := GetRValue(AGrid.Background);
+  Result.rgbReserved := AGrid.BackgroundAlpha;
+end;
+
+{Lifts the rendered pf24bit uniform grid into a pf32bit bitmap. Computes
+ the cell-rect array from grid math (ACols × cell rect, with CellGap
+ between cells and ABorder around the inner area), then calls the
+ shared rect-driven core. Called by RenderCombinedImage when alpha < 255
+ so the historical pf24bit fast path is unaffected for opaque output.}
+function LiftToAlphaAware(ASource: TBitmap; const AGrid: TCombinedGridStyle;
+  const AFrames: TArray<TBitmap>; ACols, ACellW, ACellH, ABorder: Integer): TBitmap;
+var
+  Rects: TArray<TRect>;
+  I, Row, Col, FrameX, FrameY: Integer;
+begin
+  SetLength(Rects, Length(AFrames));
+  for I := 0 to High(AFrames) do
+  begin
+    Row := I div ACols;
+    Col := I mod ACols;
+    FrameX := ABorder + Col * (ACellW + AGrid.CellGap);
+    FrameY := ABorder + Row * (ACellH + AGrid.CellGap);
+    Rects[I].Left := FrameX;
+    Rects[I].Top := FrameY;
+    Rects[I].Right := FrameX + ACellW;
+    Rects[I].Bottom := FrameY + ACellH;
+  end;
+  Result := LiftToAlphaAwareCore(ASource, GridBackgroundQuad(AGrid), AFrames, Rects);
 end;
 
 function DefaultTimestampStyle: TTimestampStyle;
@@ -931,75 +963,13 @@ begin
 end;
 
 {Lifts a smart-grid combined render into a pf32bit bitmap so PNG savers
- preserve gap/border transparency. Mirrors LiftToAlphaAware but takes a
- caller-provided list of frame cell rects rather than uniform grid math,
- because smart-grid cells have row-dependent widths.
-
- TODO: factor a shared "lift by rects" core out of this and
- LiftToAlphaAware once both call sites have settled (they each carry
- their own cell-rect computation that is mildly inconvenient to unify).}
+ preserve gap/border transparency. Smart-grid cells have row-dependent
+ widths so the caller supplies the rects directly; the shared
+ LiftToAlphaAwareCore does the actual lift.}
 function LiftToAlphaAwareSmart(ASource: TBitmap; const AGrid: TCombinedGridStyle;
   const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
-type
-  TQuadRow = array [0 .. 0] of TRGBQuad;
-  PQuadRow = ^TQuadRow;
-  TTripleRow = array [0 .. 0] of TRGBTriple;
-  PTripleRow = ^TTripleRow;
-var
-  Bg: TRGBQuad;
-  X, Y, I, Px, Py: Integer;
-  R: TRect;
-  DstRow: PQuadRow;
-  SrcRow: PTripleRow;
 begin
-  Result := TBitmap.Create;
-  try
-    Result.PixelFormat := pf32bit;
-    Result.AlphaFormat := afDefined;
-    Result.SetSize(ASource.Width, ASource.Height);
-
-    Bg.rgbBlue := GetBValue(AGrid.Background);
-    Bg.rgbGreen := GetGValue(AGrid.Background);
-    Bg.rgbRed := GetRValue(AGrid.Background);
-    Bg.rgbReserved := AGrid.BackgroundAlpha;
-
-    {Initial fill: gap/border colour at BackgroundAlpha. Pixels inside
-     cell rects are overwritten next; everything else keeps the alpha.}
-    for Y := 0 to Result.Height - 1 do
-    begin
-      DstRow := PQuadRow(Result.ScanLine[Y]);
-      for X := 0 to Result.Width - 1 do
-        DstRow^[X] := Bg;
-    end;
-
-    for I := 0 to High(AFrames) do
-    begin
-      if AFrames[I] = nil then
-        Continue;
-      if I >= Length(ACellRects) then
-        Continue;
-      R := ACellRects[I];
-      for Py := R.Top to R.Bottom - 1 do
-      begin
-        if (Py < 0) or (Py >= Result.Height) then
-          Continue;
-        SrcRow := PTripleRow(ASource.ScanLine[Py]);
-        DstRow := PQuadRow(Result.ScanLine[Py]);
-        for Px := R.Left to R.Right - 1 do
-        begin
-          if (Px < 0) or (Px >= Result.Width) then
-            Continue;
-          DstRow^[Px].rgbBlue := SrcRow^[Px].rgbtBlue;
-          DstRow^[Px].rgbGreen := SrcRow^[Px].rgbtGreen;
-          DstRow^[Px].rgbRed := SrcRow^[Px].rgbtRed;
-          DstRow^[Px].rgbReserved := 255;
-        end;
-      end;
-    end;
-  except
-    Result.Free;
-    raise;
-  end;
+  Result := LiftToAlphaAwareCore(ASource, GridBackgroundQuad(AGrid), AFrames, ACellRects);
 end;
 
 function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
