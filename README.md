@@ -36,6 +36,7 @@ All shortcuts below are defaults. Every row is user-configurable via the **Hotke
 | Alt+Enter       | Toggle Lister full-screen (maximize without the window caption)                                   |
 | T               | Toggle timecodes                                                                                  |
 | R               | Refresh (re-extract all frames)                                                                   |
+| Ctrl+R          | Shuffle (pick fresh random frame positions and re-extract)                                        |
 | ~               | Open hamburger menu (when toolbar is collapsed)                                                   |
 | F2              | Settings                                                                                          |
 | F3              | Toggle status bar                                                                                 |
@@ -44,13 +45,12 @@ All shortcuts below are defaults. Every row is user-configurable via the **Hotke
 
 ### Configuration
 
-All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into seven tabs: **General**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**, **Hotkeys**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
+All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into eight tabs: **General**, **Sampling**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**, **Hotkeys**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
 
 #### General
 
 | Setting                           | Default     | Description                                                                                                              |
 |-----------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------|
-| Skip edges                        | 2%          | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                              |
 | Max workers                       | 1           | Number of parallel ffmpeg processes for frame extraction. More workers = faster loading, higher CPU usage                |
 | One per frame                     | Off         | Launches a separate worker for each frame instead of using a fixed worker count                                          |
 | Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers. 0 = auto (matches CPU core count)         |
@@ -67,6 +67,19 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 |                                   |             | Toggling this forces re-extraction so the live view matches the new pixel grid                                           |
 | Extensions                        | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                     |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                           |
+
+#### Sampling
+
+Controls *which* moments of the video are turned into frames — independent of the engine knobs on the General tab.
+
+| Setting                       | Default | Description                                                                                                                                                                                                                  |
+|-------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Skip edges                    | 2%      | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                                                                                                                                  |
+| Start from random positions   | Off     | When on, opening a file picks frame offsets at random within their slices instead of the deterministic midpoints. Each slice still contributes one frame, so the order of frames in the view stays consistent                |
+| Randomness                    | 50%     | Strength of the per-slice jitter window. 1% nudges the offset slightly off-centre; 100% lets a frame be picked anywhere within its slice. Drives both the on-load behaviour and the on-demand Shuffle action                 |
+| Cache random frames           | Off     | When off, random extractions read from the cache (so a previously-cached random pick still hits) but do not write fresh picks back, keeping every Shuffle truly fresh. When on, random picks are cached just like normal ones |
+
+The toolbar **Refresh** button is a split button: clicking it re-extracts the current offsets, while its dropdown arrow exposes a **Shuffle** item (Ctrl+R) that re-rolls the offsets and re-extracts. Shuffle works regardless of the *Start from random positions* checkbox — that toggle only governs the default behaviour when opening a file.
 
 #### Appearance
 
@@ -149,14 +162,12 @@ Presents a video file as a virtual archive containing frame images. Opening a vi
 
 ### Configuration
 
-Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into four tabs: **General**, **Output**, **Combined**, **Size limit**.
+Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into five tabs: **General**, **Sampling**, **Output**, **Combined**, **Size limit**.
 
 #### General
 
 | Setting                           | Default     | Description                                                                    |
 |-----------------------------------|-------------|--------------------------------------------------------------------------------|
-| Frame count                       | 4           | Number of frames to extract from the video (1-99)                              |
-| Skip edges                        | 2%          | Percentage of video duration to skip at the beginning and end                  |
 | Max workers                       | 1           | Number of parallel ffmpeg processes for frame extraction                       |
 | One per frame                     | Off         | Launches a separate worker for each frame                                      |
 | Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers  |
@@ -168,6 +179,20 @@ Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin u
 |                                   |             | out as 1024x576 instead of the squished raw 720x576. No-op for square-pixel    |
 |                                   |             | videos                                                                         |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect                      |
+
+#### Sampling
+
+Controls *which* moments of the video are extracted. Re-enter the archive to see picks change.
+
+| Setting                     | Default | Description                                                                                                                      |
+|-----------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------|
+| Frame count                 | 4       | Number of frames to extract from the video (1-99)                                                                                |
+| Skip edges                  | 2%      | Percentage of video duration to skip at the beginning and end                                                                    |
+| Start from random positions | Off     | When on, each TC entry into the archive picks frame offsets at random within their slices instead of the deterministic midpoints |
+| Randomness                  | 50%     | Strength of the per-slice jitter window. 1% = slight nudge off-centre, 100% = anywhere within the slice.                         |
+|                             |         | No effect when *Start from random positions* is off                                                                              |
+
+WCX has no "Cache random frames" toggle: the plugin runs on demand from TC and has no frame cache, so the option would be a no-op.
 
 #### Output
 
