@@ -173,7 +173,7 @@ implementation
 uses
   System.Math,
   uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic,
-  uDefaults, uTypes;
+  uSettingsDlgUI, uDefaults, uTypes;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 var
@@ -411,52 +411,31 @@ end;
 
 procedure TWcxSettingsForm.PickColor(APanel: TPanel);
 begin
-  ColorDlg.Color := APanel.Color;
-  if ColorDlg.Execute then
-    APanel.Color := ColorDlg.Color;
+  PickColorForPanel(APanel, ColorDlg);
 end;
 
 procedure TWcxSettingsForm.UpdateTimestampFontDisplay;
 begin
-  EdtTimestampFont.Text := Format('%s, %d pt', [FTimestampFontName, FTimestampFontSize]);
+  RefreshTimestampFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
 end;
 
 procedure TWcxSettingsForm.UpdateBannerFontDisplay;
 begin
-  if ChkBannerAutoSize.Checked then
-    EdtBannerFont.Text := Format('%s, auto', [FBannerFontName])
-  else
-    EdtBannerFont.Text := Format('%s, %d pt', [FBannerFontName, FBannerFontSize]);
+  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked,
+    FBannerFontName, FBannerFontSize);
 end;
 
 procedure TWcxSettingsForm.PickTimestampFont;
 begin
-  FontDlg.Font.Name := FTimestampFontName;
-  FontDlg.Font.Size := FTimestampFontSize;
-  if FontDlg.Execute then
-  begin
-    FTimestampFontName := FontDlg.Font.Name;
-    FTimestampFontSize := EnsureRange(FontDlg.Font.Size, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
-    UpdateTimestampFontDisplay;
-  end;
+  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize,
+    MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 end;
 
 procedure TWcxSettingsForm.PickBannerFont;
 begin
-  FontDlg.Font.Name := FBannerFontName;
-  {Auto mode has no stored size, so seed the dialog with the default.}
-  if ChkBannerAutoSize.Checked then
-    FontDlg.Font.Size := DEF_BANNER_FONT_SIZE
-  else
-    FontDlg.Font.Size := FBannerFontSize;
-  if FontDlg.Execute then
-  begin
-    FBannerFontName := FontDlg.Font.Name;
-    FBannerFontSize := EnsureRange(FontDlg.Font.Size, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE);
-    {User picked a specific size; that signals intent to drop auto-sizing.}
-    ChkBannerAutoSize.Checked := False;
-    UpdateBannerFontDisplay;
-  end;
+  PickBannerFontInto(FontDlg, EdtBannerFont, ChkBannerAutoSize,
+    FBannerFontName, FBannerFontSize,
+    MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
 end;
 
 procedure TWcxSettingsForm.BtnTimestampFontClick(Sender: TObject);

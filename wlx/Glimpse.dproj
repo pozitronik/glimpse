@@ -102,6 +102,7 @@
         <DCCReference Include="..\src\uBitmapResize.pas"/>
         <DCCReference Include="..\src\uThumbnailRender.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
+        <DCCReference Include="..\src\uSettingsDlgUI.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

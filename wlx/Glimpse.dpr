@@ -43,7 +43,8 @@ uses
   uCombinedImage in '..\src\uCombinedImage.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
-  uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas';
+  uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
+  uSettingsDlgUI in '..\src\uSettingsDlgUI.pas';
 
 exports
   ListLoad,
