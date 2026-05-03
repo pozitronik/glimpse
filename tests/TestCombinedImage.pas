@@ -133,6 +133,26 @@ type
     [Test] procedure ShowTrueValidCorner_DrawsSomething;
   end;
 
+  {Direct tests for LiftToAlphaAwareCore -- the rect-driven 24bit->32bit
+   lift used by both LiftToAlphaAware (uniform grid) and
+   LiftToAlphaAwareSmart (variable rows). The renderer-level tests cover
+   the production paths; this fixture pins the defensive guards
+   (nil frame mid-array, frames-longer-than-rects, out-of-bounds rect)
+   that the renderers never exercise but the helper still has to handle
+   correctly for any future caller.}
+  [TestFixture]
+  TTestLiftToAlphaAwareCore = class
+  public
+    [Test] procedure Output_IsPf32BitWithDefinedAlpha;
+    [Test] procedure Output_DimensionsMatchSource;
+    [Test] procedure EmptyFrames_OutputIsPureBackground;
+    [Test] procedure NilFrameEntry_RectStaysBackground;
+    [Test] procedure RectInside_PixelsCarrySourceRGBAndOpaque;
+    [Test] procedure FramesLongerThanRects_TrailingSkipped;
+    [Test] procedure RectOutsideBounds_ClippedNoCrash;
+    [Test] procedure BackgroundQuad_PreservesAlphaByte;
+  end;
+
 implementation
 
 uses
@@ -2370,6 +2390,284 @@ begin
   finally
     Bmp.Free;
   end;
+end;
+
+{TTestLiftToAlphaAwareCore}
+
+{Helper: builds a pf24bit source bitmap with a single solid colour. The
+ lift treats the source as opaque RGB; alpha is added by the lift, so
+ the source format is always pf24bit in production callers.}
+function LiftSource(AWidth, AHeight: Integer; AColor: TColor): TBitmap;
+begin
+  Result := TBitmap.Create;
+  Result.PixelFormat := pf24bit;
+  Result.SetSize(AWidth, AHeight);
+  Result.Canvas.Brush.Color := AColor;
+  Result.Canvas.FillRect(Rect(0, 0, AWidth, AHeight));
+end;
+
+{Wide-bound row alias used by the lift tests. The production code uses
+ array[0..0] which the compiler treats as range-unchecked when indexed
+ by a runtime variable, but breaks on constant-index accesses like
+ Row^[3]. A wider bound lets the tests use literal indices freely.}
+type
+  TLiftQuadRow = array [0 .. 4095] of TRGBQuad;
+  PLiftQuadRow = ^TLiftQuadRow;
+
+{Reads the alpha byte at (X, Y) on a pf32bit bitmap via ScanLine.}
+function LiftAlphaAt(ABmp: TBitmap; X, Y: Integer): Byte;
+var
+  Row: PLiftQuadRow;
+begin
+  Row := PLiftQuadRow(ABmp.ScanLine[Y]);
+  Result := Row^[X].rgbReserved;
+end;
+
+procedure TTestLiftToAlphaAwareCore.Output_IsPf32BitWithDefinedAlpha;
+var
+  Source: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+begin
+  Source := LiftSource(40, 30, clRed);
+  try
+    Bg.rgbBlue := 0; Bg.rgbGreen := 0; Bg.rgbRed := 0; Bg.rgbReserved := 128;
+    SetLength(Frames, 0);
+    SetLength(Rects, 0);
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      Assert.AreEqual(Ord(pf32bit), Ord(Lifted.PixelFormat),
+        'Lift output must be pf32bit so PNG savers see a real alpha channel');
+      Assert.AreEqual(Ord(afDefined), Ord(Lifted.AlphaFormat),
+        'AlphaFormat=afDefined signals VCL the alpha is non-premultiplied');
+    finally
+      Lifted.Free;
+    end;
+  finally
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.Output_DimensionsMatchSource;
+var
+  Source: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+begin
+  Source := LiftSource(123, 87, clBlue);
+  try
+    Bg := Default(TRGBQuad);
+    SetLength(Frames, 0);
+    SetLength(Rects, 0);
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      Assert.AreEqual(123, Lifted.Width);
+      Assert.AreEqual(87, Lifted.Height);
+    finally
+      Lifted.Free;
+    end;
+  finally
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.EmptyFrames_OutputIsPureBackground;
+var
+  Source: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+begin
+  {No frames -> every pixel must carry the background alpha. The source's
+   RGB is irrelevant because no cell rect re-stamps it.}
+  Source := LiftSource(10, 10, clWhite);
+  try
+    Bg.rgbBlue := 0; Bg.rgbGreen := 0; Bg.rgbRed := 0; Bg.rgbReserved := 64;
+    SetLength(Frames, 0);
+    SetLength(Rects, 0);
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      Assert.AreEqual(64, Integer(LiftAlphaAt(Lifted, 0, 0)));
+      Assert.AreEqual(64, Integer(LiftAlphaAt(Lifted, 5, 5)));
+      Assert.AreEqual(64, Integer(LiftAlphaAt(Lifted, 9, 9)));
+    finally
+      Lifted.Free;
+    end;
+  finally
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.NilFrameEntry_RectStaysBackground;
+var
+  Source: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+begin
+  {Nil frame at index 0: the corresponding rect must keep background
+   alpha rather than being lifted to 255. This is the partial-extraction
+   case where a frame slot is reserved but not yet populated.}
+  Source := LiftSource(20, 20, clRed);
+  try
+    Bg.rgbReserved := 100;
+    SetLength(Frames, 1);
+    Frames[0] := nil;
+    SetLength(Rects, 1);
+    Rects[0] := Rect(0, 0, 10, 10);
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      Assert.AreEqual(100, Integer(LiftAlphaAt(Lifted, 5, 5)),
+        'Nil frame entry must leave the rect at background alpha');
+    finally
+      Lifted.Free;
+    end;
+  finally
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.RectInside_PixelsCarrySourceRGBAndOpaque;
+var
+  Source, FramePlaceholder: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+  Row: PLiftQuadRow;
+begin
+  {Source filled red, one frame slot non-nil with rect (0,0)-(8,8).
+   Inside the rect, alpha must be 255 and RGB must come from the source.
+   Outside the rect, alpha stays at the background value.}
+  Source := LiftSource(16, 16, clRed); {clRed = $0000FF}
+  FramePlaceholder := LiftSource(8, 8, clBlack); {used only as non-nil signal}
+  try
+    Bg.rgbBlue := 0; Bg.rgbGreen := 255; Bg.rgbRed := 0; Bg.rgbReserved := 50;
+    SetLength(Frames, 1);
+    Frames[0] := FramePlaceholder;
+    SetLength(Rects, 1);
+    Rects[0] := Rect(0, 0, 8, 8);
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      {Inside the rect: red source, opaque alpha.}
+      Row := PLiftQuadRow(Lifted.ScanLine[3]);
+      Assert.AreEqual(255, Integer(Row^[3].rgbReserved),
+        'Cell pixel must be alpha=255');
+      Assert.AreEqual(0, Integer(Row^[3].rgbBlue));
+      Assert.AreEqual(0, Integer(Row^[3].rgbGreen));
+      Assert.AreEqual(255, Integer(Row^[3].rgbRed));
+
+      {Outside the rect: background alpha + background RGB.}
+      Row := PLiftQuadRow(Lifted.ScanLine[10]);
+      Assert.AreEqual(50, Integer(Row^[10].rgbReserved),
+        'Pixel outside any rect must keep background alpha');
+    finally
+      Lifted.Free;
+    end;
+  finally
+    FramePlaceholder.Free;
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.FramesLongerThanRects_TrailingSkipped;
+var
+  Source, F0, F1: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+begin
+  {Two frame slots, only one rect supplied. The first frame is processed;
+   the second must be silently skipped (no crash, no out-of-bounds read).
+   Defensive guard: a future caller could mismatch the lengths and this
+   test pins the helper's tolerance for it.}
+  Source := LiftSource(20, 20, clBlue);
+  F0 := LiftSource(8, 8, clBlack);
+  F1 := LiftSource(8, 8, clBlack);
+  try
+    Bg.rgbReserved := 64;
+    SetLength(Frames, 2);
+    Frames[0] := F0;
+    Frames[1] := F1;
+    SetLength(Rects, 1);
+    Rects[0] := Rect(0, 0, 8, 8);
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      Assert.IsNotNull(Lifted, 'Length mismatch must not produce nil');
+      Assert.AreEqual(255, Integer(LiftAlphaAt(Lifted, 3, 3)),
+        'First frame still lifts inside its rect');
+      {Second frame had no rect -> no observable change.}
+      Assert.AreEqual(64, Integer(LiftAlphaAt(Lifted, 15, 15)),
+        'Pixel beyond the only supplied rect keeps background alpha');
+    finally
+      Lifted.Free;
+    end;
+  finally
+    F0.Free;
+    F1.Free;
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.RectOutsideBounds_ClippedNoCrash;
+var
+  Source, FramePlaceholder: TBitmap;
+  Bg: TRGBQuad;
+  Frames: TArray<TBitmap>;
+  Rects: TArray<TRect>;
+  Lifted: TBitmap;
+begin
+  {Rect extends past the source in both axes. Per-pixel clipping must
+   skip the out-of-bounds rows and columns without crashing. Defensive
+   guard against a caller that supplied stale rects after a resize.}
+  Source := LiftSource(10, 10, clRed);
+  FramePlaceholder := LiftSource(20, 20, clBlack);
+  try
+    Bg.rgbReserved := 80;
+    SetLength(Frames, 1);
+    Frames[0] := FramePlaceholder;
+    SetLength(Rects, 1);
+    Rects[0] := Rect(5, 5, 100, 100); {extends way past 10x10 source}
+    Lifted := LiftToAlphaAwareCore(Source, Bg, Frames, Rects);
+    try
+      Assert.IsNotNull(Lifted);
+      {Inside both source and rect: pixel must be lifted to alpha=255.}
+      Assert.AreEqual(255, Integer(LiftAlphaAt(Lifted, 7, 7)));
+      {Pixel that the rect would have covered but lies outside source
+       is simply not addressable on the output -- the test just confirms
+       the function returned without exception.}
+    finally
+      Lifted.Free;
+    end;
+  finally
+    FramePlaceholder.Free;
+    Source.Free;
+  end;
+end;
+
+procedure TTestLiftToAlphaAwareCore.BackgroundQuad_PreservesAlphaByte;
+var
+  Grid: TCombinedGridStyle;
+  Q: TRGBQuad;
+begin
+  {Sanity check on the helper that builds the RGBQuad from a grid style:
+   the alpha byte must come straight from BackgroundAlpha, not get
+   accidentally re-mapped via TColor channels.}
+  Grid := DefaultCombinedGridStyle;
+  Grid.Background := TColor($00112233); {B=$11 G=$22 R=$33}
+  Grid.BackgroundAlpha := 77;
+  Q := GridBackgroundQuad(Grid);
+  Assert.AreEqual($11, Integer(Q.rgbBlue));
+  Assert.AreEqual($22, Integer(Q.rgbGreen));
+  Assert.AreEqual($33, Integer(Q.rgbRed));
+  Assert.AreEqual(77, Integer(Q.rgbReserved));
 end;
 
 end.

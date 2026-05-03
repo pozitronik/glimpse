@@ -140,6 +140,27 @@ procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect;
  no border, black background). Callers override individual fields as needed.}
 function DefaultCombinedGridStyle: TCombinedGridStyle;
 
+{Builds a TRGBQuad from AGrid.Background + AGrid.BackgroundAlpha. Surfaced
+ in the interface so test code can construct the same gap/border colour
+ the production lift wrappers use.}
+function GridBackgroundQuad(const AGrid: TCombinedGridStyle): TRGBQuad;
+
+{Rect-driven alpha-aware lift core. Allocates a pf32bit bitmap matching
+ ASource, fills it with ABg (gap/border colour + alpha), then re-stamps
+ each non-nil frame's cell rect with the source RGB at alpha=255. Used
+ by both the uniform-grid and smart-grid lift wrappers, which differ
+ only in how they compute the cell rects.
+
+ Defensive guards:
+  - AFrames[I] = nil -> the corresponding rect stays at ABg (frame slot
+    not yet populated, e.g. partial extraction).
+  - Length(AFrames) > Length(ACellRects) -> trailing frames skipped.
+  - Rect coordinates outside ASource bounds -> clipped per-pixel.
+
+ Caller owns the returned bitmap.}
+function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad;
+  const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
+
 {Returns the historical defaults for the timestamp overlay (hidden, bottom-left,
  Consolas 9pt, black legacy-shadow background, white text). Callers override
  individual fields as needed.}
