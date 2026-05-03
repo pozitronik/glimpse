@@ -25,7 +25,7 @@ uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
   Vcl.Graphics,
   uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uCache, uProbeCache,
-  uDebugLog, uThumbnailRender;
+  uDebugLog, uThumbnailRender, uToolbarLayout;
 
 var
   GSettings: TPluginSettings;
@@ -179,8 +179,11 @@ begin
   case Command of
     lc_Copy:
       begin
+        {TC's "copy current selection" command. Forward to the same
+         dispatcher the keyboard hotkey and context menu use, so all
+         three Copy-frame paths share one wrapping.}
         if Form <> nil then
-          Form.CopyFrameToClipboard;
+          Form.DispatchCommand(CM_COPY_FRAME);
         Result := LISTPLUGIN_OK;
       end;
     lc_NewParams:

@@ -128,7 +128,6 @@ type
     procedure SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
     procedure UpdateTimecodeButton;
     procedure UpdateToolbarButtons;
-    procedure DispatchCommand(ATag: Integer);
     procedure OnToolbarButtonClick(Sender: TObject);
     procedure ActivateMode(AMode: TViewMode);
     procedure ZoomBy(AFactor: Double);
@@ -208,8 +207,13 @@ type
     constructor CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
     destructor Destroy; override;
     procedure LoadFile(const AFileName: string);
-    procedure CopyFrameToClipboard;
     procedure ApplyListerParams(AParams: Integer);
+    {Single entrypoint for save/copy/select/refresh/settings commands.
+     Hotkey actions, the right-click context menu, the toolbar buttons,
+     and the TC lc_Copy lister command all route through here so the
+     wrapping (WithReExtract on save/copy actions) lives in exactly one
+     place. ATag accepts the CM_* constants from uToolbarLayout.}
+    procedure DispatchCommand(ATag: Integer);
   end;
 
 implementation
@@ -1182,17 +1186,6 @@ begin
   end;
 end;
 
-procedure TPluginForm.CopyFrameToClipboard;
-var
-  CtxIdx: Integer;
-begin
-  CtxIdx := FContextCellIndex;
-  WithReExtract(FExporter.BuildSaveIndicesSingle(CtxIdx),
-    procedure
-    begin
-      FExporter.CopyFrame(CtxIdx);
-    end);
-end;
 
 procedure TPluginForm.ApplyListerParams(AParams: Integer);
 var
@@ -1637,37 +1630,28 @@ begin
       RefreshExtraction;
     paShuffleExtraction:
       ShuffleExtraction;
+    {Save / copy hotkey actions route through DispatchCommand so the
+     keyboard path and the context-menu path share one wrapping. Only
+     paSaveFrame clears FContextCellIndex first — that is the historical
+     behaviour and it is preserved here. paCopyFrame intentionally
+     keeps the "use last right-clicked cell, fall back to current" rule
+     so pressing Ctrl+C after a right-click copies the right-clicked
+     cell (matches the previous CopyFrameToClipboard helper).}
     paSaveFrame:
       begin
         FContextCellIndex := -1;
-        WithReExtract(FExporter.BuildSaveIndicesSingle(FContextCellIndex),
-          procedure
-          begin
-            FExporter.SaveFrame(FFileName, FContextCellIndex);
-          end);
+        DispatchCommand(CM_SAVE_FRAME);
       end;
     paSaveFrames:
-      WithReExtract(FExporter.BuildSaveIndicesSelectedOrAll,
-        procedure
-        begin
-          FExporter.SaveFrames(FFileName);
-        end);
+      DispatchCommand(CM_SAVE_FRAMES);
     paSaveView:
-      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
-        procedure
-        begin
-          FExporter.SaveView(FFileName);
-        end);
+      DispatchCommand(CM_SAVE_VIEW);
     paSelectAllFrames:
       FFrameView.SelectAll;
     paCopyFrame:
-      CopyFrameToClipboard;
+      DispatchCommand(CM_COPY_FRAME);
     paCopyView:
-      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
-        procedure
-        begin
-          FExporter.CopyView;
-        end);
+      DispatchCommand(CM_COPY_VIEW);
     paZoomIn:
       ZoomBy(ZOOM_IN_FACTOR);
     paZoomOut:
@@ -1914,13 +1898,21 @@ begin
 end;
 
 procedure TPluginForm.DispatchCommand(ATag: Integer);
+var
+  CtxIdx: Integer;
 begin
+  {Capture FContextCellIndex once so the BuildSaveIndices call and the
+   later FExporter.SaveFrame/CopyFrame call see the same value even if
+   re-extraction yields the message pump in between. Single source of
+   truth for save/copy dispatch — both the keyboard action handler and
+   the right-click context menu route through here.}
+  CtxIdx := FContextCellIndex;
   case ATag of
     CM_SAVE_FRAME:
-      WithReExtract(FExporter.BuildSaveIndicesSingle(FContextCellIndex),
+      WithReExtract(FExporter.BuildSaveIndicesSingle(CtxIdx),
         procedure
         begin
-          FExporter.SaveFrame(FFileName, FContextCellIndex);
+          FExporter.SaveFrame(FFileName, CtxIdx);
         end);
     CM_SAVE_FRAMES:
       WithReExtract(FExporter.BuildSaveIndicesSelectedOrAll,
@@ -1935,10 +1927,10 @@ begin
           FExporter.SaveView(FFileName);
         end);
     CM_COPY_FRAME:
-      WithReExtract(FExporter.BuildSaveIndicesSingle(FContextCellIndex),
+      WithReExtract(FExporter.BuildSaveIndicesSingle(CtxIdx),
         procedure
         begin
-          FExporter.CopyFrame(FContextCellIndex);
+          FExporter.CopyFrame(CtxIdx);
         end);
     CM_COPY_VIEW:
       WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
