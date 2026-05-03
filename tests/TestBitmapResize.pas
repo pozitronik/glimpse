@@ -23,6 +23,12 @@ type
     [Test] procedure TestResultMinimumDimension;
     [Test] procedure TestPf32BitInputProducesPf32BitOutput;
     [Test] procedure TestPf32BitDownscalePreservesAlpha;
+    {Defensive: a 1-pixel-tall or 1-pixel-wide pf32bit source took the
+     bilinear path with bounds clamped to ASrc.Height-2 / Width-2 = -1, then
+     dereferenced ScanLine[-1]. The bilinear sampler must clamp safely for
+     degenerate dimensions instead of running off the bitmap.}
+    [Test] procedure TestPf32BitOnePixelTallDoesNotCrash;
+    [Test] procedure TestPf32BitOnePixelWideDoesNotCrash;
   end;
 
 implementation
@@ -318,6 +324,42 @@ begin
       Assert.AreEqual(128,
         Integer(AlphaByteAt(Result, Result.Width div 2, Result.Height div 2)),
         'Alpha must survive the downscale unchanged for a uniform-alpha source');
+    finally
+      Result.Free;
+    end;
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestBitmapResize.TestPf32BitOnePixelTallDoesNotCrash;
+var
+  Bmp, Result: TBitmap;
+begin
+  Bmp := MakeAlphaBitmap(100, 1, 200);
+  try
+    Result := DownscaleBitmapToFit(Bmp, 50);
+    try
+      Assert.IsNotNull(Result, '1xN pf32bit downscale must produce a bitmap');
+      Assert.IsTrue((Result.Width >= 1) and (Result.Height >= 1));
+    finally
+      Result.Free;
+    end;
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestBitmapResize.TestPf32BitOnePixelWideDoesNotCrash;
+var
+  Bmp, Result: TBitmap;
+begin
+  Bmp := MakeAlphaBitmap(1, 100, 200);
+  try
+    Result := DownscaleBitmapToFit(Bmp, 50);
+    try
+      Assert.IsNotNull(Result, 'Nx1 pf32bit downscale must produce a bitmap');
+      Assert.IsTrue((Result.Width >= 1) and (Result.Height >= 1));
     finally
       Result.Free;
     end;

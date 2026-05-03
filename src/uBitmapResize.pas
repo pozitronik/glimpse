@@ -37,7 +37,7 @@ type
   TQuadRow = array [0 .. 0] of TRGBQuad;
   PQuadRow = ^TQuadRow;
 var
-  X, Y, IX, IY: Integer;
+  X, Y, IX, IY, IX1, IY1: Integer;
   SrcX, SrcY, FracX, FracY, W00, W10, W01, W11: Double;
   R0, R1: PQuadRow;
   Dst: PQuadRow;
@@ -54,19 +54,27 @@ begin
       SrcY := (Y + 0.5) * ASrc.Height / ANewH - 0.5;
       IY := Trunc(SrcY);
       if IY < 0 then IY := 0;
-      if IY > ASrc.Height - 2 then IY := ASrc.Height - 2;
+      if IY > ASrc.Height - 1 then IY := ASrc.Height - 1;
+      {Next-row index for bilinear interpolation. Clamping to the last row
+       collapses the row pair to nearest-neighbour at the bottom edge and on
+       1-pixel-tall sources (where ASrc.Height-2 = -1 would otherwise drive
+       IY to -1 and dereference ScanLine[-1]).}
+      IY1 := IY + 1;
+      if IY1 > ASrc.Height - 1 then IY1 := ASrc.Height - 1;
       FracY := SrcY - IY;
       if FracY < 0 then FracY := 0;
       if FracY > 1 then FracY := 1;
       R0 := PQuadRow(ASrc.ScanLine[IY]);
-      R1 := PQuadRow(ASrc.ScanLine[IY + 1]);
+      R1 := PQuadRow(ASrc.ScanLine[IY1]);
       Dst := PQuadRow(Result.ScanLine[Y]);
       for X := 0 to ANewW - 1 do
       begin
         SrcX := (X + 0.5) * ASrc.Width / ANewW - 0.5;
         IX := Trunc(SrcX);
         if IX < 0 then IX := 0;
-        if IX > ASrc.Width - 2 then IX := ASrc.Width - 2;
+        if IX > ASrc.Width - 1 then IX := ASrc.Width - 1;
+        IX1 := IX + 1;
+        if IX1 > ASrc.Width - 1 then IX1 := ASrc.Width - 1;
         FracX := SrcX - IX;
         if FracX < 0 then FracX := 0;
         if FracX > 1 then FracX := 1;
@@ -74,14 +82,14 @@ begin
         W10 := FracX * (1 - FracY);
         W01 := (1 - FracX) * FracY;
         W11 := FracX * FracY;
-        RR := R0^[IX].rgbRed * W00 + R0^[IX + 1].rgbRed * W10 +
-              R1^[IX].rgbRed * W01 + R1^[IX + 1].rgbRed * W11;
-        GG := R0^[IX].rgbGreen * W00 + R0^[IX + 1].rgbGreen * W10 +
-              R1^[IX].rgbGreen * W01 + R1^[IX + 1].rgbGreen * W11;
-        BB := R0^[IX].rgbBlue * W00 + R0^[IX + 1].rgbBlue * W10 +
-              R1^[IX].rgbBlue * W01 + R1^[IX + 1].rgbBlue * W11;
-        AA := R0^[IX].rgbReserved * W00 + R0^[IX + 1].rgbReserved * W10 +
-              R1^[IX].rgbReserved * W01 + R1^[IX + 1].rgbReserved * W11;
+        RR := R0^[IX].rgbRed * W00 + R0^[IX1].rgbRed * W10 +
+              R1^[IX].rgbRed * W01 + R1^[IX1].rgbRed * W11;
+        GG := R0^[IX].rgbGreen * W00 + R0^[IX1].rgbGreen * W10 +
+              R1^[IX].rgbGreen * W01 + R1^[IX1].rgbGreen * W11;
+        BB := R0^[IX].rgbBlue * W00 + R0^[IX1].rgbBlue * W10 +
+              R1^[IX].rgbBlue * W01 + R1^[IX1].rgbBlue * W11;
+        AA := R0^[IX].rgbReserved * W00 + R0^[IX1].rgbReserved * W10 +
+              R1^[IX].rgbReserved * W01 + R1^[IX1].rgbReserved * W11;
         Dst^[X].rgbRed := Round(RR);
         Dst^[X].rgbGreen := Round(GG);
         Dst^[X].rgbBlue := Round(BB);
