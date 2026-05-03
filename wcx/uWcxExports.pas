@@ -302,7 +302,10 @@ begin
       Exit;
     end;
 
-    H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
+    if H.Settings.RandomExtraction then
+      H.Offsets := CalculateRandomFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent)
+    else
+      H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
     H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
 
     if H.Settings.ShowFileSizes then
@@ -602,6 +605,12 @@ initialization
 {Fallback: INI next to the DLL, in case SetDefaultParams is not called
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
+
+{Seed the global Random once per DLL load. CalculateRandomFrameOffsets
+ reads from this RNG; without seeding, every TC session would emit the
+ same "random" sequence on this plugin and defeat the user's intent of
+ a non-deterministic frame layout.}
+Randomize;
 
 finalization
 

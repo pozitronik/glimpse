@@ -1,4 +1,4 @@
-{Configuration dialog for the WCX plugin.
+﻿{Configuration dialog for the WCX plugin.
  Shown via ConfigurePacker when the user clicks Configure in TC.}
 unit uWcxSettingsDlg;
 
@@ -38,6 +38,15 @@ type
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
     LblFFmpegInfo: TLabel;
+    {Sampling tab — frame-positioning controls: frame count, skip edges,
+     and the random-extraction slider. No "Cache random frames" toggle
+     here: WCX runs on demand from TC and has no frame cache, so the
+     option would be a no-op.}
+    TshSampling: TTabSheet;
+    LblRandomPercent: TLabel;
+    LblRandomPercentValue: TLabel;
+    ChkRandomExtraction: TCheckBox;
+    TrkRandomPercent: TTrackBar;
     TshOutput: TTabSheet;
     LblOutputMode: TLabel;
     CbxOutputMode: TComboBox;
@@ -127,6 +136,7 @@ type
     procedure BtnBannerFontClick(Sender: TObject);
     procedure BtnApplyClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
+    procedure TrkRandomPercentChange(Sender: TObject);
   private
     FOwnerWnd: HWND;
     FSettings: TWcxSettings;
@@ -172,6 +182,10 @@ var
 begin
   UdFrameCount.Position := ASettings.FramesCount;
   UdSkipEdges.Position := ASettings.SkipEdgesPercent;
+
+  ChkRandomExtraction.Checked := ASettings.RandomExtraction;
+  TrkRandomPercent.Position := ASettings.RandomPercent;
+  LblRandomPercentValue.Caption := IntToStr(ASettings.RandomPercent) + '%';
 
   DecodeMaxWorkersControls(ASettings.MaxWorkers, AutoChecked, UdPos);
   ChkMaxWorkersAuto.Checked := AutoChecked;
@@ -233,6 +247,8 @@ var
 begin
   ASettings.FramesCount := UdFrameCount.Position;
   ASettings.SkipEdgesPercent := UdSkipEdges.Position;
+  ASettings.RandomExtraction := ChkRandomExtraction.Checked;
+  ASettings.RandomPercent := TrkRandomPercent.Position;
 
   ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked,
     UdMaxWorkers.Position);
@@ -534,6 +550,13 @@ begin
   finally
     Defaults.Free;
   end;
+end;
+
+procedure TWcxSettingsForm.TrkRandomPercentChange(Sender: TObject);
+begin
+  {Live readout — the percent value is also captured into TWcxSettings
+   on Apply/OK via ControlsToSettings.}
+  LblRandomPercentValue.Caption := IntToStr(TrkRandomPercent.Position) + '%';
 end;
 
 constructor TWcxSettingsForm.CreateWithOwner(AOwnerWnd: HWND);

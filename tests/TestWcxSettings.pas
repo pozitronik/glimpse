@@ -95,6 +95,11 @@ type
     [Test] procedure TestTimestampTextColorRoundTrip;
     [Test] procedure TestTimestampTextAlphaRoundTrip;
     [Test] procedure TestTimestampTextAlphaClampedUpper;
+    { Random extraction (no CacheRandomFrames in WCX) }
+    [Test] procedure TestRandomExtractionDefaults;
+    [Test] procedure TestRandomExtractionRoundTrip;
+    [Test] procedure TestRandomPercentClampedHigh;
+    [Test] procedure TestRandomPercentClampedLow;
   end;
 
 implementation
@@ -1716,6 +1721,93 @@ begin
   try
     S.Load;
     Assert.AreEqual(Integer(MAX_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestRandomExtractionDefaults;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_RANDOM_EXTRACTION, S.RandomExtraction,
+      'WCX RandomExtraction defaults off');
+    Assert.AreEqual(DEF_RANDOM_PERCENT, S.RandomPercent,
+      'WCX RandomPercent defaults to mid-strength');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestRandomExtractionRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_random.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.RandomExtraction := not DEF_RANDOM_EXTRACTION;
+    S1.RandomPercent := 73;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_RANDOM_EXTRACTION, S2.RandomExtraction);
+    Assert.AreEqual(73, S2.RandomPercent);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestRandomPercentClampedHigh;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_random_hi.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_RANDOM_PERCENT, S.RandomPercent);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestRandomPercentClampedLow;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_random_lo.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', -25);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_RANDOM_PERCENT, S.RandomPercent);
   finally
     S.Free;
   end;

@@ -19,6 +19,13 @@ type
     FFFmpegExePath: string;
     {[extraction] — shared group record (see uSettingsGroups)}
     FExtraction: TExtractionSettingsGroup;
+    {Frame-position randomness. WCX has no live-view shuffle hotkey, so
+     this only governs whether the on-demand archive render starts from
+     deterministic midpoints (RandomExtraction = False) or randomised
+     per-slice picks (True). No CacheRandomFrames toggle: WCX has no
+     frame cache so the option would be a no-op.}
+    FRandomExtraction: Boolean;
+    FRandomPercent: Integer;
     {[output]}
     FOutputMode: TWcxOutputMode;
     FSaveFormat: TSaveFormat;
@@ -63,6 +70,8 @@ type
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
+    property RandomExtraction: Boolean read FRandomExtraction write FRandomExtraction;
+    property RandomPercent: Integer read FRandomPercent write FRandomPercent;
     property OutputMode: TWcxOutputMode read FOutputMode write FOutputMode;
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
@@ -129,6 +138,8 @@ begin
   FFFmpegMode := fmAuto;
   FFFmpegExePath := '';
   FExtraction := TExtractionSettingsGroup.Defaults;
+  FRandomExtraction := DEF_RANDOM_EXTRACTION;
+  FRandomPercent := DEF_RANDOM_PERCENT;
   FOutputMode := WCX_DEF_OUTPUT_MODE;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
@@ -165,6 +176,8 @@ begin
   try
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', FFFmpegExePath);
     FExtraction.LoadFrom(Ini, 'extraction');
+    FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', DEF_RANDOM_EXTRACTION);
+    FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', DEF_RANDOM_PERCENT), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
 
     if SameText(Ini.ReadString('output', 'Mode', 'separate'), 'combined') then
       FOutputMode := womCombined
@@ -204,6 +217,8 @@ begin
   try
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);
     FExtraction.SaveTo(Ini, 'extraction');
+    Ini.WriteBool('extraction', 'RandomExtraction', FRandomExtraction);
+    Ini.WriteInteger('extraction', 'RandomPercent', FRandomPercent);
 
     if FOutputMode = womCombined then
       Ini.WriteString('output', 'Mode', 'combined')
