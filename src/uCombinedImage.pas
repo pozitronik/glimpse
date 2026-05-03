@@ -126,6 +126,16 @@ procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect;
 procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect;
   const AText: string; const AStyle: TTimestampStyle);
 
+{Renders the per-cell timecode overlay for a combined-image cell. Picks
+ between the modern path (flush-to-corner rect with background block, when
+ AStyle.BackAlpha > 0) and the legacy path (free-standing shadowed text).
+ Centralises the corner-rect math so the uniform-grid and smart-grid
+ renders stay in lockstep.
+ No-op when AStyle.Show is False or AStyle.Corner is tcNone — callers
+ don't have to repeat that gating themselves.}
+procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect;
+  ATimeOffset: Double; const AStyle: TTimestampStyle);
+
 {Returns the historical defaults for the grid layout (auto columns, no gap,
  no border, black background). Callers override individual fields as needed.}
 function DefaultCombinedGridStyle: TCombinedGridStyle;
@@ -715,6 +725,50 @@ begin
   end;
 end;
 
+procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect;
+  ATimeOffset: Double; const AStyle: TTimestampStyle);
+const
+  TC_PADDING_H = 8; {horizontal padding inside the modern-path timecode rect}
+  TC_MIN_H = 20; {minimum height for the modern-path rect (live-view parity for small fonts)}
+var
+  Tc: string;
+  TW, TH: Integer;
+  R: TRect;
+begin
+  if (not AStyle.Show) or (AStyle.Corner = tcNone) then
+    Exit;
+
+  Tc := FormatTimecode(ATimeOffset);
+  {Prime the canvas font so TextWidth/TextHeight match the final render in
+   both branches below.}
+  ACanvas.Font.Name := AStyle.FontName;
+  ACanvas.Font.Size := AStyle.FontSize;
+  ACanvas.Font.Style := AStyle.FontStyles;
+
+  if AStyle.BackAlpha > 0 then
+  begin
+    {Modern path: flush-to-corner rect with bg block and centred text
+     (matches live view). Rect height floors at TC_MIN_H for live-view
+     parity at small font sizes, but grows to fit when larger fonts
+     would otherwise be clipped by DT_VCENTER inside a fixed rect.}
+    TW := ACanvas.TextWidth(Tc) + TC_PADDING_H;
+    TH := Max(ACanvas.TextHeight(Tc) + 4, TC_MIN_H);
+    case AStyle.Corner of
+      tcTopLeft:
+        R := Rect(ACellRect.Left, ACellRect.Top, ACellRect.Left + TW, ACellRect.Top + TH);
+      tcTopRight:
+        R := Rect(ACellRect.Right - TW, ACellRect.Top, ACellRect.Right, ACellRect.Top + TH);
+      tcBottomRight:
+        R := Rect(ACellRect.Right - TW, ACellRect.Bottom - TH, ACellRect.Right, ACellRect.Bottom);
+      else {tcBottomLeft}
+        R := Rect(ACellRect.Left, ACellRect.Bottom - TH, ACellRect.Left + TW, ACellRect.Bottom);
+    end;
+    DrawTimecodeOverlay(ACanvas, R, Tc, AStyle);
+  end
+  else
+    DrawLegacyTimecodeOverlay(ACanvas, ACellRect, Tc, AStyle);
+end;
+
 function DefaultCombinedGridStyle: TCombinedGridStyle;
 begin
   Result.Columns := 0;
@@ -810,16 +864,10 @@ end;
 
 function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
   const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
-const
-  TC_PADDING_H = 8; {horizontal padding inside the modern-path timecode rect}
-  TC_MIN_H = 20; {minimum height for the modern-path timecode rect (live-view parity for small fonts)}
 var
   Cols, Rows, CellW, CellH, I, Row, Col, X, Y: Integer;
   FrameCount: Integer;
-  Tc: string;
-  TW, TH: Integer;
   Border: Integer;
-  R: TRect;
   Lifted: TBitmap;
 begin
   FrameCount := Length(AFrames);
@@ -864,39 +912,9 @@ begin
     Y := Border + Row * (CellH + AGrid.CellGap);
     Result.Canvas.Draw(X, Y, AFrames[I]);
 
-    if ATimestamp.Show and (ATimestamp.Corner <> tcNone) and (I < Length(AOffsets)) then
-    begin
-      Tc := FormatTimecode(AOffsets[I].TimeOffset);
-      {Prime the canvas font so TextWidth/TextHeight match the final render in
-       both branches below.}
-      Result.Canvas.Font.Name := ATimestamp.FontName;
-      Result.Canvas.Font.Size := ATimestamp.FontSize;
-      Result.Canvas.Font.Style := ATimestamp.FontStyles;
-
-      if ATimestamp.BackAlpha > 0 then
-      begin
-        {Modern path: flush-to-corner rect with bg block and centered text (matches live view).
-         Rect height floors at TC_MIN_H for live-view parity at small font sizes, but grows to
-         fit when larger fonts would otherwise be clipped by DT_VCENTER inside a fixed rect.}
-        TW := Result.Canvas.TextWidth(Tc) + TC_PADDING_H;
-        TH := Max(Result.Canvas.TextHeight(Tc) + 4, TC_MIN_H);
-        case ATimestamp.Corner of
-          tcTopLeft:
-            R := Rect(X, Y, X + TW, Y + TH);
-          tcTopRight:
-            R := Rect(X + CellW - TW, Y, X + CellW, Y + TH);
-          tcBottomRight:
-            R := Rect(X + CellW - TW, Y + CellH - TH, X + CellW, Y + CellH);
-          else {tcBottomLeft}
-            R := Rect(X, Y + CellH - TH, X + TW, Y + CellH);
-        end;
-
-        DrawTimecodeOverlay(Result.Canvas, R, Tc, ATimestamp);
-      end else begin
-        DrawLegacyTimecodeOverlay(Result.Canvas,
-          Rect(X, Y, X + CellW, Y + CellH), Tc, ATimestamp);
-      end;
-    end;
+    if I < Length(AOffsets) then
+      DrawCellTimecode(Result.Canvas, Rect(X, Y, X + CellW, Y + CellH),
+        AOffsets[I].TimeOffset, ATimestamp);
   end;
 
   {Optional alpha-aware output. When BackgroundAlpha is 255 the pf24bit
@@ -987,21 +1005,16 @@ end;
 function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
   const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer;
   const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
-const
-  TC_PADDING_H = 8;
-  TC_MIN_H = 20;
 var
   Border, InnerW, InnerH, Gap: Integer;
   NRows, FrameCount, MaxCells: Integer;
   RowH, CellW, CellsInRow, CellsBefore, FrameIdx, RowIdx, CellInRow: Integer;
   RowTop, CellLeft: Integer;
   Bmp: TBitmap;
-  CellRect, SrcR, TcR: TRect;
+  CellRect, SrcR: TRect;
   CellRects: TArray<TRect>;
   Scale: Double;
   SrcW, SrcH: Integer;
-  Tc: string;
-  TW, TH: Integer;
   Lifted: TBitmap;
 begin
   FrameCount := Length(AFrames);
@@ -1071,36 +1084,8 @@ begin
         SetBrushOrgEx(Result.Canvas.Handle, 0, 0, nil);
         Result.Canvas.CopyRect(CellRect, Bmp.Canvas, SrcR);
 
-        {Per-cell timecode overlay. TODO: this block is a near-duplicate
-         of the equivalent loop in RenderCombinedImage; once both renders
-         have stabilised, factor it into a shared
-         "DrawTimecodeForCell(canvas, cellRect, text, style)" helper.}
-        if ATimestamp.Show and (ATimestamp.Corner <> tcNone) and (FrameIdx < Length(AOffsets)) then
-        begin
-          Tc := FormatTimecode(AOffsets[FrameIdx].TimeOffset);
-          Result.Canvas.Font.Name := ATimestamp.FontName;
-          Result.Canvas.Font.Size := ATimestamp.FontSize;
-          Result.Canvas.Font.Style := ATimestamp.FontStyles;
-
-          if ATimestamp.BackAlpha > 0 then
-          begin
-            TW := Result.Canvas.TextWidth(Tc) + TC_PADDING_H;
-            TH := Max(Result.Canvas.TextHeight(Tc) + 4, TC_MIN_H);
-            case ATimestamp.Corner of
-              tcTopLeft:
-                TcR := Rect(CellRect.Left, CellRect.Top, CellRect.Left + TW, CellRect.Top + TH);
-              tcTopRight:
-                TcR := Rect(CellRect.Right - TW, CellRect.Top, CellRect.Right, CellRect.Top + TH);
-              tcBottomRight:
-                TcR := Rect(CellRect.Right - TW, CellRect.Bottom - TH, CellRect.Right, CellRect.Bottom);
-              else {tcBottomLeft}
-                TcR := Rect(CellRect.Left, CellRect.Bottom - TH, CellRect.Left + TW, CellRect.Bottom);
-            end;
-            DrawTimecodeOverlay(Result.Canvas, TcR, Tc, ATimestamp);
-          end else begin
-            DrawLegacyTimecodeOverlay(Result.Canvas, CellRect, Tc, ATimestamp);
-          end;
-        end;
+        if FrameIdx < Length(AOffsets) then
+          DrawCellTimecode(Result.Canvas, CellRect, AOffsets[FrameIdx].TimeOffset, ATimestamp);
       end;
       Inc(CellsBefore, CellsInRow);
     end;
