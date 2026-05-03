@@ -274,18 +274,29 @@ class function THotkeyChord.FromIniStr(const AValue: string): THotkeyChord;
 var
   Parts: TArray<string>;
   I: Integer;
-  Token: string;
+  Token, Body: string;
   Mods: TShiftState;
   KeyCode: Word;
 begin
   Result := None;
-  if AValue.Trim = '' then
+  Body := AValue.Trim;
+  if Body = '' then
     Exit;
-  Parts := AValue.Split(['+']);
-  if Length(Parts) = 0 then
-    Exit;
-  Mods := [];
   KeyCode := 0;
+  {OEM '+' key paired with modifiers serialises as 'Shift++' / 'Ctrl++' /
+   'Alt++'. Splitting on '+' would yield two empty trailing tokens and the
+   chord would silently disappear on round-trip. Strip the '++' tail here so
+   the modifier prefix can be parsed normally. Single trailing '+' without a
+   preceding one (e.g. 'Ctrl+') is still a broken input that returns None.}
+  if (Length(Body) >= 2)
+    and (Body[Length(Body)] = '+')
+    and (Body[Length(Body) - 1] = '+') then
+  begin
+    KeyCode := VK_OEM_PLUS;
+    Body := Copy(Body, 1, Length(Body) - 2);
+  end;
+  Parts := Body.Split(['+']);
+  Mods := [];
   for I := 0 to High(Parts) do
   begin
     Token := Parts[I].Trim;

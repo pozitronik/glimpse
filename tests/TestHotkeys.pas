@@ -25,6 +25,14 @@ type
     [Test] procedure FromIniStr_Nonsense_Unassigned;
     [Test] procedure FromIniStr_LowerCase_Accepted;
     [Test] procedure FromIniStr_PlusKey_Recovered;
+    {Round-trip locks for chords that combine a modifier with the OEM '+' key.
+     Earlier these serialised as 'Shift++' / 'Ctrl++' / 'Alt++' but FromIniStr
+     split on every '+', producing two empty key tokens and silently losing
+     the chord. The plus-only recovery branch only matched a bare '+'.}
+    [Test] procedure FromIniStr_ShiftPlus_RoundTrips;
+    [Test] procedure FromIniStr_CtrlPlus_RoundTrips;
+    [Test] procedure FromIniStr_AltPlus_RoundTrips;
+    [Test] procedure FromIniStr_CtrlShiftPlus_RoundTrips;
     [Test] procedure FromIniStr_UnknownModifierToken_TreatsLaterTokenAsKey;
     [Test] procedure FromIniStr_ExtraKeyToken_FirstKeyWins;
     [Test] procedure Equals_SameFields_True;
@@ -208,6 +216,50 @@ begin
   C := THotkeyChord.FromIniStr('+');
   Assert.IsTrue(C.IsAssigned);
   Assert.AreEqual<Integer>(VK_OEM_PLUS, C.Key);
+end;
+
+procedure TTestHotkeyChord.FromIniStr_ShiftPlus_RoundTrips;
+var
+  Original, Parsed: THotkeyChord;
+begin
+  Original := THotkeyChord.Make(VK_OEM_PLUS, [ssShift]);
+  Parsed := THotkeyChord.FromIniStr(Original.ToIniStr);
+  Assert.IsTrue(Parsed.IsAssigned, 'Shift++ must round-trip');
+  Assert.AreEqual<Integer>(VK_OEM_PLUS, Parsed.Key);
+  Assert.IsTrue(Parsed.Modifiers = [ssShift]);
+end;
+
+procedure TTestHotkeyChord.FromIniStr_CtrlPlus_RoundTrips;
+var
+  Original, Parsed: THotkeyChord;
+begin
+  Original := THotkeyChord.Make(VK_OEM_PLUS, [ssCtrl]);
+  Parsed := THotkeyChord.FromIniStr(Original.ToIniStr);
+  Assert.IsTrue(Parsed.IsAssigned, 'Ctrl++ must round-trip');
+  Assert.AreEqual<Integer>(VK_OEM_PLUS, Parsed.Key);
+  Assert.IsTrue(Parsed.Modifiers = [ssCtrl]);
+end;
+
+procedure TTestHotkeyChord.FromIniStr_AltPlus_RoundTrips;
+var
+  Original, Parsed: THotkeyChord;
+begin
+  Original := THotkeyChord.Make(VK_OEM_PLUS, [ssAlt]);
+  Parsed := THotkeyChord.FromIniStr(Original.ToIniStr);
+  Assert.IsTrue(Parsed.IsAssigned, 'Alt++ must round-trip');
+  Assert.AreEqual<Integer>(VK_OEM_PLUS, Parsed.Key);
+  Assert.IsTrue(Parsed.Modifiers = [ssAlt]);
+end;
+
+procedure TTestHotkeyChord.FromIniStr_CtrlShiftPlus_RoundTrips;
+var
+  Original, Parsed: THotkeyChord;
+begin
+  Original := THotkeyChord.Make(VK_OEM_PLUS, [ssCtrl, ssShift]);
+  Parsed := THotkeyChord.FromIniStr(Original.ToIniStr);
+  Assert.IsTrue(Parsed.IsAssigned, 'Ctrl+Shift++ must round-trip');
+  Assert.AreEqual<Integer>(VK_OEM_PLUS, Parsed.Key);
+  Assert.IsTrue(Parsed.Modifiers = [ssCtrl, ssShift]);
 end;
 
 procedure TTestHotkeyChord.FromIniStr_UnknownModifierToken_TreatsLaterTokenAsKey;
