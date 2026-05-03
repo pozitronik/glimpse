@@ -302,10 +302,8 @@ begin
       Exit;
     end;
 
-    if H.Settings.RandomExtraction then
-      H.Offsets := CalculateRandomFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent)
-    else
-      H.Offsets := CalculateFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent);
+    H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount,
+      H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
     H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
 
     if H.Settings.ShowFileSizes then

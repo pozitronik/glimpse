@@ -106,6 +106,11 @@ type
     procedure TestRandomOffsetsZeroFrameCountRaises;
     [Test]
     procedure TestRandomOffsetsReproducibleWithSeed;
+    { BuildFrameOffsets dispatch tests }
+    [Test]
+    procedure TestBuildFrameOffsets_RandomFalse_MatchesDeterministic;
+    [Test]
+    procedure TestBuildFrameOffsets_RandomTrue_MatchesRandom;
   end;
 
 implementation
@@ -625,6 +630,37 @@ begin
   A := CalculateRandomFrameOffsets(100.0, 9, 5, 50);
   RandSeed := 42;
   B := CalculateRandomFrameOffsets(100.0, 9, 5, 50);
+  Assert.AreEqual(Integer(Length(A)), Integer(Length(B)));
+  for I := 0 to High(A) do
+    Assert.AreEqual(A[I].TimeOffset, B[I].TimeOffset, 1e-12);
+end;
+
+procedure TTestFrameOffsets.TestBuildFrameOffsets_RandomFalse_MatchesDeterministic;
+var
+  A, B: TFrameOffsetArray;
+  I: Integer;
+begin
+  {Dispatch contract: with ARandom=False, BuildFrameOffsets must produce
+   the same result as CalculateFrameOffsets for the same inputs.}
+  A := BuildFrameOffsets(100.0, 5, 2, 50, False);
+  B := CalculateFrameOffsets(100.0, 5, 2);
+  Assert.AreEqual(Integer(Length(A)), Integer(Length(B)));
+  for I := 0 to High(A) do
+    Assert.AreEqual(A[I].TimeOffset, B[I].TimeOffset, 1e-12);
+end;
+
+procedure TTestFrameOffsets.TestBuildFrameOffsets_RandomTrue_MatchesRandom;
+var
+  A, B: TFrameOffsetArray;
+  I: Integer;
+begin
+  {Dispatch contract: with ARandom=True, BuildFrameOffsets must produce
+   the same result as CalculateRandomFrameOffsets when seeded the same
+   way. Pin RandSeed before each call so the two random walks line up.}
+  RandSeed := 1234;
+  A := BuildFrameOffsets(100.0, 5, 2, 75, True);
+  RandSeed := 1234;
+  B := CalculateRandomFrameOffsets(100.0, 5, 2, 75);
   Assert.AreEqual(Integer(Length(A)), Integer(Length(B)));
   for I := 0 to High(A) do
     Assert.AreEqual(A[I].TimeOffset, B[I].TimeOffset, 1e-12);

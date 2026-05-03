@@ -42,6 +42,14 @@ function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdg
  @raises EArgumentException for invalid inputs.}
 function CalculateRandomFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomnessPercent: Integer): TFrameOffsetArray;
 
+{Single source of truth for the random-vs-deterministic offset choice
+ made by both plugins. ARandom selects between CalculateRandomFrameOffsets
+ and CalculateFrameOffsets; the other parameters are forwarded as-is.
+ Centralising the dispatch here keeps WLX and WCX in lockstep when the
+ random/deterministic decision evolves (e.g. future stratified or
+ deterministic-but-jittered modes).}
+function BuildFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomPercent: Integer; ARandom: Boolean): TFrameOffsetArray;
+
 {Formats a time in seconds as HH:MM:SS.mmm for display.}
 function FormatTimecode(ASeconds: Double): string;
 
@@ -127,6 +135,14 @@ begin
     Result[I].Index := I + 1;
     Result[I].TimeOffset := Midpoint + Jitter;
   end;
+end;
+
+function BuildFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomPercent: Integer; ARandom: Boolean): TFrameOffsetArray;
+begin
+  if ARandom then
+    Result := CalculateRandomFrameOffsets(ADuration, AFrameCount, ASkipEdgesPercent, ARandomPercent)
+  else
+    Result := CalculateFrameOffsets(ADuration, AFrameCount, ASkipEdgesPercent);
 end;
 
 function FormatTimecode(ASeconds: Double): string;

@@ -1289,10 +1289,9 @@ var
   UseRandom: Boolean;
 begin
   UseRandom := AForceRandom or FSettings.RandomExtraction;
-  if UseRandom and (FVideoInfo.Duration > 0) and (FUpDown.Position > 0) then
-    FOffsets := CalculateRandomFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent, FSettings.RandomPercent)
-  else if FVideoInfo.Duration > 0 then
-    FOffsets := CalculateFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent)
+  if (FVideoInfo.Duration > 0) and (FUpDown.Position > 0) then
+    FOffsets := BuildFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent,
+      FSettings.RandomPercent, UseRandom)
   else
     SetLength(FOffsets, 0);
   FCurrentExtractionIsRandom := UseRandom and (Length(FOffsets) > 0);
