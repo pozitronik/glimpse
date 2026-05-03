@@ -27,37 +27,23 @@ object SettingsForm: TSettingsForm
       DesignSize = (
         452
         450)
-      object LblSkipEdges: TLabel
-        Left = 12
-        Top = 24
-        Width = 59
-        Height = 15
-        Caption = 'Skip edges:'
-      end
-      object LblSkipEdgesUnit: TLabel
-        Left = 198
-        Top = 24
-        Width = 10
-        Height = 15
-        Caption = '%'
-      end
       object LblMaxWorkers: TLabel
         Left = 12
-        Top = 53
+        Top = 24
         Width = 69
         Height = 15
         Caption = 'Max workers:'
       end
       object LblMaxThreads: TLabel
         Left = 12
-        Top = 82
+        Top = 53
         Width = 108
         Height = 15
         Caption = 'Limit workers count:'
       end
       object LblMaxThreadsAuto: TLabel
         Left = 198
-        Top = 82
+        Top = 53
         Width = 3
         Height = 15
         Font.Charset = DEFAULT_CHARSET
@@ -69,50 +55,265 @@ object SettingsForm: TSettingsForm
       end
       object LblScaleTarget: TLabel
         Left = 32
-        Top = 227
+        Top = 198
         Width = 64
         Height = 15
         Caption = 'Scale target:'
       end
       object LblScaleSep: TLabel
         Left = 193
-        Top = 227
+        Top = 198
         Width = 12
         Height = 15
         Caption = #8212
       end
       object LblScaleUnit: TLabel
         Left = 291
-        Top = 227
+        Top = 198
         Width = 81
         Height = 15
         Caption = 'px (bigger side)'
       end
       object LblExtensions: TLabel
         Left = 12
-        Top = 313
-        Width = 58
+        Top = 284
+        Width = 427
         Height = 15
         Caption = 'Extensions:'
       end
       object LblFFmpegPath: TLabel
         Left = 12
-        Top = 343
-        Width = 73
+        Top = 336
+        Width = 427
         Height = 15
         Caption = 'FFmpeg path:'
       end
       object LblFFmpegInfo: TLabel
-        Left = 12
-        Top = 364
-        Width = 3
+        Left = 15
+        Top = 379
+        Width = 424
         Height = 15
+        AutoSize = False
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
         Font.Height = -12
         Font.Name = 'Segoe UI'
         Font.Style = []
         ParentFont = False
+      end
+      object EdtMaxWorkers: TEdit
+        Left = 130
+        Top = 20
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 0
+        Text = '1'
+      end
+      object UdMaxWorkers: TUpDown
+        Left = 175
+        Top = 20
+        Width = 17
+        Height = 23
+        Associate = EdtMaxWorkers
+        Min = 1
+        Max = 16
+        Position = 1
+        TabOrder = 1
+        Thousands = False
+      end
+      object ChkMaxWorkersAuto: TCheckBox
+        Left = 198
+        Top = 24
+        Width = 130
+        Height = 17
+        Caption = 'One per frame'
+        TabOrder = 2
+        OnClick = ChkMaxWorkersAutoClick
+      end
+      object EdtMaxThreads: TEdit
+        Left = 130
+        Top = 49
+        Width = 45
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 3
+        Text = '0'
+        OnChange = EdtMaxThreadsChange
+      end
+      object UdMaxThreads: TUpDown
+        Left = 175
+        Top = 49
+        Width = 17
+        Height = 23
+        Associate = EdtMaxThreads
+        Min = -1
+        Max = 64
+        TabOrder = 4
+        Thousands = False
+      end
+      object ChkUseBmpPipe: TCheckBox
+        Left = 12
+        Top = 82
+        Width = 427
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
+        TabOrder = 5
+      end
+      object ChkHwAccel: TCheckBox
+        Left = 12
+        Top = 111
+        Width = 427
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Use hardware-accelerated decoding (GPU)'
+        TabOrder = 6
+      end
+      object ChkUseKeyframes: TCheckBox
+        Left = 12
+        Top = 140
+        Width = 427
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Use keyframes (faster seeking, less precise timecodes)'
+        TabOrder = 7
+      end
+      object ChkScaledExtraction: TCheckBox
+        Left = 12
+        Top = 169
+        Width = 427
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Extract frames at display size (faster for high-res video)'
+        TabOrder = 8
+        OnClick = ChkScaledExtractionClick
+      end
+      object EdtMinFrameSide: TEdit
+        Left = 115
+        Top = 194
+        Width = 55
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 9
+        Text = '32'
+      end
+      object UdMinFrameSide: TUpDown
+        Left = 170
+        Top = 194
+        Width = 17
+        Height = 23
+        Associate = EdtMinFrameSide
+        Min = 32
+        Max = 7680
+        Increment = 10
+        Position = 32
+        TabOrder = 10
+        Thousands = False
+      end
+      object EdtMaxFrameSide: TEdit
+        Left = 213
+        Top = 194
+        Width = 55
+        Height = 23
+        NumbersOnly = True
+        TabOrder = 11
+        Text = '32'
+      end
+      object UdMaxFrameSide: TUpDown
+        Left = 268
+        Top = 194
+        Width = 17
+        Height = 23
+        Associate = EdtMaxFrameSide
+        Min = 32
+        Max = 7680
+        Increment = 10
+        Position = 32
+        TabOrder = 12
+        Thousands = False
+      end
+      object ChkAutoRefreshViewport: TCheckBox
+        Left = 12
+        Top = 224
+        Width = 427
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Re-extract automatically when the viewport changes'
+        TabOrder = 13
+      end
+      object ChkRespectAnamorphic: TCheckBox
+        Left = 12
+        Top = 252
+        Width = 427
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Respect anamorphic dimensions'
+        TabOrder = 14
+      end
+      object EdtExtensions: TEdit
+        Left = 12
+        Top = 301
+        Width = 427
+        Height = 23
+        Anchors = [akLeft, akTop, akRight]
+        TabOrder = 15
+      end
+      object EdtFFmpegPath: TEdit
+        Left = 12
+        Top = 354
+        Width = 396
+        Height = 23
+        Anchors = [akLeft, akTop, akRight]
+        TabOrder = 16
+        TextHint = 'Auto-detect'
+        OnChange = EdtFFmpegPathChange
+      end
+      object BtnFFmpegPath: TButton
+        Left = 414
+        Top = 354
+        Width = 25
+        Height = 23
+        Anchors = [akTop, akRight]
+        Caption = '...'
+        TabOrder = 17
+        OnClick = BtnFFmpegPathClick
+      end
+    end
+    object TshSampling: TTabSheet
+      Caption = 'Sampling'
+      ImageIndex = 7
+      DesignSize = (
+        452
+        450)
+      object LblSkipEdges: TLabel
+        Left = 12
+        Top = 24
+        Width = 59
+        Height = 15
+        Caption = 'Skip edges:'
+      end
+      object LblSkipEdgesUnit: TLabel
+        Left = 196
+        Top = 24
+        Width = 10
+        Height = 15
+        Caption = '%'
+      end
+      object LblRandomPercent: TLabel
+        Left = 12
+        Top = 74
+        Width = 71
+        Height = 15
+        Caption = 'Randomness:'
+      end
+      object LblRandomPercentValue: TLabel
+        Left = 417
+        Top = 74
+        Width = 22
+        Height = 15
+        Anchors = [akTop, akRight]
+        Caption = '50%'
       end
       object EdtSkipEdges: TEdit
         Left = 130
@@ -126,238 +327,45 @@ object SettingsForm: TSettingsForm
       object UdSkipEdges: TUpDown
         Left = 175
         Top = 20
-        Width = 17
+        Width = 16
         Height = 23
         Associate = EdtSkipEdges
         Max = 49
         TabOrder = 1
         Thousands = False
       end
-      object EdtMaxWorkers: TEdit
-        Left = 130
-        Top = 49
-        Width = 45
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 2
-        Text = '1'
-      end
-      object UdMaxWorkers: TUpDown
-        Left = 175
-        Top = 49
-        Width = 17
-        Height = 23
-        Associate = EdtMaxWorkers
-        Min = 1
-        Max = 16
-        Position = 1
-        TabOrder = 3
-        Thousands = False
-      end
-      object ChkMaxWorkersAuto: TCheckBox
-        Left = 198
-        Top = 53
-        Width = 130
-        Height = 17
-        Caption = 'One per frame'
-        TabOrder = 4
-        OnClick = ChkMaxWorkersAutoClick
-      end
-      object EdtMaxThreads: TEdit
-        Left = 130
-        Top = 78
-        Width = 45
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 5
-        Text = '0'
-        OnChange = EdtMaxThreadsChange
-      end
-      object UdMaxThreads: TUpDown
-        Left = 175
-        Top = 78
-        Width = 17
-        Height = 23
-        Associate = EdtMaxThreads
-        Min = -1
-        Max = 64
-        TabOrder = 6
-        Thousands = False
-      end
-      object ChkUseBmpPipe: TCheckBox
-        Left = 12
-        Top = 111
-        Width = 424
-        Height = 17
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
-        TabOrder = 7
-      end
-      object ChkHwAccel: TCheckBox
-        Left = 12
-        Top = 140
-        Width = 424
-        Height = 17
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Use hardware-accelerated decoding (GPU)'
-        TabOrder = 8
-      end
-      object ChkUseKeyframes: TCheckBox
-        Left = 12
-        Top = 169
-        Width = 424
-        Height = 17
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Use keyframes (faster seeking, less precise timecodes)'
-        TabOrder = 9
-      end
-      object ChkScaledExtraction: TCheckBox
-        Left = 12
-        Top = 198
-        Width = 424
-        Height = 17
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Extract frames at display size (faster for high-res video)'
-        TabOrder = 10
-        OnClick = ChkScaledExtractionClick
-      end
-      object EdtMinFrameSide: TEdit
-        Left = 115
-        Top = 223
-        Width = 55
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 11
-        Text = '32'
-      end
-      object UdMinFrameSide: TUpDown
-        Left = 170
-        Top = 223
-        Width = 17
-        Height = 23
-        Associate = EdtMinFrameSide
-        Min = 32
-        Max = 7680
-        Increment = 10
-        Position = 32
-        TabOrder = 12
-        Thousands = False
-      end
-      object EdtMaxFrameSide: TEdit
-        Left = 213
-        Top = 223
-        Width = 55
-        Height = 23
-        NumbersOnly = True
-        TabOrder = 13
-        Text = '32'
-      end
-      object UdMaxFrameSide: TUpDown
-        Left = 268
-        Top = 223
-        Width = 17
-        Height = 23
-        Associate = EdtMaxFrameSide
-        Min = 32
-        Max = 7680
-        Increment = 10
-        Position = 32
-        TabOrder = 14
-        Thousands = False
-      end
-      object ChkAutoRefreshViewport: TCheckBox
-        Left = 12
-        Top = 252
-        Width = 424
-        Height = 17
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Re-extract automatically when the viewport changes'
-        TabOrder = 15
-      end
-      object ChkRespectAnamorphic: TCheckBox
-        Left = 12
-        Top = 281
-        Width = 424
-        Height = 17
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Respect anamorphic dimensions'
-        TabOrder = 16
-      end
-      object EdtExtensions: TEdit
-        Left = 115
-        Top = 310
-        Width = 324
-        Height = 23
-        Anchors = [akLeft, akTop, akRight]
-        TabOrder = 17
-      end
-      object EdtFFmpegPath: TEdit
-        Left = 115
-        Top = 339
-        Width = 293
-        Height = 23
-        Anchors = [akLeft, akTop, akRight]
-        TabOrder = 18
-        TextHint = 'Auto-detect'
-        OnChange = EdtFFmpegPathChange
-      end
-      object BtnFFmpegPath: TButton
-        Left = 414
-        Top = 339
-        Width = 25
-        Height = 23
-        Anchors = [akTop, akRight]
-        Caption = '...'
-        TabOrder = 19
-        OnClick = BtnFFmpegPathClick
-      end
       object ChkRandomExtraction: TCheckBox
         Left = 12
-        Top = 372
-        Width = 424
+        Top = 49
+        Width = 427
         Height = 17
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Start from random positions'
-        TabOrder = 20
-      end
-      object LblRandomPercent: TLabel
-        Left = 12
-        Top = 397
-        Width = 76
-        Height = 15
-        Caption = 'Randomness:'
+        TabOrder = 2
       end
       object TrkRandomPercent: TTrackBar
         Left = 94
-        Top = 393
-        Width = 300
+        Top = 70
+        Width = 317
         Height = 25
         Anchors = [akLeft, akTop, akRight]
-        Min = 1
         Max = 100
+        Min = 1
+        Frequency = 5
         Position = 50
-        Frequency = 10
         ShowSelRange = False
-        TabOrder = 21
+        TabOrder = 3
         TickMarks = tmBoth
         OnChange = TrkRandomPercentChange
       end
-      object LblRandomPercentValue: TLabel
-        Left = 400
-        Top = 397
-        Width = 36
-        Height = 15
-        Anchors = [akTop, akRight]
-        Caption = '50%'
-      end
       object ChkCacheRandomFrames: TCheckBox
         Left = 12
-        Top = 425
-        Width = 424
+        Top = 102
+        Width = 427
         Height = 17
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Cache random frames'
-        TabOrder = 22
+        TabOrder = 4
       end
     end
     object TshAppearance: TTabSheet
@@ -365,7 +373,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 1
       DesignSize = (
         452
-        400)
+        450)
       object LblBackground: TLabel
         Left = 12
         Top = 24
@@ -625,7 +633,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 2
       DesignSize = (
         452
-        400)
+        450)
       object LblSaveFormat: TLabel
         Left = 12
         Top = 24
@@ -650,7 +658,7 @@ object SettingsForm: TSettingsForm
       object LblBackgroundAlpha: TLabel
         Left = 12
         Top = 111
-        Width = 110
+        Width = 109
         Height = 15
         Caption = 'Background opacity:'
       end
@@ -887,7 +895,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 3
       DesignSize = (
         452
-        400)
+        450)
       object LblCacheFolder: TLabel
         Left = 12
         Top = 53
@@ -1094,7 +1102,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 5
       DesignSize = (
         452
-        400)
+        450)
       object ChkQVDisableNavigation: TCheckBox
         Left = 12
         Top = 24
@@ -1128,7 +1136,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 6
       DesignSize = (
         452
-        400)
+        450)
       object LvwHotkeys: TListView
         Left = 12
         Top = 12
@@ -1185,7 +1193,7 @@ object SettingsForm: TSettingsForm
   end
   object PnlButtons: TPanel
     Left = 0
-    Top = 430
+    Top = 480
     Width = 460
     Height = 40
     Align = alBottom
@@ -1239,7 +1247,7 @@ object SettingsForm: TSettingsForm
   end
   object ColorDlg: TColorDialog
     Options = [cdFullOpen]
-    Left = 408
+    Left = 384
     Top = 8
   end
   object FontDlg: TFontDialog

@@ -15,10 +15,6 @@ type
   TSettingsForm = class(TForm)
     PageControl: TPageControl;
     TshGeneral: TTabSheet;
-    LblSkipEdges: TLabel;
-    EdtSkipEdges: TEdit;
-    UdSkipEdges: TUpDown;
-    LblSkipEdgesUnit: TLabel;
     LblMaxWorkers: TLabel;
     EdtMaxWorkers: TEdit;
     UdMaxWorkers: TUpDown;
@@ -40,11 +36,6 @@ type
     UdMaxFrameSide: TUpDown;
     LblScaleUnit: TLabel;
     ChkAutoRefreshViewport: TCheckBox;
-    ChkRandomExtraction: TCheckBox;
-    LblRandomPercent: TLabel;
-    TrkRandomPercent: TTrackBar;
-    LblRandomPercentValue: TLabel;
-    ChkCacheRandomFrames: TCheckBox;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -148,6 +139,16 @@ type
     BtnCancel: TButton;
     ColorDlg: TColorDialog;
     FontDlg: TFontDialog;
+    TshSampling: TTabSheet;
+    EdtSkipEdges: TEdit;
+    LblSkipEdges: TLabel;
+    UdSkipEdges: TUpDown;
+    LblSkipEdgesUnit: TLabel;
+    ChkRandomExtraction: TCheckBox;
+    LblRandomPercent: TLabel;
+    TrkRandomPercent: TTrackBar;
+    ChkCacheRandomFrames: TCheckBox;
+    LblRandomPercentValue: TLabel;
     procedure PnlBackgroundClick(Sender: TObject);
     procedure PnlTCBackClick(Sender: TObject);
     procedure PnlTCTextColorClick(Sender: TObject);
