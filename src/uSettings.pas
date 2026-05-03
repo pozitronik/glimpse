@@ -310,6 +310,12 @@ begin
     FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
     FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide', DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
     FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide', DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
+    {Cross-validate: independent clamping passes inverted bounds (Min > Max)
+     untouched. Downstream CalcExtractionMaxSide then calls EnsureRange with
+     swapped lo/hi and silently returns the larger value, locking extraction
+     size. Pull Min down to Max so the cap honours the user's upper bound.}
+    if FMinFrameSide > FMaxFrameSide then
+      FMinFrameSide := FMaxFrameSide;
     FAutoRefreshOnViewportChange := Ini.ReadBool('extraction', 'AutoRefreshOnViewportChange', DEF_AUTO_REFRESH_VIEWPORT);
     FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', DEF_RANDOM_EXTRACTION);
     FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', DEF_RANDOM_PERCENT), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);

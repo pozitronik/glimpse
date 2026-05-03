@@ -38,6 +38,8 @@ type
     [Test]
     procedure TestClampOutOfRange;
     [Test]
+    procedure TestFrameSideInvertedRangeNormalised;
+    [Test]
     procedure TestEmptyExtensionListFallback;
     [Test]
     procedure TestMissingIniFileUsesDefaults;
@@ -569,6 +571,35 @@ begin
     Assert.AreEqual(1, S.JpegQuality, 'Quality below 1 clamped to 1');
     Assert.AreEqual(9, S.PngCompression, 'Compression above 9 clamped to 9');
     Assert.AreEqual(10000, S.CacheMaxSizeMB, 'Cache size above 10000 clamped to 10000');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFrameSideInvertedRangeNormalised;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  {Cross-validation: a hand-edited INI (or a dialog that allowed it) with
+   MinFrameSide > MaxFrameSide must not be loaded as-is. EnsureRange clamps
+   each value independently, so without cross-checking, the downstream
+   CalcExtractionMaxSide receives inverted bounds and silently locks
+   extraction to the larger side regardless of viewport.}
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'MinFrameSide', 2000);
+    Ini.WriteInteger('extraction', 'MaxFrameSide', 100);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.MinFrameSide <= S.MaxFrameSide,
+      Format('Inverted range must be normalised, got Min=%d Max=%d',
+        [S.MinFrameSide, S.MaxFrameSide]));
   finally
     S.Free;
   end;
