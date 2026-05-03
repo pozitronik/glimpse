@@ -78,6 +78,20 @@ type
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
   end;
 
+  {Decorator that delegates reads but drops writes. Used for random
+   extraction when the user has CacheRandomFrames disabled: a previously
+   cached random pick can still hit (cheap), but new picks do not
+   pollute the cache. Mirror image of TBypassFrameCache; the two narrow
+   types are easier to reason about than one configurable wrapper.}
+  TReadOnlyFrameCache = class(TFrameCacheBase)
+  strict private
+    FInner: IFrameCache;
+  public
+    constructor Create(const AInner: IFrameCache);
+    function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
+    procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
+  end;
+
   {Real disk cache with sharded PNG storage and LRU eviction.}
   TFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
@@ -159,6 +173,26 @@ end;
 procedure TBypassFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
 begin
   FInner.Put(AKey, ABitmap);
+end;
+
+{TReadOnlyFrameCache}
+
+constructor TReadOnlyFrameCache.Create(const AInner: IFrameCache);
+begin
+  inherited Create;
+  FInner := AInner;
+end;
+
+function TReadOnlyFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
+begin
+  Result := FInner.TryGet(AKey);
+end;
+
+procedure TReadOnlyFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
+begin
+  {Intentional no-op: random extractions with CacheRandomFrames=False
+   read from the disk cache when an offset happens to be cached, but
+   never write fresh picks back.}
 end;
 
 {TFrameCache}

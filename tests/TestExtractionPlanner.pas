@@ -40,6 +40,10 @@ type
     [Test] procedure TestDetectSettingsChangesMaxFrameSide;
     [Test] procedure TestDetectSettingsChangesUseKeyframes;
     [Test] procedure TestDetectSettingsChangesRespectAnamorphic;
+    [Test] procedure TestDetectSettingsChangesRandomExtractionToggle;
+    [Test] procedure TestDetectSettingsChangesRandomPercentWhileOn;
+    [Test] procedure TestDetectSettingsChangesRandomPercentWhileOffNoEffect;
+    [Test] procedure TestDetectSettingsChangesCacheRandomFrames;
 
     { CalcExtractionMaxSide tests }
     [Test] procedure TestCalcMaxSideLandscape;
@@ -255,6 +259,9 @@ begin
     Assert.AreEqual(1920, Snap.MaxFrameSide);
     Assert.IsFalse(Snap.UseKeyframes);
     Assert.IsTrue(Snap.RespectAnamorphic, 'Snapshot must capture default-on RespectAnamorphic');
+    Assert.IsFalse(Snap.RandomExtraction, 'Snapshot must capture default-off RandomExtraction');
+    Assert.AreEqual(50, Snap.RandomPercent, 'Snapshot must capture default RandomPercent');
+    Assert.IsFalse(Snap.CacheRandomFrames, 'Snapshot must capture default-off CacheRandomFrames');
   finally
     S.Free;
   end;
@@ -463,6 +470,90 @@ begin
     S.RespectAnamorphic := not Snap.RespectAnamorphic;
     Changes := DetectSettingsChanges(Snap, S);
     Assert.IsTrue(scRespectAnamorphicChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesRandomExtractionToggle;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  {Flipping RandomExtraction must trigger a re-extract: the offset
+   builder picks a different distribution.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.RandomExtraction := not Snap.RandomExtraction;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scRandomExtractionChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesRandomPercentWhileOn;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  {Slider movement WHILE random extraction is enabled changes the
+   jitter window — must re-extract.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.RandomExtraction := True;
+    S.RandomPercent := 25;
+    Snap := TakeSettingsSnapshot(S);
+    S.RandomPercent := 75;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scRandomExtractionChanged in Changes,
+      'Slider while random=on must re-extract');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesRandomPercentWhileOffNoEffect;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  {Slider movement WHILE random extraction is disabled does not change
+   anything visible — the slider only matters when random is active or
+   on the next Shuffle invocation. No re-extract.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.RandomExtraction := False;
+    S.RandomPercent := 25;
+    Snap := TakeSettingsSnapshot(S);
+    S.RandomPercent := 75;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsFalse(scRandomExtractionChanged in Changes,
+      'Slider while random=off must NOT trigger re-extract');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesCacheRandomFrames;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  {Toggling CacheRandomFrames must surface — it changes which cache
+   wrapper future random extractions use, but no re-extract is needed
+   because current frames are unaffected.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Snap := TakeSettingsSnapshot(S);
+    S.CacheRandomFrames := not Snap.CacheRandomFrames;
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scCacheRandomChanged in Changes);
   finally
     S.Free;
   end;

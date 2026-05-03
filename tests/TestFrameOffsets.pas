@@ -83,6 +83,29 @@ type
     procedure TestDurationHMS_Hours;
     [Test]
     procedure TestDurationHMS_Rounding;
+    { CalculateRandomFrameOffsets tests }
+    [Test]
+    procedure TestRandomOffsetsCountMatches;
+    [Test]
+    procedure TestRandomOffsetsIndicesOneBased;
+    [Test]
+    procedure TestRandomOffsetsAtP1IsNearMidpoint;
+    [Test]
+    procedure TestRandomOffsetsAtP100StaysInsideSlice;
+    [Test]
+    procedure TestRandomOffsetsAreMonotonic;
+    [Test]
+    procedure TestRandomOffsetsRespectSkipEdges;
+    [Test]
+    procedure TestRandomOffsetsClampsHighRandomness;
+    [Test]
+    procedure TestRandomOffsetsClampsLowRandomness;
+    [Test]
+    procedure TestRandomOffsetsZeroDurationRaises;
+    [Test]
+    procedure TestRandomOffsetsZeroFrameCountRaises;
+    [Test]
+    procedure TestRandomOffsetsReproducibleWithSeed;
   end;
 
 implementation
@@ -426,6 +449,185 @@ begin
   Assert.AreEqual('1:31', FormatDurationHMS(90.6));
   { 59.5 rounds to 60 = 1:00 }
   Assert.AreEqual('1:00', FormatDurationHMS(59.5));
+end;
+
+{ CalculateRandomFrameOffsets tests }
+
+procedure TTestFrameOffsets.TestRandomOffsetsCountMatches;
+var
+  Offsets: TFrameOffsetArray;
+begin
+  Offsets := CalculateRandomFrameOffsets(100.0, 9, 0, 50);
+  Assert.AreEqual(9, Integer(Length(Offsets)));
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsIndicesOneBased;
+var
+  Offsets: TFrameOffsetArray;
+  I: Integer;
+begin
+  Offsets := CalculateRandomFrameOffsets(100.0, 5, 0, 50);
+  for I := 0 to High(Offsets) do
+    Assert.AreEqual(I + 1, Offsets[I].Index);
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsAtP1IsNearMidpoint;
+var
+  Offsets: TFrameOffsetArray;
+  Slice, Midpoint, Window, T: Double;
+  I: Integer;
+begin
+  {At P=1, jitter window is 1% of slice length around the midpoint.
+   Even with worst-case Random outputs, every offset must stay within
+   one window-half of its midpoint.}
+  Offsets := CalculateRandomFrameOffsets(100.0, 4, 0, 1);
+  Slice := 100.0 / 4.0;
+  Window := Slice / 2.0 * 0.01;
+  for I := 0 to High(Offsets) do
+  begin
+    Midpoint := (I + 0.5) * Slice;
+    T := Offsets[I].TimeOffset;
+    Assert.IsTrue(Abs(T - Midpoint) <= Window + 1e-9,
+      Format('Frame %d offset %.6f outside +/- %.6f of midpoint %.6f', [I, T, Window, Midpoint]));
+  end;
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsAtP100StaysInsideSlice;
+var
+  Offsets: TFrameOffsetArray;
+  Slice, SliceStart, SliceEnd, T: Double;
+  I, K: Integer;
+begin
+  {At P=100, the jitter window equals the full slice. Repeat the call
+   many times to exercise the Random distribution; every chosen offset
+   must still land inside its own slice (so frame ordering is preserved
+   no matter what Random returns).}
+  for K := 1 to 50 do
+  begin
+    Offsets := CalculateRandomFrameOffsets(100.0, 9, 0, 100);
+    Slice := 100.0 / 9.0;
+    for I := 0 to High(Offsets) do
+    begin
+      SliceStart := I * Slice;
+      SliceEnd := (I + 1) * Slice;
+      T := Offsets[I].TimeOffset;
+      Assert.IsTrue((T >= SliceStart - 1e-9) and (T <= SliceEnd + 1e-9),
+        Format('Frame %d offset %.6f escaped slice [%.6f, %.6f] on iter %d', [I, T, SliceStart, SliceEnd, K]));
+    end;
+  end;
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsAreMonotonic;
+var
+  Offsets: TFrameOffsetArray;
+  I, K: Integer;
+begin
+  {Frame ordering invariant: t_1 < t_2 < ... < t_N. With per-slice
+   jitter capped at slice/2 (P=100 means window=slice/2 each side, so
+   the bound is exactly slice/2 from midpoint = slice edge), adjacent
+   offsets cannot cross. Repeat many times to flush flakiness.}
+  for K := 1 to 50 do
+  begin
+    Offsets := CalculateRandomFrameOffsets(100.0, 12, 0, 100);
+    for I := 1 to High(Offsets) do
+      Assert.IsTrue(Offsets[I].TimeOffset >= Offsets[I - 1].TimeOffset - 1e-9,
+        Format('Non-monotonic at i=%d on iter %d: %.6f < %.6f', [I, K, Offsets[I].TimeOffset, Offsets[I - 1].TimeOffset]));
+  end;
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsRespectSkipEdges;
+var
+  Offsets: TFrameOffsetArray;
+  EffStart, EffEnd: Double;
+  I, K: Integer;
+begin
+  {With 10% skip, all offsets must be inside [10, 90] regardless of
+   randomness. Tests the boundary behaviour: even at P=100 the
+   slice layout starts inside the skipped zone.}
+  for K := 1 to 50 do
+  begin
+    Offsets := CalculateRandomFrameOffsets(100.0, 6, 10, 100);
+    EffStart := 10.0;
+    EffEnd := 90.0;
+    for I := 0 to High(Offsets) do
+    begin
+      Assert.IsTrue(Offsets[I].TimeOffset >= EffStart - 1e-9,
+        Format('Offset %.6f below EffStart %.6f', [Offsets[I].TimeOffset, EffStart]));
+      Assert.IsTrue(Offsets[I].TimeOffset <= EffEnd + 1e-9,
+        Format('Offset %.6f above EffEnd %.6f', [Offsets[I].TimeOffset, EffEnd]));
+    end;
+  end;
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsClampsHighRandomness;
+var
+  OffsetsAt100, OffsetsAt9999: TFrameOffsetArray;
+  I: Integer;
+begin
+  {RandomnessPercent above 100 must clamp to 100 silently. Easiest
+   check: with the same RandSeed, P=100 and P=9999 produce identical
+   sequences (same effective jitter window).}
+  RandSeed := 123;
+  OffsetsAt100 := CalculateRandomFrameOffsets(100.0, 5, 0, 100);
+  RandSeed := 123;
+  OffsetsAt9999 := CalculateRandomFrameOffsets(100.0, 5, 0, 9999);
+  for I := 0 to High(OffsetsAt100) do
+    Assert.AreEqual(OffsetsAt100[I].TimeOffset, OffsetsAt9999[I].TimeOffset, 1e-9,
+      Format('Offset %d differed between P=100 and P=9999', [I]));
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsClampsLowRandomness;
+var
+  OffsetsAt1, OffsetsAt0, OffsetsAtNeg: TFrameOffsetArray;
+  I: Integer;
+begin
+  {RandomnessPercent below 1 must clamp to 1: the slider's UI floor.}
+  RandSeed := 456;
+  OffsetsAt1 := CalculateRandomFrameOffsets(100.0, 5, 0, 1);
+  RandSeed := 456;
+  OffsetsAt0 := CalculateRandomFrameOffsets(100.0, 5, 0, 0);
+  RandSeed := 456;
+  OffsetsAtNeg := CalculateRandomFrameOffsets(100.0, 5, 0, -100);
+  for I := 0 to High(OffsetsAt1) do
+  begin
+    Assert.AreEqual(OffsetsAt1[I].TimeOffset, OffsetsAt0[I].TimeOffset, 1e-9,
+      'P=0 must clamp to 1');
+    Assert.AreEqual(OffsetsAt1[I].TimeOffset, OffsetsAtNeg[I].TimeOffset, 1e-9,
+      'Negative P must clamp to 1');
+  end;
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsZeroDurationRaises;
+begin
+  Assert.WillRaise(
+    procedure begin CalculateRandomFrameOffsets(0.0, 4, 0, 50); end,
+    EArgumentException
+  );
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsZeroFrameCountRaises;
+begin
+  Assert.WillRaise(
+    procedure begin CalculateRandomFrameOffsets(100.0, 0, 0, 50); end,
+    EArgumentException
+  );
+end;
+
+procedure TTestFrameOffsets.TestRandomOffsetsReproducibleWithSeed;
+var
+  A, B: TFrameOffsetArray;
+  I: Integer;
+begin
+  {Same RandSeed -> identical sequences. Confirms the function reads
+   from the global RNG and is therefore reproducible in tests by
+   pinning RandSeed before the call.}
+  RandSeed := 42;
+  A := CalculateRandomFrameOffsets(100.0, 9, 5, 50);
+  RandSeed := 42;
+  B := CalculateRandomFrameOffsets(100.0, 9, 5, 50);
+  Assert.AreEqual(Integer(Length(A)), Integer(Length(B)));
+  for I := 0 to High(A) do
+    Assert.AreEqual(A[I].TimeOffset, B[I].TimeOffset, 1e-12);
 end;
 
 initialization

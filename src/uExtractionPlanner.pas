@@ -13,7 +13,7 @@ type
     Len: Integer; {number of frames in this chunk}
   end;
 
-  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged);
+  TSettingsChange = (scCacheChanged, scFFmpegPathChanged, scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged, scRandomExtractionChanged, scCacheRandomChanged);
   TSettingsChanges = set of TSettingsChange;
 
   TSettingsSnapshot = record
@@ -27,6 +27,9 @@ type
     MaxFrameSide: Integer;
     UseKeyframes: Boolean;
     RespectAnamorphic: Boolean;
+    RandomExtraction: Boolean;
+    RandomPercent: Integer;
+    CacheRandomFrames: Boolean;
   end;
 
   {Splits FrameCount frames into chunks for parallel extraction.
@@ -175,6 +178,9 @@ begin
   Result.MaxFrameSide := ASettings.MaxFrameSide;
   Result.UseKeyframes := ASettings.UseKeyframes;
   Result.RespectAnamorphic := ASettings.RespectAnamorphic;
+  Result.RandomExtraction := ASettings.RandomExtraction;
+  Result.RandomPercent := ASettings.RandomPercent;
+  Result.CacheRandomFrames := ASettings.CacheRandomFrames;
 end;
 
 function DetectSettingsChanges(const AOld: TSettingsSnapshot; ASettings: TPluginSettings): TSettingsChanges;
@@ -198,6 +204,17 @@ begin
 
   if ASettings.RespectAnamorphic <> AOld.RespectAnamorphic then
     Include(Result, scRespectAnamorphicChanged);
+
+  {Random extraction: enabling/disabling or moving the slider while
+   enabled both warrant a re-extract. Slider movement while disabled
+   does not, since the slider only matters when active or when the user
+   invokes Shuffle on demand.}
+  if (ASettings.RandomExtraction <> AOld.RandomExtraction)
+    or (ASettings.RandomExtraction and (ASettings.RandomPercent <> AOld.RandomPercent)) then
+    Include(Result, scRandomExtractionChanged);
+
+  if ASettings.CacheRandomFrames <> AOld.CacheRandomFrames then
+    Include(Result, scCacheRandomChanged);
 end;
 
 end.

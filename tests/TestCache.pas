@@ -73,6 +73,12 @@ type
     [Test]
     procedure TestBypassCachePutDelegates;
 
+    { TReadOnlyFrameCache tests }
+    [Test]
+    procedure TestReadOnlyCacheTryGetDelegates;
+    [Test]
+    procedure TestReadOnlyCachePutIsNoOp;
+
     { Eviction edge cases }
     [Test]
     procedure TestEvictionSkipsLockedFiles;
@@ -608,6 +614,61 @@ begin
   finally
     Bmp.Free;
   end;
+end;
+
+{ TReadOnlyFrameCache tests }
+
+procedure TTestFrameCache.TestReadOnlyCacheTryGetDelegates;
+var
+  RealCache, ReadOnly: IFrameCache;
+  FilePath: string;
+  Bmp: TBitmap;
+begin
+  {ReadOnly must hit on entries already present in the inner cache —
+   that is the whole point of "writes off, reads on" for the random
+   extraction path with caching disabled.}
+  FilePath := CreateDummyFile('ro_get.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+
+  Bmp := CreateTestBitmap(64, 64);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 7.5, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  ReadOnly := TReadOnlyFrameCache.Create(RealCache);
+  Bmp := ReadOnly.TryGet(TFrameCacheKey.Create(FilePath, 7.5, 0, False));
+  try
+    Assert.IsNotNull(Bmp, 'ReadOnly TryGet must delegate to inner');
+    Assert.AreEqual(64, Bmp.Width);
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestFrameCache.TestReadOnlyCachePutIsNoOp;
+var
+  RealCache, ReadOnly: IFrameCache;
+  FilePath: string;
+  Bmp, Probe: TBitmap;
+begin
+  {Put must NOT reach the inner cache. Verify by attempting a Put
+   through the ReadOnly wrapper, then probing the inner directly: the
+   key must miss.}
+  FilePath := CreateDummyFile('ro_put.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+
+  ReadOnly := TReadOnlyFrameCache.Create(RealCache);
+  Bmp := CreateTestBitmap(32, 32);
+  try
+    ReadOnly.Put(TFrameCacheKey.Create(FilePath, 11.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  Probe := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 11.0, 0, False));
+  Assert.IsNull(Probe, 'ReadOnly Put must drop writes; inner cache must remain empty');
 end;
 
 procedure TTestFrameCache.TestEvictionSkipsLockedFiles;

@@ -22,6 +22,9 @@ type
     FMinFrameSide: Integer;
     FMaxFrameSide: Integer;
     FAutoRefreshOnViewportChange: Boolean;
+    FRandomExtraction: Boolean;
+    FRandomPercent: Integer;
+    FCacheRandomFrames: Boolean;
     {[view]}
     FViewMode: TViewMode;
     FModeZoom: array [TViewMode] of TZoomMode;
@@ -105,6 +108,9 @@ type
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;
     property AutoRefreshOnViewportChange: Boolean read FAutoRefreshOnViewportChange write FAutoRefreshOnViewportChange;
+    property RandomExtraction: Boolean read FRandomExtraction write FRandomExtraction;
+    property RandomPercent: Integer read FRandomPercent write FRandomPercent;
+    property CacheRandomFrames: Boolean read FCacheRandomFrames write FCacheRandomFrames;
 
     {[view]}
     property ViewMode: TViewMode read FViewMode write FViewMode;
@@ -242,6 +248,9 @@ begin
   FMinFrameSide := DEF_MIN_FRAME_SIDE;
   FMaxFrameSide := DEF_MAX_FRAME_SIDE;
   FAutoRefreshOnViewportChange := DEF_AUTO_REFRESH_VIEWPORT;
+  FRandomExtraction := DEF_RANDOM_EXTRACTION;
+  FRandomPercent := DEF_RANDOM_PERCENT;
+  FCacheRandomFrames := DEF_CACHE_RANDOM_FRAMES;
   FViewMode := DEF_VIEW_MODE;
   for var VM := Low(TViewMode) to High(TViewMode) do
     FModeZoom[VM] := DEF_ZOOM_MODE;
@@ -302,6 +311,9 @@ begin
     FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide', DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
     FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide', DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
     FAutoRefreshOnViewportChange := Ini.ReadBool('extraction', 'AutoRefreshOnViewportChange', DEF_AUTO_REFRESH_VIEWPORT);
+    FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', DEF_RANDOM_EXTRACTION);
+    FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', DEF_RANDOM_PERCENT), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
+    FCacheRandomFrames := Ini.ReadBool('extraction', 'CacheRandomFrames', DEF_CACHE_RANDOM_FRAMES);
 
     FViewMode := StrToViewMode(Ini.ReadString('view', 'Mode', ''));
     for var VM := Low(TViewMode) to High(TViewMode) do
@@ -361,6 +373,9 @@ begin
     Ini.WriteInteger('extraction', 'MinFrameSide', FMinFrameSide);
     Ini.WriteInteger('extraction', 'MaxFrameSide', FMaxFrameSide);
     Ini.WriteBool('extraction', 'AutoRefreshOnViewportChange', FAutoRefreshOnViewportChange);
+    Ini.WriteBool('extraction', 'RandomExtraction', FRandomExtraction);
+    Ini.WriteInteger('extraction', 'RandomPercent', FRandomPercent);
+    Ini.WriteBool('extraction', 'CacheRandomFrames', FCacheRandomFrames);
 
     Ini.WriteString('view', 'Mode', ViewModeToStr(FViewMode));
     for var VM := Low(TViewMode) to High(TViewMode) do

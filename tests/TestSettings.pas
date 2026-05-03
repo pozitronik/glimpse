@@ -110,6 +110,9 @@ type
     [Test]
     procedure TestCombinedBorderClampedLow;
     [Test]
+    procedure TestRandomExtractionDefaults;
+    procedure TestRandomExtractionRoundTrip;
+    procedure TestRandomPercentClampedOnLoad;
     procedure TestSaveAtLiveResolutionDefault;
     [Test]
     procedure TestSaveAtLiveResolutionRoundTrip;
@@ -1362,6 +1365,93 @@ begin
     S.Load;
     Assert.AreEqual(MIN_COMBINED_BORDER, S.CombinedBorder,
       'Negative CombinedBorder should be clamped to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRandomExtractionDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_RANDOM_EXTRACTION, S.RandomExtraction,
+      'RandomExtraction defaults off (existing behaviour preserved)');
+    Assert.AreEqual(DEF_RANDOM_PERCENT, S.RandomPercent,
+      'RandomPercent defaults to mid-strength jitter');
+    Assert.AreEqual(DEF_CACHE_RANDOM_FRAMES, S.CacheRandomFrames,
+      'CacheRandomFrames defaults off ("random means random")');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRandomExtractionRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'random.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.RandomExtraction := not DEF_RANDOM_EXTRACTION;
+    S1.RandomPercent := 75;
+    S1.CacheRandomFrames := not DEF_CACHE_RANDOM_FRAMES;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_RANDOM_EXTRACTION, S2.RandomExtraction);
+    Assert.AreEqual(75, S2.RandomPercent);
+    Assert.AreEqual(not DEF_CACHE_RANDOM_FRAMES, S2.CacheRandomFrames);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRandomPercentClampedOnLoad;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Out-of-range values in the INI must be clamped on load — protects
+   against hand-edited INI files producing impossible percentages.}
+  IniPath := TPath.Combine(FTempDir, 'random_clamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_RANDOM_PERCENT, S.RandomPercent,
+      'Out-of-range high value must clamp to MAX_RANDOM_PERCENT');
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', -50);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_RANDOM_PERCENT, S.RandomPercent,
+      'Negative value must clamp to MIN_RANDOM_PERCENT');
   finally
     S.Free;
   end;

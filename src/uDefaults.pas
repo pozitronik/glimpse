@@ -30,6 +30,21 @@ const
   DEF_SCALED_EXTRACTION = False;
   DEF_MIN_FRAME_SIDE = 120;
   DEF_MAX_FRAME_SIDE = 1920;
+
+  {Random extraction. When enabled, opening a file picks frame offsets
+   at random within their slices instead of slice midpoints. Slider
+   controls jitter magnitude; same value drives the on-demand Shuffle
+   action (paShuffleExtraction). CacheRandomFrames toggles whether
+   random extractions write to the disk cache (reads always go through
+   so previously-cached picks can still hit).
+   Defaults: feature off, mid-strength jitter, no cache writes — matches
+   the mental model "random means random" while preserving the existing
+   user experience for everyone who never touches the slider.}
+  DEF_RANDOM_EXTRACTION = False;
+  DEF_RANDOM_PERCENT = 50;
+  DEF_CACHE_RANDOM_FRAMES = False;
+  MIN_RANDOM_PERCENT = 1;
+  MAX_RANDOM_PERCENT = 100;
   {When the viewport changes (view mode switch, Lister window resize) and
    ScaledExtraction would pick a different MaxSide, re-extract in the
    background so the visible frames stay at display resolution.}

@@ -22,6 +22,26 @@ type
    @raises EArgumentException if ADuration <= 0 or AFrameCount < 1}
 function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdgesPercent: Integer = 0): TFrameOffsetArray;
 
+{Calculates randomised frame offsets within their respective slices.
+ Each frame i lives in slice i (effective range divided into N equal
+ slices); the chosen time is the slice midpoint plus a random jitter
+ capped by the randomness window:
+   slice_len    = effective_range / N
+   midpoint_i   = effective_start + (i + 0.5) * slice_len
+   window_half  = slice_len / 2 * (P / 100)
+   t_i          = midpoint_i + Random(-window_half .. +window_half)
+ Frame ordering is preserved by construction (P clamped to 1..100 keeps
+ t_i strictly inside slice i, never crossing into a neighbour). Pulls
+ randomness from the global Random — caller is responsible for calling
+ Randomize once at startup to seed it.
+ @param ADuration Video duration in seconds (must be > 0)
+ @param AFrameCount Number of frames to extract (must be >= 1)
+ @param ASkipEdgesPercent Same semantics as CalculateFrameOffsets
+ @param ARandomnessPercent Jitter strength 1..100 (clamped). At 1, the
+   window is 1% of the slice; at 100, the entire slice is in play.
+ @raises EArgumentException for invalid inputs.}
+function CalculateRandomFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomnessPercent: Integer): TFrameOffsetArray;
+
 {Formats a time in seconds as HH:MM:SS.mmm for display.}
 function FormatTimecode(ASeconds: Double): string;
 
@@ -64,6 +84,48 @@ begin
   begin
     Result[I].Index := I + 1;
     Result[I].TimeOffset := EffStart + EffDuration * (2 * (I + 1) - 1) / (2 * AFrameCount);
+  end;
+end;
+
+function CalculateRandomFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomnessPercent: Integer): TFrameOffsetArray;
+var
+  EffStart, EffEnd, EffDuration, SliceLen, Midpoint, WindowHalf, Jitter: Double;
+  P, I: Integer;
+begin
+  if IsNaN(ADuration) or IsInfinite(ADuration) or (ADuration <= 0) then
+    raise EArgumentException.Create('Duration must be a finite positive number');
+  if AFrameCount < 1 then
+    raise EArgumentException.Create('Frame count must be at least 1');
+  if (ASkipEdgesPercent < 0) or (ASkipEdgesPercent > 49) then
+    raise EArgumentException.CreateFmt('SkipEdgesPercent must be 0..49, got %d', [ASkipEdgesPercent]);
+
+  {Clamp randomness silently rather than raising: the slider in the UI
+   is bounded already; callers that pass an out-of-range integer (e.g.
+   from a hand-edited INI) should still get sensible behaviour.}
+  P := EnsureRange(ARandomnessPercent, 1, 100);
+
+  if ASkipEdgesPercent > 0 then
+  begin
+    EffStart := ADuration * ASkipEdgesPercent / 100.0;
+    EffEnd := ADuration * (100 - ASkipEdgesPercent) / 100.0;
+  end
+  else
+  begin
+    EffStart := 0;
+    EffEnd := ADuration;
+  end;
+  EffDuration := EffEnd - EffStart;
+  SliceLen := EffDuration / AFrameCount;
+  WindowHalf := SliceLen / 2.0 * (P / 100.0);
+
+  SetLength(Result, AFrameCount);
+  for I := 0 to AFrameCount - 1 do
+  begin
+    Midpoint := EffStart + (I + 0.5) * SliceLen;
+    {Random returns [0, 1). Map to [-WindowHalf, +WindowHalf).}
+    Jitter := (Random * 2.0 - 1.0) * WindowHalf;
+    Result[I].Index := I + 1;
+    Result[I].TimeOffset := Midpoint + Jitter;
   end;
 end;
 
