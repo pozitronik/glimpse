@@ -12,7 +12,8 @@ uses
   uTypes, uSettings, uHotkeys, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
-  uFrameExtractor, uFrameExport, uExtractionController, uProbeCache;
+  uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
+  uSaveResolutionExtractor;
 
 type
   {Plugin form created as a child of TC's Lister window.}
@@ -159,22 +160,13 @@ type
      rebuild (file reload, frame-count change, settings re-apply).}
     procedure ShuffleExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
-    {Synchronously builds save-resolution bitmaps for the cells listed in
-     AIndices, sized at ATargetMaxSide (0 = native). Bitmaps come from
-     the cache when available and from a fresh ffmpeg run otherwise;
-     successful extractions are written back to the cache so subsequent
-     saves are instant. Returned array is parallel to FFrameView cells:
-     non-nil entries only for indices in AIndices that succeeded; the
-     caller owns and must free each non-nil bitmap. Drives the status-bar
-     progress bar; pumps messages between frames so the UI stays
-     responsive on long videos.}
-    function ExtractFramesAtTarget(ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
     {Wraps an exporter save/copy action with re-extraction at save
      resolution when the live-resolution toggle is off and the live
-     cells are not already at the desired size. Sets/clears override
-     frames on FExporter around AAction; frees the override bitmaps
-     when the action returns. AIndices lists cells the action will
-     actually consume, so re-extraction is scoped to what is needed.}
+     cells are not already at the desired size. Delegates the heavy
+     lifting (cache lookup + ffmpeg) to TSaveResolutionExtractor; this
+     method only owns the policy gate, the override-frame plumbing on
+     FExporter, and the bitmap-cleanup. AIndices lists cells the action
+     will actually consume, so re-extraction is scoped to what is needed.}
     procedure WithReExtract(const AIndices: TArray<Integer>; AAction: TProc);
     procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
     procedure OnExtractionProgress(Sender: TObject);
@@ -1337,89 +1329,71 @@ begin
   FExtractCtrl.Start(Extractor, FFileName, FOffsets, FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
 end;
 
-function TPluginForm.ExtractFramesAtTarget(ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
-var
-  Extractor: IFrameExtractor;
-  Options: TExtractionOptions;
-  Cache: IFrameCache;
-  I, Idx, Total: Integer;
-  Key: TFrameCacheKey;
-  Bmp: TBitmap;
-begin
-  SetLength(Result, FFrameView.CellCount);
-  if (Length(FOffsets) = 0) or (Length(AIndices) = 0) or (FFileName = '') or (FFFmpegPath = '') then
-    Exit;
-
-  Cache := FExtractCtrl.Cache;
-  {Build options the same way StartExtraction does, with MaxSide forced
-   to the save target rather than the viewport-derived live cap. The
-   cache key picks up the new MaxSide automatically — re-extracted
-   frames live in their own cache slots, so the live view is unaffected.}
-  Options := Default(TExtractionOptions);
-  Options.UseBmpPipe := FSettings.UseBmpPipe;
-  Options.MaxSide := ATargetMaxSide;
-  Options.HwAccel := FSettings.HwAccel;
-  Options.UseKeyframes := FSettings.UseKeyframes;
-  Options.RespectAnamorphic := FSettings.RespectAnamorphic;
-
-  Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
-
-  Total := Length(AIndices);
-  FProgressBar.Style := pbstNormal;
-  FProgressBar.Min := 0;
-  FProgressBar.Max := Total;
-  FProgressBar.Position := 0;
-  ShowProgress(Format('Re-extracting %d frame(s) at full resolution...', [Total]));
-
-  try
-    for I := 0 to Total - 1 do
-    begin
-      Idx := AIndices[I];
-      if (Idx < 0) or (Idx >= Length(FOffsets)) then
-        Continue;
-
-      Key := TFrameCacheKey.Create(FFileName, FOffsets[Idx].TimeOffset, ATargetMaxSide, FSettings.UseKeyframes);
-      Bmp := Cache.TryGet(Key);
-      if Bmp = nil then
-      begin
-        Bmp := Extractor.ExtractFrame(FFileName, FOffsets[Idx].TimeOffset, Options);
-        if Bmp <> nil then
-          Cache.Put(Key, Bmp);
-      end;
-
-      Result[Idx] := Bmp;
-
-      FProgressBar.Position := I + 1;
-      Application.ProcessMessages;
-    end;
-  finally
-    HideProgress;
-  end;
-end;
-
 procedure TPluginForm.WithReExtract(const AIndices: TArray<Integer>; AAction: TProc);
 var
   Target: Integer;
+  Ctx: TSaveResolutionContext;
+  Reextractor: TSaveResolutionExtractor;
   Frames: TArray<TBitmap>;
-  I: Integer;
+  Total, I: Integer;
 begin
-  {Toggle on, or no work to do: skip re-extraction entirely.}
-  if FSettings.SaveAtLiveResolution or (Length(AIndices) = 0) then
-  begin
-    AAction;
-    Exit;
-  end;
-  Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height, FSettings.ScaledExtraction, FSettings.MaxFrameSide);
-  {Live cells already at the target size (typical case: ScaledExtraction
-   off so both are 0/native). No re-extraction needed; the override path
-   would only duplicate the live bitmaps.}
-  if Target = FLastExtractionMaxSide then
+  Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height,
+    FSettings.ScaledExtraction, FSettings.MaxFrameSide);
+  if not NeedsReExtractForSave(FSettings.SaveAtLiveResolution, Length(AIndices),
+    Target, FLastExtractionMaxSide) then
   begin
     AAction;
     Exit;
   end;
 
-  Frames := ExtractFramesAtTarget(Target, AIndices);
+  if (Length(FOffsets) = 0) or (FFileName = '') or (FFFmpegPath = '') then
+  begin
+    AAction;
+    Exit;
+  end;
+
+  Ctx.FileName := FFileName;
+  Ctx.Offsets := FOffsets;
+  Ctx.CellCount := FFrameView.CellCount;
+  Ctx.UseBmpPipe := FSettings.UseBmpPipe;
+  Ctx.HwAccel := FSettings.HwAccel;
+  Ctx.UseKeyframes := FSettings.UseKeyframes;
+  Ctx.RespectAnamorphic := FSettings.RespectAnamorphic;
+  Total := Length(AIndices);
+
+  Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache,
+    TFFmpegFrameExtractor.Create(FFFmpegPath));
+  try
+    Reextractor.OnLabel :=
+      procedure(const AText: string)
+      begin
+        FProgressBar.Style := pbstNormal;
+        FProgressBar.Min := 0;
+        FProgressBar.Max := Total;
+        FProgressBar.Position := 0;
+        ShowProgress(AText);
+      end;
+    Reextractor.OnProgress :=
+      procedure(ACurrent, ATotal: Integer)
+      begin
+        FProgressBar.Position := ACurrent;
+      end;
+    Reextractor.OnPump :=
+      procedure
+      begin
+        Application.ProcessMessages;
+      end;
+    Reextractor.OnDone :=
+      procedure
+      begin
+        HideProgress;
+      end;
+
+    Frames := Reextractor.ExtractAtTarget(Ctx, Target, AIndices);
+  finally
+    Reextractor.Free;
+  end;
+
   try
     FExporter.SetOverrideFrames(Frames);
     try

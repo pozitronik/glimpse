@@ -40,6 +40,7 @@ uses
   uViewModeLayout in 'uViewModeLayout.pas',
   uFrameExport in 'uFrameExport.pas',
   uExtractionController in 'uExtractionController.pas',
+  uSaveResolutionExtractor in 'uSaveResolutionExtractor.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',

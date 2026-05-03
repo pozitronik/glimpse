@@ -98,6 +98,7 @@
         <DCCReference Include="uViewModeLayout.pas"/>
         <DCCReference Include="uFrameExport.pas"/>
         <DCCReference Include="uExtractionController.pas"/>
+        <DCCReference Include="uSaveResolutionExtractor.pas"/>
         <DCCReference Include="..\src\uCombinedImage.pas"/>
         <DCCReference Include="..\src\uBitmapResize.pas"/>
         <DCCReference Include="..\src\uThumbnailRender.pas"/>
