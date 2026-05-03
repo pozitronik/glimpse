@@ -79,11 +79,6 @@ type
      selection so CacheRandomFrames=False suppresses cache writes only
      for the random path, leaving deterministic extractions cacheable.}
     FCurrentExtractionIsRandom: Boolean;
-    {Marks the next FinalizeLoadTime as the result of a Shuffle so the
-     status-bar load-time slot reads "Shuffled · 1.2s" instead of just
-     the duration. Cleared in FinalizeLoadTime so subsequent reloads
-     report a plain duration again.}
-    FPendingShuffleIndicator: Boolean;
     {Layout guard: prevents re-entrant UpdateFrameViewSize during zoom}
     FUpdatingLayout: Boolean;
     {True when the plugin is hosted in TC's Quick View panel (Ctrl+Q)}
@@ -1321,10 +1316,6 @@ begin
   FFrameView.SetCellCount(Length(FOffsets), FOffsets);
   UpdateFrameViewSize;
   StartExtraction(RandomCacheOverride);
-  {Set after StartExtraction so the flag survives the FLoadTimeStr reset
-   that StartExtraction performs; FinalizeLoadTime reads and clears it
-   when the extraction finishes.}
-  FPendingShuffleIndicator := True;
 end;
 
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
@@ -1541,12 +1532,6 @@ begin
     FLoadTimeStr := Format('%d:%.2d.%.3d', [M, S, Ms])
   else
     FLoadTimeStr := Format('%d.%.3d s', [S, Ms]);
-
-  if FPendingShuffleIndicator then
-  begin
-    FLoadTimeStr := 'Shuffled ' + FLoadTimeStr;
-    FPendingShuffleIndicator := False;
-  end;
 
   UpdateStatusBar;
 end;
