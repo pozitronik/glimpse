@@ -37,6 +37,11 @@ type
     FToolbarButtons: array of TButton;
     FBtnHamburger: TButton;
     FHamburgerMenu: TPopupMenu;
+    {Drop-down attached to the Refresh toolbar button: offers
+     "Refresh" (same as primary click) and "Shuffle" items so the
+     random-extraction trigger has a visible affordance, mirroring the
+     view-mode split-button pattern.}
+    FRefreshPopup: TPopupMenu;
     {Holds embedded PNG glyphs for toolbar buttons that have no good Unicode
      equivalent; the hamburger is the first user. Owned by Self.}
     FToolbarImages: TImageList;
@@ -113,6 +118,11 @@ type
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
     function CreateModePopup(AMode: TViewMode): TPopupMenu;
+    {Builds the dropdown menu attached to the Refresh toolbar button:
+     "Refresh" item (same as primary click) and "Shuffle" (random
+     positions). Both items dispatch through the existing OnContextMenuClick
+     so the keyboard hotkeys stay the single source of truth.}
+    function CreateRefreshPopup: TPopupMenu;
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -520,6 +530,11 @@ const
   CTRL_GAP = 8; {Gap between control groups}
   BTN_GAP = 2; {Gap between adjacent buttons in a group}
   BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
+  {Extra horizontal width reserved for the dropdown arrow on the
+   Refresh split button. The view-mode buttons use the same allowance
+   by virtue of the IDX_ICON_ARROW glyph; Refresh has no glyph so the
+   space is added explicitly to match the visual weight.}
+  REFRESH_DROPDOWN_EXTRA = 14;
   SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
   PB_H = 16; {Progress bar height}
   ICON_W = 16; {Toolbar icon width}
@@ -647,18 +662,29 @@ begin
   FElementRights[ELEM_TIMECODE_INDEX] := X + BW;
   Inc(X, BW + CTRL_GAP);
 
-  {Action buttons matching context menu (except selection-dependent commands)}
+  {Action buttons matching context menu (except selection-dependent commands).
+   The Refresh button is upgraded to a split button so the dropdown
+   exposes Shuffle as a peer action (primary click stays Refresh).}
   SetLength(FToolbarButtons, 0);
+  FRefreshPopup := nil;
   for I := 0 to High(TB_ACTIONS) do
   begin
     Btn := TButton.Create(FToolbar);
     Btn.Parent := FToolbar;
     BW := Canvas.TextWidth(TB_ACTIONS[I].Caption) + BTN_PAD;
+    if TB_ACTIONS[I].Tag = CM_REFRESH then
+      Inc(BW, REFRESH_DROPDOWN_EXTRA);
     Btn.SetBounds(X, CY, BW, CtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
     Btn.Tag := TB_ACTIONS[I].Tag;
     Btn.Enabled := False;
     Btn.OnClick := OnToolbarButtonClick;
+    if TB_ACTIONS[I].Tag = CM_REFRESH then
+    begin
+      FRefreshPopup := CreateRefreshPopup;
+      Btn.Style := bsSplitButton;
+      Btn.DropDownMenu := FRefreshPopup;
+    end;
     FElementRights[ELEM_ACTION_FIRST + I] := X + BW;
     Inc(X, BW + BTN_GAP);
     SetLength(FToolbarButtons, Length(FToolbarButtons) + 1);
@@ -817,6 +843,25 @@ begin
   end;
 end;
 
+function TPluginForm.CreateRefreshPopup: TPopupMenu;
+var
+  MI: TMenuItem;
+begin
+  Result := TPopupMenu.Create(Self);
+
+  MI := TMenuItem.Create(Result);
+  MI.Caption := 'Refresh'#9'R';
+  MI.Tag := CM_REFRESH;
+  MI.OnClick := OnContextMenuClick;
+  Result.Items.Add(MI);
+
+  MI := TMenuItem.Create(Result);
+  MI.Caption := 'Shuffle'#9'Ctrl+R';
+  MI.Tag := CM_SHUFFLE;
+  MI.OnClick := OnContextMenuClick;
+  Result.Items.Add(MI);
+end;
+
 procedure TPluginForm.CreateFrameView;
 begin
   FScrollBox := TScrollBox.Create(Self);
@@ -870,6 +915,7 @@ begin
   AddItem('Deselect all', CM_DESELECT_ALL);
   AddSeparator;
   AddItem('Refresh'#9'R', CM_REFRESH);
+  AddItem('Shuffle'#9'Ctrl+R', CM_SHUFFLE);
   AddItem('Settings...'#9'F2', CM_SETTINGS);
 
   FFrameView.PopupMenu := FContextMenu;

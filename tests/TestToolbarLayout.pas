@@ -35,6 +35,8 @@ type
     [Test] procedure Menu_ModeWithSubmenu_HasNoOnClick;
     [Test] procedure Menu_Separators_BetweenGroups;
     [Test] procedure Menu_NoSeparator_WhenOnlyActions;
+    [Test] procedure Menu_ShuffleAppearsRightAfterRefresh;
+    [Test] procedure Menu_ShuffleDisabled_WhenNoFrames;
   end;
 
 implementation
@@ -221,10 +223,12 @@ var
 begin
   Menu := TPopupMenu.Create(nil);
   try
-    { VisibleCount = 6: all modes + timecodes visible, all 7 actions hidden }
+    { VisibleCount = 6: all modes + timecodes visible, all 7 actions hidden.
+      The hamburger injects a Shuffle item next to Refresh whenever Refresh
+      lands in the menu, so the expected count is TB_ACTIONS + 1. }
     PopulateHamburgerMenu(Menu, MakeState(ELEM_ACTION_FIRST, vmGrid, False, True),
       nil, nil, nil, nil);
-    Assert.AreEqual(Length(TB_ACTIONS), CountNonSeparators(Menu));
+    Assert.AreEqual(Length(TB_ACTIONS) + 1, CountNonSeparators(Menu));
   finally
     Menu.Free;
   end;
@@ -242,8 +246,8 @@ begin
     { VisibleCount = 5: all modes visible, timecodes + all actions hidden }
     State := MakeState(ELEM_TIMECODE_INDEX, vmGrid, True, True);
     PopulateHamburgerMenu(Menu, State, nil, nil, nil, nil);
-    { Timecodes + 7 actions = 8 non-separator items }
-    Assert.AreEqual(8, CountNonSeparators(Menu));
+    { Timecodes + 7 actions + Shuffle (injected next to Refresh) = 9 }
+    Assert.AreEqual(9, CountNonSeparators(Menu));
     Found := False;
     for I := 0 to Menu.Items.Count - 1 do
       if Menu.Items[I].Caption = 'Timecodes' then
@@ -264,8 +268,8 @@ begin
       plus Timecodes + 7 actions }
     PopulateHamburgerMenu(Menu, MakeState(3, vmGrid, False, True),
       nil, nil, nil, nil);
-    { 2 modes + Timecodes + 7 actions = 10 non-separator items }
-    Assert.AreEqual(10, CountNonSeparators(Menu));
+    { 2 modes + Timecodes + 7 actions + Shuffle = 11 non-separator items }
+    Assert.AreEqual(11, CountNonSeparators(Menu));
     { First non-separator should be Filmstrip (Scroll horizontal) }
     Assert.AreEqual(MODE_CAPTIONS[vmFilmstrip], Menu.Items[0].Caption);
   finally
@@ -281,8 +285,8 @@ begin
   try
     PopulateHamburgerMenu(Menu, MakeState(0, vmGrid, False, True),
       nil, nil, nil, nil);
-    { 5 modes + Timecodes + 7 actions = 13 non-separator items }
-    Assert.AreEqual(ELEM_TOTAL_COUNT, CountNonSeparators(Menu));
+    { 5 modes + Timecodes + 7 actions + Shuffle = 14 non-separator items }
+    Assert.AreEqual(ELEM_TOTAL_COUNT + 1, CountNonSeparators(Menu));
     { First item should be the first mode }
     Assert.AreEqual(MODE_CAPTIONS[vmSmartGrid], Menu.Items[0].Caption);
   finally
@@ -471,6 +475,58 @@ begin
       if Menu.Items[I].Caption = '-' then
         Inc(SepCount);
     Assert.AreEqual(0, SepCount, 'No separators when only actions are shown');
+  finally
+    Menu.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.Menu_ShuffleAppearsRightAfterRefresh;
+var
+  Menu: TPopupMenu;
+  I, RefreshIdx: Integer;
+begin
+  {When the Refresh action collapses into the hamburger, a Shuffle item
+   must appear immediately after it. Anchors the discoverability promise:
+   any user who can find Refresh can find Shuffle.}
+  Menu := TPopupMenu.Create(nil);
+  try
+    PopulateHamburgerMenu(Menu, MakeState(0, vmGrid, False, True),
+      nil, nil, nil, nil);
+    RefreshIdx := -1;
+    for I := 0 to Menu.Items.Count - 1 do
+      if Menu.Items[I].Tag = CM_REFRESH then
+      begin
+        RefreshIdx := I;
+        Break;
+      end;
+    Assert.IsTrue(RefreshIdx >= 0, 'Refresh item must be present');
+    Assert.IsTrue(RefreshIdx + 1 < Menu.Items.Count, 'A successor must exist after Refresh');
+    Assert.AreEqual(CM_SHUFFLE, Integer(Menu.Items[RefreshIdx + 1].Tag),
+      'Shuffle must follow Refresh immediately');
+    Assert.AreEqual('Shuffle', Menu.Items[RefreshIdx + 1].Caption);
+  finally
+    Menu.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.Menu_ShuffleDisabled_WhenNoFrames;
+var
+  Menu: TPopupMenu;
+  I: Integer;
+begin
+  {Same enabled-rule as the other action items: disabled when no
+   frames are loaded.}
+  Menu := TPopupMenu.Create(nil);
+  try
+    PopulateHamburgerMenu(Menu, MakeState(0, vmGrid, False, False),
+      nil, nil, nil, nil);
+    for I := 0 to Menu.Items.Count - 1 do
+      if Menu.Items[I].Tag = CM_SHUFFLE then
+      begin
+        Assert.IsFalse(Menu.Items[I].Enabled, 'Shuffle must be disabled with no frames');
+        Exit;
+      end;
+    Assert.Fail('Shuffle item not found');
   finally
     Menu.Free;
   end;

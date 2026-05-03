@@ -40,6 +40,11 @@ type
     UdMaxFrameSide: TUpDown;
     LblScaleUnit: TLabel;
     ChkAutoRefreshViewport: TCheckBox;
+    ChkRandomExtraction: TCheckBox;
+    LblRandomPercent: TLabel;
+    TrkRandomPercent: TTrackBar;
+    LblRandomPercentValue: TLabel;
+    ChkCacheRandomFrames: TCheckBox;
     LblExtensions: TLabel;
     EdtExtensions: TEdit;
     LblFFmpegPath: TLabel;
@@ -161,6 +166,7 @@ type
     procedure EdtFFmpegPathChange(Sender: TObject);
     procedure EdtMaxThreadsChange(Sender: TObject);
     procedure ChkScaledExtractionClick(Sender: TObject);
+    procedure TrkRandomPercentChange(Sender: TObject);
     procedure EdtCacheFolderChange(Sender: TObject);
     procedure BtnClearCacheClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
@@ -247,6 +253,10 @@ begin
   UdMinFrameSide.Position := ASettings.MinFrameSide;
   UdMaxFrameSide.Position := ASettings.MaxFrameSide;
   ChkAutoRefreshViewport.Checked := ASettings.AutoRefreshOnViewportChange;
+  ChkRandomExtraction.Checked := ASettings.RandomExtraction;
+  TrkRandomPercent.Position := ASettings.RandomPercent;
+  LblRandomPercentValue.Caption := IntToStr(ASettings.RandomPercent) + '%';
+  ChkCacheRandomFrames.Checked := ASettings.CacheRandomFrames;
   UpdateMaxWorkersControls;
   UpdateScaledExtractionControls;
   EdtExtensions.Text := ASettings.ExtensionList;
@@ -327,6 +337,9 @@ begin
   ASettings.MinFrameSide := UdMinFrameSide.Position;
   ASettings.MaxFrameSide := UdMaxFrameSide.Position;
   ASettings.AutoRefreshOnViewportChange := ChkAutoRefreshViewport.Checked;
+  ASettings.RandomExtraction := ChkRandomExtraction.Checked;
+  ASettings.RandomPercent := TrkRandomPercent.Position;
+  ASettings.CacheRandomFrames := ChkCacheRandomFrames.Checked;
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
@@ -604,6 +617,11 @@ end;
 procedure TSettingsForm.ChkScaledExtractionClick(Sender: TObject);
 begin
   UpdateScaledExtractionControls;
+end;
+
+procedure TSettingsForm.TrkRandomPercentChange(Sender: TObject);
+begin
+  LblRandomPercentValue.Caption := IntToStr(TrkRandomPercent.Position) + '%';
 end;
 
 procedure TSettingsForm.ChkCacheEnabledClick(Sender: TObject);

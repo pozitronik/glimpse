@@ -205,6 +205,20 @@ begin
         MI.Enabled := AState.HasFrames;
     end;
     AMenu.Items.Add(MI);
+
+    {Shuffle is the dropdown peer of Refresh on the toolbar; when
+     Refresh collapses into the hamburger we inject Shuffle next to it
+     so the action stays reachable for users who do not know the Ctrl+R
+     hotkey. Caption mirrors the Refresh popup.}
+    if TB_ACTIONS[I].Tag = CM_REFRESH then
+    begin
+      MI := TMenuItem.Create(AMenu);
+      MI.Caption := 'Shuffle';
+      MI.Tag := CM_SHUFFLE;
+      MI.OnClick := AOnActionClick;
+      MI.Enabled := AState.HasFrames;
+      AMenu.Items.Add(MI);
+    end;
   end;
 end;
 

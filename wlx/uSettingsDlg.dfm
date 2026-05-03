@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 470
+  ClientHeight = 520
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -18,7 +18,7 @@ object SettingsForm: TSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 430
+    Height = 480
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -26,7 +26,7 @@ object SettingsForm: TSettingsForm
       Caption = 'General'
       DesignSize = (
         452
-        400)
+        450)
       object LblSkipEdges: TLabel
         Left = 12
         Top = 24
@@ -310,6 +310,54 @@ object SettingsForm: TSettingsForm
         Caption = '...'
         TabOrder = 19
         OnClick = BtnFFmpegPathClick
+      end
+      object ChkRandomExtraction: TCheckBox
+        Left = 12
+        Top = 372
+        Width = 424
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Start from random positions'
+        TabOrder = 20
+      end
+      object LblRandomPercent: TLabel
+        Left = 12
+        Top = 397
+        Width = 76
+        Height = 15
+        Caption = 'Randomness:'
+      end
+      object TrkRandomPercent: TTrackBar
+        Left = 94
+        Top = 393
+        Width = 300
+        Height = 25
+        Anchors = [akLeft, akTop, akRight]
+        Min = 1
+        Max = 100
+        Position = 50
+        Frequency = 10
+        ShowSelRange = False
+        TabOrder = 21
+        TickMarks = tmBoth
+        OnChange = TrkRandomPercentChange
+      end
+      object LblRandomPercentValue: TLabel
+        Left = 400
+        Top = 397
+        Width = 36
+        Height = 15
+        Anchors = [akTop, akRight]
+        Caption = '50%'
+      end
+      object ChkCacheRandomFrames: TCheckBox
+        Left = 12
+        Top = 425
+        Width = 424
+        Height = 17
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Cache random frames'
+        TabOrder = 22
       end
     end
     object TshAppearance: TTabSheet
