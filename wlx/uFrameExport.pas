@@ -15,8 +15,20 @@ type
     FFrameView: TFrameView;
     FSettings: TPluginSettings;
     FBannerInfo: TBannerInfo;
+    {Optional save-resolution bitmaps supplied by the caller before a
+     save/copy operation, indexed parallel to FFrameView cells. Bitmaps
+     are non-owned references (typically owned by TFrameCache). When the
+     SaveAtLiveResolution toggle is off, save paths prefer entries from
+     this array over the live FFrameView bitmaps; nil entries fall back
+     to the live cell. Set length 0 to disable.
+     Lifetime: the caller (TPluginForm) sets this before invoking a save
+     method and clears it after, so the exporter never owns the memory.}
+    FOverrideFrames: TArray<TBitmap>;
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
+    {Returns the bitmap that the save/copy paths should consume for cell
+     AIndex, honouring FOverrideFrames when set and the toggle is off.}
+    function PickSaveBitmap(AIndex: Integer): TBitmap;
     function CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray): Integer;
     procedure BuildGridStyle(out AGrid: TCombinedGridStyle);
     procedure BuildTimestampStyle(out ATs: TTimestampStyle);
@@ -55,6 +67,13 @@ type
     procedure CopyFrame(AContextCellIndex: Integer);
     procedure CopyView;
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
+    {Caller-supplied save-resolution bitmaps. Set before invoking a save
+     or copy method when SaveAtLiveResolution is off and the caller has
+     re-extracted at native (or capped) resolution; clear immediately
+     after. Pass an empty array (or nil) to release. Bitmaps are not
+     owned by the exporter.}
+    procedure SetOverrideFrames(const AFrames: TArray<TBitmap>);
+    procedure ClearOverrideFrames;
   end;
 
 implementation
@@ -160,8 +179,37 @@ begin
   Result := FFrameView.CellState(AIndex) = fcsLoaded;
 end;
 
-{Builds the frames + offsets arrays from the live cells.
- nil entries for placeholder/error cells; the renderer skips them.}
+{Picks which bitmap to feed into the save/copy renderers for cell AIndex.
+ With FOverrideFrames set and the live-resolution toggle off, prefers the
+ override entry (typically a cache-owned save-resolution bitmap); a nil
+ override entry falls back to the live cell so partial coverage degrades
+ gracefully. With the toggle on, always uses the live cell since the
+ toggle's contract is to mirror what is on screen.}
+function TFrameExporter.PickSaveBitmap(AIndex: Integer): TBitmap;
+begin
+  Result := nil;
+  if (not FSettings.SaveAtLiveResolution) and (AIndex >= 0) and (AIndex < Length(FOverrideFrames))
+    and (FOverrideFrames[AIndex] <> nil) then
+    Exit(FOverrideFrames[AIndex]);
+  if (AIndex >= 0) and (AIndex < FFrameView.CellCount) and (FFrameView.CellState(AIndex) = fcsLoaded) then
+    Result := FFrameView.CellBitmap(AIndex);
+end;
+
+procedure TFrameExporter.SetOverrideFrames(const AFrames: TArray<TBitmap>);
+begin
+  FOverrideFrames := AFrames;
+end;
+
+procedure TFrameExporter.ClearOverrideFrames;
+begin
+  SetLength(FOverrideFrames, 0);
+end;
+
+{Builds the frames + offsets arrays for the renderer.
+ Frame source is PickSaveBitmap so override entries (when set) take
+ precedence over the live cells. Offsets always come from the live view.
+ nil entries for placeholder/error/missing cells are passed through; the
+ renderer skips them.}
 function TFrameExporter.CollectFramesAndOffsets(out AFrames: TArray<TBitmap>;
   out AOffsets: TFrameOffsetArray): Integer;
 var
@@ -172,10 +220,7 @@ begin
   SetLength(AOffsets, Result);
   for I := 0 to Result - 1 do
   begin
-    if FFrameView.CellState(I) = fcsLoaded then
-      AFrames[I] := FFrameView.CellBitmap(I)
-    else
-      AFrames[I] := nil;
+    AFrames[I] := PickSaveBitmap(I);
     AOffsets[I].TimeOffset := FFrameView.CellTimeOffset(I);
   end;
 end;
@@ -488,11 +533,16 @@ begin
   BuildGridStyle(Grid);
   BuildTimestampStyle(Ts);
 
-  {Native-resolution path for the uniform-row modes. Filmstrip and
-   Scroll are degenerate grids: filmstrip is one wide row, scroll is
-   one tall column. Pin Columns explicitly so the saved image matches
-   what the user sees in those layouts.}
+  {Native-resolution path for the uniform-row modes. Pin Columns to the
+   live layout so the saved image preserves the on-screen arrangement:
+   filmstrip is one wide row, scroll is one tall column, and vmGrid
+   tracks the column count the live view is currently using (which
+   varies with panel width, e.g. a narrow panel renders 9 frames as
+   1x9 — without this, the saver would default to ceil(sqrt(N)) = 3x3
+   and ignore the user's chosen aspect).}
   case FFrameView.ViewMode of
+    vmGrid:
+      Grid.Columns := CountLiveGridColumns;
     vmFilmstrip:
       Grid.Columns := N;
     vmScroll:
@@ -659,7 +709,7 @@ begin
       end;
     end
     else
-      uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(I), TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+      uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(I), TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
   end;
 end;
 
@@ -686,7 +736,7 @@ begin
     end;
   end
   else
-    uBitmapSaver.SaveBitmapToFile(FFrameView.CellBitmap(Idx), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
+    uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(Idx), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
 end;
 
 procedure TFrameExporter.SaveFrames(const AFileName: string);
@@ -767,7 +817,7 @@ begin
     end;
   end
   else
-    Clipboard.Assign(FFrameView.CellBitmap(Idx));
+    Clipboard.Assign(PickSaveBitmap(Idx));
 end;
 
 procedure TFrameExporter.CopyView;

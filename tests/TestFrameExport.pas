@@ -35,6 +35,27 @@ type
   end;
 
   [TestFixture]
+  TTestFrameExportOverrideFrames = class
+  public
+    [Test] procedure TestOverrideAppliedWhenToggleOff;
+    [Test] procedure TestOverrideIgnoredWhenToggleOn;
+    [Test] procedure TestNilOverrideEntryFallsBackToLive;
+    [Test] procedure TestClearOverrideFramesRestoresLive;
+    [Test] procedure TestShorterOverrideArrayFallsBackToLive;
+  end;
+
+  [TestFixture]
+  TTestFrameExportGridColumns = class
+  public
+    {Pins the contract that vmGrid native-resolution save (toggle off)
+     respects the live column count, not the auto-sqrt fallback. Before
+     the fix, a narrow 1xN live layout was saved as 3x3 because the
+     case statement only handled vmFilmstrip and vmScroll.}
+    [Test] procedure TestSaveTracksLiveSingleColumn;
+    [Test] procedure TestSaveTracksLiveTwoColumns;
+  end;
+
+  [TestFixture]
   TTestFrameExportClipboardNoOp = class
   public
     {The Save* paths all end in a modal TSaveDialog so they can't be driven
@@ -601,6 +622,370 @@ begin
   end;
 end;
 
+{TTestFrameExportOverrideFrames}
+
+{Helper: builds an array of fresh TBitmaps of the given size, parallel to
+ the FrameView's cell count. Caller owns and must free the bitmaps after
+ the test (the exporter never owns override frames).}
+function MakeOverrideBitmaps(ACount, AW, AH: Integer): TArray<TBitmap>;
+var
+  I: Integer;
+begin
+  SetLength(Result, ACount);
+  for I := 0 to ACount - 1 do
+  begin
+    Result[I] := TBitmap.Create;
+    Result[I].SetSize(AW, AH);
+  end;
+end;
+
+procedure FreeOverrideBitmaps(var ABitmaps: TArray<TBitmap>);
+var
+  I: Integer;
+begin
+  for I := 0 to High(ABitmaps) do
+    ABitmaps[I].Free;
+  SetLength(ABitmaps, 0);
+end;
+
+procedure TTestFrameExportOverrideFrames.TestOverrideAppliedWhenToggleOff;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  Bmp: TBitmap;
+begin
+  {With SaveAtLiveResolution off and override frames set, the combined
+   render must use the override bitmap dimensions (320x180) rather than
+   the live cell dimensions (160x90). Anchors the contract that the save
+   path consumes the higher-resolution save bitmaps when supplied.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Overrides := MakeOverrideBitmaps(4, 320, 180);
+        try
+          Exporter.SetOverrideFrames(Overrides);
+          Bmp := Exporter.TestRenderCombinedFromCells;
+          try
+            Assert.AreEqual(640, Bmp.Width, 'Override 320 * 2 cols');
+            Assert.AreEqual(360, Bmp.Height, 'Override 180 * 2 rows');
+          finally
+            Bmp.Free;
+          end;
+        finally
+          Exporter.ClearOverrideFrames;
+          FreeOverrideBitmaps(Overrides);
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportOverrideFrames.TestOverrideIgnoredWhenToggleOn;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  BmpBaseline, BmpWithOverride: TBitmap;
+begin
+  {Toggle on means "save at view resolution" — the toggle's contract is
+   to mirror the on-screen view, so override frames must not influence
+   the rendered cells. Render twice: once with no override, once with
+   override set; the two renders must have identical dimensions, proving
+   the override array was ignored. (We avoid pinning specific dimensions
+   here because the live-resolution path derives cell sizes from the
+   FrameView's viewport layout, which is implementation detail.)}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := True;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        BmpBaseline := Exporter.TestRenderCombinedFromCells;
+        try
+          Overrides := MakeOverrideBitmaps(4, 320, 180);
+          try
+            Exporter.SetOverrideFrames(Overrides);
+            BmpWithOverride := Exporter.TestRenderCombinedFromCells;
+            try
+              Assert.AreEqual(BmpBaseline.Width, BmpWithOverride.Width,
+                'Toggle-on must ignore override (width unchanged)');
+              Assert.AreEqual(BmpBaseline.Height, BmpWithOverride.Height,
+                'Toggle-on must ignore override (height unchanged)');
+            finally
+              BmpWithOverride.Free;
+            end;
+          finally
+            Exporter.ClearOverrideFrames;
+            FreeOverrideBitmaps(Overrides);
+          end;
+        finally
+          BmpBaseline.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportOverrideFrames.TestNilOverrideEntryFallsBackToLive;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  BmpFull, BmpAllNil: TBitmap;
+begin
+  {nil entries in the override array must fall back to the live cell.
+   Verified indirectly: an all-nil override array of matching length
+   must produce the same dimensions as having no override at all
+   (every cell falls back to live).}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        BmpFull := Exporter.TestRenderCombinedFromCells;
+        try
+          SetLength(Overrides, 4); {all entries nil by default}
+          Exporter.SetOverrideFrames(Overrides);
+          BmpAllNil := Exporter.TestRenderCombinedFromCells;
+          try
+            Assert.AreEqual(BmpFull.Width, BmpAllNil.Width,
+              'All-nil override must render same width as no-override');
+            Assert.AreEqual(BmpFull.Height, BmpAllNil.Height,
+              'All-nil override must render same height as no-override');
+          finally
+            BmpAllNil.Free;
+          end;
+          Exporter.ClearOverrideFrames;
+        finally
+          BmpFull.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportOverrideFrames.TestClearOverrideFramesRestoresLive;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  BmpAfterClear: TBitmap;
+begin
+  {After ClearOverrideFrames, save paths must use live cells again. Set
+   override (which would force 320x180 cells), clear, then render — the
+   output must match the live-cell dimensions (160x90 cells -> 320x180
+   in a 2x2 grid).}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Overrides := MakeOverrideBitmaps(4, 320, 180);
+        try
+          Exporter.SetOverrideFrames(Overrides);
+          Exporter.ClearOverrideFrames;
+          BmpAfterClear := Exporter.TestRenderCombinedFromCells;
+          try
+            Assert.AreEqual(320, BmpAfterClear.Width,
+              'After clear: live 160 * 2 cols');
+            Assert.AreEqual(180, BmpAfterClear.Height,
+              'After clear: live 90 * 2 rows');
+          finally
+            BmpAfterClear.Free;
+          end;
+        finally
+          FreeOverrideBitmaps(Overrides);
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportOverrideFrames.TestShorterOverrideArrayFallsBackToLive;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  Bmp: TBitmap;
+begin
+  {Defensive contract: an override array shorter than the cell count
+   must not crash; missing entries fall back to live cells. Set 2
+   override entries for a 4-cell view; the live cells (160x90) drive the
+   layout because the renderer normalises cell pixel size.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Overrides := MakeOverrideBitmaps(2, 320, 180);
+        try
+          Exporter.SetOverrideFrames(Overrides);
+          Bmp := Exporter.TestRenderCombinedFromCells;
+          try
+            Assert.IsNotNull(Bmp, 'Short override array must not crash');
+            Assert.IsTrue(Bmp.Width > 0, 'Width positive');
+            Assert.IsTrue(Bmp.Height > 0, 'Height positive');
+          finally
+            Bmp.Free;
+          end;
+        finally
+          Exporter.ClearOverrideFrames;
+          FreeOverrideBitmaps(Overrides);
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+{TTestFrameExportGridColumns}
+
+procedure TTestFrameExportGridColumns.TestSaveTracksLiveSingleColumn;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  {9 cells of 160x90 forced to a 1-column live layout. With toggle off,
+   the saved combined image must be 1 col x 9 rows = 160 x 810. Before
+   the fix, vmGrid hit the auto-sqrt branch and produced a 3x3 = 480 x
+   270 image (the user's original report).}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 9, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    View.ColumnCount := 1; {force 1-column live layout}
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderCombinedFromCells;
+        try
+          Assert.AreEqual(160, Bmp.Width, '1 col * 160 = 160');
+          Assert.AreEqual(810, Bmp.Height, '9 rows * 90 = 810');
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportGridColumns.TestSaveTracksLiveTwoColumns;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  {6 cells of 160x90 forced to 2 columns -> live 2x3. Saved must be
+   2 col * 160 = 320 wide, 3 rows * 90 = 270 tall.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 6, [0, 1, 2, 3, 4, 5]);
+    View.ColumnCount := 2;
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderCombinedFromCells;
+        try
+          Assert.AreEqual(320, Bmp.Width, '2 cols * 160 = 320');
+          Assert.AreEqual(270, Bmp.Height, '3 rows * 90 = 270');
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
 {TTestFrameExportClipboardNoOp}
 
 procedure TTestFrameExportClipboardNoOp.CopyFrameToClipboard_EmptyView_NoException;
@@ -691,6 +1076,8 @@ end;
 initialization
   TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
   TDUnitX.RegisterTestFixture(TTestFrameExportRender);
+  TDUnitX.RegisterTestFixture(TTestFrameExportOverrideFrames);
+  TDUnitX.RegisterTestFixture(TTestFrameExportGridColumns);
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
 
 end.

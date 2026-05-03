@@ -50,6 +50,20 @@ function DetectSettingsChanges(const AOld: TSettingsSnapshot; ASettings: TPlugin
  AMinSide/AMaxSide: user-configured boundaries for the bigger side.}
 function CalcExtractionMaxSide(AViewportW, AViewportH, AFrameCount: Integer; AAspectRatio: Double; ANativeW, ANativeH, AMinSide, AMaxSide: Integer): Integer;
 
+{Picks the per-frame MaxSide ffmpeg cap to use when saving with the
+ "Save at view resolution" toggle off. The save path wants the highest
+ sensible resolution for the saved image: native when it fits the
+ user-configured cap, otherwise the cap.
+ Returns 0 (= no scaling, ffmpeg yields native) when AScaledExtraction is
+ off, or when the source's bigger side already fits within AMaxFrameSide
+ (so capping would be a no-op).
+ Returns AMaxFrameSide when the source exceeds the cap, instructing the
+ extractor to downscale to the cap's bigger side.
+ Decoupled from the live-view CalcExtractionMaxSide because the save
+ path is not driven by viewport area: the user expects the highest
+ quality the cap allows, not the smallest size that fits the panel.}
+function PickSaveMaxSide(ANativeW, ANativeH: Integer; AScaledExtraction: Boolean; AMaxFrameSide: Integer): Integer;
+
 implementation
 
 uses
@@ -126,6 +140,27 @@ begin
     Exit(0);
 
   Result := BiggerSide;
+end;
+
+function PickSaveMaxSide(ANativeW, ANativeH: Integer; AScaledExtraction: Boolean; AMaxFrameSide: Integer): Integer;
+var
+  NativeBigger: Integer;
+begin
+  Result := 0;
+  if not AScaledExtraction then
+    Exit;
+  if AMaxFrameSide <= 0 then
+    Exit;
+  NativeBigger := Max(ANativeW, ANativeH);
+  {Unknown native dimensions (probe failed or not yet populated): we have
+   no basis to decide whether the cap would change anything, so yield 0
+   and let the caller pass through to ffmpeg with no scale filter.}
+  if NativeBigger <= 0 then
+    Exit;
+  {Cap would be a no-op (native already fits), keep native.}
+  if NativeBigger <= AMaxFrameSide then
+    Exit;
+  Result := AMaxFrameSide;
 end;
 
 function TakeSettingsSnapshot(ASettings: TPluginSettings): TSettingsSnapshot;

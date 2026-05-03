@@ -51,6 +51,15 @@ type
     [Test] procedure TestCalcMaxSideZeroFrames;
     [Test] procedure TestCalcMaxSideZeroViewport;
     [Test] procedure TestCalcMaxSideSingleFrame;
+
+    { PickSaveMaxSide tests }
+    [Test] procedure TestPickSaveMaxSideScalingOff;
+    [Test] procedure TestPickSaveMaxSideNativeBelowCap;
+    [Test] procedure TestPickSaveMaxSideNativeEqualsCap;
+    [Test] procedure TestPickSaveMaxSideNativeAboveCap;
+    [Test] procedure TestPickSaveMaxSideZeroCap;
+    [Test] procedure TestPickSaveMaxSideZeroNative;
+    [Test] procedure TestPickSaveMaxSidePortraitNative;
   end;
 
 implementation
@@ -545,6 +554,59 @@ begin
   R := CalcExtractionMaxSide(1920, 1080, 1, 9/16, 3840, 2160, 120, 1920);
   Assert.IsTrue(R > 0, 'Should scale down 3840 to fit viewport');
   Assert.IsTrue(R <= 1920, 'Must not exceed max');
+end;
+
+{ PickSaveMaxSide tests: per-frame cap selection for the save-at-native path. }
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSideScalingOff;
+begin
+  { ScaledExtraction off: caller wants raw native, no cap regardless of MaxFrameSide. }
+  Assert.AreEqual(0, PickSaveMaxSide(3840, 2160, False, 1920),
+    'Scaling off must yield 0 (= ffmpeg passes native through)');
+end;
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSideNativeBelowCap;
+begin
+  { 720x1280 native with cap 1920: cap is a no-op, return 0 so ffmpeg keeps native. }
+  Assert.AreEqual(0, PickSaveMaxSide(720, 1280, True, 1920),
+    'Native below cap must yield 0 (no scaling needed)');
+end;
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSideNativeEqualsCap;
+begin
+  { 1080x1920 native with cap 1920: bigger side already at cap, keep native. }
+  Assert.AreEqual(0, PickSaveMaxSide(1080, 1920, True, 1920),
+    'Native equal to cap must yield 0 (no scaling needed)');
+end;
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSideNativeAboveCap;
+begin
+  { 4K native with cap 1920: must downscale to cap. }
+  Assert.AreEqual(1920, PickSaveMaxSide(3840, 2160, True, 1920),
+    'Native above cap must yield the cap value');
+end;
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSideZeroCap;
+begin
+  { Cap 0 is treated as "no cap": return 0 (native). Defensive guard. }
+  Assert.AreEqual(0, PickSaveMaxSide(3840, 2160, True, 0),
+    'Zero cap must yield 0 (defensive: treat as no cap)');
+end;
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSideZeroNative;
+begin
+  { Native dimensions unknown (probe failed): return 0 so caller falls back to native ffmpeg pass. }
+  Assert.AreEqual(0, PickSaveMaxSide(0, 0, True, 1920),
+    'Zero native must yield 0 (no info to apply cap against)');
+end;
+
+procedure TTestExtractionPlanner.TestPickSaveMaxSidePortraitNative;
+begin
+  { Portrait video where height is the bigger side: cap compared against Max(W,H). }
+  Assert.AreEqual(1920, PickSaveMaxSide(2160, 3840, True, 1920),
+    'Portrait native above cap (height is bigger side) must yield cap');
+  Assert.AreEqual(0, PickSaveMaxSide(720, 1280, True, 1920),
+    'Portrait native below cap must yield 0');
 end;
 
 initialization

@@ -127,6 +127,31 @@ type
     procedure ScheduleViewportRefresh;
     procedure OnViewportRefreshTimer(Sender: TObject);
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
+    {Synchronously builds save-resolution bitmaps for the cells listed in
+     AIndices, sized at ATargetMaxSide (0 = native). Bitmaps come from
+     the cache when available and from a fresh ffmpeg run otherwise;
+     successful extractions are written back to the cache so subsequent
+     saves are instant. Returned array is parallel to FFrameView cells:
+     non-nil entries only for indices in AIndices that succeeded; the
+     caller owns and must free each non-nil bitmap. Drives the status-bar
+     progress bar; pumps messages between frames so the UI stays
+     responsive on long videos.}
+    function ExtractFramesAtTarget(ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
+    {Wraps an exporter save/copy action with re-extraction at save
+     resolution when the live-resolution toggle is off and the live
+     cells are not already at the desired size. Sets/clears override
+     frames on FExporter around AAction; frees the override bitmaps
+     when the action returns. AIndices lists cells the action will
+     actually consume, so re-extraction is scoped to what is needed.}
+    procedure WithReExtract(const AIndices: TArray<Integer>; AAction: TProc);
+    {Builds the index list a save/copy action needs from the live view.
+     ssSingle: just AContextOrCurrent (resolved through FExporter).
+     ssAllLoaded: every cell whose state is fcsLoaded.
+     ssSelectedOrAllLoaded: selected loaded cells if any selection
+     exists, else every loaded cell (mirrors TFrameExporter.SaveFrames).}
+    function BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
+    function BuildSaveIndicesAllLoaded: TArray<Integer>;
+    function BuildSaveIndicesSelectedOrAll: TArray<Integer>;
     procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
     procedure OnExtractionProgress(Sender: TObject);
     procedure UpdateProgress;
@@ -1091,8 +1116,15 @@ begin
 end;
 
 procedure TPluginForm.CopyFrameToClipboard;
+var
+  CtxIdx: Integer;
 begin
-  FExporter.CopyFrame(FContextCellIndex);
+  CtxIdx := FContextCellIndex;
+  WithReExtract(BuildSaveIndicesSingle(CtxIdx),
+    procedure
+    begin
+      FExporter.CopyFrame(CtxIdx);
+    end);
 end;
 
 procedure TPluginForm.ApplyListerParams(AParams: Integer);
@@ -1210,6 +1242,134 @@ begin
 
   Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets, FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
+end;
+
+function TPluginForm.ExtractFramesAtTarget(ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
+var
+  Extractor: IFrameExtractor;
+  Options: TExtractionOptions;
+  Cache: IFrameCache;
+  I, Idx, Total: Integer;
+  Key: TFrameCacheKey;
+  Bmp: TBitmap;
+begin
+  SetLength(Result, FFrameView.CellCount);
+  if (Length(FOffsets) = 0) or (Length(AIndices) = 0) or (FFileName = '') or (FFFmpegPath = '') then
+    Exit;
+
+  Cache := FExtractCtrl.Cache;
+  {Build options the same way StartExtraction does, with MaxSide forced
+   to the save target rather than the viewport-derived live cap. The
+   cache key picks up the new MaxSide automatically — re-extracted
+   frames live in their own cache slots, so the live view is unaffected.}
+  Options := Default(TExtractionOptions);
+  Options.UseBmpPipe := FSettings.UseBmpPipe;
+  Options.MaxSide := ATargetMaxSide;
+  Options.HwAccel := FSettings.HwAccel;
+  Options.UseKeyframes := FSettings.UseKeyframes;
+  Options.RespectAnamorphic := FSettings.RespectAnamorphic;
+
+  Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
+
+  Total := Length(AIndices);
+  FProgressBar.Style := pbstNormal;
+  FProgressBar.Min := 0;
+  FProgressBar.Max := Total;
+  FProgressBar.Position := 0;
+  ShowProgress(Format('Re-extracting %d frame(s) at full resolution...', [Total]));
+
+  try
+    for I := 0 to Total - 1 do
+    begin
+      Idx := AIndices[I];
+      if (Idx < 0) or (Idx >= Length(FOffsets)) then
+        Continue;
+
+      Key := TFrameCacheKey.Create(FFileName, FOffsets[Idx].TimeOffset, ATargetMaxSide, FSettings.UseKeyframes);
+      Bmp := Cache.TryGet(Key);
+      if Bmp = nil then
+      begin
+        Bmp := Extractor.ExtractFrame(FFileName, FOffsets[Idx].TimeOffset, Options);
+        if Bmp <> nil then
+          Cache.Put(Key, Bmp);
+      end;
+
+      Result[Idx] := Bmp;
+
+      FProgressBar.Position := I + 1;
+      Application.ProcessMessages;
+    end;
+  finally
+    HideProgress;
+  end;
+end;
+
+procedure TPluginForm.WithReExtract(const AIndices: TArray<Integer>; AAction: TProc);
+var
+  Target: Integer;
+  Frames: TArray<TBitmap>;
+  I: Integer;
+begin
+  {Toggle on, or no work to do: skip re-extraction entirely.}
+  if FSettings.SaveAtLiveResolution or (Length(AIndices) = 0) then
+  begin
+    AAction;
+    Exit;
+  end;
+  Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height, FSettings.ScaledExtraction, FSettings.MaxFrameSide);
+  {Live cells already at the target size (typical case: ScaledExtraction
+   off so both are 0/native). No re-extraction needed; the override path
+   would only duplicate the live bitmaps.}
+  if Target = FLastExtractionMaxSide then
+  begin
+    AAction;
+    Exit;
+  end;
+
+  Frames := ExtractFramesAtTarget(Target, AIndices);
+  try
+    FExporter.SetOverrideFrames(Frames);
+    try
+      AAction;
+    finally
+      FExporter.ClearOverrideFrames;
+    end;
+  finally
+    for I := 0 to High(Frames) do
+      Frames[I].Free;
+  end;
+end;
+
+function TPluginForm.BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
+var
+  Idx: Integer;
+begin
+  if FExporter.ResolveFrameIndex(AContextCellIndex, Idx) then
+    Result := TArray<Integer>.Create(Idx)
+  else
+    SetLength(Result, 0);
+end;
+
+function TPluginForm.BuildSaveIndicesAllLoaded: TArray<Integer>;
+var
+  I: Integer;
+begin
+  SetLength(Result, 0);
+  for I := 0 to FFrameView.CellCount - 1 do
+    if FFrameView.CellState(I) = fcsLoaded then
+      Result := Result + [I];
+end;
+
+function TPluginForm.BuildSaveIndicesSelectedOrAll: TArray<Integer>;
+var
+  I: Integer;
+  SelectedOnly: Boolean;
+begin
+  SetLength(Result, 0);
+  SelectedOnly := FFrameView.SelectedCount > 0;
+  for I := 0 to FFrameView.CellCount - 1 do
+    if (FFrameView.CellState(I) = fcsLoaded) and ((not SelectedOnly) or FFrameView.CellSelected(I)) then
+      Result := Result + [I];
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
@@ -1410,18 +1570,34 @@ begin
     paSaveFrame:
       begin
         FContextCellIndex := -1;
-        FExporter.SaveFrame(FFileName, FContextCellIndex);
+        WithReExtract(BuildSaveIndicesSingle(FContextCellIndex),
+          procedure
+          begin
+            FExporter.SaveFrame(FFileName, FContextCellIndex);
+          end);
       end;
     paSaveFrames:
-      FExporter.SaveFrames(FFileName);
+      WithReExtract(BuildSaveIndicesSelectedOrAll,
+        procedure
+        begin
+          FExporter.SaveFrames(FFileName);
+        end);
     paSaveView:
-      FExporter.SaveView(FFileName);
+      WithReExtract(BuildSaveIndicesAllLoaded,
+        procedure
+        begin
+          FExporter.SaveView(FFileName);
+        end);
     paSelectAllFrames:
       FFrameView.SelectAll;
     paCopyFrame:
       CopyFrameToClipboard;
     paCopyView:
-      FExporter.CopyView;
+      WithReExtract(BuildSaveIndicesAllLoaded,
+        procedure
+        begin
+          FExporter.CopyView;
+        end);
     paZoomIn:
       ZoomBy(ZOOM_IN_FACTOR);
     paZoomOut:
@@ -1671,15 +1847,35 @@ procedure TPluginForm.DispatchCommand(ATag: Integer);
 begin
   case ATag of
     CM_SAVE_FRAME:
-      FExporter.SaveFrame(FFileName, FContextCellIndex);
+      WithReExtract(BuildSaveIndicesSingle(FContextCellIndex),
+        procedure
+        begin
+          FExporter.SaveFrame(FFileName, FContextCellIndex);
+        end);
     CM_SAVE_FRAMES:
-      FExporter.SaveFrames(FFileName);
+      WithReExtract(BuildSaveIndicesSelectedOrAll,
+        procedure
+        begin
+          FExporter.SaveFrames(FFileName);
+        end);
     CM_SAVE_VIEW:
-      FExporter.SaveView(FFileName);
+      WithReExtract(BuildSaveIndicesAllLoaded,
+        procedure
+        begin
+          FExporter.SaveView(FFileName);
+        end);
     CM_COPY_FRAME:
-      FExporter.CopyFrame(FContextCellIndex);
+      WithReExtract(BuildSaveIndicesSingle(FContextCellIndex),
+        procedure
+        begin
+          FExporter.CopyFrame(FContextCellIndex);
+        end);
     CM_COPY_VIEW:
-      FExporter.CopyView;
+      WithReExtract(BuildSaveIndicesAllLoaded,
+        procedure
+        begin
+          FExporter.CopyView;
+        end);
     CM_SELECT_ALL:
       FFrameView.SelectAll;
     CM_DESELECT_ALL:
