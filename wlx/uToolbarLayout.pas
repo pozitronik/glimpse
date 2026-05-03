@@ -33,6 +33,7 @@ const
   CM_DESELECT_ALL = 8;
   CM_SETTINGS = 9;
   CM_REFRESH = 10;
+  CM_SHUFFLE = 12;
 
   {Toolbar buttons differentiate the two scroll modes via icons (see
    uPluginForm.CreateToolbar); both modes share the textual caption.}

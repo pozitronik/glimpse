@@ -622,6 +622,10 @@ begin
     Assert.AreEqual(Ord(paViewModeGrid), Ord(B.Lookup(Ord('2'), [ssCtrl])));
     Assert.AreEqual(Ord(paPrevFrame), Ord(B.Lookup(VK_LEFT, [ssCtrl])));
     Assert.AreEqual(Ord(paFrameCountInc), Ord(B.Lookup(VK_UP, [ssCtrl])));
+    {Bare R = Refresh (existing), Ctrl+R = Shuffle (new). The two
+     coexist on the same key letter to keep "R" mnemonic for both.}
+    Assert.AreEqual(Ord(paRefreshExtraction), Ord(B.Lookup(Ord('R'), [])));
+    Assert.AreEqual(Ord(paShuffleExtraction), Ord(B.Lookup(Ord('R'), [ssCtrl])));
   finally
     B.Free;
   end;

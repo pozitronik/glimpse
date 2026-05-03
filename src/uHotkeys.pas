@@ -29,7 +29,7 @@ type
     paToggleMaximize, paToggleFullScreen, paHamburgerMenu, paCloseLister,
     {File}
     paPrevFile, paNextFile,
-    paOpenInPlayer, paRefreshExtraction,
+    paOpenInPlayer, paRefreshExtraction, paShuffleExtraction,
     {Frame}
     paPrevFrame, paNextFrame,
     paFrameCountInc, paFrameCountDec,
@@ -482,6 +482,8 @@ begin
       Result := [THotkeyChord.Make(VK_RETURN, [])];
     paRefreshExtraction:
       Result := [THotkeyChord.Make(Ord('R'), [])];
+    paShuffleExtraction:
+      Result := [THotkeyChord.Make(Ord('R'), [ssCtrl])];
     {Bare Left/Right bind to frame navigation so the single-view "slideshow"
      feel is the default. paPrevFrame/paNextFrame have a vmSingle guard in
      the dispatcher — in other modes the action's ExecuteHotkey returns
@@ -546,6 +548,7 @@ begin
     paNextFile: Result := 'NextFile';
     paOpenInPlayer: Result := 'OpenInPlayer';
     paRefreshExtraction: Result := 'RefreshExtraction';
+    paShuffleExtraction: Result := 'ShuffleExtraction';
     paPrevFrame: Result := 'PrevFrame';
     paNextFrame: Result := 'NextFrame';
     paFrameCountInc: Result := 'FrameCountInc';
@@ -584,6 +587,7 @@ begin
     paNextFile: Result := 'Next file';
     paOpenInPlayer: Result := 'Open in default player';
     paRefreshExtraction: Result := 'Refresh frames';
+    paShuffleExtraction: Result := 'Shuffle frames (random positions)';
     paPrevFrame: Result := 'Previous frame (single view)';
     paNextFrame: Result := 'Next frame (single view)';
     paFrameCountInc: Result := 'Increase frame count';

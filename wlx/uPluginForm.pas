@@ -68,6 +68,17 @@ type
      extraction or scaling was off; compared against the freshly-computed
      MaxSide in OnViewportRefreshTimer to decide whether to soft-refresh.}
     FLastExtractionMaxSide: Integer;
+    {True when FOffsets currently holds randomly-picked positions (either
+     because Settings.RandomExtraction was on at build time, or the user
+     invoked Shuffle as a one-shot override). Drives cache-override
+     selection so CacheRandomFrames=False suppresses cache writes only
+     for the random path, leaving deterministic extractions cacheable.}
+    FCurrentExtractionIsRandom: Boolean;
+    {Marks the next FinalizeLoadTime as the result of a Shuffle so the
+     status-bar load-time slot reads "Shuffled · 1.2s" instead of just
+     the duration. Cleared in FinalizeLoadTime so subsequent reloads
+     report a plain duration again.}
+    FPendingShuffleIndicator: Boolean;
     {Layout guard: prevents re-entrant UpdateFrameViewSize during zoom}
     FUpdatingLayout: Boolean;
     {True when the plugin is hosted in TC's Quick View panel (Ctrl+Q)}
@@ -126,6 +137,23 @@ type
     procedure SoftRefreshExtraction;
     procedure ScheduleViewportRefresh;
     procedure OnViewportRefreshTimer(Sender: TObject);
+    {Builds FOffsets from the current FVideoInfo.Duration / frame count /
+     skip-edges. AForceRandom = True overrides Settings.RandomExtraction
+     for the current build only (used by Shuffle); otherwise the
+     setting decides between deterministic midpoints and per-slice
+     random picks. Sets FCurrentExtractionIsRandom accordingly.}
+    procedure RebuildFrameOffsets(AForceRandom: Boolean = False);
+    {Cache override appropriate for the current extraction. Returns
+     TReadOnlyFrameCache when extracting random offsets with
+     CacheRandomFrames disabled (read existing entries, drop new
+     writes); nil otherwise so the controller's normal cache applies.}
+    function RandomCacheOverride: IFrameCache;
+    {Re-rolls FOffsets with random positions and starts a fresh
+     extraction immediately. Independent of Settings.RandomExtraction:
+     when "Start from random positions" is off, this is a one-shot
+     override that lasts until the next event triggering a deterministic
+     rebuild (file reload, frame-count change, settings re-apply).}
+    procedure ShuffleExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
     {Synchronously builds save-resolution bitmaps for the cells listed in
      AIndices, sized at ATargetMaxSide (0 = native). Bitmaps come from
@@ -396,6 +424,12 @@ begin
   KeyPreview := True;
   OnKeyDown := OnFormKeyDown;
   OnKeyPress := OnFormKeyPress;
+
+  {Seed the global Random once per plugin instance. CalculateRandomFrameOffsets
+   reads from this RNG; without seeding, every plugin lifecycle would emit the
+   same "random" sequence, defeating the user's expectation of fresh frames
+   on each open / Shuffle.}
+  Randomize;
 
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
@@ -1178,7 +1212,7 @@ begin
 
   SetupPlaceholders;
   HideError;
-  StartExtraction;
+  StartExtraction(RandomCacheOverride);
 end;
 
 {Pushes FVideoInfo's pixel dimensions to the frame view. RespectAnamorphic
@@ -1203,10 +1237,48 @@ end;
 
 procedure TPluginForm.SetupPlaceholders;
 begin
-  FOffsets := CalculateFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent);
+  RebuildFrameOffsets;
 
   FFrameView.SetCellCount(Length(FOffsets), FOffsets);
   UpdateFrameViewSize;
+end;
+
+procedure TPluginForm.RebuildFrameOffsets(AForceRandom: Boolean);
+var
+  UseRandom: Boolean;
+begin
+  UseRandom := AForceRandom or FSettings.RandomExtraction;
+  if UseRandom and (FVideoInfo.Duration > 0) and (FUpDown.Position > 0) then
+    FOffsets := CalculateRandomFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent, FSettings.RandomPercent)
+  else if FVideoInfo.Duration > 0 then
+    FOffsets := CalculateFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent)
+  else
+    SetLength(FOffsets, 0);
+  FCurrentExtractionIsRandom := UseRandom and (Length(FOffsets) > 0);
+end;
+
+function TPluginForm.RandomCacheOverride: IFrameCache;
+begin
+  if FCurrentExtractionIsRandom and not FSettings.CacheRandomFrames then
+    Result := TReadOnlyFrameCache.Create(FExtractCtrl.Cache)
+  else
+    Result := nil;
+end;
+
+procedure TPluginForm.ShuffleExtraction;
+begin
+  if (FFileName = '') or (FVideoInfo.Duration <= 0) then
+    Exit;
+  FExtractCtrl.Stop;
+  FExtractCtrl.DrainPendingFrameMessages;
+  RebuildFrameOffsets(True);
+  FFrameView.SetCellCount(Length(FOffsets), FOffsets);
+  UpdateFrameViewSize;
+  StartExtraction(RandomCacheOverride);
+  {Set after StartExtraction so the flag survives the FLoadTimeStr reset
+   that StartExtraction performs; FinalizeLoadTime reads and clears it
+   when the extraction finishes.}
+  FPendingShuffleIndicator := True;
 end;
 
 procedure TPluginForm.StartExtraction(const ACacheOverride: IFrameCache);
@@ -1424,6 +1496,12 @@ begin
   else
     FLoadTimeStr := Format('%d.%.3d s', [S, Ms]);
 
+  if FPendingShuffleIndicator then
+  begin
+    FLoadTimeStr := 'Shuffled ' + FLoadTimeStr;
+    FPendingShuffleIndicator := False;
+  end;
+
   UpdateStatusBar;
 end;
 
@@ -1567,6 +1645,8 @@ begin
         Result := False;
     paRefreshExtraction:
       RefreshExtraction;
+    paShuffleExtraction:
+      ShuffleExtraction;
     paSaveFrame:
       begin
         FContextCellIndex := -1;
@@ -1882,6 +1962,8 @@ begin
       FFrameView.DeselectAll;
     CM_REFRESH:
       RefreshExtraction;
+    CM_SHUFFLE:
+      ShuffleExtraction;
     CM_SETTINGS:
       ShowSettings;
   end;
@@ -2138,9 +2220,12 @@ begin
   if scRespectAnamorphicChanged in Changes then
     ApplyVideoDimsToFrameView;
 
-  {Re-extract if skip edges, scaled extraction, keyframes, or anamorphic
-   settings changed}
-  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged]) <> [] then
+  {Re-extract if skip edges, scaled extraction, keyframes, anamorphic, or
+   the random-extraction settings changed. scRandomExtractionChanged fires
+   only when toggling RandomExtraction or moving the slider while it is
+   on; CacheRandomFrames toggles by themselves do not re-extract (they
+   only change which cache wrapper future random extractions use).}
+  if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged, scRandomExtractionChanged]) <> [] then
     RefreshExtraction;
 end;
 
@@ -2194,7 +2279,7 @@ begin
     Exit;
   FExtractCtrl.Stop;
   FExtractCtrl.DrainPendingFrameMessages;
-  StartExtraction(nil);
+  StartExtraction(RandomCacheOverride);
 end;
 
 procedure TPluginForm.ScheduleViewportRefresh;
