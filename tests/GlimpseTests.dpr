@@ -81,6 +81,7 @@ uses
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
   TestSettingsDlgUI in 'TestSettingsDlgUI.pas',
+  TestSettingsGroups in 'TestSettingsGroups.pas',
   TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas';
 
 var
