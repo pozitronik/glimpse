@@ -120,6 +120,19 @@ type
     [Test] procedure SmartRender_PartialAlpha_GapPixelCarriesBackgroundAlpha;
   end;
 
+  {Direct tests for DrawCellTimecode -- the per-cell overlay helper extracted
+   in the recent refactor. Existing TTestCombinedImage tests exercise it
+   indirectly through the renderers; this fixture pins the early-exit gates
+   (Show=False / Corner=tcNone) at the unit level so a future "always draw"
+   regression cannot slip past the renderer-level smoke tests.}
+  [TestFixture]
+  TTestDrawCellTimecode = class
+  public
+    [Test] procedure ShowFalse_NoPixelsTouched;
+    [Test] procedure ShowTrueCornerNone_NoPixelsTouched;
+    [Test] procedure ShowTrueValidCorner_DrawsSomething;
+  end;
+
 implementation
 
 uses
@@ -2234,6 +2247,128 @@ begin
   finally
     for I := 0 to High(Frames) do
       Frames[I].Free;
+  end;
+end;
+
+{TTestDrawCellTimecode}
+
+{Helper: builds a TTimestampStyle for the gate tests with safe defaults.
+ Show / Corner are the parameters under test; everything else carries
+ plausible values so a positive draw produces visible pixels.}
+function TimestampForGateTest(AShow: Boolean; ACorner: TTimestampCorner;
+  ABackAlpha: Byte = 200): TTimestampStyle;
+begin
+  Result.Show := AShow;
+  Result.Corner := ACorner;
+  Result.FontName := 'Consolas';
+  Result.FontSize := 12;
+  Result.FontStyles := [fsBold];
+  Result.BackColor := clBlack;
+  Result.BackAlpha := ABackAlpha;
+  Result.TextColor := clWhite;
+  Result.TextAlpha := 255;
+end;
+
+{Counts pixels matching AColor inside ARect on ABmp.Canvas. Sparse cell
+ means almost-everything matches; a draw mutates pixels in the corner.}
+function CountMatchingPixels(ABmp: TBitmap; const ARect: TRect; AColor: TColor): Integer;
+var
+  X, Y: Integer;
+begin
+  Result := 0;
+  for Y := ARect.Top to ARect.Bottom - 1 do
+    for X := ARect.Left to ARect.Right - 1 do
+      if ABmp.Canvas.Pixels[X, Y] = AColor then
+        Inc(Result);
+end;
+
+procedure TTestDrawCellTimecode.ShowFalse_NoPixelsTouched;
+var
+  Bmp: TBitmap;
+  CellRect: TRect;
+  Style: TTimestampStyle;
+  PixelCount: Integer;
+begin
+  {Fill a bitmap with a marker colour, call DrawCellTimecode with
+   Show=False, then assert every pixel in the would-be-overlay region
+   still carries the marker. Pins the Show-gate short-circuit at the
+   unit boundary.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(200, 100);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 200, 100));
+
+    CellRect := Rect(0, 0, 200, 100);
+    Style := TimestampForGateTest(False, tcBottomLeft);
+    DrawCellTimecode(Bmp.Canvas, CellRect, 12.345, Style);
+
+    PixelCount := CountMatchingPixels(Bmp, CellRect, clRed);
+    Assert.AreEqual(200 * 100, PixelCount,
+      'Show=False must not touch any pixel inside the cell rect');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestDrawCellTimecode.ShowTrueCornerNone_NoPixelsTouched;
+var
+  Bmp: TBitmap;
+  CellRect: TRect;
+  Style: TTimestampStyle;
+  PixelCount: Integer;
+begin
+  {Same shape as the Show=False test, but with Show=True and Corner=tcNone.
+   Pins the second short-circuit gate -- a future contributor who deletes
+   the Corner check would slip past TimestampDisabled_NoTextDrawn (which
+   uses Show=False) but trip this test.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(200, 100);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 200, 100));
+
+    CellRect := Rect(0, 0, 200, 100);
+    Style := TimestampForGateTest(True, tcNone);
+    DrawCellTimecode(Bmp.Canvas, CellRect, 12.345, Style);
+
+    PixelCount := CountMatchingPixels(Bmp, CellRect, clRed);
+    Assert.AreEqual(200 * 100, PixelCount,
+      'Corner=tcNone must not touch any pixel inside the cell rect');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestDrawCellTimecode.ShowTrueValidCorner_DrawsSomething;
+var
+  Bmp: TBitmap;
+  CellRect: TRect;
+  Style: TTimestampStyle;
+  RedCount: Integer;
+begin
+  {Sanity check the positive path: with Show=True and a valid corner,
+   at least one pixel inside the cell rect must NOT match the marker
+   colour (i.e. the helper drew something). Without this, the gate
+   tests above could pass even if the helper became a complete no-op.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(200, 100);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 200, 100));
+
+    CellRect := Rect(0, 0, 200, 100);
+    Style := TimestampForGateTest(True, tcBottomLeft);
+    DrawCellTimecode(Bmp.Canvas, CellRect, 12.345, Style);
+
+    RedCount := CountMatchingPixels(Bmp, CellRect, clRed);
+    Assert.IsTrue(RedCount < 200 * 100,
+      'Some pixels must change when the helper draws the overlay');
+  finally
+    Bmp.Free;
   end;
 end;
 
