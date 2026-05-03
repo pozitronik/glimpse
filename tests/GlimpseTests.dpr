@@ -79,6 +79,8 @@ uses
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   TestThumbnailRender in 'TestThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
+  uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
+  TestSettingsDlgUI in 'TestSettingsDlgUI.pas',
   TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas';
 
 var
