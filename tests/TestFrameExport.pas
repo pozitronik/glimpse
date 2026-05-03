@@ -35,6 +35,18 @@ type
   end;
 
   [TestFixture]
+  TTestFrameExportSaveIndices = class
+  public
+    [Test] procedure TestSingleResolvesContextCell;
+    [Test] procedure TestSingleEmptyWhenNoLoadedFrames;
+    [Test] procedure TestAllLoadedSkipsUnloadedCells;
+    [Test] procedure TestAllLoadedEmptyWhenNothingLoaded;
+    [Test] procedure TestSelectedOrAllUsesSelectionWhenAny;
+    [Test] procedure TestSelectedOrAllFallsBackToAllWhenNoSelection;
+    [Test] procedure TestSelectedOrAllSkipsUnloadedSelected;
+  end;
+
+  [TestFixture]
   TTestFrameExportOverrideFrames = class
   public
     [Test] procedure TestOverrideAppliedWhenToggleOff;
@@ -622,6 +634,184 @@ begin
   end;
 end;
 
+{TTestFrameExportSaveIndices}
+
+procedure TTestFrameExportSaveIndices.TestSingleResolvesContextCell;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 2, 4]);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesSingle(2);
+      Assert.AreEqual(1, Integer(Length(Indices)),
+        'Single must return exactly one element when context resolves');
+      Assert.AreEqual(2, Indices[0]);
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveIndices.TestSingleEmptyWhenNoLoadedFrames;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  {Cells exist but none are loaded -> ResolveFrameIndex returns False;
+   Single must hand back an empty array so WithReExtract no-ops.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 3, []);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesSingle(0);
+      Assert.AreEqual(0, Integer(Length(Indices)));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveIndices.TestAllLoadedSkipsUnloadedCells;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [1, 3]);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesAllLoaded;
+      Assert.AreEqual(2, Integer(Length(Indices)));
+      Assert.AreEqual(1, Indices[0]);
+      Assert.AreEqual(3, Indices[1]);
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveIndices.TestAllLoadedEmptyWhenNothingLoaded;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, []);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesAllLoaded;
+      Assert.AreEqual(0, Integer(Length(Indices)));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveIndices.TestSelectedOrAllUsesSelectionWhenAny;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  {When at least one cell is selected, only loaded selected cells must
+   be returned -- mirrors TFrameExporter.SaveFrames selection-aware
+   semantics.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ToggleSelection(1);
+    View.ToggleSelection(3);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesSelectedOrAll;
+      Assert.AreEqual(2, Integer(Length(Indices)));
+      Assert.AreEqual(1, Indices[0]);
+      Assert.AreEqual(3, Indices[1]);
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveIndices.TestSelectedOrAllFallsBackToAllWhenNoSelection;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesSelectedOrAll;
+      Assert.AreEqual(4, Integer(Length(Indices)),
+        'No selection -> every loaded cell');
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveIndices.TestSelectedOrAllSkipsUnloadedSelected;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+  Indices: TArray<Integer>;
+begin
+  {Selection over an unloaded cell must be ignored: the action cannot
+   read a frame that does not exist yet, so re-extraction would hand it
+   a nil bitmap.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 2]);
+    View.ToggleSelection(0);
+    View.ToggleSelection(1); {unloaded, must drop}
+    View.ToggleSelection(2);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Indices := Exporter.BuildSaveIndicesSelectedOrAll;
+      Assert.AreEqual(2, Integer(Length(Indices)));
+      Assert.AreEqual(0, Indices[0]);
+      Assert.AreEqual(2, Indices[1]);
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
 {TTestFrameExportOverrideFrames}
 
 {Helper: builds an array of fresh TBitmaps of the given size, parallel to
@@ -1076,6 +1266,7 @@ end;
 initialization
   TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
   TDUnitX.RegisterTestFixture(TTestFrameExportRender);
+  TDUnitX.RegisterTestFixture(TTestFrameExportSaveIndices);
   TDUnitX.RegisterTestFixture(TTestFrameExportOverrideFrames);
   TDUnitX.RegisterTestFixture(TTestFrameExportGridColumns);
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);

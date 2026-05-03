@@ -177,14 +177,6 @@ type
      when the action returns. AIndices lists cells the action will
      actually consume, so re-extraction is scoped to what is needed.}
     procedure WithReExtract(const AIndices: TArray<Integer>; AAction: TProc);
-    {Builds the index list a save/copy action needs from the live view.
-     ssSingle: just AContextOrCurrent (resolved through FExporter).
-     ssAllLoaded: every cell whose state is fcsLoaded.
-     ssSelectedOrAllLoaded: selected loaded cells if any selection
-     exists, else every loaded cell (mirrors TFrameExporter.SaveFrames).}
-    function BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
-    function BuildSaveIndicesAllLoaded: TArray<Integer>;
-    function BuildSaveIndicesSelectedOrAll: TArray<Integer>;
     procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
     procedure OnExtractionProgress(Sender: TObject);
     procedure UpdateProgress;
@@ -1195,7 +1187,7 @@ var
   CtxIdx: Integer;
 begin
   CtxIdx := FContextCellIndex;
-  WithReExtract(BuildSaveIndicesSingle(CtxIdx),
+  WithReExtract(FExporter.BuildSaveIndicesSingle(CtxIdx),
     procedure
     begin
       FExporter.CopyFrame(CtxIdx);
@@ -1448,38 +1440,6 @@ begin
   end;
 end;
 
-function TPluginForm.BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
-var
-  Idx: Integer;
-begin
-  if FExporter.ResolveFrameIndex(AContextCellIndex, Idx) then
-    Result := TArray<Integer>.Create(Idx)
-  else
-    SetLength(Result, 0);
-end;
-
-function TPluginForm.BuildSaveIndicesAllLoaded: TArray<Integer>;
-var
-  I: Integer;
-begin
-  SetLength(Result, 0);
-  for I := 0 to FFrameView.CellCount - 1 do
-    if FFrameView.CellState(I) = fcsLoaded then
-      Result := Result + [I];
-end;
-
-function TPluginForm.BuildSaveIndicesSelectedOrAll: TArray<Integer>;
-var
-  I: Integer;
-  SelectedOnly: Boolean;
-begin
-  SetLength(Result, 0);
-  SelectedOnly := FFrameView.SelectedCount > 0;
-  for I := 0 to FFrameView.CellCount - 1 do
-    if (FFrameView.CellState(I) = fcsLoaded) and ((not SelectedOnly) or FFrameView.CellSelected(I)) then
-      Result := Result + [I];
-end;
-
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
 begin
   if ABitmap <> nil then
@@ -1680,20 +1640,20 @@ begin
     paSaveFrame:
       begin
         FContextCellIndex := -1;
-        WithReExtract(BuildSaveIndicesSingle(FContextCellIndex),
+        WithReExtract(FExporter.BuildSaveIndicesSingle(FContextCellIndex),
           procedure
           begin
             FExporter.SaveFrame(FFileName, FContextCellIndex);
           end);
       end;
     paSaveFrames:
-      WithReExtract(BuildSaveIndicesSelectedOrAll,
+      WithReExtract(FExporter.BuildSaveIndicesSelectedOrAll,
         procedure
         begin
           FExporter.SaveFrames(FFileName);
         end);
     paSaveView:
-      WithReExtract(BuildSaveIndicesAllLoaded,
+      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
         procedure
         begin
           FExporter.SaveView(FFileName);
@@ -1703,7 +1663,7 @@ begin
     paCopyFrame:
       CopyFrameToClipboard;
     paCopyView:
-      WithReExtract(BuildSaveIndicesAllLoaded,
+      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
         procedure
         begin
           FExporter.CopyView;
@@ -1957,31 +1917,31 @@ procedure TPluginForm.DispatchCommand(ATag: Integer);
 begin
   case ATag of
     CM_SAVE_FRAME:
-      WithReExtract(BuildSaveIndicesSingle(FContextCellIndex),
+      WithReExtract(FExporter.BuildSaveIndicesSingle(FContextCellIndex),
         procedure
         begin
           FExporter.SaveFrame(FFileName, FContextCellIndex);
         end);
     CM_SAVE_FRAMES:
-      WithReExtract(BuildSaveIndicesSelectedOrAll,
+      WithReExtract(FExporter.BuildSaveIndicesSelectedOrAll,
         procedure
         begin
           FExporter.SaveFrames(FFileName);
         end);
     CM_SAVE_VIEW:
-      WithReExtract(BuildSaveIndicesAllLoaded,
+      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
         procedure
         begin
           FExporter.SaveView(FFileName);
         end);
     CM_COPY_FRAME:
-      WithReExtract(BuildSaveIndicesSingle(FContextCellIndex),
+      WithReExtract(FExporter.BuildSaveIndicesSingle(FContextCellIndex),
         procedure
         begin
           FExporter.CopyFrame(FContextCellIndex);
         end);
     CM_COPY_VIEW:
-      WithReExtract(BuildSaveIndicesAllLoaded,
+      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
         procedure
         begin
           FExporter.CopyView;

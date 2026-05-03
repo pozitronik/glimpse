@@ -46,6 +46,16 @@ type
     {Resolves which frame to act on: prefers AContextCellIndex, falls back
      to current frame index, then 0. Returns False if no loaded frame found.}
     function ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
+    {Returns the cell-index list a save / copy action will consume. Used
+     by the form's WithReExtract wrapper to scope re-extraction to the
+     frames the action actually reads.
+     Single — one element if ResolveFrameIndex(AContextCellIndex) succeeds, empty otherwise.
+     AllLoaded — every cell whose state is fcsLoaded.
+     SelectedOrAll — selected loaded cells if any selection exists, else
+       every loaded cell (mirrors the selection-aware semantics of SaveFrames).}
+    function BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
+    function BuildSaveIndicesAllLoaded: TArray<Integer>;
+    function BuildSaveIndicesSelectedOrAll: TArray<Integer>;
     {Saves a single frame to a user-chosen file. Honours
      SaveAtLiveResolution: native frame size when off, on-screen cell
      size when on (letterbox in vmGrid/Filmstrip/Scroll/Single,
@@ -177,6 +187,38 @@ begin
   if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
     AIndex := 0;
   Result := FFrameView.CellState(AIndex) = fcsLoaded;
+end;
+
+function TFrameExporter.BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
+var
+  Idx: Integer;
+begin
+  if ResolveFrameIndex(AContextCellIndex, Idx) then
+    Result := TArray<Integer>.Create(Idx)
+  else
+    SetLength(Result, 0);
+end;
+
+function TFrameExporter.BuildSaveIndicesAllLoaded: TArray<Integer>;
+var
+  I: Integer;
+begin
+  SetLength(Result, 0);
+  for I := 0 to FFrameView.CellCount - 1 do
+    if FFrameView.CellState(I) = fcsLoaded then
+      Result := Result + [I];
+end;
+
+function TFrameExporter.BuildSaveIndicesSelectedOrAll: TArray<Integer>;
+var
+  I: Integer;
+  SelectedOnly: Boolean;
+begin
+  SetLength(Result, 0);
+  SelectedOnly := FFrameView.SelectedCount > 0;
+  for I := 0 to FFrameView.CellCount - 1 do
+    if (FFrameView.CellState(I) = fcsLoaded) and ((not SelectedOnly) or FFrameView.CellSelected(I)) then
+      Result := Result + [I];
 end;
 
 {Picks which bitmap to feed into the save/copy renderers for cell AIndex.
