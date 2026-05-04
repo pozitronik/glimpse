@@ -123,6 +123,11 @@ var
   Stream: TMemoryStream;
   Png: TPngImage;
 begin
+  {Explicit guard: empty input would fall through to a confusing
+   EPNGInvalidFileHeader (when range checks are off) or ERangeError on
+   AData[0] (when on). Fail fast with a clear contract violation instead.}
+  if Length(AData) = 0 then
+    raise EArgumentException.Create('PngBytesToBitmap: AData is empty');
   Stream := TMemoryStream.Create;
   try
     Stream.WriteBuffer(AData[0], Length(AData));

@@ -245,11 +245,16 @@ procedure TTestBitmapSaver.TestPngBytesToBitmapEmptyRaises;
 var
   Data: TBytes;
 begin
+  {Empty input must raise EArgumentException with a clear message rather
+   than the accidental ERangeError / access violation that previously came
+   out of WriteBuffer(AData[0], 0) for a nil dynamic array. The explicit
+   guard makes the contract obvious to callers and survives optimised
+   builds where range checks are off.}
   SetLength(Data, 0);
   Assert.WillRaise(
     procedure begin PngBytesToBitmap(Data); end,
-    nil,
-    'Empty bytes should raise');
+    EArgumentException,
+    'Empty bytes must raise EArgumentException');
 end;
 
 procedure TTestBitmapSaver.TestPngBytesToBitmapGarbageRaises;
