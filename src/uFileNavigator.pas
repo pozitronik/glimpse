@@ -29,7 +29,15 @@ uses
 
 { Enumerates supported files in ADir and returns their base names sorted
   case-insensitively. Shared by FindAdjacentFile and GetFilePosition so
-  both use the exact same ordering. }
+  both use the exact same ordering.
+
+  TODO performance: every navigation key (PrevFile / NextFile / file
+  position read for the status bar) triggers a full TDirectory.GetFiles
+  + sort. For directories with thousands of video files the rescan can
+  show in keypress latency. A short-lived cache keyed by (Dir, mtime,
+  Extensions) would amortise the scan across consecutive presses
+  without risking stale listings. Acceptable for now since most folders
+  hold a few dozen videos at most. }
 function CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
 var
   Ext: string;
