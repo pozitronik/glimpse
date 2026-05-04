@@ -473,6 +473,21 @@ begin
     Exit;
   end;
 
+  {Defensive: a source narrower than 4 * BANNER_PADDING_H has at most a
+   sub-20-pixel content area after subtracting the horizontal padding on
+   both sides. Earlier this produced a negative MaxTextW that drove
+   FindFittingBannerFontSize and WrapTextToLines into pathological
+   branches: every word truncated to '...', producing a banner band of
+   ellipses on top of the tiny source. The legitimate WLX/WCX flows
+   never feed inputs this small; treat them as degenerate and skip the
+   banner entirely.}
+  if ASrc.Width < 4 * BANNER_PADDING_H then
+  begin
+    Result := TBitmap.Create;
+    Result.Assign(ASrc);
+    Exit;
+  end;
+
   FontName := AStyle.FontName;
   if FontName.Trim = '' then
     FontName := DEF_BANNER_FONT_NAME;

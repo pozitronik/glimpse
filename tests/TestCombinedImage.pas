@@ -69,6 +69,12 @@ type
     [Test] procedure AttachBanner_LongMultiWordLine_GrowsBannerHeight;
     [Test] procedure AttachBanner_PathologicalSingleToken_HeightStaysBounded;
     [Test] procedure AttachBanner_LongLineDoesNotTruncateToEllipsis;
+    {Defensive: a source narrower than 4 x BANNER_PADDING_H has no usable
+     content area after horizontal padding. Earlier MaxTextW went negative
+     and every word was truncated to '...', producing a banner band of
+     ellipses. The guard now skips the banner entirely and returns a
+     plain copy at source dimensions.}
+    [Test] procedure AttachBanner_NarrowSource_ReturnsBannerlessCopy;
     [Test] procedure AttachBanner_PositionBottom_PreservesTopSource;
     [Test] procedure AttachBanner_FixedFontSize_DiffersFromAutoHeight;
     { FormatBannerLines edge cases }
@@ -754,6 +760,27 @@ begin
     try
       Assert.AreEqual(100, R.Width);
       Assert.AreEqual(80, R.Height);
+    finally
+      R.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.AttachBanner_NarrowSource_ReturnsBannerlessCopy;
+var
+  Src, R: TBitmap;
+begin
+  {10 px wide is well below 4 * BANNER_PADDING_H (40). The guard skips
+   the banner; the result equals the source dimensions exactly.}
+  Src := MakeFrame(10, 10, Integer(clGreen));
+  try
+    R := AttachBanner(Src, ['video.mp4'], DefaultBannerStyle);
+    try
+      Assert.AreEqual(10, R.Width, 'Bannerless copy keeps source width');
+      Assert.AreEqual(10, R.Height,
+        'Bannerless copy keeps source height (no banner band added)');
     finally
       R.Free;
     end;
