@@ -35,6 +35,15 @@ type
     [Test] procedure ExtractionMaxSide_ExactBucket_Unchanged;
     [Test] procedure ExtractionMaxSide_TakesLargerDimension;
 
+    { BuildThumbnailExtractionOptions — pure plumbing of settings into the
+      extractor options record. Pinning every field rather than just the
+      missing one so a future field-add cannot silently regress. }
+    [Test] procedure BuildOptions_UseBmpPipeAlwaysTrue;
+    [Test] procedure BuildOptions_HwAccelMirrorsSettings;
+    [Test] procedure BuildOptions_UseKeyframesMirrorsSettings;
+    [Test] procedure BuildOptions_RespectAnamorphicMirrorsSettings;
+    [Test] procedure BuildOptions_MaxSideFromRequestedCellSize;
+
     { RenderThumbnail guard conditions (no ffmpeg required) }
     [Test] procedure RenderThumbnail_NilFFmpeg_ReturnsNil;
     [Test] procedure RenderThumbnail_NilSettings_ReturnsNil;
@@ -231,6 +240,96 @@ begin
   Assert.AreEqual(SCALE_BUCKET * 2, PickThumbnailExtractionMaxSide(300, 50));
   { Tall rectangle: height drives the bucket }
   Assert.AreEqual(SCALE_BUCKET * 2, PickThumbnailExtractionMaxSide(50, 300));
+end;
+
+{ -------- BuildThumbnailExtractionOptions -------- }
+
+procedure TTestThumbnailRender.BuildOptions_UseBmpPipeAlwaysTrue;
+var
+  S: TPluginSettings;
+  O: TExtractionOptions;
+begin
+  S := TPluginSettings.Create('');
+  try
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsTrue(O.UseBmpPipe, 'Thumbnails always use the bmp pipe for speed');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.BuildOptions_HwAccelMirrorsSettings;
+var
+  S: TPluginSettings;
+  O: TExtractionOptions;
+begin
+  S := TPluginSettings.Create('');
+  try
+    S.HwAccel := True;
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsTrue(O.HwAccel);
+    S.HwAccel := False;
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsFalse(O.HwAccel);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.BuildOptions_UseKeyframesMirrorsSettings;
+var
+  S: TPluginSettings;
+  O: TExtractionOptions;
+begin
+  S := TPluginSettings.Create('');
+  try
+    S.UseKeyframes := True;
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsTrue(O.UseKeyframes);
+    S.UseKeyframes := False;
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsFalse(O.UseKeyframes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.BuildOptions_RespectAnamorphicMirrorsSettings;
+var
+  S: TPluginSettings;
+  O: TExtractionOptions;
+begin
+  S := TPluginSettings.Create('');
+  try
+    {Bug regression pin. Earlier the inline build forgot to copy
+     RespectAnamorphic, so anamorphic-source thumbnails appeared squashed
+     while the live preview rendered them correctly.}
+    S.RespectAnamorphic := True;
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsTrue(O.RespectAnamorphic,
+      'Thumbnail must respect anamorphic when the user has the toggle on');
+    S.RespectAnamorphic := False;
+    O := BuildThumbnailExtractionOptions(S, 256, 256);
+    Assert.IsFalse(O.RespectAnamorphic,
+      'Thumbnail must follow the toggle off');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.BuildOptions_MaxSideFromRequestedCellSize;
+var
+  S: TPluginSettings;
+  O: TExtractionOptions;
+begin
+  S := TPluginSettings.Create('');
+  try
+    O := BuildThumbnailExtractionOptions(S, 100, 50);
+    Assert.AreEqual(PickThumbnailExtractionMaxSide(100, 50), O.MaxSide,
+      'MaxSide must come from the requested cell size, not MaxFrameSide');
+  finally
+    S.Free;
+  end;
 end;
 
 { -------- RenderThumbnail guards -------- }

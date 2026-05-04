@@ -22,6 +22,14 @@ function CalcThumbnailOffsets(ADuration: Double; AMode: TThumbnailMode;
   Returns the larger dimension (the one ffmpeg will fit to). }
 function PickThumbnailExtractionMaxSide(AReqWidth, AReqHeight: Integer): Integer;
 
+{ Builds the TExtractionOptions used for a thumbnail extraction.
+  Pure: no IO, no settings dialog dependency. Exposed so tests can pin the
+  field-by-field copy; earlier the function silently dropped
+  RespectAnamorphic, distorting anamorphic-source thumbnails relative to
+  the lister's main extraction path. }
+function BuildThumbnailExtractionOptions(const ASettings: TPluginSettings;
+  AReqWidth, AReqHeight: Integer): TExtractionOptions;
+
 { Renders a thumbnail bitmap for the given video file.
   Returns nil if disabled, on probe failure, or on extraction failure.
   Caller owns the returned bitmap.
@@ -79,6 +87,26 @@ begin
     Exit(SCALE_BUCKET);
   { Bucket up so e.g. 96, 100, 128 all share the same cache entry }
   Result := ((Bigger + SCALE_BUCKET - 1) div SCALE_BUCKET) * SCALE_BUCKET;
+end;
+
+function BuildThumbnailExtractionOptions(const ASettings: TPluginSettings;
+  AReqWidth, AReqHeight: Integer): TExtractionOptions;
+begin
+  Result := Default(TExtractionOptions);
+  {BMP pipe is preferred for speed (we have memory headroom for tiny thumbs).
+   MaxSide is bucketed from the requested cell size, not the user-configured
+   MaxFrameSide, so thumbnail extractions stay small and share cache slots
+   across neighbouring TC sizes.}
+  Result.UseBmpPipe := True;
+  Result.MaxSide := PickThumbnailExtractionMaxSide(AReqWidth, AReqHeight);
+  Result.HwAccel := ASettings.HwAccel;
+  Result.UseKeyframes := ASettings.UseKeyframes;
+  {Match the lister's main extraction path: anamorphic sources must render
+   at display dimensions, not the raw storage pixel grid. Earlier this
+   field was left at Default(False), so DVD rips and broadcast captures
+   appeared squashed in the TC panel while the live preview rendered them
+   correctly.}
+  Result.RespectAnamorphic := ASettings.RespectAnamorphic;
 end;
 
 { Resolves the cache + extract pair for a single offset. The cache lookup
@@ -167,15 +195,7 @@ begin
     if Length(Offsets) = 0 then
       Exit;
 
-    { Build extraction options. Reuse user's HW accel and keyframes settings.
-      BMP pipe is preferred for speed (we have memory headroom for tiny thumbs).
-      MaxSide is bucketed from the requested cell size, not the user-configured
-      MaxFrameSide, so thumbnail extractions stay small. }
-    Options := Default(TExtractionOptions);
-    Options.UseBmpPipe := True;
-    Options.HwAccel := ASettings.HwAccel;
-    Options.UseKeyframes := ASettings.UseKeyframes;
-    Options.MaxSide := PickThumbnailExtractionMaxSide(AReqWidth, AReqHeight);
+    Options := BuildThumbnailExtractionOptions(ASettings, AReqWidth, AReqHeight);
 
     SetLength(Frames, Length(Offsets));
     try
