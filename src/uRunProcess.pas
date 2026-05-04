@@ -52,8 +52,11 @@ var
   StdErrThread: TThread;
   CapturedStdErr: TBytes;
   ExitCode: DWORD;
-  CancelWatcher: TThread;
+  Watcher: TThread;
   ProcessHandleRef: THandle;
+  {Set by the watcher when it terminates the child due to ATimeoutMs.
+   Integer rather than Boolean so InterlockedExchange is well-defined.}
+  TimedOutFlag: Integer;
 begin
   Result := -1;
   AStdOut := nil;
@@ -123,57 +126,69 @@ begin
   StdErrThread.FreeOnTerminate := False;
   StdErrThread.Start;
 
-  {When a cancel handle is supplied, a watcher thread waits on both the cancel
-   event and the process handle. If the caller signals cancellation before the
-   child exits naturally, the watcher kills the child; pipe closure then
-   cascades through the blocking ReadPipeToEnd calls below.}
-  CancelWatcher := nil;
-  if ACancelHandle <> 0 then
-  begin
-    ProcessHandleRef := PI.hProcess;
-    CancelWatcher := TThread.CreateAnonymousThread(
-      procedure
-      var
-        Handles: array[0..1] of THandle;
+  {Single watcher handles both wall-clock timeout and optional caller cancel.
+   It waits on the process handle (and the cancel event when supplied) with
+   ATimeoutMs as the upper bound:
+   - WAIT_OBJECT_0 (process exited): no action.
+   - WAIT_OBJECT_0 + 1 (cancel signalled): TerminateProcess.
+   - WAIT_TIMEOUT: TerminateProcess and flag the timeout.
+   In every case TerminateProcess closes the child's pipe ends, so the
+   blocking ReadPipeToEnd on the calling thread unblocks within the
+   wall-clock budget instead of waiting for the child to drain stdout.}
+  TimedOutFlag := 0;
+  ProcessHandleRef := PI.hProcess;
+  Watcher := TThread.CreateAnonymousThread(
+    procedure
+    var
+      Handles: array[0..1] of THandle;
+      Count: DWORD;
+    begin
+      Handles[0] := ProcessHandleRef;
+      Count := 1;
+      if ACancelHandle <> 0 then
       begin
-        Handles[0] := ACancelHandle;
-        Handles[1] := ProcessHandleRef;
-        if WaitForMultipleObjects(2, @Handles[0], False, INFINITE) = WAIT_OBJECT_0 then
+        Handles[1] := ACancelHandle;
+        Count := 2;
+      end;
+      case WaitForMultipleObjects(Count, @Handles[0], False, ATimeoutMs) of
+        WAIT_OBJECT_0 + 1:
           TerminateProcess(ProcessHandleRef, 1);
-      end);
-    CancelWatcher.FreeOnTerminate := False;
-    CancelWatcher.Start;
-  end;
+        WAIT_TIMEOUT:
+          begin
+            InterlockedExchange(TimedOutFlag, 1);
+            TerminateProcess(ProcessHandleRef, 1);
+          end;
+        {WAIT_OBJECT_0 (process exited naturally) and any failure value:
+         no further action required.}
+      end;
+    end);
+  Watcher.FreeOnTerminate := False;
+  Watcher.Start;
 
-  {Read stdout on the calling thread}
+  {Read stdout on the calling thread. If the watcher terminates the child,
+   pipe closure unblocks this read.}
   AStdOut := ReadPipeToEnd(StdOutRead);
 
   StdErrThread.WaitFor;
   AStdErr := CapturedStdErr;
   StdErrThread.Free;
 
-  if WaitForSingleObject(PI.hProcess, ATimeoutMs) = WAIT_OBJECT_0 then
+  {Streams have closed, which means the child has exited (either naturally,
+   or because the watcher terminated it). Wait infinite -- the wall-clock
+   budget has already been enforced by the watcher.}
+  WaitForSingleObject(PI.hProcess, INFINITE);
+
+  Watcher.WaitFor;
+  Watcher.Free;
+
+  if TimedOutFlag <> 0 then
+    Result := -1
+  else if (ACancelHandle <> 0) and (WaitForSingleObject(ACancelHandle, 0) = WAIT_OBJECT_0) then
+    Result := -1
+  else
   begin
     GetExitCodeProcess(PI.hProcess, ExitCode);
-    {Cancellation path kills the child with exit code 1; surface it as -1 so
-     callers can distinguish a real "-1 from child" (not meaningful under Win32
-     ExitProcess) from a cancelled run.}
-    if (ACancelHandle <> 0) and (WaitForSingleObject(ACancelHandle, 0) = WAIT_OBJECT_0) then
-      Result := -1
-    else
-      Result := Integer(ExitCode);
-  end else begin
-    TerminateProcess(PI.hProcess, 1);
-    Result := -1;
-  end;
-
-  {Join the watcher before closing the process handle to guarantee the watcher
-   is no longer referencing it. If the child finished naturally, the watcher
-   has already woken up from its wait and exited without action.}
-  if Assigned(CancelWatcher) then
-  begin
-    CancelWatcher.WaitFor;
-    CancelWatcher.Free;
+    Result := Integer(ExitCode);
   end;
 
   CloseHandle(StdOutRead);

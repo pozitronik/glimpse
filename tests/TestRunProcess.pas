@@ -17,10 +17,13 @@ type
     [Test] procedure SimultaneousStdOutAndStdErr;
     [Test] procedure EmptyOutput_ProducesEmptyBytes;
     [Test] procedure LargeOutput_CapturedFully;
-    { Note: timeout is not unit-testable because RunProcess blocks on pipe
-      reads until the child closes stdout/stderr; the timeout parameter only
-      applies after pipes are drained. A long-running child that writes
-      continuously will block ReadPipeToEnd indefinitely. }
+    {Wall-clock timeout: ATimeoutMs is the budget for total elapsed time, not
+     just the post-output wait. Earlier the function blocked on ReadPipeToEnd
+     until the child's stdout pipe closed -- a child that produces nothing
+     for 30 seconds blocked the call for 30 seconds regardless of the
+     500 ms timeout. The fix is a watcher thread that terminates the child
+     once ATimeoutMs elapses, cascading through pipe closure.}
+    [Test] procedure Timeout_TerminatesSlowChildWithinBudget;
     [Test] procedure BinaryOutput_PreservedExactly;
     { Cancellation contract: an optional cancel handle unblocks a long-running
       child by killing it, which cascades through pipe closure. }
@@ -120,6 +123,27 @@ begin
   Output := TEncoding.Default.GetString(StdOut);
   Assert.IsTrue(Output.Contains('line_1'), 'Should contain first line');
   Assert.IsTrue(Output.Contains('line_1000'), 'Should contain last line');
+end;
+
+procedure TTestRunProcess.Timeout_TerminatesSlowChildWithinBudget;
+var
+  StdOut, StdErr: TBytes;
+  Code: Integer;
+  StartTick, Elapsed: Cardinal;
+begin
+  {Child sleeps 10 seconds with no output; without the watcher fix,
+   ReadPipeToEnd blocks for the full 10 seconds because stdout never closes
+   until the child exits. ATimeoutMs=500 must kill it well under that.
+   PowerShell cold start can take ~2 seconds, so allow 5 seconds for the
+   whole call.}
+  StartTick := GetTickCount;
+  Code := RunProcess(
+    'powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 10"',
+    StdOut, StdErr, 500);
+  Elapsed := GetTickCount - StartTick;
+  Assert.AreEqual(-1, Code, 'Timed-out process must return -1');
+  Assert.IsTrue(Elapsed < 5000,
+    Format('Wall-clock budget broken; ATimeoutMs=500 elapsed=%dms', [Elapsed]));
 end;
 
 procedure TTestRunProcess.BinaryOutput_PreservedExactly;
