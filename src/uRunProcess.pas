@@ -85,7 +85,12 @@ begin
   end;
   CloseHandle(StdInWrite);
 
-  {Parent-side read handles must not be inherited}
+  {Parent-side read handles must not be inherited.
+   StdInRead is intentionally NOT cleared here -- it stays inheritable
+   so CreateProcess passes it to the child via SI.hStdInput. The parent
+   closes its own copy immediately after CreateProcess (line below the
+   call), so the inheritable flag is harmless. Symmetric clearing was
+   considered but would break the child's inheritance of stdin.}
   SetHandleInformation(StdOutRead, HANDLE_FLAG_INHERIT, 0);
   SetHandleInformation(StdErrRead, HANDLE_FLAG_INHERIT, 0);
 
