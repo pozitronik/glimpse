@@ -43,6 +43,15 @@ procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
  callers must not assume it returns synchronously without the cache lock.}
 procedure InvalidateFrameCache;
 
+{Test-only seed and inspection of the module-level cache state. PRODUCTION
+ CODE MUST NOT CALL THESE. They exist so a regression test for the
+ DoOpenArchive exception-cleanup path can mimic the partial state that
+ PreExtractFrames populates before raising, then assert InvalidateFrameCache
+ wipes it.}
+procedure WcxTest_SeedCacheState(const AVideoFile, ATempDir: string);
+function WcxTest_CachedVideoFile: string;
+function WcxTest_CachedTempDir: string;
+
 implementation
 
 uses
@@ -122,6 +131,37 @@ begin
   GCacheLock.Enter;
   try
     InvalidateFrameCacheLocked;
+  finally
+    GCacheLock.Leave;
+  end;
+end;
+
+procedure WcxTest_SeedCacheState(const AVideoFile, ATempDir: string);
+begin
+  GCacheLock.Enter;
+  try
+    GCachedVideoFile := AVideoFile;
+    GCachedTempDir := ATempDir;
+  finally
+    GCacheLock.Leave;
+  end;
+end;
+
+function WcxTest_CachedVideoFile: string;
+begin
+  GCacheLock.Enter;
+  try
+    Result := GCachedVideoFile;
+  finally
+    GCacheLock.Leave;
+  end;
+end;
+
+function WcxTest_CachedTempDir: string;
+begin
+  GCacheLock.Enter;
+  try
+    Result := GCachedTempDir;
   finally
     GCacheLock.Leave;
   end;
@@ -348,6 +388,12 @@ begin
     Result := THandle(H);
   except
     H.Free;
+    {PreExtractFrames may have populated GCachedVideoFile / GCachedTempDir
+     and started writing temp files before the exception. Without this
+     reset, a subsequent OpenArchive on the same video file would treat the
+     partial directory as a cache hit and serve garbage entries (or trip
+     over missing temp files mid-extraction).}
+    InvalidateFrameCache;
     AOpenResult := E_BAD_ARCHIVE;
   end;
 end;

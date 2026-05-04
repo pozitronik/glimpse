@@ -32,13 +32,20 @@ type
      threads. The cache mutator must serialise via GCacheLock so two threads
      cannot interleave directory deletion and field assignments.}
     [Test] procedure InvalidateFrameCache_Concurrent_DoesNotCrash;
+    {Regression: when DoOpenArchive's body raises after PreExtractFrames has
+     populated GCachedVideoFile and GCachedTempDir, the except branch must
+     invalidate the cache. Without that, a subsequent OpenArchive on the
+     same file finds a stale cache hit and returns paths into a partial /
+     deleted directory. The seed helper mimics what PreExtractFrames leaves
+     behind; InvalidateFrameCache (called from the except block) wipes it.}
+    [Test] procedure InvalidateFrameCache_AfterSeed_ResetsAllFieldsAndDeletesTempDir;
   end;
 
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, System.SyncObjs, uWcxAPI,
-  uWcxExports;
+  Winapi.Windows, System.SysUtils, System.IOUtils, System.Classes, System.SyncObjs,
+  uWcxAPI, uWcxExports;
 
 { THeaderDataExW }
 
@@ -251,6 +258,39 @@ begin
       'No thread may raise an exception under contention');
   finally
     StartGate.Free;
+  end;
+end;
+
+procedure TTestWcxAPI.InvalidateFrameCache_AfterSeed_ResetsAllFieldsAndDeletesTempDir;
+var
+  TempDir: string;
+begin
+  TempDir := TPath.Combine(TPath.GetTempPath, 'wcx_seed_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(TempDir);
+  try
+    {Mimic PreExtractFrames partial population: globals point to a real
+     temp directory holding (in production) some half-written frames.}
+    WcxTest_SeedCacheState('C:\fake_video.mp4', TempDir);
+    Assert.AreEqual('C:\fake_video.mp4', WcxTest_CachedVideoFile,
+      'Sanity: seed populated the video-file slot');
+    Assert.AreEqual(TempDir, WcxTest_CachedTempDir,
+      'Sanity: seed populated the temp-dir slot');
+    Assert.IsTrue(TDirectory.Exists(TempDir));
+
+    {This is what DoOpenArchive's except branch now does. Both fields must
+     end up empty and the temp directory must be deleted, otherwise a
+     subsequent OpenArchive on the same video would erroneously reuse it.}
+    InvalidateFrameCache;
+
+    Assert.AreEqual('', WcxTest_CachedVideoFile,
+      'Video-file slot must be empty after invalidation');
+    Assert.AreEqual('', WcxTest_CachedTempDir,
+      'Temp-dir slot must be empty after invalidation');
+    Assert.IsFalse(TDirectory.Exists(TempDir),
+      'Temp directory must be deleted by InvalidateFrameCache');
+  finally
+    if TDirectory.Exists(TempDir) then
+      TDirectory.Delete(TempDir, True);
   end;
 end;
 
