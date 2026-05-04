@@ -512,6 +512,9 @@ begin
     Exit;
   ControlsToSettings(FSettings);
   FSettings.Save;
+  {Re-validate the FFmpeg path in case the user changed it; without this
+   the info label keeps showing the validation result from dialog open.}
+  UpdateFFmpegInfo;
   if Assigned(FOnApply) then
     FOnApply();
 end;
