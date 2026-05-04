@@ -6,7 +6,7 @@ unit uCache;
 interface
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes,
+  System.SysUtils, System.IOUtils, System.Classes, System.SyncObjs,
   System.Generics.Collections, System.Generics.Defaults,
   Vcl.Graphics, Vcl.Imaging.pngimage, uBitmapSaver;
 
@@ -97,6 +97,15 @@ type
   strict private
     FCacheDir: string;
     FMaxSizeBytes: Int64;
+    {Serialises every public operation. NTFS rename is atomic, so a
+     concurrent TryGet during a Put already sees old-or-new but never
+     partial; the lock additionally guards Evict's directory walk
+     against a Put adding new entries mid-scan and the GetTotalSize /
+     Clear admin paths against in-flight reads. Lock is held across the
+     PNG encode + disk write inside Put; workers therefore serialise on
+     cache writes, which is acceptable given typical frame sizes and
+     the disk being the real bottleneck anyway.}
+    FLock: TCriticalSection;
 
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string; static;
     {Best-effort cleanup of leftover Put-temp files. Called from the
@@ -105,6 +114,7 @@ type
 
   public
     constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
+    destructor Destroy; override;
 
     {Generates a cache key hash string for a frame by reading file metadata
      from disk. Returns empty string if the file cannot be stat'd.
@@ -203,12 +213,19 @@ end;
 constructor TFrameCache.Create(const ACacheDir: string; AMaxSizeMB: Integer);
 begin
   inherited Create;
+  FLock := TCriticalSection.Create;
   FCacheDir := ACacheDir;
   FMaxSizeBytes := Int64(AMaxSizeMB) * 1024 * 1024;
   if not TDirectory.Exists(FCacheDir) then
     TDirectory.CreateDirectory(FCacheDir);
   SweepOrphanedTempFiles;
   DebugLog('Cache', Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
+end;
+
+destructor TFrameCache.Destroy;
+begin
+  FLock.Free;
+  inherited;
 end;
 
 procedure TFrameCache.SweepOrphanedTempFiles;
@@ -275,34 +292,39 @@ begin
   Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes);
   if Key = '' then
     Exit;
+  FLock.Enter;
   try
-    Path := ShardedKeyPath(FCacheDir, Key, '.png');
-    if not TFile.Exists(Path) then
-    begin
-      DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]));
-      Exit;
-    end;
-
-    Data := TFile.ReadAllBytes(Path);
-    DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));
-    Result := PngBytesToBitmap(Data);
-    DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d', [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));
-  except
-    on E: Exception do
-    begin
-      DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
-      FreeAndNil(Result);
-    end;
-  end;
-
-  {Update access time for LRU tracking; isolated so a failure here
-   cannot discard the successfully loaded bitmap.}
-  if Result <> nil then
     try
-      TFile.SetLastAccessTime(ShardedKeyPath(FCacheDir, Key, '.png'), Now);
+      Path := ShardedKeyPath(FCacheDir, Key, '.png');
+      if not TFile.Exists(Path) then
+      begin
+        DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]));
+        Exit;
+      end;
+
+      Data := TFile.ReadAllBytes(Path);
+      DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));
+      Result := PngBytesToBitmap(Data);
+      DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d', [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));
     except
-      {Access time is cosmetic for LRU; failure is harmless}
+      on E: Exception do
+      begin
+        DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
+        FreeAndNil(Result);
+      end;
     end;
+
+    {Update access time for LRU tracking; isolated so a failure here
+     cannot discard the successfully loaded bitmap.}
+    if Result <> nil then
+      try
+        TFile.SetLastAccessTime(ShardedKeyPath(FCacheDir, Key, '.png'), Now);
+      except
+        {Access time is cosmetic for LRU; failure is harmless}
+      end;
+  finally
+    FLock.Leave;
+  end;
 end;
 
 procedure TFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
@@ -316,60 +338,70 @@ begin
   if Key = '' then
     Exit;
   DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
+  FLock.Enter;
   try
-    FinalPath := ShardedKeyPath(FCacheDir, Key, '.png');
-    SubDir := ExtractFilePath(FinalPath);
-    if not TDirectory.Exists(SubDir) then
-      TDirectory.CreateDirectory(SubDir);
-
-    {Write to temp file, then rename for atomicity}
-    TempPath := TPath.Combine(FCacheDir, TGUID.NewGuid.ToString + '.tmp');
-    Png := TPngImage.Create;
     try
-      Png.Assign(ABitmap);
-      Png.CompressionLevel := 1; {Fast compression for cache writes}
-      Png.SaveToFile(TempPath);
-      DebugLog('Cache', Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));
-    finally
-      Png.Free;
-    end;
+      FinalPath := ShardedKeyPath(FCacheDir, Key, '.png');
+      SubDir := ExtractFilePath(FinalPath);
+      if not TDirectory.Exists(SubDir) then
+        TDirectory.CreateDirectory(SubDir);
 
-    {Atomic replace: MoveFileEx with MOVEFILE_REPLACE_EXISTING is atomic
-     on NTFS, eliminating the window where concurrent readers see no file}
-    if not MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING) then
-    begin
-      DebugLog('Cache', Format('  MoveFileEx failed err=%d', [GetLastError]));
+      {Write to temp file, then rename for atomicity}
+      TempPath := TPath.Combine(FCacheDir, TGUID.NewGuid.ToString + '.tmp');
+      Png := TPngImage.Create;
       try
-        if TFile.Exists(TempPath) then
-          TFile.Delete(TempPath);
-      except
-        {Best-effort temp file cleanup}
+        Png.Assign(ABitmap);
+        Png.CompressionLevel := 1; {Fast compression for cache writes}
+        Png.SaveToFile(TempPath);
+        DebugLog('Cache', Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));
+      finally
+        Png.Free;
       end;
-      Exit;
-    end;
-    DebugLog('Cache', Format('  moved to %s', [FinalPath]));
-  except
-    on E: Exception do
-    begin
-      DebugLog('Cache', Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
-      try
-        if TFile.Exists(TempPath) then
-          TFile.Delete(TempPath);
-      except
-        {Best-effort temp file cleanup}
+
+      {Atomic replace: MoveFileEx with MOVEFILE_REPLACE_EXISTING is atomic
+       on NTFS, eliminating the window where concurrent readers see no file}
+      if not MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING) then
+      begin
+        DebugLog('Cache', Format('  MoveFileEx failed err=%d', [GetLastError]));
+        try
+          if TFile.Exists(TempPath) then
+            TFile.Delete(TempPath);
+        except
+          {Best-effort temp file cleanup}
+        end;
+        Exit;
+      end;
+      DebugLog('Cache', Format('  moved to %s', [FinalPath]));
+    except
+      on E: Exception do
+      begin
+        DebugLog('Cache', Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
+        try
+          if TFile.Exists(TempPath) then
+            TFile.Delete(TempPath);
+        except
+          {Best-effort temp file cleanup}
+        end;
       end;
     end;
+  finally
+    FLock.Leave;
   end;
 end;
 
 procedure TFrameCache.Clear;
 begin
+  FLock.Enter;
   try
-    if TDirectory.Exists(FCacheDir) then
-      TDirectory.Delete(FCacheDir, True);
-    TDirectory.CreateDirectory(FCacheDir);
-  except
-    {Best-effort clear; directory may be locked}
+    try
+      if TDirectory.Exists(FCacheDir) then
+        TDirectory.Delete(FCacheDir, True);
+      TDirectory.CreateDirectory(FCacheDir);
+    except
+      {Best-effort clear; directory may be locked}
+    end;
+  finally
+    FLock.Leave;
   end;
 end;
 
@@ -390,66 +422,71 @@ begin
   if not TDirectory.Exists(FCacheDir) then
     Exit;
 
-  Infos := TList<TCacheFileInfo>.Create;
+  FLock.Enter;
   try
-    TotalSize := 0;
+    Infos := TList<TCacheFileInfo>.Create;
     try
-      for var FileName in TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories) do
-      begin
-        try
-          Info.Path := FileName;
-          Info.Size := TFile.GetSize(FileName);
-          Info.AccessTime := TFile.GetLastAccessTime(FileName);
-          Infos.Add(Info);
-          TotalSize := TotalSize + Info.Size;
-        except
-          {Skip files we cannot stat}
-        end;
-      end;
-    except
-      Exit; {Directory inaccessible; nothing to evict}
-    end;
-
-    if TotalSize <= FMaxSizeBytes then
-      Exit;
-
-    {Sort by access time ascending (oldest first)}
-    Infos.Sort(TComparer<TCacheFileInfo>.Construct(
-      function(const A, B: TCacheFileInfo): Integer
-      begin
-        Result := CompareDateTime(A.AccessTime, B.AccessTime);
-      end));
-
-    {Delete oldest files until within budget}
-    for Info in Infos do
-    begin
-      if TotalSize <= FMaxSizeBytes then
-        Break;
+      TotalSize := 0;
       try
-        TFile.Delete(Info.Path);
-        TotalSize := TotalSize - Info.Size;
+        for var FileName in TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories) do
+        begin
+          try
+            Info.Path := FileName;
+            Info.Size := TFile.GetSize(FileName);
+            Info.AccessTime := TFile.GetLastAccessTime(FileName);
+            Infos.Add(Info);
+            TotalSize := TotalSize + Info.Size;
+          except
+            {Skip files we cannot stat}
+          end;
+        end;
       except
-        {File may be locked by another TC instance}
+        Exit; {Directory inaccessible; nothing to evict}
       end;
-    end;
 
-    {Clean up empty subdirectories}
-    try
-      Dirs := TDirectory.GetDirectories(FCacheDir);
-      for Dir in Dirs do
+      if TotalSize <= FMaxSizeBytes then
+        Exit;
+
+      {Sort by access time ascending (oldest first)}
+      Infos.Sort(TComparer<TCacheFileInfo>.Construct(
+        function(const A, B: TCacheFileInfo): Integer
+        begin
+          Result := CompareDateTime(A.AccessTime, B.AccessTime);
+        end));
+
+      {Delete oldest files until within budget}
+      for Info in Infos do
       begin
+        if TotalSize <= FMaxSizeBytes then
+          Break;
         try
-          if Length(TDirectory.GetFiles(Dir)) = 0 then
-            TDirectory.Delete(Dir, False);
+          TFile.Delete(Info.Path);
+          TotalSize := TotalSize - Info.Size;
         except
-          {Skip dirs that can't be removed}
+          {File may be locked by another TC instance}
         end;
       end;
-    except
-      {Subdirectory enumeration failed; not critical}
+
+      {Clean up empty subdirectories}
+      try
+        Dirs := TDirectory.GetDirectories(FCacheDir);
+        for Dir in Dirs do
+        begin
+          try
+            if Length(TDirectory.GetFiles(Dir)) = 0 then
+              TDirectory.Delete(Dir, False);
+          except
+            {Skip dirs that can't be removed}
+          end;
+        end;
+      except
+        {Subdirectory enumeration failed; not critical}
+      end;
+    finally
+      Infos.Free;
     end;
   finally
-    Infos.Free;
+    FLock.Leave;
   end;
 end;
 
@@ -461,18 +498,23 @@ begin
   Result := 0;
   if not TDirectory.Exists(FCacheDir) then
     Exit;
+  FLock.Enter;
   try
-    Files := TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories);
-    for FileName in Files do
-    begin
-      try
-        Result := Result + TFile.GetSize(FileName);
-      except
-        {Skip files we cannot stat}
+    try
+      Files := TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories);
+      for FileName in Files do
+      begin
+        try
+          Result := Result + TFile.GetSize(FileName);
+        except
+          {Skip files we cannot stat}
+        end;
       end;
+    except
+      {Directory enumeration failed; return partial result}
     end;
-  except
-    {Directory enumeration failed; return partial result}
+  finally
+    FLock.Leave;
   end;
 end;
 

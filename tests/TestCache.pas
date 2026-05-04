@@ -4,6 +4,7 @@ interface
 
 uses
   DUnitX.TestFramework, System.SysUtils, System.IOUtils, System.Classes,
+  System.SyncObjs, Winapi.Windows,
   Vcl.Graphics, uCache;
 
 type
@@ -102,6 +103,13 @@ type
     procedure TestConstructorSweepsOrphanTempFiles;
     [Test]
     procedure TestConstructorPreservesPngEntries;
+
+    {Concurrency: every public operation is wrapped in FLock so concurrent
+     workers cannot corrupt the cache directory or interleave Evict's
+     directory walk with a Put. The stress test fires Put / TryGet / Evict
+     / GetTotalSize from many threads and asserts no exception escapes.}
+    [Test]
+    procedure TestConcurrentOperations_DoNotCrash;
   end;
 
 implementation
@@ -896,6 +904,124 @@ begin
     Assert.IsTrue(TFile.Exists(PngFile),
       'Cached .png entries must survive the constructor sweep');
   finally
+    Cache.Free;
+  end;
+end;
+
+type
+  TCacheStressKind = (cskPut, cskGet, cskEvict, cskTotalSize);
+
+  TCacheStressThread = class(TThread)
+  strict private
+    FCache: TFrameCache;
+    FStart: TEvent;
+    FKind: TCacheStressKind;
+    FIterations: Integer;
+    FSourceFile: string;
+    FException: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(ACache: TFrameCache; AStart: TEvent;
+      AKind: TCacheStressKind; AIterations: Integer; const ASourceFile: string);
+    property Exc: string read FException;
+  end;
+
+constructor TCacheStressThread.Create(ACache: TFrameCache; AStart: TEvent;
+  AKind: TCacheStressKind; AIterations: Integer; const ASourceFile: string);
+begin
+  FCache := ACache;
+  FStart := AStart;
+  FKind := AKind;
+  FIterations := AIterations;
+  FSourceFile := ASourceFile;
+  inherited Create(False);
+end;
+
+procedure TCacheStressThread.Execute;
+var
+  I: Integer;
+  Bmp, Got: TBitmap;
+  Key: TFrameCacheKey;
+begin
+  FStart.WaitFor(INFINITE);
+  try
+    for I := 1 to FIterations do
+    begin
+      Key := TFrameCacheKey.Create(FSourceFile, 1.0 + (I mod 5), 0, False);
+      case FKind of
+        cskPut:
+          begin
+            Bmp := TBitmap.Create;
+            try
+              Bmp.PixelFormat := pf24bit;
+              Bmp.SetSize(8, 8);
+              FCache.Put(Key, Bmp);
+            finally
+              Bmp.Free;
+            end;
+          end;
+        cskGet:
+          begin
+            Got := FCache.TryGet(Key);
+            Got.Free;
+          end;
+        cskEvict:
+          FCache.Evict;
+        cskTotalSize:
+          FCache.GetTotalSize;
+      end;
+    end;
+  except
+    on E: Exception do
+      FException := E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+procedure TTestFrameCache.TestConcurrentOperations_DoNotCrash;
+const
+  ITER = 25;
+var
+  Cache: TFrameCache;
+  StartGate: TEvent;
+  Threads: array [0 .. 7] of TCacheStressThread;
+  Handles: array [0 .. 7] of THandle;
+  SourceFile: string;
+  I: Integer;
+  Failures: string;
+begin
+  {Source file must exist so FrameKey returns a non-empty key. The
+   running test executable is reliably present.}
+  SourceFile := ParamStr(0);
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  StartGate := TEvent.Create(nil, True, False, '');
+  try
+    {Mix kinds: 3 putters, 3 getters, 1 evicter, 1 size-poller all racing
+     on the same cache.}
+    Threads[0] := TCacheStressThread.Create(Cache, StartGate, cskPut, ITER, SourceFile);
+    Threads[1] := TCacheStressThread.Create(Cache, StartGate, cskPut, ITER, SourceFile);
+    Threads[2] := TCacheStressThread.Create(Cache, StartGate, cskPut, ITER, SourceFile);
+    Threads[3] := TCacheStressThread.Create(Cache, StartGate, cskGet, ITER, SourceFile);
+    Threads[4] := TCacheStressThread.Create(Cache, StartGate, cskGet, ITER, SourceFile);
+    Threads[5] := TCacheStressThread.Create(Cache, StartGate, cskGet, ITER, SourceFile);
+    Threads[6] := TCacheStressThread.Create(Cache, StartGate, cskEvict, ITER div 5, SourceFile);
+    Threads[7] := TCacheStressThread.Create(Cache, StartGate, cskTotalSize, ITER, SourceFile);
+
+    for I := 0 to High(Handles) do
+      Handles[I] := Threads[I].Handle;
+    StartGate.SetEvent;
+    WaitForMultipleObjects(Length(Handles), @Handles[0], True, 60000);
+
+    Failures := '';
+    for I := 0 to High(Threads) do
+    begin
+      if Threads[I].Exc <> '' then
+        Failures := Failures + Format('thread %d: %s; ', [I, Threads[I].Exc]);
+      Threads[I].Free;
+    end;
+    Assert.AreEqual('', Failures, 'No thread may surface an exception under contention');
+  finally
+    StartGate.Free;
     Cache.Free;
   end;
 end;
