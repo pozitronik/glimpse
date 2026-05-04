@@ -17,6 +17,13 @@ type
     [Test] procedure CopyBitmap_Pf32Bit_CfDibCompositesAlphaOntoBackground;
     [Test] procedure CopyBitmap_Pf32Bit_CfDibIsBottomUp;
     [Test] procedure CopyBitmap_Pf32Bit_PublishesCfBitmapSibling;
+    {Retry contract for the open helper. Earlier the bare except absorbed
+     every exception class and burned 200 ms retrying problems that were
+     not transient clipboard contention.}
+    [Test] procedure RetryOpener_SucceedsImmediately_ReturnsTrue;
+    [Test] procedure RetryOpener_AlwaysClipboardException_GivesUp;
+    [Test] procedure RetryOpener_NonClipboardException_Propagates;
+    [Test] procedure RetryOpener_RecoversAfterTransientFailures;
   end;
 
 implementation
@@ -362,6 +369,78 @@ begin
   finally
     Clipboard.Close;
   end;
+end;
+
+{ -------- TryClipboardOpenWithRetry retry contract -------- }
+
+procedure TTestClipboardImage.RetryOpener_SucceedsImmediately_ReturnsTrue;
+var
+  Calls: Integer;
+begin
+  Calls := 0;
+  Assert.IsTrue(TryClipboardOpenWithRetry(
+    procedure
+    begin
+      Inc(Calls);
+    end));
+  Assert.AreEqual(1, Calls, 'Successful first attempt must not retry');
+end;
+
+procedure TTestClipboardImage.RetryOpener_AlwaysClipboardException_GivesUp;
+var
+  Calls: Integer;
+  Result: Boolean;
+begin
+  Calls := 0;
+  Result := TryClipboardOpenWithRetry(
+    procedure
+    begin
+      Inc(Calls);
+      raise EClipboardException.Create('persistent contention');
+    end);
+  Assert.IsFalse(Result, 'Persistent EClipboardException must exhaust retries');
+  Assert.AreEqual(20, Calls,
+    'Retry budget is fixed at 20 attempts; if a future tweak changes that, update this assertion');
+end;
+
+procedure TTestClipboardImage.RetryOpener_NonClipboardException_Propagates;
+begin
+  {Bug-fix pin: the original bare except absorbed everything and burned
+   200 ms retrying. The narrowed handler must let non-EClipboardException
+   classes propagate. EArgumentException stands in for any unrelated
+   exception (EOutOfMemory, EAccessViolation, EOSError) — they all share
+   the same propagation contract, and using a non-special class here
+   keeps the test's leak detection clean.}
+  Assert.WillRaise(
+    procedure
+    begin
+      TryClipboardOpenWithRetry(
+        procedure
+        begin
+          raise EArgumentException.Create('non-transient');
+        end);
+    end,
+    EArgumentException,
+    'Non-clipboard exceptions must propagate, not be retried');
+end;
+
+procedure TTestClipboardImage.RetryOpener_RecoversAfterTransientFailures;
+var
+  Calls: Integer;
+  Result: Boolean;
+begin
+  {Two transient failures, then a success. The helper must succeed and
+   the call count proves the retry actually fired before the success.}
+  Calls := 0;
+  Result := TryClipboardOpenWithRetry(
+    procedure
+    begin
+      Inc(Calls);
+      if Calls < 3 then
+        raise EClipboardException.Create('transient');
+    end);
+  Assert.IsTrue(Result, 'Recovery after a few transient failures must succeed');
+  Assert.AreEqual(3, Calls);
 end;
 
 initialization

@@ -23,7 +23,13 @@ unit uClipboardImage;
 interface
 
 uses
-  System.UITypes, Vcl.Graphics;
+  System.SysUtils, System.UITypes, Vcl.Graphics;
+
+type
+  {Action that opens the clipboard. Defaults to Vcl.Clipbrd.Clipboard.Open
+   in production; tests inject throwers so the retry policy can be
+   exercised without owning the global clipboard.}
+  TClipboardOpenAction = reference to procedure;
 
 {Pushes ABitmap to the system clipboard.
 
@@ -40,6 +46,18 @@ uses
  Returns True on success.}
 function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap; ABackground: TColor = TColor($000000)): Boolean;
 
+{Retries the clipboard open up to 20 times with 10 ms sleeps when it
+ surfaces an EClipboardException, returning True on the first successful
+ open and False once the retry budget is exhausted. The action overload
+ is the test seam; the no-arg overload calls Vcl.Clipbrd.Clipboard.Open.
+ Earlier the bare except swallowed every exception including
+ EAccessViolation / EOutOfMemory and burned 200 ms retrying problems
+ that were never going to fix themselves; the retry now matches only
+ the documented transient failure (EClipboardException), and any other
+ exception propagates to the caller.}
+function TryClipboardOpenWithRetry: Boolean; overload;
+function TryClipboardOpenWithRetry(const AOpenAction: TClipboardOpenAction): Boolean; overload;
+
 implementation
 
 uses
@@ -53,7 +71,7 @@ const
   LCS_sRGB        = $73524742;
   LCS_GM_GRAPHICS = 2;
 
-function TryClipboardOpenWithRetry: Boolean;
+function TryClipboardOpenWithRetry(const AOpenAction: TClipboardOpenAction): Boolean;
 var
   I: Integer;
 begin
@@ -62,17 +80,26 @@ begin
    console DUnitX runs (no message pump) and host processes that pump
    messages on a different thread. A short retry loop is the conventional
    remedy. Vcl.Clipbrd raises EClipboardException on its own OpenClipboard
-   failure, so we catch and retry.}
+   failure, so we catch and retry — but only that. Other exception classes
+   (EAccessViolation, EOutOfMemory, ...) are not transient clipboard
+   contention and must propagate to the caller.}
   for I := 1 to 20 do
   begin
     try
-      Clipboard.Open;
+      AOpenAction;
       Exit(True);
     except
-      Sleep(10);
+      on E: EClipboardException do
+        Sleep(10);
     end;
   end;
   Result := False;
+end;
+
+function TryClipboardOpenWithRetry: Boolean;
+begin
+  Result := TryClipboardOpenWithRetry(
+    procedure begin Clipboard.Open; end);
 end;
 
 {Builds an HGLOBAL holding a CF_DIBV5 buffer (BITMAPV5HEADER + ARGB
