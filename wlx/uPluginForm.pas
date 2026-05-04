@@ -2225,6 +2225,11 @@ begin
   FExtractCtrl.DrainPendingFrameMessages;
   FFrameView.ClearCells;
   SetupPlaceholders;
+  {TBypassFrameCache skips reads (forces ffmpeg re-extraction) but still
+   delegates writes to the inner cache, so refresh DOES update the cache
+   with fresh frames. TestBypassCachePutDelegates pins that contract.
+   Comment is here so a quick read does not assume "bypass" means write-
+   skip too -- the decorator is read-only-bypass.}
   StartExtraction(TBypassFrameCache.Create(FExtractCtrl.Cache));
 end;
 
