@@ -42,7 +42,7 @@ end;
 
 function CacheHashKey(const AKeyString: string): string;
 begin
-  Result := THashMD5.GetHashString(AKeyString).ToLower;
+  Result := THashMD5.GetHashString(AKeyString);
 end;
 
 function ShardedKeyPath(const ACacheDir, AKey, AExt: string): string;
