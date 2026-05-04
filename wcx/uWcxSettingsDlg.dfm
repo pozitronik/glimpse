@@ -272,6 +272,7 @@ object WcxSettingsForm: TWcxSettingsForm
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Start from random positions'
         TabOrder = 4
+        OnClick = ChkRandomExtractionClick
       end
       object TrkRandomPercent: TTrackBar
         Left = 94

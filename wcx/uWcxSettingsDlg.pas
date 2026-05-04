@@ -132,6 +132,7 @@ type
     procedure PnlBannerTextColorClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
     procedure ChkBannerAutoSizeClick(Sender: TObject);
+    procedure ChkRandomExtractionClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
     procedure BtnBannerFontClick(Sender: TObject);
     procedure BtnApplyClick(Sender: TObject);
@@ -148,6 +149,10 @@ type
     procedure SettingsToControls(ASettings: TWcxSettings);
     procedure ControlsToSettings(ASettings: TWcxSettings);
     procedure UpdateCombinedState;
+    {Greys out the randomness slider and its labels when the random
+     extraction checkbox is unchecked, so the user is not given a control
+     that would have no effect until the checkbox is ticked.}
+    procedure UpdateRandomState;
     procedure UpdateMaxWorkersControls;
     procedure UpdateFFmpegInfo;
     procedure UpdateTimestampFontDisplay;
@@ -237,6 +242,7 @@ begin
 
   UpdateMaxWorkersControls;
   UpdateCombinedState;
+  UpdateRandomState;
   UpdateFFmpegInfo;
 end;
 
@@ -481,6 +487,21 @@ end;
 procedure TWcxSettingsForm.ChkShowBannerClick(Sender: TObject);
 begin
   UpdateCombinedState;
+end;
+
+procedure TWcxSettingsForm.ChkRandomExtractionClick(Sender: TObject);
+begin
+  UpdateRandomState;
+end;
+
+procedure TWcxSettingsForm.UpdateRandomState;
+var
+  Enabled: Boolean;
+begin
+  Enabled := ChkRandomExtraction.Checked;
+  LblRandomPercent.Enabled := Enabled;
+  LblRandomPercentValue.Enabled := Enabled;
+  TrkRandomPercent.Enabled := Enabled;
 end;
 
 procedure TWcxSettingsForm.BtnApplyClick(Sender: TObject);
