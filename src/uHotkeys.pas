@@ -203,6 +203,14 @@ begin
     VK_SUBTRACT:
       Result := VK_OEM_MINUS;
     VK_DECIMAL:
+      {Locale caveat: VK_DECIMAL is collapsed onto VK_OEM_PERIOD so
+       numpad-decimal and the top-row '.' share a single binding.
+       European numpads where the decimal key produces ',' would
+       prefer VK_OEM_COMMA, but Windows does not expose layout-aware
+       VK mapping at this layer. Acceptable -- worst case the user
+       binds the top-row key separately and gets the layout they
+       expect; current behaviour matches WLX's existing one-binding
+       contract.}
       Result := VK_OEM_PERIOD;
   else
     Result := AKey;
