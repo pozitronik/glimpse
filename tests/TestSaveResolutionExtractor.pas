@@ -30,12 +30,20 @@ type
     [Test] procedure OutOfRangeIndexIsSkipped;
     [Test] procedure ProgressCallbacksFire;
     [Test] procedure DoneCallbackFiresEvenOnEarlyExit;
+    {Negative test for the review claim that ExtractAtTarget stores the
+     extractor's bitmap reference shared with the result array so freeing
+     the result would leave a dangling pointer in the cache. The production
+     TFrameCache serialises the bitmap to a PNG on disk and drops the
+     reference; the next TryGet rebuilds a fresh TBitmap. The test
+     uses a real disk cache, frees the first result, and asserts the
+     second extraction returns a distinct, valid bitmap.}
+    [Test] procedure CacheDoesNotShareBitmapWithResult;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.IOUtils, System.Classes, System.Generics.Collections,
   Winapi.Windows, Vcl.Graphics,
   uTypes, uCache, uFrameOffsets, uFrameExtractor, uSaveResolutionExtractor;
 
@@ -537,6 +545,63 @@ begin
     Assert.AreEqual(0, Integer(Length(Result)));
   finally
     Sub.Free;
+  end;
+end;
+
+procedure TTestSaveResolutionExtractor.CacheDoesNotShareBitmapWithResult;
+var
+  Cache: IFrameCache;
+  Ext: IFrameExtractor;
+  Sub: TSaveResolutionExtractor;
+  Ctx: TSaveResolutionContext;
+  First, Second: TArray<TBitmap>;
+  Canned: TBitmap;
+  CacheDir: string;
+  FirstPtr, SecondPtr: NativeUInt;
+  FirstW, FirstH: Integer;
+begin
+  CacheDir := TPath.Combine(TPath.GetTempPath, 'VT_SaveExtRoundTrip_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(CacheDir);
+  try
+    Cache := TFrameCache.Create(CacheDir, 100);
+    Ext := TMockExtractor.Create;
+    Sub := TSaveResolutionExtractor.Create(Cache, Ext);
+    try
+      Ctx := MakeContext(1);
+      {TFrameCache keys include file size + mtime, so FileName must be a
+       real existing path. The running test executable is always present.}
+      Ctx.FileName := ParamStr(0);
+      Canned := MakeBitmap(320, 240);
+      TMockExtractor(Ext).SetCanned(Ctx.Offsets[0].TimeOffset, Canned);
+
+      First := Sub.ExtractAtTarget(Ctx, 1920, [0]);
+      Assert.IsNotNull(First[0], 'First extraction (cache miss) must produce a bitmap');
+      FirstPtr := NativeUInt(First[0]);
+      FirstW := First[0].Width;
+      FirstH := First[0].Height;
+      First[0].Free;
+      First[0] := nil;
+
+      Second := Sub.ExtractAtTarget(Ctx, 1920, [0]);
+      try
+        Assert.IsNotNull(Second[0], 'Second extraction (cache hit) must produce a bitmap');
+        SecondPtr := NativeUInt(Second[0]);
+        Assert.AreNotEqual(FirstPtr, SecondPtr,
+          'Cache must return a fresh bitmap, not the freed reference');
+        Assert.AreEqual(FirstW, Second[0].Width);
+        Assert.AreEqual(FirstH, Second[0].Height);
+        Assert.AreEqual(1, TMockExtractor(Ext).CallCount,
+          'Second call must hit cache; extractor stays at 1 call');
+      finally
+        Second[0].Free;
+      end;
+    finally
+      Sub.Free;
+    end;
+  finally
+    Cache := nil;
+    if TDirectory.Exists(CacheDir) then
+      TDirectory.Delete(CacheDir, True);
   end;
 end;
 
