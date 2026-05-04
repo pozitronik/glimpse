@@ -89,6 +89,16 @@ type
 
     property IniPath: string read FIniPath;
 
+    {Property contract: setters write the field directly with no range or
+     cross-field validation. The single source of truth is Load, which
+     clamps every numeric value and normalises cross-field relations
+     (e.g. MinFrameSide <= MaxFrameSide). Programmatic mutators that
+     bypass the dialog are expected to round-trip through Save+Load (or
+     write valid values themselves); the in-memory copy may briefly hold
+     out-of-range values but Load fixes them on the next read. Do not
+     add per-setter clamping here without removing the corresponding
+     clamp in Load - duplicate validation has historically diverged.}
+
     {[ffmpeg]}
     property FFmpegMode: TFFmpegMode read FFFmpegMode write FFFmpegMode;
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
