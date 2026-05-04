@@ -32,23 +32,24 @@ uses
  alpha values. We sidestep that by building a COLOR_RGBALPHA PNG of
  known geometry and writing each scanline byte-for-byte.
 
- TODO performance: the inner loop writes one pixel at a time via the
- GDI-backed Png.Pixels[X,Y] property and AlphaScanline[Y][X], which is
- O(W*H) separate property accesses. A scanline-based path that copies
- RGB bytes contiguously and the alpha byte separately would be
- significantly faster for large combined images. Acceptable for now
- because save is a user-initiated one-shot, but worth revisiting if
- the WCX combined-image extraction starts hitting this regularly.}
+ Implementation note: TPngImage stores COLOR_RGBALPHA at 8 bits per
+ channel as a 24-bit BGR DIB scanline plus a separate AlphaScanline
+ (verified against TPngImage.SetInfo(24, FALSE) for COLOR_RGBALPHA).
+ Source pf32bit DIBs are also BGRA, so for each pixel we copy three
+ bytes verbatim to the BGR scanline and the fourth byte to the alpha
+ line — no per-pixel TColor packing or property dispatch.
+ TestSavePNGAlphaRoundTrip pins both the alpha and the colour ordering;
+ a B/R swap regression there would scream "R<->B swap would land here".}
 procedure SaveAlphaBitmapAsPng(ABitmap: TBitmap; const APath: string;
   ACompressionLevel: Integer);
 const
   COLOR_RGBALPHA = 6;
+  BGR_BYTES_PER_PIXEL = 3;
 var
   Png: TPngImage;
   X, Y: Integer;
-  Src: PByte;
+  Src, Dst: PByte;
   AlphaLine: PByteArray;
-  B, G, R, A: Byte;
 begin
   Png := TPngImage.CreateBlank(COLOR_RGBALPHA, 8, ABitmap.Width, ABitmap.Height);
   try
@@ -56,20 +57,16 @@ begin
     for Y := 0 to ABitmap.Height - 1 do
     begin
       Src := PByte(ABitmap.ScanLine[Y]);
+      Dst := PByte(Png.Scanline[Y]);
       AlphaLine := Png.AlphaScanline[Y];
       for X := 0 to ABitmap.Width - 1 do
       begin
-        {Win32 DIB pf32bit byte order is BGRA. TColor stores red in the
-         low byte, so the COLORREF/RGB-macro packing is
-         R | (G shl 8) | (B shl 16) — inlined here to avoid pulling in
-         Winapi.Windows, which would shadow Vcl.Graphics.TBitmap with
-         Winapi.Windows.tagBITMAP.}
-        B := Src^; Inc(Src);
-        G := Src^; Inc(Src);
-        R := Src^; Inc(Src);
-        A := Src^; Inc(Src);
-        Png.Pixels[X, Y] := TColor(R or (G shl 8) or (B shl 16));
-        AlphaLine[X] := A;
+        {BGR triple: byte-for-byte from BGRA source. Then peel off A.}
+        Move(Src^, Dst^, BGR_BYTES_PER_PIXEL);
+        Inc(Src, BGR_BYTES_PER_PIXEL);
+        Inc(Dst, BGR_BYTES_PER_PIXEL);
+        AlphaLine[X] := Src^;
+        Inc(Src);
       end;
     end;
     Png.SaveToFile(APath);
