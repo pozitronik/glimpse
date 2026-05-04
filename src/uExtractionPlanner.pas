@@ -190,7 +190,11 @@ begin
   if (ASettings.CacheEnabled <> AOld.CacheEnabled) or (ASettings.CacheFolder <> AOld.CacheFolder) or (ASettings.CacheMaxSizeMB <> AOld.CacheMaxSizeMB) then
     Include(Result, scCacheChanged);
 
-  if (ASettings.FFmpegExePath <> AOld.FFmpegExePath) and (ASettings.FFmpegExePath <> '') then
+  {Any change to the path counts, including clearing a custom path back to
+   '' (auto-detect). The earlier "and ASettings.FFmpegExePath <> ''" guard
+   silently swallowed the revert-to-auto case so the user's change had no
+   visible effect until next file load.}
+  if ASettings.FFmpegExePath <> AOld.FFmpegExePath then
     Include(Result, scFFmpegPathChanged);
 
   if ASettings.SkipEdgesPercent <> AOld.SkipEdgesPercent then

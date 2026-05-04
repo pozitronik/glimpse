@@ -33,6 +33,11 @@ type
     [Test] procedure TestDetectSettingsChangesCacheFolder;
     [Test] procedure TestDetectSettingsChangesCacheMaxSize;
     [Test] procedure TestDetectSettingsChangesFFmpegPath;
+    {Regression: clearing the FFmpeg path (custom -> empty/auto-detect) was
+     filtered out by an extra "and AFFmpegExePath <> ''" guard, so reverting
+     to auto-detect did not trigger re-extraction. Any change to the path
+     must surface as scFFmpegPathChanged.}
+    [Test] procedure TestDetectSettingsChangesFFmpegPathCleared;
     [Test] procedure TestDetectSettingsChangesSkipEdges;
     [Test] procedure TestDetectSettingsChangesMultiple;
     [Test] procedure TestDetectSettingsChangesScaledExtraction;
@@ -346,6 +351,27 @@ begin
     S.FFmpegExePath := 'C:\new\ffmpeg.exe';
     Changes := DetectSettingsChanges(Snap, S);
     Assert.IsTrue(scFFmpegPathChanged in Changes);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestExtractionPlanner.TestDetectSettingsChangesFFmpegPathCleared;
+var
+  S: TPluginSettings;
+  Snap: TSettingsSnapshot;
+  Changes: TSettingsChanges;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    {Start with a custom path so the snapshot captures non-empty.}
+    S.FFmpegExePath := 'C:\custom\ffmpeg.exe';
+    Snap := TakeSettingsSnapshot(S);
+    {User clears the field to revert to auto-detect.}
+    S.FFmpegExePath := '';
+    Changes := DetectSettingsChanges(Snap, S);
+    Assert.IsTrue(scFFmpegPathChanged in Changes,
+      'Clearing a non-empty FFmpeg path must trigger re-extraction');
   finally
     S.Free;
   end;
