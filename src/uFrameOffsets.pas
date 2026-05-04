@@ -130,7 +130,11 @@ begin
   for I := 0 to AFrameCount - 1 do
   begin
     Midpoint := EffStart + (I + 0.5) * SliceLen;
-    {Random returns [0, 1). Map to [-WindowHalf, +WindowHalf).}
+    {Random returns [0, 1). Map to [-WindowHalf, +WindowHalf). The
+     half-open upper bound (+WindowHalf is exclusive) introduces a
+     sub-millisecond bias that is well below ffmpeg's seek granularity
+     and visually irrelevant for frame selection; symmetry would cost a
+     conditional branch for no observable benefit.}
     Jitter := (Random * 2.0 - 1.0) * WindowHalf;
     Result[I].Index := I + 1;
     Result[I].TimeOffset := Midpoint + Jitter;
