@@ -15,7 +15,6 @@ type
   strict private
     FIniPath: string;
     {[ffmpeg]}
-    FFFmpegMode: TFFmpegMode;
     FFFmpegExePath: string;
     {[extraction] — shared group record (see uSettingsGroups)}
     FExtraction: TExtractionSettingsGroup;
@@ -60,7 +59,6 @@ type
     procedure ResetDefaults;
 
     property IniPath: string read FIniPath;
-    property FFmpegMode: TFFmpegMode read FFFmpegMode write FFFmpegMode;
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
     property FramesCount: Integer read FExtraction.FramesCount write FExtraction.FramesCount;
     property SkipEdgesPercent: Integer read FExtraction.SkipEdgesPercent write FExtraction.SkipEdgesPercent;
@@ -135,7 +133,6 @@ end;
 
 procedure TWcxSettings.ResetDefaults;
 begin
-  FFFmpegMode := fmAuto;
   FFFmpegExePath := '';
   FExtraction := TExtractionSettingsGroup.Defaults;
   FRandomExtraction := DEF_RANDOM_EXTRACTION;
