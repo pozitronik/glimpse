@@ -63,6 +63,15 @@ type
 procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
 procedure WcxTest_ResetDeleteDirectoryProc;
 
+{Clamps a 64-bit file size into the 32-bit signed range used by the WCX
+ ANSI ReadHeader (THeaderData.UnpSize is Integer). Negative input is
+ promoted to zero (defensive; sizes from disk are non-negative); values
+ above MaxInt saturate at MaxInt so a 5 GB combined image surfaces as
+ ~2 GB instead of wrapping into a negative or truncated value. The Wide
+ variant (ReadHeaderExW) carries the full 64-bit value via UnpSize +
+ UnpSizeHigh and is unaffected.}
+function ClampSizeForAnsiHeader(AValue: Int64): Integer;
+
 implementation
 
 uses
@@ -130,6 +139,16 @@ end;
 procedure DefaultDeleteDirectory(const APath: string);
 begin
   TDirectory.Delete(APath, True);
+end;
+
+function ClampSizeForAnsiHeader(AValue: Int64): Integer;
+begin
+  if AValue < 0 then
+    Result := 0
+  else if AValue > MaxInt then
+    Result := MaxInt
+  else
+    Result := Integer(AValue);
 end;
 
 {Cache mutator that assumes GCacheLock is already held. Used by
@@ -471,7 +490,9 @@ begin
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
   if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
-    HeaderData.UnpSize := H.EntrySizes[H.CurrentIndex];
+    {THeaderData.UnpSize is 32-bit signed; clamp so >2 GB combined
+     images surface as MaxInt instead of wrapping into a negative size.}
+    HeaderData.UnpSize := ClampSizeForAnsiHeader(H.EntrySizes[H.CurrentIndex]);
   HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
 

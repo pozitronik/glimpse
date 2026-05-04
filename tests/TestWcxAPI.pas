@@ -46,6 +46,17 @@ type
      DLL unload. The fix swallows the delete failure and still resets every
      field, leaving a (best-effort) clean state.}
     [Test] procedure InvalidateFrameCache_DeleteFailureSwallowedAndStateReset;
+    {ANSI ReadHeader's THeaderData.UnpSize is 32-bit signed; the 64-bit
+     EntrySize must be clamped before assignment, otherwise a >2 GB
+     combined image wraps into a negative or truncated size in the
+     legacy ANSI path. The Wide path splits into UnpSize + UnpSizeHigh
+     and is unaffected.}
+    [Test] procedure ClampSize_BelowMaxInt_PassesThrough;
+    [Test] procedure ClampSize_ExactlyMaxInt_PassesThrough;
+    [Test] procedure ClampSize_AboveMaxInt_SaturatesToMaxInt;
+    [Test] procedure ClampSize_FiveGigabytes_SaturatesToMaxInt;
+    [Test] procedure ClampSize_Negative_PromotedToZero;
+    [Test] procedure ClampSize_Zero_PassesThrough;
   end;
 
 implementation
@@ -339,6 +350,45 @@ begin
     if TDirectory.Exists(TempDir) then
       TDirectory.Delete(TempDir, True);
   end;
+end;
+
+{ -------- ClampSizeForAnsiHeader -------- }
+
+procedure TTestWcxAPI.ClampSize_BelowMaxInt_PassesThrough;
+begin
+  Assert.AreEqual(1024, ClampSizeForAnsiHeader(1024));
+  Assert.AreEqual(1024 * 1024 * 100, ClampSizeForAnsiHeader(1024 * 1024 * 100));
+end;
+
+procedure TTestWcxAPI.ClampSize_ExactlyMaxInt_PassesThrough;
+begin
+  Assert.AreEqual(MaxInt, ClampSizeForAnsiHeader(Int64(MaxInt)));
+end;
+
+procedure TTestWcxAPI.ClampSize_AboveMaxInt_SaturatesToMaxInt;
+begin
+  Assert.AreEqual(MaxInt, ClampSizeForAnsiHeader(Int64(MaxInt) + 1),
+    'One past MaxInt must saturate, not wrap to negative');
+end;
+
+procedure TTestWcxAPI.ClampSize_FiveGigabytes_SaturatesToMaxInt;
+begin
+  {Real-world large value: 5 GiB combined image.}
+  Assert.AreEqual(MaxInt, ClampSizeForAnsiHeader(Int64(5) * 1024 * 1024 * 1024));
+end;
+
+procedure TTestWcxAPI.ClampSize_Negative_PromotedToZero;
+begin
+  {Defensive clamp: file sizes from disk are non-negative, but if a caller
+   ever fed in a negative value (sentinel or computation error), surfacing
+   a negative UnpSize would be worse than zero.}
+  Assert.AreEqual(0, ClampSizeForAnsiHeader(-1));
+  Assert.AreEqual(0, ClampSizeForAnsiHeader(Low(Int64)));
+end;
+
+procedure TTestWcxAPI.ClampSize_Zero_PassesThrough;
+begin
+  Assert.AreEqual(0, ClampSizeForAnsiHeader(0));
 end;
 
 end.
