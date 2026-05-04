@@ -193,7 +193,10 @@ begin
       FSaveFormat := sfPNG;
     FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality', FJpegQuality), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
     FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', FPngCompression), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
-    FBackgroundAlpha := EnsureRange(Ini.ReadInteger('output', 'BackgroundAlpha', FBackgroundAlpha), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
+    {Explicit Byte cast: EnsureRange returns Integer, target is Byte; the
+     range is [0, 255] so the narrowing is always safe but the cast
+     documents intent and survives stricter compiler options.}
+    FBackgroundAlpha := Byte(EnsureRange(Ini.ReadInteger('output', 'BackgroundAlpha', FBackgroundAlpha), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA));
 
     FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', FCombinedColumns), 0, 20);
     FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), FBackground);

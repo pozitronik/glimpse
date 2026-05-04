@@ -273,7 +273,9 @@ begin
   ASettings.SaveFormat := TSaveFormat(CbxFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
   ASettings.PngCompression := UdPngCompression.Position;
-  ASettings.BackgroundAlpha := UdBackgroundAlpha.Position;
+  {Explicit Byte cast: TUpDown.Position is Integer, target is Byte; the
+   control's Min/Max are clamped to [0, 255] so the narrowing is safe.}
+  ASettings.BackgroundAlpha := Byte(UdBackgroundAlpha.Position);
   ASettings.ShowFileSizes := ChkShowFileSizes.Checked;
 
   ASettings.CombinedColumns := UdColumns.Position;
