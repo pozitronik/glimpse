@@ -50,10 +50,26 @@ type
     destructor Destroy; override;
   end;
 
+{Decision rule for posting WM_EXTRACTION_DONE from a worker's finally block.
+ Returns True only for the last worker to decrement the active counter; the
+ ATerminated flag is taken for documentation but is intentionally not used
+ to suppress the post. Earlier the worker checked NOT Terminated before
+ posting, which left the UI without a completion signal whenever all
+ workers had been cancelled at the cancel-edge of natural completion. The
+ controller already calls DrainPendingFrameMessages between extractions so
+ a stale post is harmless; missing the post on the cancel path was the
+ actual hazard.}
+function ShouldPostDone(AIsLastWorker, ATerminated: Boolean): Boolean;
+
 implementation
 
 uses
   System.SysUtils, uDebugLog;
+
+function ShouldPostDone(AIsLastWorker, ATerminated: Boolean): Boolean;
+begin
+  Result := AIsLastWorker;
+end;
 
 procedure ThreadLog(const AMsg: string);
 begin
@@ -103,6 +119,7 @@ var
   I, CellIdx: Integer;
   Source: string;
   CacheKey: TFrameCacheKey;
+  IsLast: Boolean;
 begin
   ThreadLog(Format('Execute START frames=%d', [Length(FOffsets)]));
   try
@@ -170,10 +187,14 @@ begin
       PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
     end;
   finally
-    { Always decrement; last worker to finish notifies the UI }
-    if InterlockedDecrement(FActiveWorkerCount^) = 0 then
-      if not Terminated then
-        PostMessage(FNotifyWnd, WM_EXTRACTION_DONE, 0, 0);
+    { Always decrement; last worker to finish notifies the UI.
+      Post even when Terminated -- the controller drains stale completion
+      messages before each new extraction, so the UI is robust against
+      that, and skipping the post on cancel left WMExtractionDone
+      unsignalled in races between Terminate and natural completion. }
+    IsLast := InterlockedDecrement(FActiveWorkerCount^) = 0;
+    if ShouldPostDone(IsLast, Terminated) then
+      PostMessage(FNotifyWnd, WM_EXTRACTION_DONE, 0, 0);
   end;
 end;
 

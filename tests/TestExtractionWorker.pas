@@ -28,6 +28,21 @@ type
     [Test] procedure TerminateBeforeStart_ProducesEmptyQueue;
   end;
 
+  [TestFixture]
+  TTestShouldPostDone = class
+  public
+    {Pins the decision rule the worker's finally block uses. Earlier the
+     rule was AIsLastWorker AND NOT ATerminated, which suppressed
+     WM_EXTRACTION_DONE on the cancel-edge of natural completion and left
+     the UI with a still-armed progress indicator. The fix is to post
+     whenever the last worker exits, regardless of Terminated; the
+     controller drains stale completion messages between extractions.}
+    [Test] procedure NotLast_NotTerminated_DoesNotPost;
+    [Test] procedure NotLast_Terminated_DoesNotPost;
+    [Test] procedure Last_NotTerminated_Posts;
+    [Test] procedure Last_Terminated_Posts;
+  end;
+
 implementation
 
 uses
@@ -498,7 +513,38 @@ begin
   end;
 end;
 
+{ TTestShouldPostDone }
+
+procedure TTestShouldPostDone.NotLast_NotTerminated_DoesNotPost;
+begin
+  Assert.IsFalse(ShouldPostDone(False, False),
+    'A non-final worker exit must never post WM_EXTRACTION_DONE');
+end;
+
+procedure TTestShouldPostDone.NotLast_Terminated_DoesNotPost;
+begin
+  Assert.IsFalse(ShouldPostDone(False, True),
+    'A non-final worker exit must not post even when terminated');
+end;
+
+procedure TTestShouldPostDone.Last_NotTerminated_Posts;
+begin
+  Assert.IsTrue(ShouldPostDone(True, False),
+    'Natural completion: last worker must post the done notification');
+end;
+
+procedure TTestShouldPostDone.Last_Terminated_Posts;
+begin
+  {The bug-fix pin. Pre-fix this returned False, so cancellation races
+   could leave WMExtractionDone unsignalled and the progress indicator
+   stuck. The drain in TExtractionController handles staleness, so
+   posting unconditionally on the last worker is the correct contract.}
+  Assert.IsTrue(ShouldPostDone(True, True),
+    'Last worker must post done even when Terminated; drain handles staleness');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestExtractionThread);
+  TDUnitX.RegisterTestFixture(TTestShouldPostDone);
 
 end.
