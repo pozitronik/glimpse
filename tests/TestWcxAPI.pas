@@ -39,6 +39,13 @@ type
      deleted directory. The seed helper mimics what PreExtractFrames leaves
      behind; InvalidateFrameCache (called from the except block) wipes it.}
     [Test] procedure InvalidateFrameCache_AfterSeed_ResetsAllFieldsAndDeletesTempDir;
+    {Regression: when the temp directory contained a file held by a sharing-
+     violating handle (antivirus, another process), TDirectory.Delete raised
+     and the exception escaped InvalidateFrameCache. The procedure runs from
+     finalization, so an unhandled exception there could crash the host on
+     DLL unload. The fix swallows the delete failure and still resets every
+     field, leaving a (best-effort) clean state.}
+    [Test] procedure InvalidateFrameCache_DeleteFailureSwallowedAndStateReset;
   end;
 
 implementation
@@ -288,6 +295,46 @@ begin
       'Temp-dir slot must be empty after invalidation');
     Assert.IsFalse(TDirectory.Exists(TempDir),
       'Temp directory must be deleted by InvalidateFrameCache');
+  finally
+    if TDirectory.Exists(TempDir) then
+      TDirectory.Delete(TempDir, True);
+  end;
+end;
+
+procedure TTestWcxAPI.InvalidateFrameCache_DeleteFailureSwallowedAndStateReset;
+var
+  TempDir: string;
+begin
+  {Direct simulation of the failure mode the bug report describes:
+   TDirectory.Delete raises mid-flight (locked file, antivirus, missing
+   permission, race-removed directory, etc.). Because the production
+   primitive is hard to make fail deterministically across Delphi RTL
+   versions, the unit exposes a test-only injection point. The test
+   binds a thrower in place of TDirectory.Delete and asserts:
+   1. InvalidateFrameCache does not propagate the exception (finalization-
+      safe, the original bug).
+   2. Every cache field is still cleared even though the deletion failed.}
+  TempDir := TPath.Combine(TPath.GetTempPath, 'wcx_inject_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(TempDir);
+  try
+    WcxTest_SeedCacheState('C:\fake.mp4', TempDir);
+    WcxTest_SetDeleteDirectoryProc(
+      procedure(const APath: string)
+      begin
+        raise EInOutError.Create('simulated delete failure');
+      end);
+    try
+      Assert.WillNotRaise(
+        procedure begin InvalidateFrameCache; end,
+        nil,
+        'InvalidateFrameCache must not propagate delete failures');
+
+      Assert.AreEqual('', WcxTest_CachedVideoFile,
+        'Field reset must run even when delete failed');
+      Assert.AreEqual('', WcxTest_CachedTempDir);
+    finally
+      WcxTest_ResetDeleteDirectoryProc;
+    end;
   finally
     if TDirectory.Exists(TempDir) then
       TDirectory.Delete(TempDir, True);

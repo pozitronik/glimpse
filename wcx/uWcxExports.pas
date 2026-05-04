@@ -52,6 +52,17 @@ procedure WcxTest_SeedCacheState(const AVideoFile, ATempDir: string);
 function WcxTest_CachedVideoFile: string;
 function WcxTest_CachedTempDir: string;
 
+type
+  TWcxDeleteDirectoryProc = reference to procedure(const APath: string);
+
+{Test-only injection point for the directory-delete primitive used by
+ InvalidateFrameCache. Defaults to TDirectory.Delete(_, True). Tests
+ swap in a thrower to drive the exception path that the production
+ try/except must swallow without crashing the host on DLL unload.
+ PRODUCTION CODE MUST NOT CALL THESE.}
+procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
+procedure WcxTest_ResetDeleteDirectoryProc;
+
 implementation
 
 uses
@@ -91,6 +102,10 @@ var
   GCachedTempDir: string;
   GCachedTempPaths: TArray<string>;
   GCachedEntrySizes: TArray<Int64>;
+  {Indirection for the recursive directory deletion. Production points
+   at DefaultDeleteDirectory; tests rebind via WcxTest_SetDeleteDirectoryProc
+   to drive the exception-swallowing path of InvalidateFrameCacheLocked.}
+  GDeleteDirectoryProc: TWcxDeleteDirectoryProc;
 
 procedure WcxLog(const AMsg: string);
 begin
@@ -112,14 +127,30 @@ begin
   Result.MaxSide := AMaxSide;
 end;
 
+procedure DefaultDeleteDirectory(const APath: string);
+begin
+  TDirectory.Delete(APath, True);
+end;
+
 {Cache mutator that assumes GCacheLock is already held. Used by
  PreExtractFrames which acquires the lock for its full body and then
  needs to discard a stale cache without re-entering. External callers go
- through InvalidateFrameCache.}
+ through InvalidateFrameCache.
+ The directory delete is wrapped in try/except: this routine runs from
+ the unit's finalization (and from any failure path during DLL unload),
+ and an unhandled exception there can crash the host process. The field
+ reset must run regardless so the globals are not left dangling against
+ a directory that may or may not exist.}
 procedure InvalidateFrameCacheLocked;
 begin
   if (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
-    TDirectory.Delete(GCachedTempDir, True);
+  try
+    GDeleteDirectoryProc(GCachedTempDir);
+  except
+    on E: Exception do
+      WcxLog(Format('InvalidateFrameCache: delete failed for %s: %s: %s',
+        [GCachedTempDir, E.ClassName, E.Message]));
+  end;
   GCachedVideoFile := '';
   GCachedTempDir := '';
   GCachedTempPaths := nil;
@@ -165,6 +196,24 @@ begin
   finally
     GCacheLock.Leave;
   end;
+end;
+
+procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
+begin
+  GCacheLock.Enter;
+  try
+    if Assigned(AProc) then
+      GDeleteDirectoryProc := AProc
+    else
+      GDeleteDirectoryProc := DefaultDeleteDirectory;
+  finally
+    GCacheLock.Leave;
+  end;
+end;
+
+procedure WcxTest_ResetDeleteDirectoryProc;
+begin
+  WcxTest_SetDeleteDirectoryProc(nil);
 end;
 
 function GetEntryCount(H: TArchiveHandle): Integer;
@@ -682,6 +731,7 @@ end;
 initialization
 
 GCacheLock := TCriticalSection.Create;
+GDeleteDirectoryProc := DefaultDeleteDirectory;
 
 {Fallback: INI next to the DLL, in case SetDefaultParams is not called
  before ConfigurePacker or OpenArchive}
