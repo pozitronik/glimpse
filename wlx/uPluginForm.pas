@@ -432,7 +432,13 @@ begin
   SetBounds(0, 0, R.Right, R.Bottom);
 
   {Quick View panel is a child window; Lister is a top-level window.
-   Must be set before ApplySettings so QV defaults take effect.}
+   Must be set before ApplySettings so QV defaults take effect.
+   Heuristic: TC's WLX SDK does not expose a "quick view vs lister"
+   flag, so we infer from the parent window style. If a future TC
+   release changes its window hierarchy this detection would silently
+   misclassify -- there is no better signal at this layer, and the
+   misclassification only affects which user-facing defaults apply,
+   not correctness of frame rendering.}
   FQuickViewMode := (GetWindowLong(AParentWin, GWL_STYLE) and WS_CHILD) <> 0;
 
   CreateToolbar;
