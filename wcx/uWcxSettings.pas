@@ -171,10 +171,17 @@ begin
     Exit;
   Ini := TIniFile.Create(FIniPath);
   try
+    {Pass the current field value as the INI fallback so the post-Reset
+     default propagates through one source of truth (ResetDefaults). The
+     LoadFrom helpers on the group records already follow this pattern;
+     the inline reads now match. String-parsed enums (Mode, Format) and
+     the hex-encoded Background are kept on literal/constant fallbacks
+     because converting the current field back to a string just to feed
+     it as a default would add reverse-conversion noise for no benefit.}
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', FFFmpegExePath);
     FExtraction.LoadFrom(Ini, 'extraction');
-    FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', DEF_RANDOM_EXTRACTION);
-    FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', DEF_RANDOM_PERCENT), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
+    FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', FRandomExtraction);
+    FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', FRandomPercent), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
 
     if SameText(Ini.ReadString('output', 'Mode', 'separate'), 'combined') then
       FOutputMode := womCombined
@@ -184,21 +191,21 @@ begin
       FSaveFormat := sfJPEG
     else
       FSaveFormat := sfPNG;
-    FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality', DEF_JPEG_QUALITY), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-    FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', DEF_PNG_COMPRESSION), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
-    FBackgroundAlpha := EnsureRange(Ini.ReadInteger('output', 'BackgroundAlpha', DEF_BACKGROUND_ALPHA), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
+    FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality', FJpegQuality), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+    FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', FPngCompression), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+    FBackgroundAlpha := EnsureRange(Ini.ReadInteger('output', 'BackgroundAlpha', FBackgroundAlpha), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
 
-    FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', WCX_DEF_COMBINED_COLS), 0, 20);
-    FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), WCX_DEF_BACKGROUND);
-    FCellGap := Max(Ini.ReadInteger('combined', 'CellGap', WCX_DEF_CELL_GAP), MIN_CELL_GAP);
-    FCombinedBorder := Max(Ini.ReadInteger('combined', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER);
+    FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', FCombinedColumns), 0, 20);
+    FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), FBackground);
+    FCellGap := Max(Ini.ReadInteger('combined', 'CellGap', FCellGap), MIN_CELL_GAP);
+    FCombinedBorder := Max(Ini.ReadInteger('combined', 'CombinedBorder', FCombinedBorder), MIN_COMBINED_BORDER);
     FTimestamp.LoadFrom(Ini, 'combined', 'ShowTimestamp');
     FBanner.LoadFrom(Ini, 'combined');
 
-    FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', WCX_DEF_SHOW_FILE_SIZES);
+    FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', FShowFileSizes);
 
-    FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide', WCX_DEF_FRAME_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
-    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', WCX_DEF_COMBINED_MAX_SIDE), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+    FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide', FFrameMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', FCombinedMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
   finally
     Ini.Free;
   end;
