@@ -412,7 +412,14 @@ begin
       Exit;
     end;
 
-    {Different video or no cache: invalidate old cache and extract fresh}
+    {Different video or no cache: invalidate old cache and extract fresh.
+     Security caveat: the temp directory inherits the parent (user temp)
+     ACL, so other processes running as the same user can read the
+     extracted frames. This is the same exposure as ffmpeg's own temp
+     output and matches the WLX frame cache; tightening would require an
+     explicit per-directory ACL via SetSecurityInfo. Acceptable for a
+     single-user TC session; revisit if multi-user or sandboxed contexts
+     ever become a use case.}
     InvalidateFrameCacheLocked;
     GCachedTempDir := TPath.Combine(TPath.GetTempPath, 'glimpse_wcx_' + TPath.GetGUIDFileName(False));
     TDirectory.CreateDirectory(GCachedTempDir);
