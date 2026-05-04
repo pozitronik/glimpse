@@ -99,6 +99,9 @@ type
     FMaxSizeBytes: Int64;
 
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string; static;
+    {Best-effort cleanup of leftover Put-temp files. Called from the
+     constructor; safe to call repeatedly.}
+    procedure SweepOrphanedTempFiles;
 
   public
     constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
@@ -204,7 +207,35 @@ begin
   FMaxSizeBytes := Int64(AMaxSizeMB) * 1024 * 1024;
   if not TDirectory.Exists(FCacheDir) then
     TDirectory.CreateDirectory(FCacheDir);
+  SweepOrphanedTempFiles;
   DebugLog('Cache', Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
+end;
+
+procedure TFrameCache.SweepOrphanedTempFiles;
+var
+  Files: TArray<string>;
+  F: string;
+begin
+  {Put writes <CacheDir>\<guid>.tmp and renames it via MoveFileEx. If the
+   process crashed between SaveToFile and the rename, the .tmp survived
+   forever -- there was no later sweep, and Evict only walked .png files.
+   Wipe leftover temp files at construction so a crash-prone environment
+   does not accumulate disk-leaking shards.}
+  if not TDirectory.Exists(FCacheDir) then
+    Exit;
+  try
+    Files := TDirectory.GetFiles(FCacheDir, '*.tmp', TSearchOption.soTopDirectoryOnly);
+  except
+    Exit;
+  end;
+  for F in Files do
+    try
+      TFile.Delete(F);
+    except
+      {Best-effort: a temp may still be locked by another TC instance
+       holding the cache open for a different put-in-progress. Skipping
+       leaves it for the next constructor call.}
+    end;
 end;
 
 class function TFrameCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;

@@ -94,6 +94,14 @@ type
     procedure TestCacheManagerEvict;
     [Test]
     procedure TestCacheManagerGetTotalSize;
+
+    {Orphan-temp sweep: Put writes <CacheDir>\<guid>.tmp and renames it.
+     If the process crashed mid-write the .tmp survived forever -- Evict
+     only walked .png. Construction now sweeps top-level *.tmp.}
+    [Test]
+    procedure TestConstructorSweepsOrphanTempFiles;
+    [Test]
+    procedure TestConstructorPreservesPngEntries;
   end;
 
 implementation
@@ -836,6 +844,60 @@ begin
   { Fresh manager instance must see the files written by TFrameCache }
   Mgr := CreateCacheManager(FCacheDir, 100);
   Assert.IsTrue(Mgr.GetTotalSize > 0, 'Manager must report positive size after put');
+end;
+
+procedure TTestFrameCache.TestConstructorSweepsOrphanTempFiles;
+var
+  Cache: TFrameCache;
+  OrphanA, OrphanB, Survivor: string;
+begin
+  {Pre-create the cache directory and seed it with two orphan .tmp files
+   plus an unrelated text file. The constructor must wipe the orphans
+   without touching files that do not match the .tmp pattern.}
+  TDirectory.CreateDirectory(FCacheDir);
+  OrphanA := TPath.Combine(FCacheDir, TGUID.NewGuid.ToString + '.tmp');
+  OrphanB := TPath.Combine(FCacheDir, TGUID.NewGuid.ToString + '.tmp');
+  Survivor := TPath.Combine(FCacheDir, 'unrelated.txt');
+  TFile.WriteAllText(OrphanA, 'partial png 1');
+  TFile.WriteAllText(OrphanB, 'partial png 2');
+  TFile.WriteAllText(Survivor, 'unrelated');
+
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  try
+    Assert.IsFalse(TFile.Exists(OrphanA),
+      'Orphan .tmp A must be swept on construction');
+    Assert.IsFalse(TFile.Exists(OrphanB),
+      'Orphan .tmp B must be swept on construction');
+    Assert.IsTrue(TFile.Exists(Survivor),
+      'Non-.tmp files must survive the sweep');
+  finally
+    Cache.Free;
+    if TFile.Exists(Survivor) then
+      TFile.Delete(Survivor);
+  end;
+end;
+
+procedure TTestFrameCache.TestConstructorPreservesPngEntries;
+var
+  Cache: TFrameCache;
+  ShardDir, PngFile: string;
+begin
+  {Sweep targets only .tmp at the top level. Real cache entries live in
+   sharded subdirectories and have .png extensions; the sweep must not
+   touch them.}
+  TDirectory.CreateDirectory(FCacheDir);
+  ShardDir := TPath.Combine(FCacheDir, 'ab');
+  TDirectory.CreateDirectory(ShardDir);
+  PngFile := TPath.Combine(ShardDir, 'abcdef.png');
+  TFile.WriteAllText(PngFile, 'fake png bytes');
+
+  Cache := TFrameCache.Create(FCacheDir, 100);
+  try
+    Assert.IsTrue(TFile.Exists(PngFile),
+      'Cached .png entries must survive the constructor sweep');
+  finally
+    Cache.Free;
+  end;
 end;
 
 initialization
