@@ -63,17 +63,14 @@ end;
 
 function TimestampCornerToStr(ACorner: TTimestampCorner): string;
 begin
+  {Exhaustive enumeration so a future TTimestampCorner value triggers a
+   compiler hint instead of silently falling through to 'bottomleft'.}
   case ACorner of
-    tcNone:
-      Result := 'none';
-    tcTopLeft:
-      Result := 'topleft';
-    tcTopRight:
-      Result := 'topright';
-    tcBottomRight:
-      Result := 'bottomright';
-    else
-      Result := 'bottomleft';
+    tcNone:        Result := 'none';
+    tcTopLeft:     Result := 'topleft';
+    tcTopRight:    Result := 'topright';
+    tcBottomLeft:  Result := 'bottomleft';
+    tcBottomRight: Result := 'bottomright';
   end;
 end;
 
@@ -90,10 +87,8 @@ end;
 function BannerPositionToStr(APosition: TBannerPosition): string;
 begin
   case APosition of
-    bpBottom:
-      Result := 'bottom';
-    else
-      Result := 'top';
+    bpTop:    Result := 'top';
+    bpBottom: Result := 'bottom';
   end;
 end;
 
