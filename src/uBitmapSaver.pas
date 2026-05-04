@@ -30,7 +30,15 @@ uses
  TPngImage.Assign(TBitmap) is unreliable for alpha — depending on Delphi
  version it silently emits a 24-bit PNG or stamps alpha=255 over real
  alpha values. We sidestep that by building a COLOR_RGBALPHA PNG of
- known geometry and writing each scanline byte-for-byte.}
+ known geometry and writing each scanline byte-for-byte.
+
+ TODO performance: the inner loop writes one pixel at a time via the
+ GDI-backed Png.Pixels[X,Y] property and AlphaScanline[Y][X], which is
+ O(W*H) separate property accesses. A scanline-based path that copies
+ RGB bytes contiguously and the alpha byte separately would be
+ significantly faster for large combined images. Acceptable for now
+ because save is a user-initiated one-shot, but worth revisiting if
+ the WCX combined-image extraction starts hitting this regularly.}
 procedure SaveAlphaBitmapAsPng(ABitmap: TBitmap; const APath: string;
   ACompressionLevel: Integer);
 const
