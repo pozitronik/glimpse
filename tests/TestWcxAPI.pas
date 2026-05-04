@@ -28,12 +28,17 @@ type
     { Constants }
     [Test] procedure Caps_FlagsArePowersOfTwo;
     [Test] procedure ErrorCodes_UniqueValues;
+    {Concurrency: TC may dispatch OpenArchive / ConfigurePacker on different
+     threads. The cache mutator must serialise via GCacheLock so two threads
+     cannot interleave directory deletion and field assignments.}
+    [Test] procedure InvalidateFrameCache_Concurrent_DoesNotCrash;
   end;
 
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, uWcxAPI;
+  Winapi.Windows, System.SysUtils, System.Classes, System.SyncObjs, uWcxAPI,
+  uWcxExports;
 
 { THeaderDataExW }
 
@@ -174,6 +179,79 @@ begin
     for J := I + 1 to Length(Codes) - 1 do
       Assert.AreNotEqual(Codes[I], Codes[J],
         Format('Error codes at [%d] and [%d] must differ', [I, J]));
+end;
+
+type
+  TInvalidateThread = class(TThread)
+  strict private
+    FStart: TEvent;
+    FIterations: Integer;
+    FException: string;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AStart: TEvent; AIterations: Integer);
+    property Exc: string read FException;
+  end;
+
+constructor TInvalidateThread.Create(AStart: TEvent; AIterations: Integer);
+begin
+  FStart := AStart;
+  FIterations := AIterations;
+  inherited Create(False);
+end;
+
+procedure TInvalidateThread.Execute;
+var
+  I: Integer;
+begin
+  FStart.WaitFor(INFINITE);
+  try
+    for I := 1 to FIterations do
+      InvalidateFrameCache;
+  except
+    on E: Exception do
+      FException := E.ClassName + ': ' + E.Message;
+  end;
+end;
+
+procedure TTestWcxAPI.InvalidateFrameCache_Concurrent_DoesNotCrash;
+const
+  THREAD_COUNT = 8;
+  ITERATIONS = 200;
+var
+  Threads: array [0 .. THREAD_COUNT - 1] of TInvalidateThread;
+  StartGate: TEvent;
+  Handles: array [0 .. THREAD_COUNT - 1] of THandle;
+  I: Integer;
+  FailureMsg: string;
+begin
+  {Manual-reset start gate so all threads charge into InvalidateFrameCache
+   simultaneously, maximising the chance of contention. Without GCacheLock,
+   the directory-delete and field-clear sequence races; with the lock,
+   every iteration is atomic and the unit must survive the storm cleanly.}
+  StartGate := TEvent.Create(nil, True, False, '');
+  try
+    for I := 0 to THREAD_COUNT - 1 do
+    begin
+      Threads[I] := TInvalidateThread.Create(StartGate, ITERATIONS);
+      Handles[I] := Threads[I].Handle;
+    end;
+    StartGate.SetEvent;
+    WaitForMultipleObjects(THREAD_COUNT, @Handles[0], True, 30000);
+
+    FailureMsg := '';
+    for I := 0 to THREAD_COUNT - 1 do
+    begin
+      if Threads[I].Exc <> '' then
+        FailureMsg := FailureMsg + Format('thread %d: %s; ', [I, Threads[I].Exc]);
+      Threads[I].Free;
+    end;
+    Assert.AreEqual('', FailureMsg,
+      'No thread may raise an exception under contention');
+  finally
+    StartGate.Free;
+  end;
 end;
 
 end.

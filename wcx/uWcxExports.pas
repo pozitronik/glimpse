@@ -38,10 +38,15 @@ function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar; Flags: Inte
 {Shows configuration dialog}
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 
+{Drops the module-level pre-extraction cache. Public so the settings dialog
+ callback and the concurrency stress test can both invoke it; in-process
+ callers must not assume it returns synchronously without the cache lock.}
+procedure InvalidateFrameCache;
+
 implementation
 
 uses
-  System.SysUtils, System.AnsiStrings, System.IOUtils,
+  System.SysUtils, System.AnsiStrings, System.IOUtils, System.SyncObjs,
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
@@ -65,7 +70,14 @@ type
 
 var
   GIniPath: string;
-  {Module-level cache for pre-extracted frames (survives across OpenArchive calls)}
+  {Serialises every read and write of the module-level frame cache below.
+   TC may dispatch OpenArchive / ConfigurePacker / finalization on different
+   threads; without the lock two threads could both enter PreExtractFrames,
+   one would InvalidateFrameCache while the other was writing into the same
+   GCachedTempDir, corrupting state and leaking temp files.}
+  GCacheLock: TCriticalSection;
+  {Module-level cache for pre-extracted frames (survives across OpenArchive calls).
+   All access goes through GCacheLock.}
   GCachedVideoFile: string;
   GCachedTempDir: string;
   GCachedTempPaths: TArray<string>;
@@ -91,7 +103,11 @@ begin
   Result.MaxSide := AMaxSide;
 end;
 
-procedure InvalidateFrameCache;
+{Cache mutator that assumes GCacheLock is already held. Used by
+ PreExtractFrames which acquires the lock for its full body and then
+ needs to discard a stale cache without re-entering. External callers go
+ through InvalidateFrameCache.}
+procedure InvalidateFrameCacheLocked;
 begin
   if (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
     TDirectory.Delete(GCachedTempDir, True);
@@ -99,6 +115,16 @@ begin
   GCachedTempDir := '';
   GCachedTempPaths := nil;
   GCachedEntrySizes := nil;
+end;
+
+procedure InvalidateFrameCache;
+begin
+  GCacheLock.Enter;
+  try
+    InvalidateFrameCacheLocked;
+  finally
+    GCacheLock.Leave;
+  end;
 end;
 
 function GetEntryCount(H: TArchiveHandle): Integer;
@@ -226,40 +252,49 @@ begin
 end;
 
 {Pre-extracts all frames to a module-level temp cache, or reuses
- an existing cache if the same video was already extracted.}
+ an existing cache if the same video was already extracted.
+ The whole body runs under GCacheLock so a concurrent OpenArchive on a
+ second thread cannot race on the temp-dir creation or invalidation.
+ The helpers ExtractCombinedToCache / ExtractSeparateToCache touch the
+ globals directly and rely on this caller holding the lock.}
 procedure PreExtractFrames(H: TArchiveHandle);
 var
   Extractor: IFrameExtractor;
   EntryCount: Integer;
 begin
-  {Reuse cached extraction if available for the same video}
-  if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
-  begin
+  GCacheLock.Enter;
+  try
+    {Reuse cached extraction if available for the same video}
+    if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
+    begin
+      H.TempPaths := GCachedTempPaths;
+      H.EntrySizes := GCachedEntrySizes;
+      WcxLog(Format('PreExtract: cache hit for %s', [H.FileName]));
+      Exit;
+    end;
+
+    {Different video or no cache: invalidate old cache and extract fresh}
+    InvalidateFrameCacheLocked;
+    GCachedTempDir := TPath.Combine(TPath.GetTempPath, 'glimpse_wcx_' + TPath.GetGUIDFileName(False));
+    TDirectory.CreateDirectory(GCachedTempDir);
+    GCachedVideoFile := H.FileName;
+
+    Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
+    EntryCount := GetEntryCount(H);
+    SetLength(GCachedTempPaths, EntryCount);
+    SetLength(GCachedEntrySizes, EntryCount);
+
+    if H.Settings.OutputMode = womCombined then
+      ExtractCombinedToCache(H, Extractor)
+    else
+      ExtractSeparateToCache(H, Extractor);
+
     H.TempPaths := GCachedTempPaths;
     H.EntrySizes := GCachedEntrySizes;
-    WcxLog(Format('PreExtract: cache hit for %s', [H.FileName]));
-    Exit;
+    WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, GCachedTempDir]));
+  finally
+    GCacheLock.Leave;
   end;
-
-  {Different video or no cache: invalidate old cache and extract fresh}
-  InvalidateFrameCache;
-  GCachedTempDir := TPath.Combine(TPath.GetTempPath, 'glimpse_wcx_' + TPath.GetGUIDFileName(False));
-  TDirectory.CreateDirectory(GCachedTempDir);
-  GCachedVideoFile := H.FileName;
-
-  Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-  EntryCount := GetEntryCount(H);
-  SetLength(GCachedTempPaths, EntryCount);
-  SetLength(GCachedEntrySizes, EntryCount);
-
-  if H.Settings.OutputMode = womCombined then
-    ExtractCombinedToCache(H, Extractor)
-  else
-    ExtractSeparateToCache(H, Extractor);
-
-  H.TempPaths := GCachedTempPaths;
-  H.EntrySizes := GCachedEntrySizes;
-  WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, GCachedTempDir]));
 end;
 
 function DoOpenArchive(const AFileName: string; AOpenMode: Integer; out AOpenResult: Integer): THandle;
@@ -600,6 +635,8 @@ end;
 
 initialization
 
+GCacheLock := TCriticalSection.Create;
+
 {Fallback: INI next to the DLL, in case SetDefaultParams is not called
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
@@ -613,5 +650,6 @@ Randomize;
 finalization
 
 InvalidateFrameCache;
+GCacheLock.Free;
 
 end.
