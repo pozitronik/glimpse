@@ -31,6 +31,13 @@ uses
 
 function ClampZoomFactor(OldZoom, AFactor: Double): Double;
 begin
+  {Sentinel convention: 0 == "no visible change". Callers must guard
+   before assigning the result to a zoom factor or dividing by it.
+   The sole production caller (TPluginForm.ZoomBy) does, and
+   TestClampZoomFactorNoChangeAtMax / TestClampZoomFactorEpsilonBoundary
+   pin the contract. A new caller that forgets the guard would store 0
+   into ZoomFactor and downstream layout math would divide-by-zero;
+   prefer the existing pattern when adding callers.}
   Result := EnsureRange(OldZoom * AFactor, MIN_ZOOM, MAX_ZOOM);
   if SameValue(Result, OldZoom, ZOOM_EPSILON) then
     Result := 0;
