@@ -506,6 +506,13 @@ end;
 
 function OpenArchive(var ArchiveData: TOpenArchiveData): THandle; stdcall;
 begin
+  {Encoding caveat: every ANSI export in this unit converts the incoming
+   PAnsiChar via the system code page (string(AnsiString(...))). Paths
+   containing characters not representable in the local CP_ACP are
+   corrupted at this boundary. The Wide siblings (OpenArchiveW,
+   ProcessFileW, ReadHeaderExW) are the supported path; modern TC
+   always calls them. The ANSI shims exist for ABI completeness and
+   fall back gracefully on plain ASCII paths.}
   Result := DoOpenArchive(string(AnsiString(ArchiveData.ArcName)), ArchiveData.OpenMode, ArchiveData.OpenResult);
 end;
 

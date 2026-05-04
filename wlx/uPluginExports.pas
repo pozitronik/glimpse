@@ -82,6 +82,12 @@ end;
 
 function ListLoad(ParentWin: HWND; FileToLoad: PAnsiChar; ShowFlags: Integer): HWND; stdcall;
 begin
+  {Encoding caveat: the ANSI exports below convert via the system code
+   page (string(AnsiString(...))). File paths containing characters not
+   representable in the local CP_ACP are corrupted at this boundary.
+   The Unicode siblings (ListLoadW etc.) are the supported path; modern
+   TC builds always call the W variants. The ANSI shims exist for ABI
+   completeness only.}
   Log('ListLoad (ANSI)');
   Result := DoListLoad(ParentWin, string(AnsiString(FileToLoad)), ShowFlags);
 end;
