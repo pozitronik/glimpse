@@ -26,6 +26,11 @@ procedure DebugLog(const ATag, AMsg: string);
 var
   F: TextFile;
 begin
+  {TODO performance: each call opens, appends, and closes the log file.
+   Acceptable for the current debug-only usage (off in release builds
+   unless the user enables it manually) but expensive under heavy
+   logging. If sustained-throughput logging ever becomes a use case,
+   keep the handle open under LogLock and flush periodically.}
   if GDebugLogPath = '' then
     Exit;
   LogLock.Enter;
