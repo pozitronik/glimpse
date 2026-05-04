@@ -127,7 +127,10 @@ begin
 
   for I := 0 to High(ALoadedIndices) do
   begin
+    {pf24bit: TFrameView.SetFrame's contract; default pfDevice would
+     trip the runtime check.}
     Bmp := TBitmap.Create;
+    Bmp.PixelFormat := pf24bit;
     Bmp.SetSize(160, 90);
     Result.SetFrame(ALoadedIndices[I], Bmp);
   end;

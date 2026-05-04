@@ -118,6 +118,11 @@ type
     [Test] procedure TestHasLoadedCellsOneLoadedAmongErrors;
     [Test] procedure TestHasLoadedCellsAllLoaded;
     [Test] procedure TestSetFrameOutOfRange;
+    {Contract: SetFrame requires pf24bit input. The internal scanline
+     memcpy reads 3 bytes per pixel and would silently corrupt a pf32bit
+     source by reading 3/4 of every scanline. The runtime check raises
+     instead of letting that happen.}
+    [Test] procedure TestSetFramePf32bit_Raises;
     [Test] procedure TestSetCellErrorOutOfRange;
     [Test] procedure TestSetCellCountResetsCurrentFrameIndex;
     [Test] procedure TestClearCellsResetsCurrentFrameIndex;
@@ -198,6 +203,18 @@ procedure FreeTestFrameView(AView: TFrameView);
 begin
   { Freeing the parent form also frees the child frame view }
   AView.Parent.Free;
+end;
+
+{TFrameView.SetFrame's contract requires pf24bit input -- the production
+ path memcpys 3 bytes per pixel into a pf24bit destination. TBitmap.Create
+ defaults to pfDevice (which finalises to pf32bit on this Windows build),
+ so explicit format selection avoids tripping the contract check in every
+ test that exercises SetFrame.}
+function MakeFrameBitmap(AWidth, AHeight: Integer): TBitmap;
+begin
+  Result := TBitmap.Create;
+  Result.PixelFormat := pf24bit;
+  Result.SetSize(AWidth, AHeight);
 end;
 
 function MakeOffsets(ACount: Integer): TFrameOffsetArray;
@@ -1550,9 +1567,7 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(2, MakeOffsets(2));
-    Bmp := TBitmap.Create;
-    Bmp.Width := 100;
-    Bmp.Height := 50;
+    Bmp := MakeFrameBitmap(100, 50);
     V.SetFrame(0, Bmp); { SetFrame takes ownership and copies the bitmap }
     Assert.AreEqual(Ord(fcsLoaded), Ord(V.CellState(0)));
     Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(1)));
@@ -1587,9 +1602,7 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(1, MakeOffsets(1));
-    Bmp := TBitmap.Create;
-    Bmp.Width := 10;
-    Bmp.Height := 10;
+    Bmp := MakeFrameBitmap(10, 10);
     V.SetFrame(0, Bmp);
     V.ClearCells;
     { After clear, cell array should be empty }
@@ -1638,8 +1651,7 @@ begin
     V.SetCellCount(3, MakeOffsets(3));
     for I := 0 to 2 do
     begin
-      Bmp := TBitmap.Create;
-      Bmp.SetSize(10, 10);
+      Bmp := MakeFrameBitmap(10, 10);
       V.SetFrame(I, Bmp);
     end;
     Assert.IsFalse(V.HasPlaceholders, 'All loaded = no placeholders');
@@ -1656,8 +1668,7 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(3, MakeOffsets(3));
-    Bmp := TBitmap.Create;
-    Bmp.SetSize(10, 10);
+    Bmp := MakeFrameBitmap(10, 10);
     V.SetFrame(0, Bmp);
     V.SetCellError(1);
     { Cell 2 is still a placeholder }
@@ -1720,8 +1731,7 @@ begin
   V := CreateTestFrameView(800, vmGrid);
   try
     V.SetCellCount(3, MakeOffsets(3));
-    Bmp := TBitmap.Create;
-    Bmp.SetSize(10, 10);
+    Bmp := MakeFrameBitmap(10, 10);
     V.SetFrame(1, Bmp);
     Assert.IsTrue(V.HasLoadedCells);
   finally
@@ -1739,8 +1749,7 @@ begin
     V.SetCellCount(3, MakeOffsets(3));
     V.SetCellError(0);
     V.SetCellError(2);
-    Bmp := TBitmap.Create;
-    Bmp.SetSize(10, 10);
+    Bmp := MakeFrameBitmap(10, 10);
     V.SetFrame(1, Bmp);
     Assert.IsTrue(V.HasLoadedCells);
   finally
@@ -1759,8 +1768,7 @@ begin
     V.SetCellCount(3, MakeOffsets(3));
     for I := 0 to 2 do
     begin
-      Bmp := TBitmap.Create;
-      Bmp.SetSize(10, 10);
+      Bmp := MakeFrameBitmap(10, 10);
       V.SetFrame(I, Bmp);
     end;
     Assert.IsTrue(V.HasLoadedCells);
@@ -1778,14 +1786,37 @@ begin
   try
     V.SetCellCount(2, MakeOffsets(2));
     { SetFrame takes ownership; out-of-range frees the bitmap }
-    Bmp := TBitmap.Create;
-    Bmp.SetSize(10, 10);
+    Bmp := MakeFrameBitmap(10, 10);
     V.SetFrame(5, Bmp);
-    Bmp := TBitmap.Create;
-    Bmp.SetSize(10, 10);
+    Bmp := MakeFrameBitmap(10, 10);
     V.SetFrame(-1, Bmp);
     Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(0)));
     Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(1)));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewState.TestSetFramePf32bit_Raises;
+var
+  V: TFrameView;
+  Bmp: TBitmap;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(2, MakeOffsets(2));
+    Bmp := TBitmap.Create;
+    Bmp.PixelFormat := pf32bit;
+    Bmp.SetSize(10, 10);
+    {Index 0 is in range so the contract check fires. SetFrame takes
+     ownership of ABitmap on every path, so the failed call must Free
+     the bitmap before raising or we leak.}
+    Assert.WillRaise(
+      procedure begin V.SetFrame(0, Bmp); end,
+      EArgumentException,
+      'pf32bit input must raise EArgumentException');
+    Assert.AreEqual(Ord(fcsPlaceholder), Ord(V.CellState(0)),
+      'Cell stays as placeholder when SetFrame rejected the input');
   finally
     FreeTestFrameView(V);
   end;

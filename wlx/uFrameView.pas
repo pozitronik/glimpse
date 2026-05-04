@@ -633,25 +633,39 @@ var
   Copy: TBitmap;
   Y, BytesPerRow: Integer;
 begin
-  if (AIndex >= 0) and (AIndex < Length(FCells)) then
+  if (AIndex < 0) or (AIndex >= Length(FCells)) then
   begin
-    {Copy pixel data via raw memory, bypassing GDI entirely.
-     Canvas.Draw on a bitmap created by another thread intermittently
-     fails because the GDI DC handle is not reliably usable cross-thread.}
-    Copy := TBitmap.Create;
-    Copy.PixelFormat := pf24bit;
-    Copy.SetSize(ABitmap.Width, ABitmap.Height);
-    BytesPerRow := ABitmap.Width * 3;
-    for Y := 0 to ABitmap.Height - 1 do
-      Move(ABitmap.ScanLine[Y]^, Copy.ScanLine[Y]^, BytesPerRow);
     ABitmap.Free;
+    Exit;
+  end;
 
-    FCells[AIndex].State := fcsLoaded;
-    FCells[AIndex].Bitmap := Copy;
-    Invalidate;
-  end
-  else
+  {Contract: ABitmap must be pf24bit. The extraction worker always
+   produces pf24bit, but a hard runtime check catches a future regression
+   loudly instead of silently corrupting the cell. The scanline memcpy
+   below would otherwise read 3 bytes per pixel out of a 4-bytes-per-
+   pixel source, mis-aligning every pixel after the first.}
+  if ABitmap.PixelFormat <> pf24bit then
+  begin
     ABitmap.Free;
+    raise EArgumentException.CreateFmt(
+      'TFrameView.SetFrame requires pf24bit input, got pixel-format ord=%d',
+      [Ord(ABitmap.PixelFormat)]);
+  end;
+
+  {Copy pixel data via raw memory, bypassing GDI entirely.
+   Canvas.Draw on a bitmap created by another thread intermittently
+   fails because the GDI DC handle is not reliably usable cross-thread.}
+  Copy := TBitmap.Create;
+  Copy.PixelFormat := pf24bit;
+  Copy.SetSize(ABitmap.Width, ABitmap.Height);
+  BytesPerRow := ABitmap.Width * 3;
+  for Y := 0 to ABitmap.Height - 1 do
+    Move(ABitmap.ScanLine[Y]^, Copy.ScanLine[Y]^, BytesPerRow);
+  ABitmap.Free;
+
+  FCells[AIndex].State := fcsLoaded;
+  FCells[AIndex].Bitmap := Copy;
+  Invalidate;
 end;
 
 procedure TFrameView.SetCellError(AIndex: Integer);
