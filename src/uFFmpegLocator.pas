@@ -15,6 +15,9 @@ implementation
 uses
   System.SysUtils, System.IOUtils, Winapi.Windows, uPathExpand;
 
+const
+  FFMPEG_EXE_NAME = 'ffmpeg.exe';
+
 function FindOnSystemPath(const AFileName: string): string;
 var
   Buffer: array [0 .. MAX_PATH] of Char;
@@ -32,7 +35,7 @@ begin
   {1. Plugin directory}
   if APluginDir <> '' then
   begin
-    Result := TPath.Combine(APluginDir, 'ffmpeg.exe');
+    Result := TPath.Combine(APluginDir, FFMPEG_EXE_NAME);
     if TFile.Exists(Result) then
       Exit;
   end;
@@ -46,7 +49,7 @@ begin
   end;
 
   {3. System PATH}
-  Result := FindOnSystemPath('ffmpeg.exe');
+  Result := FindOnSystemPath(FFMPEG_EXE_NAME);
 end;
 
 end.
