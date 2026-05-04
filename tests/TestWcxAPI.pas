@@ -57,6 +57,15 @@ type
     [Test] procedure ClampSize_FiveGigabytes_SaturatesToMaxInt;
     [Test] procedure ClampSize_Negative_PromotedToZero;
     [Test] procedure ClampSize_Zero_PassesThrough;
+    {Earlier the extract / copy except blocks lumped every Delphi exception
+     into E_EWRITE, telling the user "disk write failed" even when the
+     real cause was RAM exhaustion or a missing source file. The mapping
+     branches off the high-signal classes; uncategorised exceptions still
+     fall through to E_EWRITE so legacy behaviour is preserved.}
+    [Test] procedure ExcMap_OutOfMemory_MapsToNoMemory;
+    [Test] procedure ExcMap_FileNotFound_MapsToOpenError;
+    [Test] procedure ExcMap_GenericException_FallsThroughToWriteError;
+    [Test] procedure ExcMap_OSError_FallsThroughToWriteError;
   end;
 
 implementation
@@ -389,6 +398,39 @@ end;
 procedure TTestWcxAPI.ClampSize_Zero_PassesThrough;
 begin
   Assert.AreEqual(0, ClampSizeForAnsiHeader(0));
+end;
+
+{ -------- ExceptionClassToWcxError -------- }
+
+procedure TTestWcxAPI.ExcMap_OutOfMemory_MapsToNoMemory;
+begin
+  {Class-reference test avoids instantiating EOutOfMemory, which has a
+   FreeInstance override that prevents normal Free from reclaiming the
+   memory.}
+  Assert.AreEqual(E_NO_MEMORY, ExceptionClassToWcxError(EOutOfMemory));
+end;
+
+procedure TTestWcxAPI.ExcMap_FileNotFound_MapsToOpenError;
+begin
+  Assert.AreEqual(E_EOPEN, ExceptionClassToWcxError(EFileNotFoundException));
+end;
+
+procedure TTestWcxAPI.ExcMap_GenericException_FallsThroughToWriteError;
+begin
+  Assert.AreEqual(E_EWRITE, ExceptionClassToWcxError(Exception),
+    'Uncategorised classes preserve legacy E_EWRITE mapping');
+  Assert.AreEqual(E_EWRITE, ExceptionClassToWcxError(EArgumentException));
+  Assert.AreEqual(E_EWRITE, ExceptionClassToWcxError(nil),
+    'Defensive: nil class falls through to E_EWRITE');
+end;
+
+procedure TTestWcxAPI.ExcMap_OSError_FallsThroughToWriteError;
+begin
+  {OS errors arrive when DeleteFile / CopyFile / WriteFile fail. They are
+   intentionally not branched off because the WCX API has no precise code
+   for them; E_EWRITE is the closest match for the IO-failed-mid-flight
+   shape.}
+  Assert.AreEqual(E_EWRITE, ExceptionClassToWcxError(EOSError));
 end;
 
 end.

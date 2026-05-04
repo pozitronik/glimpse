@@ -5,7 +5,7 @@ unit uWcxExports;
 interface
 
 uses
-  Winapi.Windows, uWcxAPI;
+  System.SysUtils, Winapi.Windows, uWcxAPI;
 
 {Opens archive (video file) for listing or extraction}
 function OpenArchive(var ArchiveData: TOpenArchiveData): THandle; stdcall;
@@ -72,10 +72,23 @@ procedure WcxTest_ResetDeleteDirectoryProc;
  UnpSizeHigh and is unaffected.}
 function ClampSizeForAnsiHeader(AValue: Int64): Integer;
 
+{Maps a Delphi exception class to the closest WCX error code. Earlier the
+ extract / copy except blocks mapped every exception to E_EWRITE, which
+ told the user "disk write failed" even when the real problem was RAM
+ exhaustion or a missing source file. The mapping is intentionally
+ narrow: only the high-signal classes branch off; everything else still
+ falls through to E_EWRITE so legacy behaviour is preserved for the
+ uncategorised majority.
+ Takes a class reference rather than an instance so tests can pin every
+ branch without allocating instances of leak-tricky classes (EOutOfMemory
+ overrides FreeInstance to a no-op for the singleton path).}
+function ExceptionClassToWcxError(AClass: TClass): Integer;
+function ExceptionToWcxError(E: Exception): Integer;
+
 implementation
 
 uses
-  System.SysUtils, System.AnsiStrings, System.IOUtils, System.SyncObjs,
+  System.AnsiStrings, System.IOUtils, System.SyncObjs,
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
@@ -149,6 +162,24 @@ begin
     Result := MaxInt
   else
     Result := Integer(AValue);
+end;
+
+function ExceptionClassToWcxError(AClass: TClass): Integer;
+begin
+  if (AClass <> nil) and AClass.InheritsFrom(EOutOfMemory) then
+    Result := E_NO_MEMORY
+  else if (AClass <> nil) and AClass.InheritsFrom(EFileNotFoundException) then
+    Result := E_EOPEN
+  else
+    Result := E_EWRITE;
+end;
+
+function ExceptionToWcxError(E: Exception): Integer;
+begin
+  if E = nil then
+    Result := E_EWRITE
+  else
+    Result := ExceptionClassToWcxError(E.ClassType);
 end;
 
 {Cache mutator that assumes GCacheLock is already held. Used by
@@ -541,7 +572,8 @@ begin
     TFile.Copy(ATempPaths[AIndex], ADestPath, True);
     AResult := E_SUCCESS;
   except
-    AResult := E_EWRITE;
+    on E: Exception do
+      AResult := ExceptionToWcxError(E);
   end;
 end;
 
@@ -577,7 +609,8 @@ begin
       Bmp.Free;
     end;
   except
-    Exit(E_EWRITE);
+    on E: Exception do
+      Exit(ExceptionToWcxError(E));
   end;
   Result := E_SUCCESS;
 end;
@@ -612,7 +645,8 @@ begin
     end;
     Result := E_SUCCESS;
   except
-    Result := E_EWRITE;
+    on E: Exception do
+      Result := ExceptionToWcxError(E);
   end;
 end;
 
