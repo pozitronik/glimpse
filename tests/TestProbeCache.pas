@@ -30,6 +30,13 @@ type
     [Test] procedure TestGetTotalSizeOnMissingDir;
     [Test] procedure TestClearWipesEntries;
     [Test] procedure TestClearOnMissingDirNoException;
+    {Atomic write: Put writes to a sibling .tmp and renames into place. A
+     successful Put must leave only the final .probe file; the .tmp must
+     be gone. Earlier Lines.SaveToFile wrote straight to the target, so a
+     mid-write crash left a partial file that TryGet treated as valid
+     (cache poisoning until the source file's mtime changed).}
+    [Test] procedure TestPutLeavesNoTempFiles;
+    [Test] procedure TestPutOverwritesPreviousEntryAtomically;
   end;
 
 implementation
@@ -475,6 +482,86 @@ begin
     Assert.Pass('Clear on missing dir did not raise');
   finally
     Cache.Free;
+  end;
+end;
+
+procedure TTestProbeCache.TestPutLeavesNoTempFiles;
+var
+  Cache: TProbeCache;
+  Info: TVideoInfo;
+  TmpFile: string;
+  TempLeftovers: TArray<string>;
+begin
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_atomic_' +
+    TGuid.NewGuid.ToString + '.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      Info := Default(TVideoInfo);
+      Info.Duration := 60.0;
+      Info.Width := 640;
+      Info.Height := 360;
+      Info.IsValid := True;
+
+      Cache.Put(TmpFile, Info);
+
+      {Recursive scan; the temp file lives next to the .probe inside the
+       sharded subdirectory.}
+      TempLeftovers := TDirectory.GetFiles(FCacheDir, '*.tmp',
+        TSearchOption.soAllDirectories);
+      Assert.AreEqual<Integer>(0, Length(TempLeftovers),
+        'Atomic Put must rename the temp into place; no .tmp may remain');
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestProbeCache.TestPutOverwritesPreviousEntryAtomically;
+var
+  Cache: TProbeCache;
+  Info, Retrieved: TVideoInfo;
+  TmpFile: string;
+  TempLeftovers: TArray<string>;
+begin
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_overwrite_' +
+    TGuid.NewGuid.ToString + '.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      {First put.}
+      Info := Default(TVideoInfo);
+      Info.Duration := 30.0;
+      Info.Width := 320;
+      Info.Height := 240;
+      Info.IsValid := True;
+      Cache.Put(TmpFile, Info);
+
+      {Re-put with different values; MoveFileEx + MOVEFILE_REPLACE_EXISTING
+       must overwrite cleanly without orphan .tmp files.}
+      Info.Duration := 90.0;
+      Info.Width := 1280;
+      Info.Height := 720;
+      Cache.Put(TmpFile, Info);
+
+      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
+      Assert.AreEqual(Double(90.0), Retrieved.Duration, 0.001,
+        'Overwrite must take effect');
+      Assert.AreEqual(1280, Retrieved.Width);
+
+      TempLeftovers := TDirectory.GetFiles(FCacheDir, '*.tmp',
+        TSearchOption.soAllDirectories);
+      Assert.AreEqual<Integer>(0, Length(TempLeftovers),
+        'No .tmp may remain after a successful overwrite');
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
   end;
 end;
 

@@ -41,7 +41,13 @@ function DefaultProbeCacheDir: string;
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils, uCacheKey;
+  Winapi.Windows, System.SysUtils, System.Classes, System.IOUtils, uCacheKey;
+
+const
+  MOVEFILE_REPLACE_EXISTING = 1;
+
+function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall;
+  external 'kernel32.dll' name 'MoveFileExW';
 
 function DefaultProbeCacheDir: string;
 begin
@@ -180,7 +186,7 @@ end;
 
 procedure TProbeCache.Put(const AFilePath: string; const AInfo: TVideoInfo);
 var
-  Key, Path, Dir: string;
+  Key, Path, Dir, TempPath: string;
   Lines: TStringList;
 begin
   if not AInfo.IsValid then
@@ -210,11 +216,32 @@ begin
     Lines.Add('AudioSampleRate=' + IntToStr(AInfo.AudioSampleRate));
     Lines.Add('AudioChannels=' + AInfo.AudioChannels);
     Lines.Add('AudioBitrateKbps=' + IntToStr(AInfo.AudioBitrateKbps));
+    {Atomic write: SaveToFile straight to Path could leave a half-written
+     .probe if the process crashed mid-write, and TryGet treats a file
+     with just a Duration line as valid (poisoning the cache for that
+     entry until the next clear or file-mtime change). Mirror the frame
+     cache pattern: write to a unique sibling .tmp, then MoveFileEx with
+     MOVEFILE_REPLACE_EXISTING for an atomic rename on NTFS.}
+    TempPath := Path + '.' + TGUID.NewGuid.ToString + '.tmp';
     try
       TDirectory.CreateDirectory(Dir);
-      Lines.SaveToFile(Path, TEncoding.UTF8);
+      Lines.SaveToFile(TempPath, TEncoding.UTF8);
+      if not MoveFileEx(PChar(TempPath), PChar(Path), MOVEFILE_REPLACE_EXISTING) then
+      begin
+        try
+          if TFile.Exists(TempPath) then
+            TFile.Delete(TempPath);
+        except
+          {Best-effort temp cleanup}
+        end;
+      end;
     except
-      {Write failure is non-fatal; next open will just probe again}
+      try
+        if TFile.Exists(TempPath) then
+          TFile.Delete(TempPath);
+      except
+        {Best-effort temp cleanup}
+      end;
     end;
   finally
     Lines.Free;
