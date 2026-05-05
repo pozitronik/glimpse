@@ -92,7 +92,8 @@ uses
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
-  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize;
+  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize,
+  uWcxPresets, uWcxListing;
 
 type
   {State for one open archive (video file)}
@@ -108,6 +109,13 @@ type
     {Populated from module-level cache when ShowFileSizes is enabled}
     TempPaths: TArray<string>;
     EntrySizes: TArray<Int64>;
+    {Loaded once at OpenArchive when UsePresets is on; empty otherwise.
+     Indexed by Listing[I].PresetIndex.}
+    Presets: TWcxPresetArray;
+    {Pre-built typed listing: legacy entries first (frames or combined),
+     preset entries appended after. ReadHeaderExW iterates this; ProcessFile
+     dispatches on Listing[CurrentIndex].Kind.}
+    Listing: TWcxListingEntryArray;
   end;
 
 var
@@ -265,7 +273,11 @@ begin
   WcxTest_SetDeleteDirectoryProc(nil);
 end;
 
-function GetEntryCount(H: TArchiveHandle): Integer;
+{Number of legacy (frame or combined) entries the cache code sizes its
+ temp arrays against. Pre-presets this was the same as GetEntryCount; the
+ two diverge once preset entries are appended to the listing because
+ presets do not pre-extract and so consume no temp slots.}
+function LegacyEntryCount(H: TArchiveHandle): Integer;
 begin
   if H.Settings.OutputMode = womCombined then
     Result := 1
@@ -273,12 +285,14 @@ begin
     Result := Length(H.Offsets);
 end;
 
+function GetEntryCount(H: TArchiveHandle): Integer;
+begin
+  Result := Length(H.Listing);
+end;
+
 function GetEntryName(H: TArchiveHandle): string;
 begin
-  if H.Settings.OutputMode = womCombined then
-    Result := GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
-  else
-    Result := GenerateFrameFileName(H.FileName, H.CurrentIndex, H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat);
+  Result := H.Listing[H.CurrentIndex].FileName;
 end;
 
 {Extracts all frames, renders a combined grid with optional banner.
@@ -425,7 +439,9 @@ begin
     GCachedVideoFile := H.FileName;
 
     Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-    EntryCount := GetEntryCount(H);
+    {Cache arrays size to legacy entries only; preset entries do not
+     pre-extract (they run on demand during ProcessFile).}
+    EntryCount := LegacyEntryCount(H);
     SetLength(GCachedTempPaths, EntryCount);
     SetLength(GCachedEntrySizes, EntryCount);
 
@@ -485,10 +501,18 @@ begin
     H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
     H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
 
+    {Load presets only when the master switch is on so legacy installs
+     skip the IO entirely. The listing builder still runs unconditionally
+     because it produces the same legacy-only output when the preset
+     array is empty.}
+    if H.Settings.UsePresets then
+      H.Presets := LoadPresets(PresetsIniPath(GIniPath));
+    H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.OutputMode, H.Settings.SaveFormat, H.Settings.UsePresets, H.Presets);
+
     if H.Settings.ShowFileSizes then
       PreExtractFrames(H);
 
-    WcxLog(Format('OpenArchive: %s frames=%d', [AFileName, Length(H.Offsets)]));
+    WcxLog(Format('OpenArchive: %s frames=%d presets=%d', [AFileName, Length(H.Offsets), Length(H.Presets)]));
     Result := THandle(H);
   except
     H.Free;
@@ -587,30 +611,32 @@ begin
   end;
 end;
 
-function DoExtractSeparate(H: TArchiveHandle; const ADestPath, ADestName: string): Integer;
+{Extracts a single frame at the legacy frame index AFrameIndex.
+ Index is decoupled from H.CurrentIndex because the listing now interleaves
+ presets after the legacy frames, so the TC iteration position no longer
+ matches the offset/temp-path index. ekFrame entries carry their own
+ LegacyIndex, which the dispatch in DoProcessFile passes in here.}
+function DoExtractSeparate(H: TArchiveHandle; AFrameIndex: Integer; const ADestPath, ADestName: string): Integer;
 var
   Extractor: IFrameExtractor;
   Bmp: TBitmap;
   FullPath: string;
 begin
-  if H.CurrentIndex >= Length(H.Offsets) then
-    Exit(E_END_ARCHIVE);
-
   if ADestName <> '' then
     FullPath := ADestName
   else if ADestPath <> '' then
-    FullPath := IncludeTrailingPathDelimiter(ADestPath) + GenerateFrameFileName(H.FileName, H.CurrentIndex, H.Offsets[H.CurrentIndex].TimeOffset, H.Settings.SaveFormat)
+    FullPath := IncludeTrailingPathDelimiter(ADestPath) + GenerateFrameFileName(H.FileName, AFrameIndex, H.Offsets[AFrameIndex].TimeOffset, H.Settings.SaveFormat)
   else
     Exit(E_ECREATE);
 
-  WcxLog(Format('Extract frame %d -> %s', [H.CurrentIndex, FullPath]));
+  WcxLog(Format('Extract frame %d -> %s', [AFrameIndex, FullPath]));
 
-  if TryCopyCachedFrame(H.TempPaths, H.CurrentIndex, FullPath, Result) then
+  if TryCopyCachedFrame(H.TempPaths, AFrameIndex, FullPath, Result) then
     Exit;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
   try
-    Bmp := Extractor.ExtractFrame(H.FileName, H.Offsets[H.CurrentIndex].TimeOffset, BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide));
+    Bmp := Extractor.ExtractFrame(H.FileName, H.Offsets[AFrameIndex].TimeOffset, BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide));
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try
@@ -663,6 +689,7 @@ end;
 function DoProcessFile(hArcData: THandle; Operation: Integer; const ADestPath, ADestName: string): Integer;
 var
   H: TArchiveHandle;
+  Entry: TWcxListingEntry;
 begin
   H := TArchiveHandle(hArcData);
 
@@ -683,10 +710,25 @@ begin
 
   if Operation = PK_EXTRACT then
   begin
-    if H.Settings.OutputMode = womCombined then
-      Result := DoExtractCombined(H, ADestPath, ADestName)
+    Entry := H.Listing[H.CurrentIndex];
+    case Entry.Kind of
+      ekFrame:
+        Result := DoExtractSeparate(H, Entry.LegacyIndex, ADestPath, ADestName);
+      ekCombined:
+        Result := DoExtractCombined(H, ADestPath, ADestName);
+      ekPreset:
+        begin
+          {Step 3 stub: the listing surfaces the preset entry so users see
+           it in the archive view, but the actual ffmpeg invocation is
+           wired in Step 6. Returning E_NOT_SUPPORTED keeps the visible
+           listing safe — TC reports the failure to the user instead of
+           silently producing a garbage file.}
+          WcxLog(Format('ProcessFile: preset entry "%s" extraction stub (Step 6 will implement)', [Entry.FileName]));
+          Result := E_NOT_SUPPORTED;
+        end;
     else
-      Result := DoExtractSeparate(H, ADestPath, ADestName);
+      Result := E_NOT_SUPPORTED;
+    end;
 
     if Result <> E_SUCCESS then
     begin

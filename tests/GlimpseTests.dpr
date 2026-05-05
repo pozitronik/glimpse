@@ -72,6 +72,8 @@ uses
   TestWcxAPI in 'TestWcxAPI.pas',
   uWcxPresets in '..\wcx\uWcxPresets.pas',
   TestWcxPresets in 'TestWcxPresets.pas',
+  uWcxListing in '..\wcx\uWcxListing.pas',
+  TestWcxListing in 'TestWcxListing.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
