@@ -35,7 +35,8 @@ uses
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
   uWcxPresets in 'uWcxPresets.pas',
   uWcxListing in 'uWcxListing.pas',
-  uWcxProgressBridge in 'uWcxProgressBridge.pas';
+  uWcxProgressBridge in 'uWcxProgressBridge.pas',
+  uWcxPresetExtractor in 'uWcxPresetExtractor.pas';
 
 exports
   OpenArchive,

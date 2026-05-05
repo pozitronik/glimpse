@@ -76,6 +76,8 @@ uses
   TestWcxListing in 'TestWcxListing.pas',
   uWcxProgressBridge in '..\wcx\uWcxProgressBridge.pas',
   TestWcxProgressBridge in 'TestWcxProgressBridge.pas',
+  uWcxPresetExtractor in '..\wcx\uWcxPresetExtractor.pas',
+  TestWcxPresetExtractor in 'TestWcxPresetExtractor.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',

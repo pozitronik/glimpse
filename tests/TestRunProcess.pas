@@ -30,6 +30,15 @@ type
     [Test] procedure CancelHandle_DefaultZeroPreservesBehavior;
     [Test] procedure CancelHandle_NotSignaledRunsToCompletion;
     [Test] procedure CancelHandle_SignaledTerminatesLongRunningChild;
+    { Streaming overload: dispatches each stdout line as it arrives so callers
+      can react to incremental progress (used by the WCX preset extractor). }
+    [Test] procedure Streaming_DispatchesEachLineSeparately;
+    [Test] procedure Streaming_StripsTrailingCarriageReturn;
+    [Test] procedure Streaming_FinalLineWithoutTerminatorStillDispatched;
+    [Test] procedure Streaming_EmptyLinesSwallowed;
+    [Test] procedure Streaming_StderrStillBuffered;
+    [Test] procedure Streaming_ReturnsExitCode;
+    [Test] procedure Streaming_CancelHandleStopsLongRunningChild;
   end;
 
 implementation
@@ -242,6 +251,171 @@ begin
     Assert.AreEqual(-1, Code, 'Cancelled process should return -1');
     Assert.IsTrue(Elapsed < 5000,
       Format('Cancel should complete within 5s; elapsed=%dms', [Elapsed]));
+  finally
+    CancelEvent.Free;
+  end;
+end;
+
+procedure TTestRunProcess.Streaming_DispatchesEachLineSeparately;
+var
+  StdErr: TBytes;
+  Lines: TStringList;
+  Code: Integer;
+begin
+  { Three echo commands chained produce three CRLF-terminated lines; the
+    splitter must hand them back as three separate dispatches in order.
+    cmd.exe's `echo X &&` form leaves trailing whitespace on each line, so
+    Trim before asserting content — the splitter's contract is splitting,
+    not whitespace normalisation. }
+  Lines := TStringList.Create;
+  try
+    Code := RunProcess('cmd.exe /c "echo one && echo two && echo three"',
+      procedure(L: string)
+      begin
+        Lines.Add(L.Trim);
+      end, StdErr);
+    Assert.AreEqual(0, Code);
+    Assert.AreEqual(3, Lines.Count);
+    Assert.AreEqual('one', Lines[0]);
+    Assert.AreEqual('two', Lines[1]);
+    Assert.AreEqual('three', Lines[2]);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRunProcess.Streaming_StripsTrailingCarriageReturn;
+var
+  StdErr: TBytes;
+  CapturedLine: string;
+begin
+  { cmd.exe emits CRLF; the splitter must strip the CR so callers see a
+    clean line. Without stripping, ffmpeg progress parsers would fail to
+    match keys like "progress=end" because of the trailing #13. }
+  CapturedLine := '__none__';
+  RunProcess('cmd.exe /c echo hello',
+    procedure(L: string)
+    begin
+      CapturedLine := L;
+    end, StdErr);
+  Assert.AreEqual('hello', CapturedLine);
+end;
+
+procedure TTestRunProcess.Streaming_FinalLineWithoutTerminatorStillDispatched;
+var
+  StdErr: TBytes;
+  Lines: TStringList;
+begin
+  { `echo|set /p=` writes without a trailing newline. The Flush step at
+    end-of-stream must still hand the tail to the callback so progress
+    extractors do not lose the last status update. }
+  Lines := TStringList.Create;
+  try
+    RunProcess('cmd.exe /c "<NUL set /p=tail"',
+      procedure(L: string)
+      begin
+        Lines.Add(L);
+      end, StdErr);
+    Assert.AreEqual(1, Lines.Count, 'Tail without LF must still dispatch');
+    Assert.AreEqual('tail', Lines[0]);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRunProcess.Streaming_EmptyLinesSwallowed;
+var
+  StdErr: TBytes;
+  Lines: TStringList;
+begin
+  { Blank lines (CRLF with no content) carry no information and would only
+    spam the callback; suppress them at the splitter. PowerShell gives a
+    reliable empty-line emitter; cmd's `echo.` is too quirky across
+    Windows builds. }
+  Lines := TStringList.Create;
+  try
+    RunProcess(
+      'powershell -NoProfile -NonInteractive -Command "''a''; ''''; ''b''"',
+      procedure(L: string)
+      begin
+        Lines.Add(L);
+      end, StdErr);
+    Assert.AreEqual(2, Lines.Count, 'Blank line must not reach the callback');
+    Assert.AreEqual('a', Lines[0]);
+    Assert.AreEqual('b', Lines[1]);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRunProcess.Streaming_StderrStillBuffered;
+var
+  StdErr: TBytes;
+  Lines: TStringList;
+  ErrStr: string;
+begin
+  { Stderr keeps the buffered semantics so the caller can show the error
+    message on failure. The line callback must not see stderr lines. Trim
+    on the captured line accommodates cmd's trailing whitespace from `&&`. }
+  Lines := TStringList.Create;
+  try
+    RunProcess('cmd.exe /c "echo good && echo bad 1>&2"',
+      procedure(L: string)
+      begin
+        Lines.Add(L.Trim);
+      end, StdErr);
+    Assert.AreEqual(1, Lines.Count, 'Stderr must not flow into the line callback');
+    Assert.AreEqual('good', Lines[0]);
+    ErrStr := TEncoding.Default.GetString(StdErr).Trim;
+    Assert.AreEqual('bad', ErrStr);
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRunProcess.Streaming_ReturnsExitCode;
+var
+  StdErr: TBytes;
+begin
+  { Exit code propagation matches the buffered overload. }
+  Assert.AreEqual(7, RunProcess('cmd.exe /c exit 7',
+    procedure(L: string) begin end, StdErr));
+end;
+
+procedure TTestRunProcess.Streaming_CancelHandleStopsLongRunningChild;
+var
+  StdErr: TBytes;
+  Code: Integer;
+  CancelEvent: TEvent;
+  Signaler: TThread;
+  StartTick, Elapsed: Cardinal;
+  LocalEvent: TEvent;
+begin
+  CancelEvent := TEvent.Create(nil, True, False, '');
+  try
+    LocalEvent := CancelEvent;
+    Signaler := TThread.CreateAnonymousThread(
+      procedure
+      begin
+        Sleep(300);
+        LocalEvent.SetEvent;
+      end);
+    Signaler.FreeOnTerminate := False;
+    Signaler.Start;
+    try
+      StartTick := GetTickCount;
+      Code := RunProcess(
+        'powershell -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"',
+        procedure(L: string) begin end,
+        StdErr, 60000, CancelEvent.Handle);
+      Elapsed := GetTickCount - StartTick;
+    finally
+      Signaler.WaitFor;
+      Signaler.Free;
+    end;
+    Assert.AreEqual(-1, Code, 'Cancelled streaming run must return -1');
+    Assert.IsTrue(Elapsed < 5000,
+      Format('Cancel must complete in <5s; elapsed=%dms', [Elapsed]));
   finally
     CancelEvent.Free;
   end;

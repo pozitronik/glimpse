@@ -12,12 +12,101 @@ uses
  ACancelHandle is an optional Win32 waitable handle (typically TEvent.Handle). When
  signaled mid-run, a watcher thread terminates the child process, which cascades
  through pipe closure and unblocks the otherwise-blocking ReadFile calls.}
-function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): Integer;
+function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): Integer; overload;
+
+{Streaming overload: dispatches each stdout line to AOnStdOutLine as it
+ arrives instead of buffering the full output. Lines are decoded as UTF-8
+ with replacement (matches uFFmpegExe's lenient policy) and trailing CR
+ is stripped. AStdErr is still buffered to completion so callers can show
+ the error message on failure. Cancel/timeout semantics match the buffered
+ overload; AOnStdOutLine has no return value, so callers signal cancel by
+ setting ACancelHandle externally (typically via the WCX progress bridge).
+ Exceptions raised inside AOnStdOutLine propagate up after the watcher
+ wakes and the child exits, so the process is never orphaned.}
+function RunProcess(const ACommandLine: string; AOnStdOutLine: TProc<string>; out AStdErr: TBytes; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): Integer; overload;
 
 implementation
 
 uses
   System.Classes;
+
+{Decodes a line as UTF-8 with replacement so embedded invalid sequences
+ do not raise. The streaming overload uses this once per dispatched line.}
+function DecodeLine(const ABytes: TBytes; AStart, ALength: Integer): string;
+var
+  Enc: TEncoding;
+begin
+  if ALength <= 0 then
+    Exit('');
+  Enc := TUTF8Encoding.Create(CP_UTF8, 0, 0);
+  try
+    Result := Enc.GetString(ABytes, AStart, ALength);
+  finally
+    Enc.Free;
+  end;
+end;
+
+{Maintains a rolling partial-line buffer across pipe reads.
+ Feed appends bytes and dispatches every complete line (terminated by #10,
+ trailing #13 stripped). Flush dispatches any non-empty tail without a
+ terminator. Both swallow empty lines so progress noise lines like a
+ trailing blank don't reach the callback.}
+type
+  TLineSplitter = record
+    Partial: TBytes;
+    procedure Feed(const ABuffer; ABytesRead: Integer; const AOnLine: TProc<string>);
+    procedure Flush(const AOnLine: TProc<string>);
+  end;
+
+procedure TLineSplitter.Feed(const ABuffer; ABytesRead: Integer; const AOnLine: TProc<string>);
+var
+  Combined: TBytes;
+  PrevLen, I, LineStart, LineLen: Integer;
+begin
+  if ABytesRead <= 0 then
+    Exit;
+  PrevLen := Length(Partial);
+  SetLength(Combined, PrevLen + ABytesRead);
+  if PrevLen > 0 then
+    Move(Partial[0], Combined[0], PrevLen);
+  Move(ABuffer, Combined[PrevLen], ABytesRead);
+  Partial := nil;
+
+  LineStart := 0;
+  for I := 0 to High(Combined) do
+  begin
+    if Combined[I] = $0A then
+    begin
+      LineLen := I - LineStart;
+      {Strip the trailing #13 if present so callers see a clean line.}
+      if (LineLen > 0) and (Combined[I - 1] = $0D) then
+        Dec(LineLen);
+      if LineLen > 0 then
+        AOnLine(DecodeLine(Combined, LineStart, LineLen));
+      LineStart := I + 1;
+    end;
+  end;
+
+  {Anything past the last #10 is the new partial line; carries forward
+   to the next Feed.}
+  if LineStart <= High(Combined) then
+  begin
+    SetLength(Partial, Length(Combined) - LineStart);
+    Move(Combined[LineStart], Partial[0], Length(Partial));
+  end;
+end;
+
+procedure TLineSplitter.Flush(const AOnLine: TProc<string>);
+var
+  TailLen: Integer;
+begin
+  TailLen := Length(Partial);
+  if (TailLen > 0) and (Partial[TailLen - 1] = $0D) then
+    Dec(TailLen);
+  if TailLen > 0 then
+    AOnLine(DecodeLine(Partial, 0, TailLen));
+  Partial := nil;
+end;
 
 function ReadPipeToEnd(APipe: THandle): TBytes;
 var
@@ -181,6 +270,174 @@ begin
   {Streams have closed, which means the child has exited (either naturally,
    or because the watcher terminated it). Wait infinite - the wall-clock
    budget has already been enforced by the watcher.}
+  WaitForSingleObject(PI.hProcess, INFINITE);
+
+  Watcher.WaitFor;
+  Watcher.Free;
+
+  if TimedOutFlag <> 0 then
+    Result := -1
+  else if (ACancelHandle <> 0) and (WaitForSingleObject(ACancelHandle, 0) = WAIT_OBJECT_0) then
+    Result := -1
+  else
+  begin
+    GetExitCodeProcess(PI.hProcess, ExitCode);
+    Result := Integer(ExitCode);
+  end;
+
+  CloseHandle(StdOutRead);
+  CloseHandle(StdErrRead);
+  CloseHandle(PI.hProcess);
+  CloseHandle(PI.hThread);
+end;
+
+function RunProcess(const ACommandLine: string; AOnStdOutLine: TProc<string>; out AStdErr: TBytes; ATimeoutMs: DWORD; ACancelHandle: THandle): Integer; overload;
+var
+  SA: TSecurityAttributes;
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  StdOutRead, StdOutWrite: THandle;
+  StdErrRead, StdErrWrite: THandle;
+  StdInRead, StdInWrite: THandle;
+  CmdLine: string;
+  StdErrThread: TThread;
+  CapturedStdErr: TBytes;
+  ExitCode: DWORD;
+  Watcher: TThread;
+  ProcessHandleRef: THandle;
+  TimedOutFlag: Integer;
+  Buffer: array [0 .. 4095] of Byte;
+  BytesRead: DWORD;
+  Splitter: TLineSplitter;
+  ReadOk: Boolean;
+begin
+  Result := -1;
+  AStdErr := nil;
+
+  SA.nLength := SizeOf(SA);
+  SA.bInheritHandle := True;
+  SA.lpSecurityDescriptor := nil;
+
+  if not CreatePipe(StdOutRead, StdOutWrite, @SA, 0) then
+    Exit;
+  if not CreatePipe(StdErrRead, StdErrWrite, @SA, 0) then
+  begin
+    CloseHandle(StdOutRead);
+    CloseHandle(StdOutWrite);
+    Exit;
+  end;
+  if not CreatePipe(StdInRead, StdInWrite, @SA, 1) then
+  begin
+    CloseHandle(StdOutRead);
+    CloseHandle(StdOutWrite);
+    CloseHandle(StdErrRead);
+    CloseHandle(StdErrWrite);
+    Exit;
+  end;
+  CloseHandle(StdInWrite);
+
+  SetHandleInformation(StdOutRead, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(StdErrRead, HANDLE_FLAG_INHERIT, 0);
+
+  ZeroMemory(@SI, SizeOf(SI));
+  SI.cb := SizeOf(SI);
+  SI.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
+  SI.hStdInput := StdInRead;
+  SI.hStdOutput := StdOutWrite;
+  SI.hStdError := StdErrWrite;
+  SI.wShowWindow := SW_HIDE;
+
+  ZeroMemory(@PI, SizeOf(PI));
+
+  CmdLine := ACommandLine;
+  UniqueString(CmdLine);
+
+  if not CreateProcess(nil, PChar(CmdLine), nil, nil, True, CREATE_NO_WINDOW, nil, nil, SI, PI) then
+  begin
+    CloseHandle(StdOutRead);
+    CloseHandle(StdOutWrite);
+    CloseHandle(StdErrRead);
+    CloseHandle(StdErrWrite);
+    CloseHandle(StdInRead);
+    Exit;
+  end;
+
+  CloseHandle(StdOutWrite);
+  CloseHandle(StdErrWrite);
+  CloseHandle(StdInRead);
+
+  StdErrThread := TThread.CreateAnonymousThread(
+    procedure
+    begin
+      CapturedStdErr := ReadPipeToEnd(StdErrRead);
+    end);
+  StdErrThread.FreeOnTerminate := False;
+  StdErrThread.Start;
+
+  TimedOutFlag := 0;
+  ProcessHandleRef := PI.hProcess;
+  Watcher := TThread.CreateAnonymousThread(
+    procedure
+    var
+      Handles: array [0 .. 1] of THandle;
+      Count: DWORD;
+    begin
+      Handles[0] := ProcessHandleRef;
+      Count := 1;
+      if ACancelHandle <> 0 then
+      begin
+        Handles[1] := ACancelHandle;
+        Count := 2;
+      end;
+      case WaitForMultipleObjects(Count, @Handles[0], False, ATimeoutMs) of
+        WAIT_OBJECT_0 + 1:
+          TerminateProcess(ProcessHandleRef, 1);
+        WAIT_TIMEOUT:
+          begin
+            InterlockedExchange(TimedOutFlag, 1);
+            TerminateProcess(ProcessHandleRef, 1);
+          end;
+      end;
+    end);
+  Watcher.FreeOnTerminate := False;
+  Watcher.Start;
+
+  {Streaming stdout: read in chunks, dispatch complete lines, hold the
+   trailing partial across reads. ReadFile blocks until at least one byte
+   arrives or the pipe closes (which happens when the child exits or the
+   watcher terminates it).}
+  Splitter := Default(TLineSplitter);
+  try
+    repeat
+      BytesRead := 0;
+      ReadOk := ReadFile(StdOutRead, Buffer, SizeOf(Buffer), BytesRead, nil);
+      if not ReadOk then
+        Break;
+      if BytesRead > 0 then
+        Splitter.Feed(Buffer, Integer(BytesRead), AOnStdOutLine);
+    until BytesRead = 0;
+    Splitter.Flush(AOnStdOutLine);
+  except
+    {On callback exceptions we still need to drain background threads and
+     close handles so the child does not leak. Save and re-raise after
+     cleanup runs.}
+    StdErrThread.WaitFor;
+    AStdErr := CapturedStdErr;
+    StdErrThread.Free;
+    WaitForSingleObject(PI.hProcess, INFINITE);
+    Watcher.WaitFor;
+    Watcher.Free;
+    CloseHandle(StdOutRead);
+    CloseHandle(StdErrRead);
+    CloseHandle(PI.hProcess);
+    CloseHandle(PI.hThread);
+    raise;
+  end;
+
+  StdErrThread.WaitFor;
+  AStdErr := CapturedStdErr;
+  StdErrThread.Free;
+
   WaitForSingleObject(PI.hProcess, INFINITE);
 
   Watcher.WaitFor;
