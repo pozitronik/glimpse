@@ -129,6 +129,30 @@ type
   end;
 
   [TestFixture]
+  TTestFrameViewSelection = class
+  public
+    {Selection contract: cells start unselected; ToggleSelection flips
+     individual cells; SelectAll / DeselectAll act on every cell;
+     SelectedCount and CellSelected reflect the bitset; out-of-range
+     index is a no-op for ToggleSelection and CellSelected returns False.}
+    [Test] procedure InitialState_NoCellSelected;
+    [Test] procedure InitialState_SelectedCountIsZero;
+    [Test] procedure Toggle_TurnsOnAndOff;
+    [Test] procedure Toggle_DoesNotAffectOtherCells;
+    [Test] procedure Toggle_NegativeIndex_NoOp;
+    [Test] procedure Toggle_PastEndIndex_NoOp;
+    [Test] procedure SelectAll_SelectsEveryCell;
+    [Test] procedure DeselectAll_ClearsEveryCell;
+    [Test] procedure SelectAll_ThenToggle_FlipsSingleCell;
+    [Test] procedure SelectedCount_ReflectsTogglesAccurately;
+    [Test] procedure SelectAll_OnEmptyView_NoOp;
+    [Test] procedure DeselectAll_OnEmptyView_NoOp;
+    [Test] procedure SetCellCount_ResetsSelections;
+    [Test] procedure ClearCells_LeavesNoCellsSelected;
+    [Test] procedure CellSelected_OutOfRange_ReturnsFalse;
+  end;
+
+  [TestFixture]
   TTestFrameViewMisc = class
   public
     [Test] procedure TestAdvanceAnimationWrapsAt8;
@@ -1874,6 +1898,249 @@ begin
   end;
 end;
 
+{ TTestFrameViewSelection }
+
+procedure TTestFrameViewSelection.InitialState_NoCellSelected;
+var
+  V: TFrameView;
+  I: Integer;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    for I := 0 to 3 do
+      Assert.IsFalse(V.CellSelected(I),
+        Format('Cell %d must start unselected', [I]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.InitialState_SelectedCountIsZero;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    Assert.AreEqual(0, V.SelectedCount);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.Toggle_TurnsOnAndOff;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.ToggleSelection(1);
+    Assert.IsTrue(V.CellSelected(1), 'Toggle once must select');
+    V.ToggleSelection(1);
+    Assert.IsFalse(V.CellSelected(1), 'Toggle again must deselect');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.Toggle_DoesNotAffectOtherCells;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.ToggleSelection(1);
+    Assert.IsFalse(V.CellSelected(0));
+    Assert.IsTrue(V.CellSelected(1));
+    Assert.IsFalse(V.CellSelected(2));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.Toggle_NegativeIndex_NoOp;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.ToggleSelection(-1);
+    Assert.AreEqual(0, V.SelectedCount,
+      'Negative index must not flip any cell');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.Toggle_PastEndIndex_NoOp;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.ToggleSelection(99);
+    Assert.AreEqual(0, V.SelectedCount,
+      'Index past end must not flip any cell');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.SelectAll_SelectsEveryCell;
+var
+  V: TFrameView;
+  I: Integer;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(5, MakeOffsets(5));
+    V.SelectAll;
+    Assert.AreEqual(5, V.SelectedCount);
+    for I := 0 to 4 do
+      Assert.IsTrue(V.CellSelected(I),
+        Format('Cell %d must be selected after SelectAll', [I]));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.DeselectAll_ClearsEveryCell;
+var
+  V: TFrameView;
+  I: Integer;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(5, MakeOffsets(5));
+    V.SelectAll;
+    V.DeselectAll;
+    Assert.AreEqual(0, V.SelectedCount);
+    for I := 0 to 4 do
+      Assert.IsFalse(V.CellSelected(I));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.SelectAll_ThenToggle_FlipsSingleCell;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SelectAll;
+    V.ToggleSelection(2);
+    Assert.AreEqual(3, V.SelectedCount,
+      'Toggle on a selected cell must drop SelectedCount by 1');
+    Assert.IsFalse(V.CellSelected(2));
+    Assert.IsTrue(V.CellSelected(0));
+    Assert.IsTrue(V.CellSelected(1));
+    Assert.IsTrue(V.CellSelected(3));
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.SelectedCount_ReflectsTogglesAccurately;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(6, MakeOffsets(6));
+    V.ToggleSelection(0);
+    V.ToggleSelection(2);
+    V.ToggleSelection(4);
+    Assert.AreEqual(3, V.SelectedCount, 'Three toggles, three selected');
+    V.ToggleSelection(2);
+    Assert.AreEqual(2, V.SelectedCount, 'Untoggle one drops to two');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.SelectAll_OnEmptyView_NoOp;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SelectAll;
+    Assert.AreEqual(0, V.SelectedCount,
+      'SelectAll on a view with no cells must not raise or invent selections');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.DeselectAll_OnEmptyView_NoOp;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.DeselectAll;
+    Assert.AreEqual(0, V.SelectedCount);
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.SetCellCount_ResetsSelections;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SelectAll;
+    Assert.AreEqual(4, V.SelectedCount, 'Precondition: all selected');
+    {Switching to a new file rebuilds the cell array; selections must
+     not leak across files.}
+    V.SetCellCount(3, MakeOffsets(3));
+    Assert.AreEqual(0, V.SelectedCount,
+      'SetCellCount must reset all selections to default (unselected)');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.ClearCells_LeavesNoCellsSelected;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.SelectAll;
+    V.ClearCells;
+    Assert.AreEqual(0, V.SelectedCount,
+      'ClearCells empties the cell array, so SelectedCount drops to 0');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.CellSelected_OutOfRange_ReturnsFalse;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(2, MakeOffsets(2));
+    Assert.IsFalse(V.CellSelected(-1), 'Negative index must return False');
+    Assert.IsFalse(V.CellSelected(99), 'Past-end index must return False');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
 { TTestFrameViewMisc }
 
 procedure TTestFrameViewMisc.TestAdvanceAnimationWrapsAt8;
@@ -2552,6 +2819,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameViewScroll);
   TDUnitX.RegisterTestFixture(TTestFrameViewGridZoom);
   TDUnitX.RegisterTestFixture(TTestFrameViewState);
+  TDUnitX.RegisterTestFixture(TTestFrameViewSelection);
   TDUnitX.RegisterTestFixture(TTestFrameViewMisc);
   TDUnitX.RegisterTestFixture(TTestFrameViewZoom);
   TDUnitX.RegisterTestFixture(TTestFrameViewEdgeCases);

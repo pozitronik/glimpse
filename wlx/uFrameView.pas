@@ -604,11 +604,20 @@ procedure TFrameView.SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetA
 var
   I: Integer;
 begin
+  {Free bitmaps from any retained cells before resizing; otherwise
+   reducing ACount loses references to the bitmaps in slots [ACount..]
+   and shrinking-then-regrowing leaks them.}
+  for I := 0 to High(FCells) do
+    FCells[I].Bitmap.Free;
   SetLength(FCells, ACount);
   for I := 0 to ACount - 1 do
   begin
     FCells[I].State := fcsPlaceholder;
     FCells[I].Bitmap := nil;
+    {Reset selection: a SetCellCount call signals "new file" or
+     "frame count changed"; selections from the previous layout must
+     not bleed through.}
+    FCells[I].Selected := False;
     if (AOffsets <> nil) and (I < Length(AOffsets)) then
     begin
       FCells[I].Timecode := FormatTimecode(AOffsets[I].TimeOffset);
@@ -764,7 +773,10 @@ end;
 
 function TFrameView.CellSelected(AIndex: Integer): Boolean;
 begin
-  Result := FCells[AIndex].Selected;
+  {Defensive guard: callers (mouse hit-test, paint loops) occasionally
+   pass -1 for "no cell at point". Without the range check the reader
+   crashes in Debug (range error) or returns garbage in Release.}
+  Result := (AIndex >= 0) and (AIndex < Length(FCells)) and FCells[AIndex].Selected;
 end;
 
 function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
