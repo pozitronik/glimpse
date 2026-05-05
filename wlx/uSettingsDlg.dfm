@@ -77,14 +77,14 @@ object SettingsForm: TSettingsForm
       object LblExtensions: TLabel
         Left = 12
         Top = 284
-        Width = 427
+        Width = 58
         Height = 15
         Caption = 'Extensions:'
       end
       object LblFFmpegPath: TLabel
         Left = 12
         Top = 336
-        Width = 427
+        Width = 73
         Height = 15
         Caption = 'FFmpeg path:'
       end

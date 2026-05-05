@@ -55,11 +55,11 @@ function WcxTest_CachedTempDir: string;
 type
   TWcxDeleteDirectoryProc = reference to procedure(const APath: string);
 
-{Test-only injection point for the directory-delete primitive used by
- InvalidateFrameCache. Defaults to TDirectory.Delete(_, True). Tests
- swap in a thrower to drive the exception path that the production
- try/except must swallow without crashing the host on DLL unload.
- PRODUCTION CODE MUST NOT CALL THESE.}
+  {Test-only injection point for the directory-delete primitive used by
+   InvalidateFrameCache. Defaults to TDirectory.Delete(_, True). Tests
+   swap in a thrower to drive the exception path that the production
+   try/except must swallow without crashing the host on DLL unload.
+   PRODUCTION CODE MUST NOT CALL THESE.}
 procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
 procedure WcxTest_ResetDeleteDirectoryProc;
 
@@ -194,13 +194,12 @@ end;
 procedure InvalidateFrameCacheLocked;
 begin
   if (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
-  try
-    GDeleteDirectoryProc(GCachedTempDir);
-  except
-    on E: Exception do
-      WcxLog(Format('InvalidateFrameCache: delete failed for %s: %s: %s',
-        [GCachedTempDir, E.ClassName, E.Message]));
-  end;
+    try
+      GDeleteDirectoryProc(GCachedTempDir);
+    except
+      on E: Exception do
+        WcxLog(Format('InvalidateFrameCache: delete failed for %s: %s: %s', [GCachedTempDir, E.ClassName, E.Message]));
+    end;
   GCachedVideoFile := '';
   GCachedTempDir := '';
   GCachedTempPaths := nil;
@@ -483,8 +482,7 @@ begin
       Exit;
     end;
 
-    H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount,
-      H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
+    H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
     H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
 
     if H.Settings.ShowFileSizes then
@@ -575,11 +573,9 @@ end;
  and a copy to ADestPath was attempted; AResult then carries E_SUCCESS or
  E_EWRITE. Returns False when no cached source was available, leaving the
  caller to fall through to the ffmpeg extraction path.}
-function TryCopyCachedFrame(const ATempPaths: TArray<string>; AIndex: Integer;
-  const ADestPath: string; out AResult: Integer): Boolean;
+function TryCopyCachedFrame(const ATempPaths: TArray<string>; AIndex: Integer; const ADestPath: string; out AResult: Integer): Boolean;
 begin
-  if (ATempPaths = nil) or (AIndex < 0) or (AIndex >= Length(ATempPaths))
-     or (ATempPaths[AIndex] = '') or (not TFile.Exists(ATempPaths[AIndex])) then
+  if (ATempPaths = nil) or (AIndex < 0) or (AIndex >= Length(ATempPaths)) or (ATempPaths[AIndex] = '') or (not TFile.Exists(ATempPaths[AIndex])) then
     Exit(False);
   Result := True;
   try
@@ -787,7 +783,11 @@ begin
   Settings := TWcxSettings.Create(GIniPath);
   try
     Settings.Load;
-    if ShowWcxSettingsDialog(Parent, Settings, procedure begin InvalidateFrameCache; end) then
+    if ShowWcxSettingsDialog(Parent, Settings,
+      procedure
+      begin
+        InvalidateFrameCache;
+      end) then
     begin
       Settings.Save;
       InvalidateFrameCache;

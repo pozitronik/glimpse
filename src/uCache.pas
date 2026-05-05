@@ -1,4 +1,4 @@
-{Disk cache for extracted video frames.
+﻿{Disk cache for extracted video frames.
  Stores frames as PNG files in a sharded directory structure, keyed by
  video file metadata and frame time offset. Provides LRU eviction.}
 unit uCache;
@@ -26,8 +26,7 @@ type
      entries live side-by-side — this flag disambiguates them.}
     UseKeyframes: Boolean;
 
-    class function Create(const AFilePath: string; ATimeOffset: Double;
-      AMaxSide: Integer; AUseKeyframes: Boolean): TFrameCacheKey; static;
+    class function Create(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): TFrameCacheKey; static;
   end;
 
   {Core cache contract: retrieve and store video frames by file identity
@@ -149,8 +148,7 @@ function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal)
 
 {TFrameCacheKey}
 
-class function TFrameCacheKey.Create(const AFilePath: string; ATimeOffset: Double;
-  AMaxSide: Integer; AUseKeyframes: Boolean): TFrameCacheKey;
+class function TFrameCacheKey.Create(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): TFrameCacheKey;
 begin
   Result.FilePath := AFilePath;
   Result.TimeOffset := ATimeOffset;
@@ -235,7 +233,7 @@ var
 begin
   {Put writes <CacheDir>\<guid>.tmp and renames it via MoveFileEx. If the
    process crashed between SaveToFile and the rename, the .tmp survived
-   forever -- there was no later sweep, and Evict only walked .png files.
+   forever - there was no later sweep, and Evict only walked .png files.
    Wipe leftover temp files at construction so a crash-prone environment
    does not accumulate disk-leaking shards.}
   if not TDirectory.Exists(FCacheDir) then

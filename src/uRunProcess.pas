@@ -86,7 +86,7 @@ begin
   CloseHandle(StdInWrite);
 
   {Parent-side read handles must not be inherited.
-   StdInRead is intentionally NOT cleared here -- it stays inheritable
+   StdInRead is intentionally NOT cleared here - it stays inheritable
    so CreateProcess passes it to the child via SI.hStdInput. The parent
    closes its own copy immediately after CreateProcess (line below the
    call), so the inheritable flag is harmless. Symmetric clearing was
@@ -145,7 +145,7 @@ begin
   Watcher := TThread.CreateAnonymousThread(
     procedure
     var
-      Handles: array[0..1] of THandle;
+      Handles: array [0 .. 1] of THandle;
       Count: DWORD;
     begin
       Handles[0] := ProcessHandleRef;
@@ -179,7 +179,7 @@ begin
   StdErrThread.Free;
 
   {Streams have closed, which means the child has exited (either naturally,
-   or because the watcher terminated it). Wait infinite -- the wall-clock
+   or because the watcher terminated it). Wait infinite - the wall-clock
    budget has already been enforced by the watcher.}
   WaitForSingleObject(PI.hProcess, INFINITE);
 

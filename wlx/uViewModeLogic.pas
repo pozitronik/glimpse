@@ -86,8 +86,8 @@ begin
   case AMode of
     vmSingle, vmScroll, vmFilmstrip:
       Result := 1;
-  else
-    Result := ATotalFrames;
+    else
+      Result := ATotalFrames;
   end;
 end;
 

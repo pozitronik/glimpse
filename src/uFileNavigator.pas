@@ -1,25 +1,23 @@
-{ Finds the next or previous supported file in the same directory,
-  and reports the current file's 1-based position among the supported
-  siblings. Sorted alphabetically, case-insensitive, with wrap-around
-  at boundaries for navigation. }
+{Finds the next or previous supported file in the same directory,
+ and reports the current file's 1-based position among the supported
+ siblings. Sorted alphabetically, case-insensitive, with wrap-around
+ at boundaries for navigation.}
 unit uFileNavigator;
 
 interface
 
-{ Returns the path of the adjacent supported file in the same directory
-  as ACurrentFile. ADelta = +1 for next, -1 for previous. AExtensions is
-  a comma-separated list (e.g. 'mp4,mkv,avi'). Returns empty string if
-  fewer than two supported files exist. Wraps around at first/last file. }
-function FindAdjacentFile(const ACurrentFile, AExtensions: string;
-  ADelta: Integer): string;
+{Returns the path of the adjacent supported file in the same directory
+ as ACurrentFile. ADelta = +1 for next, -1 for previous. AExtensions is
+ a comma-separated list (e.g. 'mp4,mkv,avi'). Returns empty string if
+ fewer than two supported files exist. Wraps around at first/last file.}
+function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
 
-{ Reports the 1-based position (AIndex) of ACurrentFile within the sorted
-  list of supported files in its directory, plus the total count (ATotal).
-  Returns True on success. Returns False with both out params at 0 when
-  the directory is unreadable, no supported files are present, or
-  ACurrentFile itself isn't in the sorted list. }
-function GetFilePosition(const ACurrentFile, AExtensions: string;
-  out AIndex, ATotal: Integer): Boolean;
+{Reports the 1-based position (AIndex) of ACurrentFile within the sorted
+ list of supported files in its directory, plus the total count (ATotal).
+ Returns True on success. Returns False with both out params at 0 when
+ the directory is unreadable, no supported files are present, or
+ ACurrentFile itself isn't in the sorted list.}
+function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
 
 implementation
 
@@ -27,17 +25,17 @@ uses
   System.SysUtils, System.IOUtils, System.Types, System.Generics.Collections,
   System.Generics.Defaults;
 
-{ Enumerates supported files in ADir and returns their base names sorted
-  case-insensitively. Shared by FindAdjacentFile and GetFilePosition so
-  both use the exact same ordering.
+{Enumerates supported files in ADir and returns their base names sorted
+ case-insensitively. Shared by FindAdjacentFile and GetFilePosition so
+ both use the exact same ordering.
 
-  TODO performance: every navigation key (PrevFile / NextFile / file
-  position read for the status bar) triggers a full TDirectory.GetFiles
-  + sort. For directories with thousands of video files the rescan can
-  show in keypress latency. A short-lived cache keyed by (Dir, mtime,
-  Extensions) would amortise the scan across consecutive presses
-  without risking stale listings. Acceptable for now since most folders
-  hold a few dozen videos at most. }
+ TODO performance: every navigation key (PrevFile / NextFile / file
+ position read for the status bar) triggers a full TDirectory.GetFiles
+ + sort. For directories with thousands of video files the rescan can
+ show in keypress latency. A short-lived cache keyed by (Dir, mtime,
+ Extensions) would amortise the scan across consecutive presses
+ without risking stale listings. Acceptable for now since most folders
+ hold a few dozen videos at most.}
 function CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
 var
   Ext: string;
@@ -72,7 +70,7 @@ begin
         if ExtSet.ContainsKey(Ext) then
           Sorted.Add(ExtractFileName(RawFiles[I]));
       end;
-      { Case-insensitive sort, same as TC's default alphabetical order }
+      {Case-insensitive sort, same as TC's default alphabetical order}
       Sorted.Sort(TComparer<string>.Construct(
         function(const A, B: string): Integer
         begin
@@ -97,8 +95,7 @@ begin
   Result := -1;
 end;
 
-function FindAdjacentFile(const ACurrentFile, AExtensions: string;
-  ADelta: Integer): string;
+function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
 var
   Dir, CurName: string;
   Files: TArray<string>;
@@ -113,14 +110,13 @@ begin
   CurIdx := IndexOfName(Files, CurName);
   if CurIdx < 0 then
     Exit;
-  { Double-mod keeps the result non-negative even for large negative deltas;
-    plain Delphi mod preserves the dividend's sign. }
+  {Double-mod keeps the result non-negative even for large negative deltas;
+   plain Delphi mod preserves the dividend's sign.}
   NewIdx := ((CurIdx + ADelta) mod Length(Files) + Length(Files)) mod Length(Files);
   Result := Dir + Files[NewIdx];
 end;
 
-function GetFilePosition(const ACurrentFile, AExtensions: string;
-  out AIndex, ATotal: Integer): Boolean;
+function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
 var
   Dir, CurName: string;
   Files: TArray<string>;

@@ -273,8 +273,7 @@ begin
   UpdateTimestampFontDisplay;
   UdCellGap.Position := ASettings.CellGap;
   UdBorder.Position := ASettings.CombinedBorder;
-  DecodeTimestampCornerControls(ASettings.ShowTimecode, ASettings.TimestampCorner,
-    ShowChecked, ComboIdx);
+  DecodeTimestampCornerControls(ASettings.ShowTimecode, ASettings.TimestampCorner, ShowChecked, ComboIdx);
   ChkShowTimecode.Checked := ShowChecked;
   CbxTimestampCorner.ItemIndex := ComboIdx;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
@@ -328,8 +327,7 @@ var
   Corner: TTimestampCorner;
 begin
   ASettings.SkipEdgesPercent := UdSkipEdges.Position;
-  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked,
-    UdMaxWorkers.Position);
+  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked, UdMaxWorkers.Position);
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
   ASettings.UseKeyframes := ChkUseKeyframes.Checked;
@@ -363,8 +361,7 @@ begin
   ASettings.TimestampFontSize := FTimestampFontSize;
   ASettings.CellGap := UdCellGap.Position;
   ASettings.CombinedBorder := UdBorder.Position;
-  EncodeTimestampCornerControls(ChkShowTimecode.Checked, CbxTimestampCorner.ItemIndex,
-    Show, Corner);
+  EncodeTimestampCornerControls(ChkShowTimecode.Checked, CbxTimestampCorner.ItemIndex, Show, Corner);
   ASettings.ShowTimecode := Show;
   ASettings.TimestampCorner := Corner;
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
@@ -413,21 +410,17 @@ end;
 
 procedure TSettingsForm.UpdateBannerFontDisplay;
 begin
-  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked,
-    FBannerFontName, FBannerFontSize);
+  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked, FBannerFontName, FBannerFontSize);
 end;
 
 procedure TSettingsForm.PickTimestampFont;
 begin
-  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize,
-    MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 end;
 
 procedure TSettingsForm.PickBannerFont;
 begin
-  PickBannerFontInto(FontDlg, EdtBannerFont, ChkBannerAutoSize,
-    FBannerFontName, FBannerFontSize,
-    MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
+  PickBannerFontInto(FontDlg, EdtBannerFont, ChkBannerAutoSize, FBannerFontName, FBannerFontSize, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
 end;
 
 procedure TSettingsForm.BtnTimestampFontClick(Sender: TObject);
@@ -549,8 +542,7 @@ var
 begin
   Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
 
-  if MessageBox(Handle, 'Delete all cached frames and probe metadata?',
-    'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
+  if MessageBox(Handle, 'Delete all cached frames and probe metadata?', 'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
 
   if TDirectory.Exists(Dir) then
@@ -742,9 +734,7 @@ end;
 
 procedure TSettingsForm.BtnHotkeyResetAllClick(Sender: TObject);
 begin
-  if MessageBox(Handle,
-    'Reset every hotkey to its default? Unsaved changes in this tab will be lost.',
-    'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
+  if MessageBox(Handle, 'Reset every hotkey to its default? Unsaved changes in this tab will be lost.', 'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
     Exit;
   FHotkeys.ResetToDefaults;
   PopulateHotkeyList;

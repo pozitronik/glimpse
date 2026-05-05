@@ -1,15 +1,15 @@
-{Synchronous frame re-extraction for the "Save at view resolution = OFF"
+﻿{Synchronous frame re-extraction for the "Save at view resolution = OFF"
  path. The save toggle promises native (or capped) frame resolution; the
  live-view cells are already at viewport-scaled size, so the save path
  needs to fetch a higher-resolution copy on demand. This unit owns that
  fetch:
 
  - Cache hits (a previous save at the same MaxSide cached the bitmap)
-   skip ffmpeg.
+ skip ffmpeg.
  - Cache misses run ffmpeg via the injected IFrameExtractor and write
-   the result back to the cache.
+ the result back to the cache.
  - Returned bitmaps are caller-owned; caller must Free each non-nil
-   entry after use.
+ entry after use.
 
  Pulled out of TPluginForm so the policy and the extraction loop both
  become unit-testable: TSaveResolutionExtractor accepts mock IFrameCache
@@ -69,8 +69,7 @@ type
      The returned array has length ACtx.CellCount; only entries listed in
      AIndices are populated (success → bitmap, failure → nil). Caller
      owns and must Free each non-nil bitmap.}
-    function ExtractAtTarget(const ACtx: TSaveResolutionContext;
-      ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
+    function ExtractAtTarget(const ACtx: TSaveResolutionContext; ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
 
     property OnProgress: TSaveResolutionProgress read FOnProgress write FOnProgress;
     property OnLabel: TSaveResolutionLabel read FOnLabel write FOnLabel;
@@ -80,22 +79,20 @@ type
     property OnPump: TSaveResolutionPump read FOnPump write FOnPump;
   end;
 
-{Pure decision: returns True when WithReExtract should re-fetch frames
- at save resolution rather than using the live cells as-is. Pulled out
- so the policy can be unit-tested without instantiating the extractor.
+  {Pure decision: returns True when WithReExtract should re-fetch frames
+   at save resolution rather than using the live cells as-is. Pulled out
+   so the policy can be unit-tested without instantiating the extractor.
 
- The four short-circuits, in order:
+   The four short-circuits, in order:
    - Toggle ON ("save at view resolution") → use live cells, never re-extract.
    - Empty index list → nothing for the action to consume; skip.
    - Target equals last extraction MaxSide → live cells already match.
    - Otherwise → re-extract.}
-function NeedsReExtractForSave(ASaveAtLiveResolution: Boolean;
-  AIndicesCount, ATargetMaxSide, ALastExtractionMaxSide: Integer): Boolean;
+function NeedsReExtractForSave(ASaveAtLiveResolution: Boolean; AIndicesCount, ATargetMaxSide, ALastExtractionMaxSide: Integer): Boolean;
 
 implementation
 
-function NeedsReExtractForSave(ASaveAtLiveResolution: Boolean;
-  AIndicesCount, ATargetMaxSide, ALastExtractionMaxSide: Integer): Boolean;
+function NeedsReExtractForSave(ASaveAtLiveResolution: Boolean; AIndicesCount, ATargetMaxSide, ALastExtractionMaxSide: Integer): Boolean;
 begin
   if ASaveAtLiveResolution then
     Exit(False);
@@ -115,8 +112,7 @@ begin
   FExtractor := AExtractor;
 end;
 
-function TSaveResolutionExtractor.ExtractAtTarget(const ACtx: TSaveResolutionContext;
-  ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
+function TSaveResolutionExtractor.ExtractAtTarget(const ACtx: TSaveResolutionContext; ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
 var
   Options: TExtractionOptions;
   I, Idx, Total: Integer;
@@ -124,15 +120,14 @@ var
   Bmp: TBitmap;
 begin
   SetLength(Result, ACtx.CellCount);
-  if (Length(ACtx.Offsets) = 0) or (Length(AIndices) = 0) or (ACtx.FileName = '')
-    or (FCache = nil) or (FExtractor = nil) then
+  if (Length(ACtx.Offsets) = 0) or (Length(AIndices) = 0) or (ACtx.FileName = '') or (FCache = nil) or (FExtractor = nil) then
     Exit;
 
   {Build options the same way the live StartExtraction does, with MaxSide
    forced to the save target rather than the viewport-derived live cap.
    The cache key picks up the new MaxSide automatically — re-extracted
    frames live in their own cache slots, so the live view is unaffected.}
-  Options := Default(TExtractionOptions);
+  Options := Default (TExtractionOptions);
   Options.UseBmpPipe := ACtx.UseBmpPipe;
   Options.MaxSide := ATargetMaxSide;
   Options.HwAccel := ACtx.HwAccel;
@@ -152,8 +147,7 @@ begin
       if (Idx < 0) or (Idx >= Length(ACtx.Offsets)) then
         Continue;
 
-      Key := TFrameCacheKey.Create(ACtx.FileName, ACtx.Offsets[Idx].TimeOffset,
-        ATargetMaxSide, ACtx.UseKeyframes);
+      Key := TFrameCacheKey.Create(ACtx.FileName, ACtx.Offsets[Idx].TimeOffset, ATargetMaxSide, ACtx.UseKeyframes);
       Bmp := FCache.TryGet(Key);
       if Bmp = nil then
       begin

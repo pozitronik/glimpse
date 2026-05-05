@@ -303,20 +303,19 @@ const
   FKEY_LPARAM_CTRL = 2;
   FKEY_LPARAM_ALT = 4;
 
-{True when AKey should flow through to the VCL/OS key pipeline unchanged
- instead of being swallowed by the plugin's key-interception. These are the
- keys the plugin cannot own without breaking system behaviour:
- - Tab: VCL focus cycling relies on the standard WM_KEYDOWN path.
- - Alt+F4: Windows delivers SC_CLOSE via the normal chain; hijacking it
+  {True when AKey should flow through to the VCL/OS key pipeline unchanged
+   instead of being swallowed by the plugin's key-interception. These are the
+   keys the plugin cannot own without breaking system behaviour:
+   - Tab: VCL focus cycling relies on the standard WM_KEYDOWN path.
+   - Alt+F4: Windows delivers SC_CLOSE via the normal chain; hijacking it
    would leave users unable to close the Lister window.
- - Bare modifier keys: meaningless alone, and we need TranslateMessage to
+   - Bare modifier keys: meaningless alone, and we need TranslateMessage to
    see their down/up transitions for subsequent key combinations to build
    correct WM_SYSKEYDOWN messages.}
 function ShouldLetKeyPassThrough(AKey: Word): Boolean;
 begin
   case AKey of
-    VK_TAB, VK_SHIFT, VK_CONTROL, VK_MENU,
-    VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
+    VK_TAB, VK_SHIFT, VK_CONTROL, VK_MENU, VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
       Exit(True);
   end;
   {Alt+F4 is a system close shortcut — let the OS deliver its SC_CLOSE.}
@@ -327,7 +326,7 @@ end;
 
 {Packs the live modifier-key state into a single LPARAM value so the
  repost target can rebuild TShiftState without another GetKeyState call.}
-function PackShiftIntoLParam: LPARAM;
+function PackShiftIntoLParam: lParam;
 begin
   Result := 0;
   if GetKeyState(VK_SHIFT) < 0 then
@@ -436,7 +435,7 @@ begin
    Heuristic: TC's WLX SDK does not expose a "quick view vs lister"
    flag, so we infer from the parent window style. If a future TC
    release changes its window hierarchy this detection would silently
-   misclassify -- there is no better signal at this layer, and the
+   misclassify - there is no better signal at this layer, and the
    misclassification only affects which user-facing defaults apply,
    not correctness of frame rendering.}
   FQuickViewMode := (GetWindowLong(AParentWin, GWL_STYLE) and WS_CHILD) <> 0;
@@ -464,7 +463,6 @@ begin
    guaranteeing TC's subclass is already in place. Our subclass then fires
    first and can intercept keys TC would otherwise consume (F2/F3).}
   PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
-
 
   uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
 
@@ -617,8 +615,7 @@ begin
        Icon sits to the right of the caption, matching the original ↕/↔
        glyph position.}
       FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
-    end
-    else if VM = vmFilmstrip then
+    end else if VM = vmFilmstrip then
     begin
       FModeButtons[VM].Images := FToolbarImages;
       FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_H;
@@ -980,9 +977,7 @@ begin
   if Length(FOffsets) > 0 then
   begin
     if FFrameView.ViewMode = vmSingle then
-      AddPanel(Format('%d / %d',
-        [FFrameView.CurrentFrameIndex + 1, Length(FOffsets)]),
-        SBP_FRAMEPOS_W)
+      AddPanel(Format('%d / %d', [FFrameView.CurrentFrameIndex + 1, Length(FOffsets)]), SBP_FRAMEPOS_W)
     else
       AddPanel(IntToStr(Length(FOffsets)), SBP_FRAMEPOS_W);
   end;
@@ -1184,7 +1179,6 @@ begin
   end;
 end;
 
-
 procedure TPluginForm.ApplyListerParams(AParams: Integer);
 var
   NewZM: TZoomMode;
@@ -1273,8 +1267,7 @@ var
 begin
   UseRandom := AForceRandom or FSettings.RandomExtraction;
   if (FVideoInfo.Duration > 0) and (FUpDown.Position > 0) then
-    FOffsets := BuildFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent,
-      FSettings.RandomPercent, UseRandom)
+    FOffsets := BuildFrameOffsets(FVideoInfo.Duration, FUpDown.Position, FSettings.SkipEdgesPercent, FSettings.RandomPercent, UseRandom)
   else
     SetLength(FOffsets, 0);
   FCurrentExtractionIsRandom := UseRandom and (Length(FOffsets) > 0);
@@ -1343,10 +1336,8 @@ var
   Frames: TArray<TBitmap>;
   Total, I: Integer;
 begin
-  Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height,
-    FSettings.ScaledExtraction, FSettings.MaxFrameSide);
-  if not NeedsReExtractForSave(FSettings.SaveAtLiveResolution, Length(AIndices),
-    Target, FLastExtractionMaxSide) then
+  Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height, FSettings.ScaledExtraction, FSettings.MaxFrameSide);
+  if not NeedsReExtractForSave(FSettings.SaveAtLiveResolution, Length(AIndices), Target, FLastExtractionMaxSide) then
   begin
     AAction;
     Exit;
@@ -1367,11 +1358,9 @@ begin
   Ctx.RespectAnamorphic := FSettings.RespectAnamorphic;
   Total := Length(AIndices);
 
-  Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache,
-    TFFmpegFrameExtractor.Create(FFFmpegPath));
+  Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache, TFFmpegFrameExtractor.Create(FFFmpegPath));
   try
-    Reextractor.OnLabel :=
-      procedure(const AText: string)
+    Reextractor.OnLabel := procedure(const AText: string)
       begin
         FProgressBar.Style := pbstNormal;
         FProgressBar.Min := 0;
@@ -1379,18 +1368,15 @@ begin
         FProgressBar.Position := 0;
         ShowProgress(AText);
       end;
-    Reextractor.OnProgress :=
-      procedure(ACurrent, ATotal: Integer)
+    Reextractor.OnProgress := procedure(ACurrent, ATotal: Integer)
       begin
         FProgressBar.Position := ACurrent;
       end;
-    Reextractor.OnPump :=
-      procedure
+    Reextractor.OnPump := procedure
       begin
         Application.ProcessMessages;
       end;
-    Reextractor.OnDone :=
-      procedure
+    Reextractor.OnDone := procedure
       begin
         HideProgress;
       end;
@@ -1524,8 +1510,7 @@ begin
   begin
     PostMessage(GetParent(Handle), WM_SYSKEYDOWN, AKey, Integer($20000000));
     PostMessage(GetParent(Handle), WM_SYSKEYUP, AKey, Integer($E0000000));
-  end else
-  begin
+  end else begin
     PostMessage(GetParent(Handle), WM_KEYDOWN, AKey, 0);
     PostMessage(GetParent(Handle), WM_KEYUP, AKey, 0);
   end;
@@ -1651,8 +1636,8 @@ begin
       SwitchOrCycleMode(Ord('4'));
     paViewModeSingle:
       SwitchOrCycleMode(Ord('5'));
-  else
-    Result := False;
+    else
+      Result := False;
   end;
 end;
 
@@ -1683,8 +1668,7 @@ begin
    to reclaim focus, etc.).}
   if (GetFocus = FEditFrameCount.Handle) and (Shift * [ssCtrl, ssAlt] = []) then
     case Key of
-      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9,
-      VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN:
+      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9, VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN:
         Exit;
     end;
 
@@ -2229,7 +2213,7 @@ begin
    delegates writes to the inner cache, so refresh DOES update the cache
    with fresh frames. TestBypassCachePutDelegates pins that contract.
    Comment is here so a quick read does not assume "bypass" means write-
-   skip too -- the decorator is read-only-bypass.}
+   skip too - the decorator is read-only-bypass.}
   StartExtraction(TBypassFrameCache.Create(FExtractCtrl.Cache));
 end;
 
@@ -2274,17 +2258,21 @@ begin
   {All of these can become false between the event that kicked the timer
    and the timer firing (user closed, disabled the feature, etc.), so
    re-check every precondition.}
-  if FSettings = nil then Exit;
-  if not FSettings.AutoRefreshOnViewportChange then Exit;
-  if not FSettings.ScaledExtraction then Exit;
-  if not FVideoInfo.IsValid then Exit;
-  if FFileName = '' then Exit;
-  if Length(FOffsets) = 0 then Exit;
+  if FSettings = nil then
+    Exit;
+  if not FSettings.AutoRefreshOnViewportChange then
+    Exit;
+  if not FSettings.ScaledExtraction then
+    Exit;
+  if not FVideoInfo.IsValid then
+    Exit;
+  if FFileName = '' then
+    Exit;
+  if Length(FOffsets) = 0 then
+    Exit;
 
   ViewportFrames := ViewportFrameCount(FFrameView.ViewMode, Length(FOffsets));
-  NewMaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight,
-    ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height,
-    FSettings.MinFrameSide, FSettings.MaxFrameSide);
+  NewMaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide);
 
   {Same size bucket as the live extraction (viewport only jittered within
    one SCALE_BUCKET, or the view mode didn't actually change the divisor).

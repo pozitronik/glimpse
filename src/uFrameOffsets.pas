@@ -1,4 +1,4 @@
-{Frame offset calculator for uniform time distribution.
+﻿{Frame offset calculator for uniform time distribution.
  Pure computation: no I/O, no dependencies on UI or ffmpeg.}
 unit uFrameOffsets;
 
@@ -26,10 +26,10 @@ function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdg
  Each frame i lives in slice i (effective range divided into N equal
  slices); the chosen time is the slice midpoint plus a random jitter
  capped by the randomness window:
-   slice_len    = effective_range / N
-   midpoint_i   = effective_start + (i + 0.5) * slice_len
-   window_half  = slice_len / 2 * (P / 100)
-   t_i          = midpoint_i + Random(-window_half .. +window_half)
+ slice_len    = effective_range / N
+ midpoint_i   = effective_start + (i + 0.5) * slice_len
+ window_half  = slice_len / 2 * (P / 100)
+ t_i          = midpoint_i + Random(-window_half .. +window_half)
  Frame ordering is preserved by construction (P clamped to 1..100 keeps
  t_i strictly inside slice i, never crossing into a neighbour). Pulls
  randomness from the global Random — caller is responsible for calling
@@ -38,7 +38,7 @@ function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdg
  @param AFrameCount Number of frames to extract (must be >= 1)
  @param ASkipEdgesPercent Same semantics as CalculateFrameOffsets
  @param ARandomnessPercent Jitter strength 1..100 (clamped). At 1, the
-   window is 1% of the slice; at 100, the entire slice is in play.
+ window is 1% of the slice; at 100, the entire slice is in play.
  @raises EArgumentException for invalid inputs.}
 function CalculateRandomFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomnessPercent: Integer): TFrameOffsetArray;
 
@@ -116,9 +116,7 @@ begin
   begin
     EffStart := ADuration * ASkipEdgesPercent / 100.0;
     EffEnd := ADuration * (100 - ASkipEdgesPercent) / 100.0;
-  end
-  else
-  begin
+  end else begin
     EffStart := 0;
     EffEnd := ADuration;
   end;

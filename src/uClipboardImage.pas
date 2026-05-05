@@ -1,14 +1,14 @@
-{Clipboard publisher for alpha-aware bitmaps.
+﻿{Clipboard publisher for alpha-aware bitmaps.
 
  For pf32bit sources we publish two formats side-by-side:
  - CF_DIBV5 carries the full ARGB pixels for paste targets that honour
-   alpha (Paint.NET, GIMP, Krita, Affinity Photo, modern browsers).
+ alpha (Paint.NET, GIMP, Krita, Affinity Photo, modern browsers).
  - CF_DIB carries an opaque copy with alpha already composited onto the
-   caller-provided background colour, so legacy targets (Paint, Word,
-   older imaging tools) that only understand CF_DIB receive a
-   ready-to-paste image instead of Windows' default alpha-strip
-   synthesis (which renders semi-transparent pixels as broken/black in
-   many such targets).
+ caller-provided background colour, so legacy targets (Paint, Word,
+ older imaging tools) that only understand CF_DIB receive a
+ ready-to-paste image instead of Windows' default alpha-strip
+ synthesis (which renders semi-transparent pixels as broken/black in
+ many such targets).
 
  An app that prioritises CF_DIB over CF_DIBV5 still loses the alpha
  channel — this is unavoidable, but those apps would not have honoured
@@ -31,19 +31,19 @@ type
    exercised without owning the global clipboard.}
   TClipboardOpenAction = reference to procedure;
 
-{Pushes ABitmap to the system clipboard.
+  {Pushes ABitmap to the system clipboard.
 
- When ABitmap is pf32bit the helper publishes both CF_DIBV5 (full
- alpha) and CF_DIB (alpha composited onto ABackground) so paste works
- in both modern and legacy targets. ABackground is the colour
- semi-transparent pixels are flattened against; for our use it should
- match the configured background of the rendered combined image so the
- opaque copy looks identical to a BackgroundAlpha=255 render.
+   When ABitmap is pf32bit the helper publishes both CF_DIBV5 (full
+   alpha) and CF_DIB (alpha composited onto ABackground) so paste works
+   in both modern and legacy targets. ABackground is the colour
+   semi-transparent pixels are flattened against; for our use it should
+   match the configured background of the rendered combined image so the
+   opaque copy looks identical to a BackgroundAlpha=255 render.
 
- When ABitmap is not pf32bit the call falls through to
- Vcl.Clipbrd.Clipboard.Assign and ABackground is ignored.
+   When ABitmap is not pf32bit the call falls through to
+   Vcl.Clipbrd.Clipboard.Assign and ABackground is ignored.
 
- Returns True on success.}
+   Returns True on success.}
 function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap; ABackground: TColor = TColor($000000)): Boolean;
 
 {Retries the clipboard open up to 20 times with 10 ms sleeps when it
@@ -68,7 +68,7 @@ const
    LCS_sRGB is the 4-char-code 'sRGB' in big-endian; LCS_GM_GRAPHICS is
    the GamutMatching graphics rendering intent — both standard for screen
    bitmaps.}
-  LCS_sRGB        = $73524742;
+  LCS_sRGB = $73524742;
   LCS_GM_GRAPHICS = 2;
 
 function TryClipboardOpenWithRetry(const AOpenAction: TClipboardOpenAction): Boolean;
@@ -99,7 +99,10 @@ end;
 function TryClipboardOpenWithRetry: Boolean;
 begin
   Result := TryClipboardOpenWithRetry(
-    procedure begin Clipboard.Open; end);
+    procedure
+    begin
+      Clipboard.Open;
+    end);
 end;
 
 {Builds an HGLOBAL holding a CF_DIBV5 buffer (BITMAPV5HEADER + ARGB
@@ -222,19 +225,26 @@ begin
       ScanSrc := PByte(ASrc.ScanLine[H - 1 - Y]);
       for X := 0 to W - 1 do
       begin
-        SrcB := ScanSrc^; Inc(ScanSrc);
-        SrcG := ScanSrc^; Inc(ScanSrc);
-        SrcR := ScanSrc^; Inc(ScanSrc);
-        SrcA := ScanSrc^; Inc(ScanSrc);
+        SrcB := ScanSrc^;
+        Inc(ScanSrc);
+        SrcG := ScanSrc^;
+        Inc(ScanSrc);
+        SrcR := ScanSrc^;
+        Inc(ScanSrc);
+        SrcA := ScanSrc^;
+        Inc(ScanSrc);
         {out = (src*A + bg*(255-A) + 127) div 255 — rounded straight-alpha
          composite. For our specific bitmaps the gap pixels carry RGB
          equal to ABackground, so the result there reduces to bg
          regardless of A; frame pixels (A=255) reduce to src. This makes
          the flattened image visually identical to a BackgroundAlpha=255
          render of the same content.}
-        PixelDest^ := Byte((SrcB * SrcA + BgB * (255 - SrcA) + 127) div 255); Inc(PixelDest);
-        PixelDest^ := Byte((SrcG * SrcA + BgG * (255 - SrcA) + 127) div 255); Inc(PixelDest);
-        PixelDest^ := Byte((SrcR * SrcA + BgR * (255 - SrcA) + 127) div 255); Inc(PixelDest);
+        PixelDest^ := Byte((SrcB * SrcA + BgB * (255 - SrcA) + 127) div 255);
+        Inc(PixelDest);
+        PixelDest^ := Byte((SrcG * SrcA + BgG * (255 - SrcA) + 127) div 255);
+        Inc(PixelDest);
+        PixelDest^ := Byte((SrcR * SrcA + BgR * (255 - SrcA) + 127) div 255);
+        Inc(PixelDest);
       end;
       {Padding bytes (if any) are left uninitialised; CF_DIB consumers
        only read the first W*3 bytes of each row.}
@@ -277,12 +287,11 @@ begin
     Inc(PixelBits, Header^.biSize);
     ScreenDC := GetDC(0);
     if ScreenDC <> 0 then
-    try
-      Result := CreateDIBitmap(ScreenDC, Header^, CBM_INIT, PixelBits,
-        PBitmapInfo(Header)^, DIB_RGB_COLORS);
-    finally
-      ReleaseDC(0, ScreenDC);
-    end;
+      try
+        Result := CreateDIBitmap(ScreenDC, Header^, CBM_INIT, PixelBits, PBitmapInfo(Header)^, DIB_RGB_COLORS);
+      finally
+        ReleaseDC(0, ScreenDC);
+      end;
   finally
     GlobalUnlock(Mem);
     {The DIB buffer was a temporary input to CreateDIBitmap; the HBITMAP

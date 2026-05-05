@@ -1,4 +1,4 @@
-{Bitmap saving to PNG and JPEG files.
+﻿{Bitmap saving to PNG and JPEG files.
  Near-pure: depends on VCL imaging classes but has no form or settings dependency.}
 unit uBitmapSaver;
 
@@ -40,8 +40,7 @@ uses
  line — no per-pixel TColor packing or property dispatch.
  TestSavePNGAlphaRoundTrip pins both the alpha and the colour ordering;
  a B/R swap regression there would scream "R<->B swap would land here".}
-procedure SaveAlphaBitmapAsPng(ABitmap: TBitmap; const APath: string;
-  ACompressionLevel: Integer);
+procedure SaveAlphaBitmapAsPng(ABitmap: TBitmap; const APath: string; ACompressionLevel: Integer);
 const
   COLOR_RGBALPHA = 6;
   BGR_BYTES_PER_PIXEL = 3;
@@ -57,7 +56,7 @@ begin
     for Y := 0 to ABitmap.Height - 1 do
     begin
       Src := PByte(ABitmap.ScanLine[Y]);
-      Dst := PByte(Png.Scanline[Y]);
+      Dst := PByte(Png.ScanLine[Y]);
       AlphaLine := Png.AlphaScanline[Y];
       for X := 0 to ABitmap.Width - 1 do
       begin

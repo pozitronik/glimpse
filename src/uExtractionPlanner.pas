@@ -213,8 +213,7 @@ begin
    enabled both warrant a re-extract. Slider movement while disabled
    does not, since the slider only matters when active or when the user
    invokes Shuffle on demand.}
-  if (ASettings.RandomExtraction <> AOld.RandomExtraction)
-    or (ASettings.RandomExtraction and (ASettings.RandomPercent <> AOld.RandomPercent)) then
+  if (ASettings.RandomExtraction <> AOld.RandomExtraction) or (ASettings.RandomExtraction and (ASettings.RandomPercent <> AOld.RandomPercent)) then
     Include(Result, scRandomExtractionChanged);
 
   if ASettings.CacheRandomFrames <> AOld.CacheRandomFrames then

@@ -1,4 +1,4 @@
-{Plugin settings manager backed by an INI file.
+﻿{Plugin settings manager backed by an INI file.
  Handles defaults, validation, type-safe access, and persistence.}
 unit uSettings;
 

@@ -10,12 +10,12 @@ uses
 const
   SHARD_PREFIX_LEN = 2; {directory sharding depth: first N chars of the hash key}
 
-{Returns the invariant format settings used for deterministic key strings
- (decimal separator '.', no thousand grouping). Callers must treat the
- result as read-only; mutating any returned copy has no effect on the
- next call. Earlier this was a public mutable global, so any unit could
- silently rewrite the decimal separator and break key generation
- process-wide.}
+  {Returns the invariant format settings used for deterministic key strings
+   (decimal separator '.', no thousand grouping). Callers must treat the
+   result as read-only; mutating any returned copy has no effect on the
+   next call. Earlier this was a public mutable global, so any unit could
+   silently rewrite the decimal separator and break key generation
+   process-wide.}
 function InvFmt: TFormatSettings;
 
 {Computes an MD5 hash of AKeyString, returned as a lowercase hex string.}

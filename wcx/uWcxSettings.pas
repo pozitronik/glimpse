@@ -1,4 +1,4 @@
-{WCX plugin settings backed by an INI file.
+﻿{WCX plugin settings backed by an INI file.
  Separate from WLX settings to allow independent configuration.}
 unit uWcxSettings;
 

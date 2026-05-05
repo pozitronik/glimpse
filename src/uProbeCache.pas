@@ -46,8 +46,7 @@ uses
 const
   MOVEFILE_REPLACE_EXISTING = 1;
 
-function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall;
-  external 'kernel32.dll' name 'MoveFileExW';
+function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
 
 function DefaultProbeCacheDir: string;
 begin

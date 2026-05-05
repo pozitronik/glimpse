@@ -40,18 +40,14 @@ type
     {Must be called before ShowModal. Seeds the dialog with the current
      chord list for AAction; ABindings is used read-only for conflict
      detection against other actions.}
-    procedure Initialize(AAction: uHotkeys.TPluginAction;
-      const ABindings: uHotkeys.THotkeyBindings);
+    procedure Initialize(AAction: uHotkeys.TPluginAction; const ABindings: uHotkeys.THotkeyBindings);
     property Chords: uHotkeys.THotkeyChordArray read FChords;
   end;
 
-{Runs the shortcut editor modally. Returns True when the user pressed OK;
- AResult then carries the edited chord list. Returns False on Cancel /
- Escape (AResult is left untouched).}
-function EditShortcuts(AOwner: TWinControl;
-  AAction: uHotkeys.TPluginAction;
-  const ABindings: uHotkeys.THotkeyBindings;
-  out AResult: uHotkeys.THotkeyChordArray): Boolean;
+  {Runs the shortcut editor modally. Returns True when the user pressed OK;
+   AResult then carries the edited chord list. Returns False on Cancel /
+   Escape (AResult is left untouched).}
+function EditShortcuts(AOwner: TWinControl; AAction: uHotkeys.TPluginAction; const ABindings: uHotkeys.THotkeyBindings; out AResult: uHotkeys.THotkeyChordArray): Boolean;
 
 implementation
 
@@ -61,8 +57,7 @@ uses
   System.Math,
   Vcl.Dialogs;
 
-procedure TShortcutEditorForm.Initialize(AAction: uHotkeys.TPluginAction;
-  const ABindings: uHotkeys.THotkeyBindings);
+procedure TShortcutEditorForm.Initialize(AAction: uHotkeys.TPluginAction; const ABindings: uHotkeys.THotkeyBindings);
 begin
   FAction := AAction;
   FBindings := ABindings;
@@ -111,10 +106,7 @@ begin
   Conflict := FBindings.FindActionByChord(AChord, FAction);
   if Conflict <> uHotkeys.paNone then
   begin
-    if MessageBox(Handle,
-      PChar(Format('This shortcut is already assigned to "%s". Reassign?',
-        [uHotkeys.ActionCaption(Conflict)])),
-      'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
+    if MessageBox(Handle, PChar(Format('This shortcut is already assigned to "%s". Reassign?', [uHotkeys.ActionCaption(Conflict)])), 'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
       Exit(False);
     {The caller (settings dialog) will reconcile by removing the chord
      from the conflicting action after we return OK.}
@@ -135,12 +127,11 @@ begin
    be captured and bound like any other key; users cancel the dialog via
    the Cancel button or the window-frame close.}
   case Key of
-    VK_SHIFT, VK_CONTROL, VK_MENU,
-    VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
-    begin
-      Key := 0;
-      Exit;
-    end;
+    VK_SHIFT, VK_CONTROL, VK_MENU, VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
+      begin
+        Key := 0;
+        Exit;
+      end;
   end;
 
   Chord := uHotkeys.THotkeyChord.Make(Key, Shift);
@@ -165,10 +156,7 @@ begin
   UpdateButtonStates;
 end;
 
-function EditShortcuts(AOwner: TWinControl;
-  AAction: uHotkeys.TPluginAction;
-  const ABindings: uHotkeys.THotkeyBindings;
-  out AResult: uHotkeys.THotkeyChordArray): Boolean;
+function EditShortcuts(AOwner: TWinControl; AAction: uHotkeys.TPluginAction; const ABindings: uHotkeys.THotkeyBindings; out AResult: uHotkeys.THotkeyChordArray): Boolean;
 var
   Dlg: TShortcutEditorForm;
 begin

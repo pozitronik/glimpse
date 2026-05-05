@@ -1,4 +1,4 @@
-{Pure formatting helpers shared by the WLX and WCX settings dialogs.
+﻿{Pure formatting helpers shared by the WLX and WCX settings dialogs.
  No VCL dependency, so these run under unit tests without a UI. The
  dialogs keep the wiring (control reads/writes, dialog plumbing); only
  the deterministic label-formatting and encode/decode policy lives here.}
@@ -44,21 +44,18 @@ function FFmpegInfoLabelText(AState: TFFmpegProbeState; const APath, AVersion: s
  plus the current default corner. The combo no longer carries tcNone;
  its items 0..3 map to tcTopLeft..tcBottomRight. This single helper
  prevents the two dialogs from drifting on the migration rule.}
-procedure DecodeTimestampCornerControls(AShow: Boolean; ACorner: TTimestampCorner;
-  out AShowChecked: Boolean; out AComboIndex: Integer);
+procedure DecodeTimestampCornerControls(AShow: Boolean; ACorner: TTimestampCorner; out AShowChecked: Boolean; out AComboIndex: Integer);
 
 {Encodes the checkbox state + combo index back into (Show, Corner) for
  saving. AComboIndex is assumed to be in range 0..3 (four real corners);
  Show passes through directly.}
-procedure EncodeTimestampCornerControls(AShowChecked: Boolean; AComboIndex: Integer;
-  out AShow: Boolean; out ACorner: TTimestampCorner);
+procedure EncodeTimestampCornerControls(AShowChecked: Boolean; AComboIndex: Integer; out AShow: Boolean; out ACorner: TTimestampCorner);
 
 {Decodes a stored MaxWorkers value into the (Auto checkbox, UpDown position)
  pair the dialogs display. MaxWorkers = 0 is the auto sentinel — checkbox
  checked, UpDown falls back to 1 so the explicit-mode field doesn't flash
  "0" when the user toggles auto off.}
-procedure DecodeMaxWorkersControls(AMaxWorkers: Integer;
-  out AAutoChecked: Boolean; out AUdPosition: Integer);
+procedure DecodeMaxWorkersControls(AMaxWorkers: Integer; out AAutoChecked: Boolean; out AUdPosition: Integer);
 
 {Encodes the Auto checkbox + UpDown position back into MaxWorkers. Auto
  always maps to 0 regardless of the UpDown position (the UpDown value is
@@ -108,8 +105,7 @@ begin
   end;
 end;
 
-procedure DecodeTimestampCornerControls(AShow: Boolean; ACorner: TTimestampCorner;
-  out AShowChecked: Boolean; out AComboIndex: Integer);
+procedure DecodeTimestampCornerControls(AShow: Boolean; ACorner: TTimestampCorner; out AShowChecked: Boolean; out AComboIndex: Integer);
 begin
   if ACorner = tcNone then
   begin
@@ -117,23 +113,19 @@ begin
      owns visibility; corner falls back to the documented default.}
     AShowChecked := False;
     AComboIndex := Ord(DEF_TIMESTAMP_CORNER) - 1;
-  end
-  else
-  begin
+  end else begin
     AShowChecked := AShow;
     AComboIndex := Ord(ACorner) - 1;
   end;
 end;
 
-procedure EncodeTimestampCornerControls(AShowChecked: Boolean; AComboIndex: Integer;
-  out AShow: Boolean; out ACorner: TTimestampCorner);
+procedure EncodeTimestampCornerControls(AShowChecked: Boolean; AComboIndex: Integer; out AShow: Boolean; out ACorner: TTimestampCorner);
 begin
   AShow := AShowChecked;
   ACorner := TTimestampCorner(AComboIndex + 1);
 end;
 
-procedure DecodeMaxWorkersControls(AMaxWorkers: Integer;
-  out AAutoChecked: Boolean; out AUdPosition: Integer);
+procedure DecodeMaxWorkersControls(AMaxWorkers: Integer; out AAutoChecked: Boolean; out AUdPosition: Integer);
 begin
   AAutoChecked := AMaxWorkers = 0;
   if AMaxWorkers > 0 then

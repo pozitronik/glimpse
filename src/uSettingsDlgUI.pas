@@ -1,4 +1,4 @@
-{VCL-dependent helpers shared by the WLX and WCX settings dialogs.
+﻿{VCL-dependent helpers shared by the WLX and WCX settings dialogs.
 
  Each dialog historically carried byte-identical copies of these
  procedures: a colour-picker bound to a TPanel.Color, two font-edit
@@ -35,19 +35,16 @@ procedure RefreshBannerFontEdit(AEdit: TEdit; AAutoSize: Boolean; const AFontNam
 {Drives AFontDialog seeded with the current font name and size; writes
  the picked values back through the var parameters and refreshes AEdit.
  Picked size is clamped to [AMinSize, AMaxSize] before storage.}
-procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit;
-  var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
+procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
 
 {Same as PickTimestampFontInto but for the banner font, with two extra
  wrinkles:
-  - When AChkAutoSize is checked at entry, the dialog seeds the size
-    field with ADefaultSize so the user sees a sensible starting value
-    instead of whatever stale FBannerFontSize happens to hold.
-  - Picking any size signals intent to drop auto-sizing, so the auto
-    checkbox is unchecked on accept.}
-procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit;
-  AChkAutoSize: TCheckBox; var AFontName: string; var AFontSize: Integer;
-  AMinSize, AMaxSize, ADefaultSize: Integer);
+ - When AChkAutoSize is checked at entry, the dialog seeds the size
+ field with ADefaultSize so the user sees a sensible starting value
+ instead of whatever stale FBannerFontSize happens to hold.
+ - Picking any size signals intent to drop auto-sizing, so the auto
+ checkbox is unchecked on accept.}
+procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; AChkAutoSize: TCheckBox; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
 
 implementation
 
@@ -82,8 +79,7 @@ begin
   Result := AValue;
 end;
 
-procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit;
-  var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
+procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
 begin
   AFontDialog.Font.Name := AFontName;
   AFontDialog.Font.Size := AFontSize;
@@ -95,9 +91,7 @@ begin
   end;
 end;
 
-procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit;
-  AChkAutoSize: TCheckBox; var AFontName: string; var AFontSize: Integer;
-  AMinSize, AMaxSize, ADefaultSize: Integer);
+procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; AChkAutoSize: TCheckBox; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
 begin
   AFontDialog.Font.Name := AFontName;
   if AChkAutoSize.Checked then

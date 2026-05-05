@@ -1,4 +1,4 @@
-{Renders multiple frame bitmaps into a single combined grid image.
+﻿{Renders multiple frame bitmaps into a single combined grid image.
  Pure rendering: no I/O, no settings dependency.}
 unit uCombinedImage;
 
@@ -106,9 +106,7 @@ function AttachBanner(ASrc: TBitmap; const ALines: TArray<string>; const AStyle:
  The legacy shadow-only rendering (BackAlpha = 0) is handled by
  DrawLegacyTimecodeOverlay — its geometry (4px margin, non-centered
  text) diverges from the live view.}
-procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect;
-  const AText: string; const AStyle: TTimestampStyle;
-  ABgScratch: TBitmap = nil; ATextScratch: TBitmap = nil);
+procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect; const AText: string; const AStyle: TTimestampStyle; ABgScratch: TBitmap = nil; ATextScratch: TBitmap = nil);
 
 {Draws the "legacy-path" timecode overlay (black 1px drop shadow plus
  coloured text inset by 4px from the cell edge) into ACanvas using AStyle.
@@ -123,8 +121,7 @@ procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect;
  opacity blits the shadow+text onto an offscreen bitmap and AlphaBlends
  the result back, preserving underlying pixel content that shadows would
  otherwise overwrite.}
-procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect;
-  const AText: string; const AStyle: TTimestampStyle);
+procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect; const AText: string; const AStyle: TTimestampStyle);
 
 {Renders the per-cell timecode overlay for a combined-image cell. Picks
  between the modern path (flush-to-corner rect with background block, when
@@ -133,8 +130,7 @@ procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect;
  renders stay in lockstep.
  No-op when AStyle.Show is False or AStyle.Corner is tcNone — callers
  don't have to repeat that gating themselves.}
-procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect;
-  ATimeOffset: Double; const AStyle: TTimestampStyle);
+procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect; ATimeOffset: Double; const AStyle: TTimestampStyle);
 
 {Returns the historical defaults for the grid layout (auto columns, no gap,
  no border, black background). Callers override individual fields as needed.}
@@ -152,14 +148,13 @@ function GridBackgroundQuad(const AGrid: TCombinedGridStyle): TRGBQuad;
  only in how they compute the cell rects.
 
  Defensive guards:
-  - AFrames[I] = nil -> the corresponding rect stays at ABg (frame slot
-    not yet populated, e.g. partial extraction).
-  - Length(AFrames) > Length(ACellRects) -> trailing frames skipped.
-  - Rect coordinates outside ASource bounds -> clipped per-pixel.
+ - AFrames[I] = nil -> the corresponding rect stays at ABg (frame slot
+ not yet populated, e.g. partial extraction).
+ - Length(AFrames) > Length(ACellRects) -> trailing frames skipped.
+ - Rect coordinates outside ASource bounds -> clipped per-pixel.
 
  Caller owns the returned bitmap.}
-function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad;
-  const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
+function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad; const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
 
 {Returns the historical defaults for the timestamp overlay (hidden, bottom-left,
  Consolas 9pt, black legacy-shadow background, white text). Callers override
@@ -172,8 +167,7 @@ function DefaultTimestampStyle: TTimestampStyle;
  @param AGrid Grid geometry (columns, gap, border, background)
  @param ATimestamp Per-cell timecode overlay style; ignored when Show=False
  @return Combined bitmap, or nil if AFrames is empty. Caller owns result.}
-function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
-  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
+function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 
 {Renders frames into a smart-grid combined image. Cells per row come from
  ARowCounts (sum must equal Length(AFrames)); within each row cells are
@@ -188,9 +182,7 @@ function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFr
  @param AGrid Border, gap, and background colour/alpha
  @param ATimestamp Per-cell timecode overlay style
  @return Combined bitmap. Caller owns result.}
-function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
-  const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer;
-  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
+function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer; const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 
 implementation
 
@@ -265,10 +257,8 @@ begin
     {Anamorphic: storage and display dimensions diverge. Show both so the
      banner explains why the saved combined image is wider than the raw
      "WxH" reported by mediainfo et al.}
-    if (AInfo.DisplayWidth > 0) and (AInfo.DisplayHeight > 0) and
-      ((AInfo.DisplayWidth <> AInfo.Width) or (AInfo.DisplayHeight <> AInfo.Height)) then
-      Line2 := Line2 + Format('%dx%d -> %dx%d',
-        [AInfo.Width, AInfo.Height, AInfo.DisplayWidth, AInfo.DisplayHeight])
+    if (AInfo.DisplayWidth > 0) and (AInfo.DisplayHeight > 0) and ((AInfo.DisplayWidth <> AInfo.Width) or (AInfo.DisplayHeight <> AInfo.Height)) then
+      Line2 := Line2 + Format('%dx%d -> %dx%d', [AInfo.Width, AInfo.Height, AInfo.DisplayWidth, AInfo.DisplayHeight])
     else
       Line2 := Line2 + Format('%dx%d', [AInfo.Width, AInfo.Height]);
   end;
@@ -540,9 +530,7 @@ begin
   begin
     SrcY := 0;
     BannerY := ASrc.Height;
-  end
-  else
-  begin
+  end else begin
     BannerY := 0;
     SrcY := BannerH;
   end;
@@ -573,9 +561,7 @@ begin
     Result.Canvas.Draw(0, SrcY, ASrc);
 end;
 
-procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect;
-  const AText: string; const AStyle: TTimestampStyle;
-  ABgScratch: TBitmap; ATextScratch: TBitmap);
+procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect; const AText: string; const AStyle: TTimestampStyle; ABgScratch: TBitmap; ATextScratch: TBitmap);
 var
   BF: TBlendFunction;
   BgBmp, TextBmp: TBitmap;
@@ -607,8 +593,7 @@ begin
       BF.BlendFlags := 0;
       BF.SourceConstantAlpha := AStyle.BackAlpha;
       BF.AlphaFormat := 0;
-      Winapi.Windows.AlphaBlend(ACanvas.Handle, ARect.Left, ARect.Top,
-        ARect.Width, ARect.Height, BgBmp.Canvas.Handle, 0, 0, 1, 1, BF);
+      Winapi.Windows.AlphaBlend(ACanvas.Handle, ARect.Left, ARect.Top, ARect.Width, ARect.Height, BgBmp.Canvas.Handle, 0, 0, 1, 1, BF);
     finally
       if OwnsBg then
         BgBmp.Free;
@@ -628,8 +613,7 @@ begin
     ACanvas.Font.Color := AStyle.TextColor;
     ACanvas.Brush.Style := bsClear;
     DrawR := ARect;
-    DrawText(ACanvas.Handle, PChar(AText), -1, DrawR,
-      DT_CENTER or DT_VCENTER or DT_SINGLELINE);
+    DrawText(ACanvas.Handle, PChar(AText), -1, DrawR, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
     Exit;
   end;
 
@@ -645,31 +629,26 @@ begin
     TextBmp.PixelFormat := pf24bit;
     if (TextBmp.Width < ARect.Width) or (TextBmp.Height < ARect.Height) then
       TextBmp.SetSize(Max(ARect.Width, TextBmp.Width), Max(ARect.Height, TextBmp.Height));
-    BitBlt(TextBmp.Canvas.Handle, 0, 0, ARect.Width, ARect.Height,
-      ACanvas.Handle, ARect.Left, ARect.Top, SRCCOPY);
+    BitBlt(TextBmp.Canvas.Handle, 0, 0, ARect.Width, ARect.Height, ACanvas.Handle, ARect.Left, ARect.Top, SRCCOPY);
     TextBmp.Canvas.Font.Name := AStyle.FontName;
     TextBmp.Canvas.Font.Size := AStyle.FontSize;
     TextBmp.Canvas.Font.Style := AStyle.FontStyles;
     TextBmp.Canvas.Font.Color := AStyle.TextColor;
     TextBmp.Canvas.Brush.Style := bsClear;
     LocalR := Rect(0, 0, ARect.Width, ARect.Height);
-    DrawText(TextBmp.Canvas.Handle, PChar(AText), -1, LocalR,
-      DT_CENTER or DT_VCENTER or DT_SINGLELINE);
+    DrawText(TextBmp.Canvas.Handle, PChar(AText), -1, LocalR, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
     BF.BlendOp := AC_SRC_OVER;
     BF.BlendFlags := 0;
     BF.SourceConstantAlpha := AStyle.TextAlpha;
     BF.AlphaFormat := 0;
-    Winapi.Windows.AlphaBlend(ACanvas.Handle, ARect.Left, ARect.Top,
-      ARect.Width, ARect.Height, TextBmp.Canvas.Handle, 0, 0,
-      ARect.Width, ARect.Height, BF);
+    Winapi.Windows.AlphaBlend(ACanvas.Handle, ARect.Left, ARect.Top, ARect.Width, ARect.Height, TextBmp.Canvas.Handle, 0, 0, ARect.Width, ARect.Height, BF);
   finally
     if OwnsText then
       TextBmp.Free;
   end;
 end;
 
-procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect;
-  const AText: string; const AStyle: TTimestampStyle);
+procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect; const AText: string; const AStyle: TTimestampStyle);
 const
   TC_MARGIN = 4; {inset from the cell edge — historical WLX 1.0.x value}
 var
@@ -731,16 +710,19 @@ begin
    text region, then AlphaBlend the result back. R spans one extra pixel
    on the bottom-right to include the shadow offset, clipped to the cell.}
   R := Rect(TX, TY, TX + TW + 2, TY + TH + 2);
-  if R.Left < X then R.Left := X;
-  if R.Top < Y then R.Top := Y;
-  if R.Right > X + CellW then R.Right := X + CellW;
-  if R.Bottom > Y + CellH then R.Bottom := Y + CellH;
+  if R.Left < X then
+    R.Left := X;
+  if R.Top < Y then
+    R.Top := Y;
+  if R.Right > X + CellW then
+    R.Right := X + CellW;
+  if R.Bottom > Y + CellH then
+    R.Bottom := Y + CellH;
   TextBmp := TBitmap.Create;
   try
     TextBmp.PixelFormat := pf24bit;
     TextBmp.SetSize(R.Width, R.Height);
-    BitBlt(TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height,
-      ACanvas.Handle, R.Left, R.Top, SRCCOPY);
+    BitBlt(TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height, ACanvas.Handle, R.Left, R.Top, SRCCOPY);
     TextBmp.Canvas.Font.Name := AStyle.FontName;
     TextBmp.Canvas.Font.Size := AStyle.FontSize;
     TextBmp.Canvas.Font.Style := AStyle.FontStyles;
@@ -753,16 +735,13 @@ begin
     BF.BlendFlags := 0;
     BF.SourceConstantAlpha := AStyle.TextAlpha;
     BF.AlphaFormat := 0;
-    Winapi.Windows.AlphaBlend(ACanvas.Handle, R.Left, R.Top,
-      R.Width, R.Height, TextBmp.Canvas.Handle, 0, 0,
-      R.Width, R.Height, BF);
+    Winapi.Windows.AlphaBlend(ACanvas.Handle, R.Left, R.Top, R.Width, R.Height, TextBmp.Canvas.Handle, 0, 0, R.Width, R.Height, BF);
   finally
     TextBmp.Free;
   end;
 end;
 
-procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect;
-  ATimeOffset: Double; const AStyle: TTimestampStyle);
+procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect; ATimeOffset: Double; const AStyle: TTimestampStyle);
 const
   TC_PADDING_H = 8; {horizontal padding inside the modern-path timecode rect}
   TC_MIN_H = 20; {minimum height for the modern-path rect (live-view parity for small fonts)}
@@ -820,8 +799,7 @@ end;
  uniform-grid and smart-grid lift wrappers, which differ only in how
  they compute the cell rects. Rect entries paired with nil frame slots
  are skipped so partial coverage degrades gracefully.}
-function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad;
-  const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
+function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad; const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
 type
   TQuadRow = array [0 .. 0] of TRGBQuad;
   PQuadRow = ^TQuadRow;
@@ -896,8 +874,7 @@ end;
  between cells and ABorder around the inner area), then calls the
  shared rect-driven core. Called by RenderCombinedImage when alpha < 255
  so the historical pf24bit fast path is unaffected for opaque output.}
-function LiftToAlphaAware(ASource: TBitmap; const AGrid: TCombinedGridStyle;
-  const AFrames: TArray<TBitmap>; ACols, ACellW, ACellH, ABorder: Integer): TBitmap;
+function LiftToAlphaAware(ASource: TBitmap; const AGrid: TCombinedGridStyle; const AFrames: TArray<TBitmap>; ACols, ACellW, ACellH, ABorder: Integer): TBitmap;
 var
   Rects: TArray<TRect>;
   I, Row, Col, FrameX, FrameY: Integer;
@@ -930,8 +907,7 @@ begin
   Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
 end;
 
-function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
-  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
+function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 var
   Cols, Rows, CellW, CellH, I, Row, Col, X, Y: Integer;
   FrameCount: Integer;
@@ -981,8 +957,7 @@ begin
     Result.Canvas.Draw(X, Y, AFrames[I]);
 
     if I < Length(AOffsets) then
-      DrawCellTimecode(Result.Canvas, Rect(X, Y, X + CellW, Y + CellH),
-        AOffsets[I].TimeOffset, ATimestamp);
+      DrawCellTimecode(Result.Canvas, Rect(X, Y, X + CellW, Y + CellH), AOffsets[I].TimeOffset, ATimestamp);
   end;
 
   {Optional alpha-aware output. When BackgroundAlpha is 255 the pf24bit
@@ -1002,15 +977,12 @@ end;
  preserve gap/border transparency. Smart-grid cells have row-dependent
  widths so the caller supplies the rects directly; the shared
  LiftToAlphaAwareCore does the actual lift.}
-function LiftToAlphaAwareSmart(ASource: TBitmap; const AGrid: TCombinedGridStyle;
-  const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
+function LiftToAlphaAwareSmart(ASource: TBitmap; const AGrid: TCombinedGridStyle; const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
 begin
   Result := LiftToAlphaAwareCore(ASource, GridBackgroundQuad(AGrid), AFrames, ACellRects);
 end;
 
-function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray;
-  const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer;
-  const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
+function RenderSmartCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; const ARowCounts: TArray<Integer>; AOutputW, AOutputH: Integer; const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 var
   Border, InnerW, InnerH, Gap: Integer;
   NRows, FrameCount, MaxCells: Integer;

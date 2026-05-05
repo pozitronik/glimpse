@@ -521,11 +521,7 @@ begin
   {Field-by-field compare rather than a single record-equality check because
    TTimestampStyle contains a managed string (FontName) that should be compared
    by value. Bail out of the invalidate when nothing visible changed.}
-  if (FStyle.Show = AValue.Show) and (FStyle.Corner = AValue.Corner)
-     and (FStyle.FontName = AValue.FontName) and (FStyle.FontSize = AValue.FontSize)
-     and (FStyle.FontStyles = AValue.FontStyles)
-     and (FStyle.BackColor = AValue.BackColor) and (FStyle.BackAlpha = AValue.BackAlpha)
-     and (FStyle.TextColor = AValue.TextColor) and (FStyle.TextAlpha = AValue.TextAlpha) then
+  if (FStyle.Show = AValue.Show) and (FStyle.Corner = AValue.Corner) and (FStyle.FontName = AValue.FontName) and (FStyle.FontSize = AValue.FontSize) and (FStyle.FontStyles = AValue.FontStyles) and (FStyle.BackColor = AValue.BackColor) and (FStyle.BackAlpha = AValue.BackAlpha) and (FStyle.TextColor = AValue.TextColor) and (FStyle.TextAlpha = AValue.TextAlpha) then
     Exit;
   FStyle := AValue;
   Invalidate;
@@ -584,12 +580,9 @@ begin
    load-fade cue stays visible with any user-chosen hue.}
   EffectiveStyle := FStyle;
   if FCells[AIndex].State <> fcsLoaded then
-    EffectiveStyle.TextColor := RGB(GetRValue(FStyle.TextColor) shr 1,
-                                    GetGValue(FStyle.TextColor) shr 1,
-                                    GetBValue(FStyle.TextColor) shr 1);
+    EffectiveStyle.TextColor := RGB(GetRValue(FStyle.TextColor) shr 1, GetGValue(FStyle.TextColor) shr 1, GetBValue(FStyle.TextColor) shr 1);
 
-  DrawTimecodeOverlay(Canvas, R, FCells[AIndex].Timecode, EffectiveStyle,
-    FBlendBmp, FTextBlendBmp);
+  DrawTimecodeOverlay(Canvas, R, FCells[AIndex].Timecode, EffectiveStyle, FBlendBmp, FTextBlendBmp);
 end;
 
 procedure TFrameView.PaintErrorCell(const ARect: TRect);
@@ -647,9 +640,7 @@ begin
   if ABitmap.PixelFormat <> pf24bit then
   begin
     ABitmap.Free;
-    raise EArgumentException.CreateFmt(
-      'TFrameView.SetFrame requires pf24bit input, got pixel-format ord=%d',
-      [Ord(ABitmap.PixelFormat)]);
+    raise EArgumentException.CreateFmt('TFrameView.SetFrame requires pf24bit input, got pixel-format ord=%d', [Ord(ABitmap.PixelFormat)]);
   end;
 
   {Copy pixel data via raw memory, bypassing GDI entirely.

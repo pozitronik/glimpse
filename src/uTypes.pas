@@ -31,10 +31,10 @@ type
     RespectAnamorphic: Boolean;
   end;
 
-{Enum <-> INI-string conversions for TTimestampCorner and TBannerPosition.
- StrToX returns ADefault when the string does not match any known literal,
- matching the StrToIntDef convention. XToStr always returns a recognised
- literal so its output round-trips through StrToX.}
+  {Enum <-> INI-string conversions for TTimestampCorner and TBannerPosition.
+   StrToX returns ADefault when the string does not match any known literal,
+   matching the StrToIntDef convention. XToStr always returns a recognised
+   literal so its output round-trips through StrToX.}
 function StrToTimestampCorner(const AValue: string; ADefault: TTimestampCorner): TTimestampCorner;
 function TimestampCornerToStr(ACorner: TTimestampCorner): string;
 function StrToBannerPosition(const AValue: string; ADefault: TBannerPosition): TBannerPosition;
@@ -66,11 +66,16 @@ begin
   {Exhaustive enumeration so a future TTimestampCorner value triggers a
    compiler hint instead of silently falling through to 'bottomleft'.}
   case ACorner of
-    tcNone:        Result := 'none';
-    tcTopLeft:     Result := 'topleft';
-    tcTopRight:    Result := 'topright';
-    tcBottomLeft:  Result := 'bottomleft';
-    tcBottomRight: Result := 'bottomright';
+    tcNone:
+      Result := 'none';
+    tcTopLeft:
+      Result := 'topleft';
+    tcTopRight:
+      Result := 'topright';
+    tcBottomLeft:
+      Result := 'bottomleft';
+    tcBottomRight:
+      Result := 'bottomright';
   end;
 end;
 
@@ -87,8 +92,10 @@ end;
 function BannerPositionToStr(APosition: TBannerPosition): string;
 begin
   case APosition of
-    bpTop:    Result := 'top';
-    bpBottom: Result := 'bottom';
+    bpTop:
+      Result := 'top';
+    bpBottom:
+      Result := 'bottom';
   end;
 end;
 

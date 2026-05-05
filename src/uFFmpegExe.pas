@@ -1,4 +1,4 @@
-{ffmpeg.exe backend: process execution, video probing, and frame extraction.}
+﻿{ffmpeg.exe backend: process execution, video probing, and frame extraction.}
 unit uFFmpegExe;
 
 interface
@@ -112,8 +112,7 @@ function ValidateFFmpeg(const AExePath: string): string;
  no I/O, no globals. Exposed so the option-to-filter mapping (HwAccel,
  UseKeyframes, MaxSide cap, RespectAnamorphic SAR scale) can be verified
  independently of the actual extraction.}
-function BuildExtractCmdLine(const AExePath, AFileName: string;
-  ATimeOffset: Double; const AOptions: TExtractionOptions): string;
+function BuildExtractCmdLine(const AExePath, AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions): string;
 
 implementation
 
@@ -591,8 +590,7 @@ begin
     Result.ErrorMessage := 'Could not parse video metadata';
 end;
 
-function BuildExtractCmdLine(const AExePath, AFileName: string;
-  ATimeOffset: Double; const AOptions: TExtractionOptions): string;
+function BuildExtractCmdLine(const AExePath, AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions): string;
 var
   Codec, ScaleFilter, HwAccelFlag, KeyframeFlag, ChainFilters: string;
 begin
@@ -627,9 +625,7 @@ begin
   begin
     if ChainFilters <> '' then
       ChainFilters := ChainFilters + ',';
-    ChainFilters := ChainFilters + Format(
-      'scale=min(iw\,%d):min(ih\,%d):force_original_aspect_ratio=decrease:force_divisible_by=2',
-      [AOptions.MaxSide, AOptions.MaxSide]);
+    ChainFilters := ChainFilters + Format('scale=min(iw\,%d):min(ih\,%d):force_original_aspect_ratio=decrease:force_divisible_by=2', [AOptions.MaxSide, AOptions.MaxSide]);
   end;
 
   if ChainFilters <> '' then
@@ -647,11 +643,7 @@ begin
   else
     KeyframeFlag := '';
 
-  Result := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' +
-    '-frames:v 1 %s%s pipe:1',
-    [AExePath, KeyframeFlag,
-     Format('%.3f', [ATimeOffset], TFormatSettings.Invariant),
-     HwAccelFlag, AFileName, ScaleFilter, Codec]);
+  Result := Format('"%s" -nostdin -loglevel error %s-ss %s %s-i "%s" ' + '-frames:v 1 %s%s pipe:1', [AExePath, KeyframeFlag, Format('%.3f', [ATimeOffset], TFormatSettings.Invariant), HwAccelFlag, AFileName, ScaleFilter, Codec]);
 end;
 
 function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD; ACancelHandle: THandle): TBitmap;

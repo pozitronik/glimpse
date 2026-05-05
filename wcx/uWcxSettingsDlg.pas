@@ -217,8 +217,7 @@ begin
   UdCellGap.Position := ASettings.CellGap;
   UdBorder.Position := ASettings.CombinedBorder;
   PnlBackground.Color := ASettings.Background;
-  DecodeTimestampCornerControls(ASettings.ShowTimestamp, ASettings.TimestampCorner,
-    ShowChecked, ComboIdx);
+  DecodeTimestampCornerControls(ASettings.ShowTimestamp, ASettings.TimestampCorner, ShowChecked, ComboIdx);
   ChkTimestamp.Checked := ShowChecked;
   CbxTimestampCorner.ItemIndex := ComboIdx;
   PnlTCBack.Color := ASettings.TimecodeBackColor;
@@ -256,8 +255,7 @@ begin
   ASettings.RandomExtraction := ChkRandomExtraction.Checked;
   ASettings.RandomPercent := TrkRandomPercent.Position;
 
-  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked,
-    UdMaxWorkers.Position);
+  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked, UdMaxWorkers.Position);
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
   ASettings.HwAccel := ChkHwAccel.Checked;
@@ -282,8 +280,7 @@ begin
   ASettings.CellGap := UdCellGap.Position;
   ASettings.CombinedBorder := UdBorder.Position;
   ASettings.Background := PnlBackground.Color;
-  EncodeTimestampCornerControls(ChkTimestamp.Checked, CbxTimestampCorner.ItemIndex,
-    Show, Corner);
+  EncodeTimestampCornerControls(ChkTimestamp.Checked, CbxTimestampCorner.ItemIndex, Show, Corner);
   ASettings.ShowTimestamp := Show;
   ASettings.TimestampCorner := Corner;
   ASettings.TimecodeBackColor := PnlTCBack.Color;
@@ -429,21 +426,17 @@ end;
 
 procedure TWcxSettingsForm.UpdateBannerFontDisplay;
 begin
-  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked,
-    FBannerFontName, FBannerFontSize);
+  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked, FBannerFontName, FBannerFontSize);
 end;
 
 procedure TWcxSettingsForm.PickTimestampFont;
 begin
-  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize,
-    MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 end;
 
 procedure TWcxSettingsForm.PickBannerFont;
 begin
-  PickBannerFontInto(FontDlg, EdtBannerFont, ChkBannerAutoSize,
-    FBannerFontName, FBannerFontSize,
-    MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
+  PickBannerFontInto(FontDlg, EdtBannerFont, ChkBannerAutoSize, FBannerFontName, FBannerFontSize, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
 end;
 
 procedure TWcxSettingsForm.BtnTimestampFontClick(Sender: TObject);

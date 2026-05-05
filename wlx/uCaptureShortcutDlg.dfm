@@ -33,8 +33,6 @@ object ShortcutEditorForm: TShortcutEditorForm
     Font.Name = 'Segoe UI'
     Font.Style = [fsBold]
     ParentFont = False
-    ExplicitLeft = 16
-    ExplicitTop = 14
     ExplicitWidth = 39
   end
   object LblHint: TLabel
@@ -50,9 +48,7 @@ object ShortcutEditorForm: TShortcutEditorForm
     Font.Name = 'Segoe UI'
     Font.Style = []
     ParentFont = False
-    ExplicitLeft = 16
-    ExplicitTop = 190
-    ExplicitWidth = 288
+    ExplicitWidth = 150
   end
   object LstChords: TListBox
     Left = 0
@@ -63,9 +59,6 @@ object ShortcutEditorForm: TShortcutEditorForm
     ItemHeight = 15
     TabOrder = 0
     OnClick = LstChordsClick
-    ExplicitLeft = 16
-    ExplicitTop = 16
-    ExplicitWidth = 380
   end
   object BtnRemove: TButton
     Left = 0
@@ -76,7 +69,6 @@ object ShortcutEditorForm: TShortcutEditorForm
     Caption = 'Remove'
     TabOrder = 1
     OnClick = BtnRemoveClick
-    ExplicitTop = 174
   end
   object BtnOK: TButton
     Left = 234
@@ -87,8 +79,6 @@ object ShortcutEditorForm: TShortcutEditorForm
     Caption = 'OK'
     ModalResult = 1
     TabOrder = 2
-    ExplicitLeft = 236
-    ExplicitTop = 174
   end
   object BtnCancel: TButton
     Left = 320
@@ -99,7 +89,5 @@ object ShortcutEditorForm: TShortcutEditorForm
     Caption = 'Cancel'
     ModalResult = 2
     TabOrder = 3
-    ExplicitLeft = 322
-    ExplicitTop = 174
   end
 end

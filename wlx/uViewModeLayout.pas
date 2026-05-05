@@ -93,15 +93,15 @@ type
     function CellIndexAt(const APoint: TPoint; const ACtx: TViewLayoutContext): Integer; override;
   end;
 
-{Computes the cells-per-row arrangement for a smart grid that minimises
- aspect-ratio mismatch between the displayed cells and the source frame.
- ACellCount frames are distributed over rows; the row count that yields
- the lowest total mismatch wins. Returns the per-row cell counts (sum
- equals ACellCount).
+  {Computes the cells-per-row arrangement for a smart grid that minimises
+   aspect-ratio mismatch between the displayed cells and the source frame.
+   ACellCount frames are distributed over rows; the row count that yields
+   the lowest total mismatch wins. Returns the per-row cell counts (sum
+   equals ACellCount).
 
- Shared between TSmartGridLayout (live view) and the file/clipboard save
- path so a saved smart-combined image uses the exact same arrangement
- the user is looking at when they trigger the save.}
+   Shared between TSmartGridLayout (live view) and the file/clipboard save
+   path so a saved smart-combined image uses the exact same arrangement
+   the user is looking at when they trigger the save.}
 function ComputeSmartGridRows(ACellCount, ABaseW, ABaseH, ACellGap: Integer; AAspectRatio: Double): TArray<Integer>;
 
 function CreateViewModeLayout(AMode: TViewMode): TViewModeLayout;
@@ -457,7 +457,7 @@ begin
 
       {Last row/cell fills remaining space to absorb rounding remainder.
        Gaps sit between cells only, so the last cell's right edge is BaseW
-       and the last row's bottom edge is BaseH -- no gap trails after them}
+       and the last row's bottom edge is BaseH - no gap trails after them}
       Result.Left := CellInRow * (CellW + Gap);
       if CellInRow = FSmartRows[RowIdx].Count - 1 then
         Result.Right := ACtx.BaseW
@@ -524,7 +524,7 @@ begin
 
   {Try each possible row count and find the one with least cropping.
    Cell dimensions include gap subtraction so the scoring reflects how
-   the cells will actually render -- otherwise gap>0 would bias the
+   the cells will actually render - otherwise gap>0 would bias the
    score toward row counts that cram more cells per row than they can
    fit cleanly.}
   for R := 1 to N do

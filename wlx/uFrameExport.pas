@@ -1,4 +1,4 @@
-{Frame export operations: save to file and copy to clipboard.
+﻿{Frame export operations: save to file and copy to clipboard.
  Extracted from TPluginForm to isolate I/O from UI orchestration.}
 unit uFrameExport;
 
@@ -52,7 +52,7 @@ type
      Single — one element if ResolveFrameIndex(AContextCellIndex) succeeds, empty otherwise.
      AllLoaded — every cell whose state is fcsLoaded.
      SelectedOrAll — selected loaded cells if any selection exists, else
-       every loaded cell (mirrors the selection-aware semantics of SaveFrames).}
+     every loaded cell (mirrors the selection-aware semantics of SaveFrames).}
     function BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
     function BuildSaveIndicesAllLoaded: TArray<Integer>;
     function BuildSaveIndicesSelectedOrAll: TArray<Integer>;
@@ -230,8 +230,7 @@ end;
 function TFrameExporter.PickSaveBitmap(AIndex: Integer): TBitmap;
 begin
   Result := nil;
-  if (not FSettings.SaveAtLiveResolution) and (AIndex >= 0) and (AIndex < Length(FOverrideFrames))
-    and (FOverrideFrames[AIndex] <> nil) then
+  if (not FSettings.SaveAtLiveResolution) and (AIndex >= 0) and (AIndex < Length(FOverrideFrames)) and (FOverrideFrames[AIndex] <> nil) then
     Exit(FOverrideFrames[AIndex]);
   if (AIndex >= 0) and (AIndex < FFrameView.CellCount) and (FFrameView.CellState(AIndex) = fcsLoaded) then
     Result := FFrameView.CellBitmap(AIndex);
@@ -252,8 +251,7 @@ end;
  precedence over the live cells. Offsets always come from the live view.
  nil entries for placeholder/error/missing cells are passed through; the
  renderer skips them.}
-function TFrameExporter.CollectFramesAndOffsets(out AFrames: TArray<TBitmap>;
-  out AOffsets: TFrameOffsetArray): Integer;
+function TFrameExporter.CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray): Integer;
 var
   I: Integer;
 begin
@@ -292,9 +290,9 @@ end;
 {Counts the columns the live layout is currently using by iterating
  cells and counting those that share cell 0's top coordinate.
  Generalises across the three uniform-row modes:
-   vmGrid      - cells in row 0 share Top, returns column count.
-   vmFilmstrip - all cells share Top (one row), returns FrameCount.
-   vmScroll    - only cell 0 has that Top (one column), returns 1.
+ vmGrid      - cells in row 0 share Top, returns column count.
+ vmFilmstrip - all cells share Top (one row), returns FrameCount.
+ vmScroll    - only cell 0 has that Top (one column), returns 1.
  Used by the live-resolution save path; not called for vmSmartGrid
  (which has its own renderer) or vmSingle (which routes to SaveFrame).}
 function TFrameExporter.CountLiveGridColumns: Integer;
@@ -452,8 +450,8 @@ end;
  save. Output dimensions follow the FSettings.SaveAtLiveResolution toggle:
  - True: panel inner area + Border (pixel-faithful to the live view)
  - False: anchor to the row with the most cells, sized at native frame
-   width; total inner aspect ratio still tracks the panel so rows look
-   the same shape as on screen.}
+ width; total inner aspect ratio still tracks the panel so rows look
+ the same shape as on screen.}
 function TFrameExporter.RenderSmartCombinedFromCells: TBitmap;
 var
   Frames: TArray<TBitmap>;
@@ -504,9 +502,7 @@ begin
     InnerH := PanelInnerH;
     OutputW := InnerW + 2 * Border;
     OutputH := InnerH + 2 * Border;
-  end
-  else
-  begin
+  end else begin
     {Native: anchor inner_W to the widest row, then preserve the panel's
      inner aspect ratio so rows look the same as on screen. NativeW comes
      from the first non-nil frame; uniform across a video.}
@@ -537,17 +533,17 @@ end;
  toggle in every mode:
 
  - vmSmartGrid: smart layout (panel-aspect-driven row counts);
-   panel-pixel cells when the toggle is on, anchor-to-widest native
-   cells when off. Handled by RenderSmartCombinedFromCells.
+ panel-pixel cells when the toggle is on, anchor-to-widest native
+ cells when off. Handled by RenderSmartCombinedFromCells.
  - vmGrid / vmFilmstrip / vmScroll: uniform-row grid. When the toggle
-   is on, all three route through RenderGridCombinedAtLiveResolution
-   so cell pixels match the on-screen layout (vmFilmstrip = one wide
-   row, vmScroll = one tall column, vmGrid = current column count).
-   When off, they render at native cell size with Columns pinned to
-   the view's natural shape.
+ is on, all three route through RenderGridCombinedAtLiveResolution
+ so cell pixels match the on-screen layout (vmFilmstrip = one wide
+ row, vmScroll = one tall column, vmGrid = current column count).
+ When off, they render at native cell size with Columns pinned to
+ the view's natural shape.
  - vmSingle: caller (SaveView/CopyView) routes to single-frame paths
-   before reaching this function, so vmSingle never reaches the
-   regular grid renderer here.
+ before reaching this function, so vmSingle never reaches the
+ regular grid renderer here.
 
  Returns nil only when there are no cells; placeholder/error cells are
  passed through as nil bitmaps and skipped by the renderer.}
@@ -651,8 +647,10 @@ begin
           JpegType.FileMask := '*.jpg';
 
           case FSettings.SaveFormat of
-            sfJPEG: ModernDlg.FileTypeIndex := 2;
-            else    ModernDlg.FileTypeIndex := 1;
+            sfJPEG:
+              ModernDlg.FileTypeIndex := 2;
+            else
+              ModernDlg.FileTypeIndex := 1;
           end;
           ModernDlg.DefaultExtension := 'png';
           ModernDlg.FileName := ADefaultName;
@@ -668,8 +666,10 @@ begin
           if ModernDlg.Execute then
           begin
             case ModernDlg.FileTypeIndex of
-              2: AFormat := sfJPEG;
-              else AFormat := sfPNG;
+              2:
+                AFormat := sfJPEG;
+              else
+                AFormat := sfPNG;
             end;
             APath := ModernDlg.FileName;
             FSettings.SaveFolder := ExtractFilePath(ModernDlg.FileName);

@@ -1,4 +1,4 @@
-{Shared default values and clamping ranges for extraction and output settings.
+﻿{Shared default values and clamping ranges for extraction and output settings.
  Used by both WLX and WCX plugins to ensure consistent behavior.}
 unit uDefaults;
 
