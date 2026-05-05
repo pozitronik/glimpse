@@ -150,6 +150,11 @@ type
     [Test] procedure SetCellCount_ResetsSelections;
     [Test] procedure ClearCells_LeavesNoCellsSelected;
     [Test] procedure CellSelected_OutOfRange_ReturnsFalse;
+    [Test] procedure CellIndexAt_PointInsideCell_ReturnsThatIndex;
+    [Test] procedure CellIndexAt_PointOutsideAllCells_ReturnsMinusOne;
+    [Test] procedure MouseDown_CtrlLeftClick_TogglesSelectionAtPoint;
+    [Test] procedure MouseDown_LeftClickWithoutCtrl_DoesNotToggleSelection;
+    [Test] procedure MouseDown_CtrlClickOutsideAnyCell_NoOp;
   end;
 
   [TestFixture]
@@ -197,7 +202,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Types, System.Math,
+  System.SysUtils, System.Types, System.Math, System.Classes,
   Winapi.Windows, Winapi.Messages,
   Vcl.Forms, Vcl.Graphics, Vcl.Controls,
   uFrameView, uFrameOffsets, uTypes, uSettings;
@@ -2136,6 +2141,139 @@ begin
     V.SetCellCount(2, MakeOffsets(2));
     Assert.IsFalse(V.CellSelected(-1), 'Negative index must return False');
     Assert.IsFalse(V.CellSelected(99), 'Past-end index must return False');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+type
+  {Subclass that promotes MouseDown to public so tests can simulate
+   Ctrl+click without going through the Win32 message pump.}
+  TFrameViewWithMouseAccess = class(TFrameView)
+  public
+    procedure SimulateMouseDown(AButton: TMouseButton; AShift: TShiftState; X, Y: Integer);
+  end;
+
+procedure TFrameViewWithMouseAccess.SimulateMouseDown(AButton: TMouseButton;
+  AShift: TShiftState; X, Y: Integer);
+begin
+  MouseDown(AButton, AShift, X, Y);
+end;
+
+function CreateMouseAccessView(AWidth: Integer; AMode: TViewMode): TFrameViewWithMouseAccess;
+var
+  ParentForm: TForm;
+begin
+  ParentForm := TForm.CreateNew(nil);
+  ParentForm.Width := AWidth;
+  ParentForm.Height := 800;
+
+  Result := TFrameViewWithMouseAccess.Create(ParentForm);
+  Result.Parent := ParentForm;
+  Result.Left := 0;
+  Result.Top := 0;
+  Result.Width := AWidth;
+  Result.ViewMode := AMode;
+  Result.CellGap := 4;
+end;
+
+procedure TTestFrameViewSelection.CellIndexAt_PointInsideCell_ReturnsThatIndex;
+var
+  V: TFrameView;
+  CellRect: TRect;
+  Mid: TPoint;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 600);
+    {Pick a known cell, hit-test its centre.}
+    CellRect := V.GetCellRect(2);
+    Mid := Point((CellRect.Left + CellRect.Right) div 2,
+                 (CellRect.Top + CellRect.Bottom) div 2);
+    Assert.AreEqual(2, V.CellIndexAt(Mid),
+      'Hit-test on cell 2''s centre must return 2');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.CellIndexAt_PointOutsideAllCells_ReturnsMinusOne;
+var
+  V: TFrameView;
+begin
+  V := CreateTestFrameView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 600);
+    {(-100, -100) is well outside any cell.}
+    Assert.AreEqual(-1, V.CellIndexAt(Point(-100, -100)),
+      'Point outside every cell rect must return -1');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.MouseDown_CtrlLeftClick_TogglesSelectionAtPoint;
+var
+  V: TFrameViewWithMouseAccess;
+  CellRect: TRect;
+  Mid: TPoint;
+begin
+  V := CreateMouseAccessView(800, vmGrid);
+  try
+    V.SetCellCount(4, MakeOffsets(4));
+    V.SetViewport(800, 600);
+    CellRect := V.GetCellRect(1);
+    Mid := Point((CellRect.Left + CellRect.Right) div 2,
+                 (CellRect.Top + CellRect.Bottom) div 2);
+
+    V.SimulateMouseDown(mbLeft, [ssCtrl], Mid.X, Mid.Y);
+    Assert.IsTrue(V.CellSelected(1),
+      'Ctrl+left-click must toggle selection at the hit-test cell');
+
+    V.SimulateMouseDown(mbLeft, [ssCtrl], Mid.X, Mid.Y);
+    Assert.IsFalse(V.CellSelected(1),
+      'Second Ctrl+left-click must toggle off');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.MouseDown_LeftClickWithoutCtrl_DoesNotToggleSelection;
+var
+  V: TFrameViewWithMouseAccess;
+  CellRect: TRect;
+  Mid: TPoint;
+begin
+  V := CreateMouseAccessView(800, vmGrid);
+  try
+    V.SetCellCount(3, MakeOffsets(3));
+    V.SetViewport(800, 600);
+    CellRect := V.GetCellRect(0);
+    Mid := Point((CellRect.Left + CellRect.Right) div 2,
+                 (CellRect.Top + CellRect.Bottom) div 2);
+
+    V.SimulateMouseDown(mbLeft, [], Mid.X, Mid.Y);
+    Assert.IsFalse(V.CellSelected(0),
+      'Plain left-click (no Ctrl) must not toggle selection');
+  finally
+    FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewSelection.MouseDown_CtrlClickOutsideAnyCell_NoOp;
+var
+  V: TFrameViewWithMouseAccess;
+begin
+  V := CreateMouseAccessView(800, vmGrid);
+  try
+    V.SetCellCount(2, MakeOffsets(2));
+    V.SetViewport(800, 600);
+
+    V.SimulateMouseDown(mbLeft, [ssCtrl], 9999, 9999);
+    Assert.AreEqual(0, V.SelectedCount,
+      'Ctrl+click outside any cell must not select anything');
   finally
     FreeTestFrameView(V);
   end;

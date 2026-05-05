@@ -68,6 +68,62 @@ type
   end;
 
   [TestFixture]
+  TTestFrameExportScaling = class
+  public
+    {ScaleBitmapLetterbox / ScaleBitmapCropToFill mirror the live view's
+     fitting logic and feed every "save at live resolution" path. The
+     existing render tests exercise them indirectly; these pin the
+     dimensions, background fill, and degenerate-input handling
+     directly so a future fitting-logic regression surfaces here.}
+    [Test] procedure Letterbox_OutputMatchesRequestedDimensions;
+    [Test] procedure Letterbox_NilSourceFillsBackground;
+    [Test] procedure Letterbox_OutputIsPf24bit;
+    [Test] procedure CropToFill_OutputMatchesRequestedDimensions;
+    [Test] procedure CropToFill_NilSourceFillsBackgroundFromSettings;
+    [Test] procedure CropToFill_OutputIsPf24bit;
+  end;
+
+  [TestFixture]
+  TTestFrameExportLiveResolution = class
+  public
+    {RenderCellAtLiveSize routes through ScaleBitmapCropToFill for
+     vmSmartGrid and ScaleBitmapLetterbox otherwise. The result must
+     match the live cell rect's dimensions in either case.
+     RenderGridCombinedAtLiveResolution and RenderSmartCombinedFromCells
+     are the entry points for "save at live resolution = ON" combined
+     output; tests here verify they return non-nil bitmaps and free
+     cleanly. Pixel-perfect dimensions depend on the live layout pass,
+     which TFrameView controls; we assert structural properties only.}
+    [Test] procedure RenderCellAtLiveSize_GridMode_ReturnsCellSizedBitmap;
+    [Test] procedure RenderCellAtLiveSize_SmartGridMode_ReturnsCellSizedBitmap;
+    [Test] procedure RenderGridCombinedAtLiveResolution_ProducesBitmap;
+    [Test] procedure RenderGridCombinedAtLiveResolution_NoLoadedFrames_ReturnsNil;
+    [Test] procedure RenderSmartCombinedFromCells_ProducesBitmap;
+    [Test] procedure RenderSmartCombinedFromCells_NoLoadedFrames_ReturnsNil;
+  end;
+
+  [TestFixture]
+  TTestFrameExportSaveFramesToDir = class
+  strict private
+    FTempDir: string;
+    function CountFiles(const APattern: string): Integer;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+
+    {SaveFramesToDir is the dialog-free leaf of the SaveFrames pipeline:
+     it iterates loaded cells (or selected loaded cells when
+     ASelectedOnly is True), formats per-frame names, and writes through
+     uBitmapSaver. Tests here verify the file count, selection
+     filtering, and the placeholder-skip rule.}
+    [Test] procedure SavesAllLoadedFramesAsSeparateFiles;
+    [Test] procedure SkipsPlaceholderCells;
+    [Test] procedure SelectedOnly_OnlyWritesSelectedLoadedCells;
+    [Test] procedure NoSelectedAndSelectedOnly_WritesNothing;
+    [Test] procedure FormatExtensionMatchesArgument;
+  end;
+
+  [TestFixture]
   TTestFrameExportClipboardNoOp = class
   public
     {The Save* paths all end in a modal TSaveDialog so they can't be driven
@@ -82,9 +138,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Types,
+  System.SysUtils, System.Types, System.Math, System.IOUtils, System.UITypes,
   Vcl.Forms, Vcl.Controls, Vcl.Graphics,
-  uFrameView, uFrameOffsets, uSettings, uFrameExport, uCombinedImage;
+  uTypes, uBitmapSaver, uFrameView, uFrameOffsets, uSettings, uFrameExport, uCombinedImage;
 
 type
   { Test subclass that exposes protected render methods }
@@ -92,6 +148,12 @@ type
   public
     function TestRenderCombinedFromCells: TBitmap;
     function TestRenderWithBanner(ABmp: TBitmap): TBitmap;
+    function TestScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
+    function TestScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
+    function TestRenderCellAtLiveSize(AIndex: Integer): TBitmap;
+    function TestRenderGridCombinedAtLiveResolution: TBitmap;
+    function TestRenderSmartCombinedFromCells: TBitmap;
+    procedure TestSaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   end;
 
 function TTestableExporter.TestRenderCombinedFromCells: TBitmap;
@@ -102,6 +164,37 @@ end;
 function TTestableExporter.TestRenderWithBanner(ABmp: TBitmap): TBitmap;
 begin
   Result := RenderWithBanner(ABmp);
+end;
+
+function TTestableExporter.TestScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
+begin
+  Result := ScaleBitmapLetterbox(ASrc, AW, AH, ABg);
+end;
+
+function TTestableExporter.TestScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
+begin
+  Result := ScaleBitmapCropToFill(ASrc, AW, AH);
+end;
+
+function TTestableExporter.TestRenderCellAtLiveSize(AIndex: Integer): TBitmap;
+begin
+  Result := RenderCellAtLiveSize(AIndex);
+end;
+
+function TTestableExporter.TestRenderGridCombinedAtLiveResolution: TBitmap;
+begin
+  Result := RenderGridCombinedAtLiveResolution;
+end;
+
+function TTestableExporter.TestRenderSmartCombinedFromCells: TBitmap;
+begin
+  Result := RenderSmartCombinedFromCells;
+end;
+
+procedure TTestableExporter.TestSaveFramesToDir(const ADir: string;
+  AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
+begin
+  SaveFramesToDir(ADir, AFormat, ASelectedOnly, AFileName);
 end;
 
 { Helper: creates a temporary TFrameView parented to a form }
@@ -1266,12 +1359,635 @@ begin
   end;
 end;
 
+{ TTestFrameExportScaling }
+
+function MakeColorSrcBitmap(AW, AH: Integer; AColor: TColor): TBitmap;
+begin
+  Result := TBitmap.Create;
+  Result.PixelFormat := pf24bit;
+  Result.SetSize(AW, AH);
+  Result.Canvas.Brush.Color := AColor;
+  Result.Canvas.FillRect(Rect(0, 0, AW, AH));
+end;
+
+procedure TTestFrameExportScaling.Letterbox_OutputMatchesRequestedDimensions;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Src, Out: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 1, [0]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Src := MakeColorSrcBitmap(160, 90, clRed);
+        try
+          Out := Exporter.TestScaleBitmapLetterbox(Src, 320, 200, clBlue);
+          try
+            Assert.AreEqual(320, Out.Width, 'Output width must match request');
+            Assert.AreEqual(200, Out.Height, 'Output height must match request');
+          finally
+            Out.Free;
+          end;
+        finally
+          Src.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportScaling.Letterbox_NilSourceFillsBackground;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Out: TBitmap;
+begin
+  {Defensive: nil source must not crash. Output is just the background
+   colour at the requested dimensions.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 1, [0]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Out := Exporter.TestScaleBitmapLetterbox(nil, 100, 60, clYellow);
+        try
+          Assert.IsNotNull(Out);
+          Assert.AreEqual(100, Out.Width);
+          Assert.AreEqual(60, Out.Height);
+        finally
+          Out.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportScaling.Letterbox_OutputIsPf24bit;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Src, Out: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 1, [0]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Src := MakeColorSrcBitmap(80, 45, clGreen);
+        try
+          Out := Exporter.TestScaleBitmapLetterbox(Src, 200, 120, clBlack);
+          try
+            Assert.AreEqual(Ord(pf24bit), Ord(Out.PixelFormat),
+              'Output must be pf24bit (TFrameView.SetFrame contract).');
+          finally
+            Out.Free;
+          end;
+        finally
+          Src.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportScaling.CropToFill_OutputMatchesRequestedDimensions;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Src, Out: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 1, [0]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Src := MakeColorSrcBitmap(160, 90, clRed);
+        try
+          Out := Exporter.TestScaleBitmapCropToFill(Src, 256, 256);
+          try
+            Assert.AreEqual(256, Out.Width);
+            Assert.AreEqual(256, Out.Height);
+          finally
+            Out.Free;
+          end;
+        finally
+          Src.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportScaling.CropToFill_NilSourceFillsBackgroundFromSettings;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Out: TBitmap;
+begin
+  {Nil source: function fills the result with FSettings.Background and
+   returns. Different from Letterbox where the caller passes a bg colour.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 1, [0]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Out := Exporter.TestScaleBitmapCropToFill(nil, 80, 80);
+        try
+          Assert.IsNotNull(Out);
+          Assert.AreEqual(80, Out.Width);
+          Assert.AreEqual(80, Out.Height);
+        finally
+          Out.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportScaling.CropToFill_OutputIsPf24bit;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Src, Out: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 1, [0]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Src := MakeColorSrcBitmap(80, 45, clGreen);
+        try
+          Out := Exporter.TestScaleBitmapCropToFill(Src, 200, 120);
+          try
+            Assert.AreEqual(Ord(pf24bit), Ord(Out.PixelFormat));
+          finally
+            Out.Free;
+          end;
+        finally
+          Src.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+{ TTestFrameExportLiveResolution }
+
+procedure TTestFrameExportLiveResolution.RenderCellAtLiveSize_GridMode_ReturnsCellSizedBitmap;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+  R: TRect;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    View.ViewMode := vmGrid;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        R := View.GetCellRect(1);
+        Bmp := Exporter.TestRenderCellAtLiveSize(1);
+        try
+          Assert.IsNotNull(Bmp);
+          Assert.AreEqual<Integer>(Max(1, R.Width), Bmp.Width,
+            'Output width must equal the live cell rect width');
+          Assert.AreEqual<Integer>(Max(1, R.Height), Bmp.Height,
+            'Output height must equal the live cell rect height');
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportLiveResolution.RenderCellAtLiveSize_SmartGridMode_ReturnsCellSizedBitmap;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+  R: TRect;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    View.ViewMode := vmSmartGrid;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        R := View.GetCellRect(0);
+        Bmp := Exporter.TestRenderCellAtLiveSize(0);
+        try
+          Assert.IsNotNull(Bmp);
+          Assert.AreEqual<Integer>(Max(1, R.Width), Bmp.Width);
+          Assert.AreEqual<Integer>(Max(1, R.Height), Bmp.Height);
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportLiveResolution.RenderGridCombinedAtLiveResolution_ProducesBitmap;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    View.ViewMode := vmGrid;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderGridCombinedAtLiveResolution;
+        try
+          Assert.IsNotNull(Bmp,
+            'Live-resolution grid render must produce a bitmap');
+          Assert.IsTrue(Bmp.Width > 0);
+          Assert.IsTrue(Bmp.Height > 0);
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportLiveResolution.RenderGridCombinedAtLiveResolution_NoLoadedFrames_ReturnsNil;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Empty: TFrameOffsetArray;
+begin
+  {Zero cells -> CollectFramesAndOffsets returns 0 -> render exits nil.
+   N>0 cells with all-nil bitmaps still renders (placeholder cells), so
+   to hit the nil-return path the cell count itself must be zero.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := TFrameView.Create(Form);
+    View.Parent := Form;
+    View.SetViewport(800, 600);
+    View.ViewMode := vmGrid;
+    SetLength(Empty, 0);
+    View.SetCellCount(0, Empty);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Assert.IsNull(Exporter.TestRenderGridCombinedAtLiveResolution,
+          'Zero cells -> nothing to render -> nil');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportLiveResolution.RenderSmartCombinedFromCells_ProducesBitmap;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Bmp: TBitmap;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ViewMode := vmSmartGrid;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Bmp := Exporter.TestRenderSmartCombinedFromCells;
+        try
+          Assert.IsNotNull(Bmp);
+          Assert.IsTrue(Bmp.Width > 0);
+          Assert.IsTrue(Bmp.Height > 0);
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportLiveResolution.RenderSmartCombinedFromCells_NoLoadedFrames_ReturnsNil;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Empty: TFrameOffsetArray;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := TFrameView.Create(Form);
+    View.Parent := Form;
+    View.SetViewport(800, 600);
+    View.ViewMode := vmSmartGrid;
+    SetLength(Empty, 0);
+    View.SetCellCount(0, Empty);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Assert.IsNull(Exporter.TestRenderSmartCombinedFromCells,
+          'Zero cells -> nothing to render -> nil');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+{ TTestFrameExportSaveFramesToDir }
+
+procedure TTestFrameExportSaveFramesToDir.Setup;
+begin
+  FTempDir := IncludeTrailingPathDelimiter(
+    System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath,
+      'VT_FrameExportSaveDir_' + TGuid.NewGuid.ToString));
+  System.IOUtils.TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestFrameExportSaveFramesToDir.TearDown;
+begin
+  if (FTempDir <> '') and System.IOUtils.TDirectory.Exists(FTempDir) then
+    System.IOUtils.TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestFrameExportSaveFramesToDir.CountFiles(const APattern: string): Integer;
+begin
+  Result := Length(System.IOUtils.TDirectory.GetFiles(FTempDir, APattern));
+end;
+
+procedure TTestFrameExportSaveFramesToDir.SavesAllLoadedFramesAsSeparateFiles;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    {3 cells, all loaded}
+    View := CreateTestFrameView(Form, 3, [0, 1, 2]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, False, 'video.mp4');
+        Assert.AreEqual(3, CountFiles('*.png'),
+          'Every loaded cell must produce a PNG');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveFramesToDir.SkipsPlaceholderCells;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    {5 cells, only 2 loaded (indices 0 and 3); the other three are
+     placeholders and must be skipped.}
+    View := CreateTestFrameView(Form, 5, [0, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, False, 'video.mp4');
+        Assert.AreEqual(2, CountFiles('*.png'),
+          'Placeholder cells must be skipped');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveFramesToDir.SelectedOnly_OnlyWritesSelectedLoadedCells;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    View.ToggleSelection(1);
+    View.ToggleSelection(3);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, True, 'video.mp4');
+        Assert.AreEqual(2, CountFiles('*.png'),
+          'Only selected loaded cells must be saved');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveFramesToDir.NoSelectedAndSelectedOnly_WritesNothing;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 3, [0, 1, 2]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, True, 'video.mp4');
+        Assert.AreEqual(0, CountFiles('*.png'),
+          'ASelectedOnly with no selection writes nothing -- production callers gate with SelectedCount>0 first');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportSaveFramesToDir.FormatExtensionMatchesArgument;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 2, [0, 1]);
+    Settings := CreateSettingsWithBanner(False);
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Exporter.TestSaveFramesToDir(FTempDir, sfJPEG, False, 'video.mp4');
+        Assert.AreEqual(2, CountFiles('*.jpg'),
+          'AFormat=sfJPEG must produce .jpg files via GenerateFrameFileName');
+        Assert.AreEqual(0, CountFiles('*.png'),
+          'No .png files must be produced when AFormat=sfJPEG');
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
   TDUnitX.RegisterTestFixture(TTestFrameExportRender);
   TDUnitX.RegisterTestFixture(TTestFrameExportSaveIndices);
   TDUnitX.RegisterTestFixture(TTestFrameExportOverrideFrames);
   TDUnitX.RegisterTestFixture(TTestFrameExportGridColumns);
+  TDUnitX.RegisterTestFixture(TTestFrameExportScaling);
+  TDUnitX.RegisterTestFixture(TTestFrameExportLiveResolution);
+  TDUnitX.RegisterTestFixture(TTestFrameExportSaveFramesToDir);
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
 
 end.

@@ -25,7 +25,6 @@ type
      method and clears it after, so the exporter never owns the memory.}
     FOverrideFrames: TArray<TBitmap>;
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
-    procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
     {Returns the bitmap that the save/copy paths should consume for cell
      AIndex, honouring FOverrideFrames when set and the toggle is off.}
     function PickSaveBitmap(AIndex: Integer): TBitmap;
@@ -33,14 +32,18 @@ type
     procedure BuildGridStyle(out AGrid: TCombinedGridStyle);
     procedure BuildTimestampStyle(out ATs: TTimestampStyle);
     function CountLiveGridColumns: Integer;
+  protected
+    {Render helpers exposed at protected scope so a test subclass can
+     exercise them directly. They are pipeline internals; production
+     code reaches them only through SaveFrame / SaveView / CopyFrame.}
     function ScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
     function ScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
     function RenderCellAtLiveSize(AIndex: Integer): TBitmap;
     function RenderGridCombinedAtLiveResolution: TBitmap;
     function RenderSmartCombinedFromCells: TBitmap;
-  protected
     function RenderCombinedFromCells: TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
+    procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
     {Resolves which frame to act on: prefers AContextCellIndex, falls back
