@@ -78,6 +78,8 @@ uses
   TestWcxProgressBridge in 'TestWcxProgressBridge.pas',
   uWcxPresetExtractor in '..\wcx\uWcxPresetExtractor.pas',
   TestWcxPresetExtractor in 'TestWcxPresetExtractor.pas',
+  uWcxPresetEditorModel in '..\wcx\uWcxPresetEditorModel.pas',
+  TestWcxPresetEditorModel in 'TestWcxPresetEditorModel.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',

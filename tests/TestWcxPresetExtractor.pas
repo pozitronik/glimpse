@@ -40,6 +40,12 @@ type
     [Test] procedure TestParseProgressClampsNegativeUs;
     [Test] procedure TestParseProgressKeyCaseInsensitive;
     [Test] procedure TestParseProgressMissingEqualsRejected;
+    { MakeTempPath: ".tmp" must go BEFORE the extension so ffmpeg's
+      container-from-extension inference still works. }
+    [Test] procedure TestMakeTempPathInsertsTmpBeforeExtension;
+    [Test] procedure TestMakeTempPathHandlesPathWithDirectory;
+    [Test] procedure TestMakeTempPathHandlesNoExtension;
+    [Test] procedure TestMakeTempPathHandlesMultipleDots;
   end;
 
 implementation
@@ -332,6 +338,39 @@ var
 begin
   Assert.IsFalse(ParseProgressLine('out_time_us 5000000', 10.0, P));
   Assert.IsFalse(ParseProgressLine('', 10.0, P));
+end;
+
+{ MakeTempPath }
+
+procedure TTestWcxPresetExtractor.TestMakeTempPathInsertsTmpBeforeExtension;
+begin
+  { ffmpeg picks the output container from the file extension. With ".tmp"
+    appended after, ffmpeg sees ".tmp" and refuses with "Unable to choose
+    an output format" — the bug that motivated this function. }
+  Assert.AreEqual('poster.tmp.jpg', MakeTempPath('poster.jpg'));
+  Assert.AreEqual('audio.tmp.mp3', MakeTempPath('audio.mp3'));
+end;
+
+procedure TTestWcxPresetExtractor.TestMakeTempPathHandlesPathWithDirectory;
+begin
+  Assert.AreEqual('C:\out\poster.tmp.jpg',
+    MakeTempPath('C:\out\poster.jpg'));
+end;
+
+procedure TTestWcxPresetExtractor.TestMakeTempPathHandlesNoExtension;
+begin
+  { Edge case for extensionless outputs (preset validation requires an
+    OutputExt so this should not happen via the normal path, but the
+    helper must still be defined). }
+  Assert.AreEqual('noext.tmp', MakeTempPath('noext'));
+end;
+
+procedure TTestWcxPresetExtractor.TestMakeTempPathHandlesMultipleDots;
+begin
+  { Only the last extension is replaced; earlier dots are part of the
+    basename and survive. Important for filenames like "My.Movie.poster.jpg". }
+  Assert.AreEqual('My.Movie.poster.tmp.jpg',
+    MakeTempPath('My.Movie.poster.jpg'));
 end;
 
 end.

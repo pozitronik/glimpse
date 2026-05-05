@@ -76,6 +76,21 @@ type
     { Path derivation }
     [Test] procedure TestPresetsIniPathSiblingOfSettings;
     [Test] procedure TestPresetsIniPathEmptyInputReturnsEmpty;
+
+    { LoadAllPresets: editor variant that surfaces disabled and invalid
+      entries so they can be repaired in the GUI. }
+    [Test] procedure TestLoadAllIncludesDisabled;
+    [Test] procedure TestLoadAllIncludesInvalidArgsForRepair;
+    [Test] procedure TestLoadAllPreservesOrder;
+    [Test] procedure TestLoadAllMissingFileReturnsEmpty;
+
+    { SavePresets round-trip and ordering. }
+    [Test] procedure TestSavePresetsRoundTrip;
+    [Test] procedure TestSavePresetsPreservesArrayOrder;
+    [Test] procedure TestSavePresetsOmitsEmptyOptionalKeys;
+    [Test] procedure TestSavePresetsEmptyArrayProducesEmptyFile;
+    [Test] procedure TestSavePresetsEmptyPathSilentlyIgnored;
+    [Test] procedure TestSavePresetsEnabledFlagPersists;
   end;
 
 implementation
@@ -653,6 +668,193 @@ begin
     "no presets" condition rather than synthesise a stray "presets.ini"
     in the current working directory. }
   Assert.AreEqual('', PresetsIniPath(''));
+end;
+
+{ LoadAllPresets: editor variant }
+
+procedure TTestWcxPresets.TestLoadAllIncludesDisabled;
+var
+  Path: string;
+  Presets: TWcxPresetArray;
+begin
+  { LoadPresets drops disabled entries because they have no place in the
+    visible archive listing. The editor must see them so the user can
+    flip the toggle back on; LoadAllPresets is the editor's hook. }
+  Path := WriteIni('all_disabled.ini',
+    '[a]'#13#10 +
+    'Enabled=False'#13#10 +
+    'OutputExt=mp3'#13#10 +
+    '[b]'#13#10 +
+    'OutputExt=mp4'#13#10);
+  Presets := LoadAllPresets(Path);
+  Assert.AreEqual(2, Integer(Length(Presets)));
+  Assert.AreEqual('a', Presets[0].Name);
+  Assert.IsFalse(Presets[0].Enabled, 'Disabled state must survive LoadAll');
+  Assert.AreEqual('b', Presets[1].Name);
+end;
+
+procedure TTestWcxPresets.TestLoadAllIncludesInvalidArgsForRepair;
+var
+  Path: string;
+  Presets: TWcxPresetArray;
+begin
+  { A preset with -i in Args would be rejected by the listing-time
+    LoadPresets. The editor must still surface it so the user can
+    delete the bad token rather than discover the entry vanished. }
+  Path := WriteIni('all_bad_args.ini',
+    '[broken]'#13#10 +
+    'OutputExt=mp4'#13#10 +
+    'Args=-i other.mkv -c copy'#13#10);
+  Presets := LoadAllPresets(Path);
+  Assert.AreEqual(1, Integer(Length(Presets)));
+  Assert.AreEqual('-i other.mkv -c copy', Presets[0].Args,
+    'LoadAll keeps the original Args verbatim so the editor can show what is wrong');
+end;
+
+procedure TTestWcxPresets.TestLoadAllPreservesOrder;
+var
+  Path: string;
+  Presets: TWcxPresetArray;
+begin
+  Path := WriteIni('all_order.ini',
+    '[zeta]'#13#10 + 'OutputExt=mp3'#13#10 +
+    '[alpha]'#13#10 + 'OutputExt=mp3'#13#10 +
+    '[mid]'#13#10 + 'OutputExt=mp3'#13#10);
+  Presets := LoadAllPresets(Path);
+  Assert.AreEqual('zeta', Presets[0].Name);
+  Assert.AreEqual('alpha', Presets[1].Name);
+  Assert.AreEqual('mid', Presets[2].Name);
+end;
+
+procedure TTestWcxPresets.TestLoadAllMissingFileReturnsEmpty;
+var
+  Presets: TWcxPresetArray;
+begin
+  Presets := LoadAllPresets(TPath.Combine(FTempDir, 'no_such.ini'));
+  Assert.AreEqual(0, Integer(Length(Presets)));
+end;
+
+{ SavePresets }
+
+procedure TTestWcxPresets.TestSavePresetsRoundTrip;
+var
+  Path: string;
+  Saved, Loaded: TWcxPresetArray;
+begin
+  { Round-trip property: presets that load cleanly via LoadPresets must
+    survive Save then LoadPresets unchanged. Pin the exact field set so
+    the editor never silently drops a key. }
+  Path := TPath.Combine(FTempDir, 'rt.ini');
+  SetLength(Saved, 2);
+  Saved[0].Name := 'audio_mp3';
+  Saved[0].Enabled := True;
+  Saved[0].Description := 'MP3 rip';
+  Saved[0].OutputExt := 'mp3';
+  Saved[0].OutputName := '%basename%_audio';
+  Saved[0].Args := '-vn -c:a libmp3lame -q:a 4';
+  Saved[1].Name := 'poster';
+  Saved[1].Enabled := True;
+  Saved[1].OutputExt := 'jpg';
+  Saved[1].OutputName := '%basename%_poster';
+  Saved[1].Args := '-ss 00:00:05 -frames:v 1 -q:v 2';
+
+  SavePresets(Path, Saved);
+  Loaded := LoadPresets(Path);
+
+  Assert.AreEqual(2, Integer(Length(Loaded)));
+  Assert.AreEqual('audio_mp3', Loaded[0].Name);
+  Assert.AreEqual('MP3 rip', Loaded[0].Description);
+  Assert.AreEqual('mp3', Loaded[0].OutputExt);
+  Assert.AreEqual('%basename%_audio', Loaded[0].OutputName);
+  Assert.AreEqual('-vn -c:a libmp3lame -q:a 4', Loaded[0].Args);
+  Assert.IsTrue(Loaded[0].Enabled);
+  Assert.AreEqual('poster', Loaded[1].Name);
+end;
+
+procedure TTestWcxPresets.TestSavePresetsPreservesArrayOrder;
+var
+  Path: string;
+  Saved, Loaded: TWcxPresetArray;
+begin
+  { Ordering matters: the listing-time dedupe gives the bare name to the
+    first-defined preset. The editor's drag-reorder semantics depend on
+    Save preserving the array order verbatim. }
+  Path := TPath.Combine(FTempDir, 'order.ini');
+  SetLength(Saved, 3);
+  Saved[0].Name := 'zeta'; Saved[0].OutputExt := 'mp3'; Saved[0].Enabled := True;
+  Saved[1].Name := 'alpha'; Saved[1].OutputExt := 'mp3'; Saved[1].Enabled := True;
+  Saved[2].Name := 'mid'; Saved[2].OutputExt := 'mp3'; Saved[2].Enabled := True;
+
+  SavePresets(Path, Saved);
+  Loaded := LoadAllPresets(Path);
+
+  Assert.AreEqual('zeta', Loaded[0].Name);
+  Assert.AreEqual('alpha', Loaded[1].Name);
+  Assert.AreEqual('mid', Loaded[2].Name);
+end;
+
+procedure TTestWcxPresets.TestSavePresetsOmitsEmptyOptionalKeys;
+var
+  Path, Body: string;
+  P: TWcxPresetArray;
+begin
+  { Optional keys (Description, OutputName, Args) must be omitted entirely
+    when empty so the saved INI stays minimal and round-trips through the
+    same defaults the loader applies on a fresh read. }
+  Path := TPath.Combine(FTempDir, 'omit.ini');
+  SetLength(P, 1);
+  P[0].Name := 'minimal'; P[0].OutputExt := 'mp4'; P[0].Enabled := True;
+  SavePresets(Path, P);
+  {No-encoding overload auto-detects via BOM; SavePresets emits UTF-16 LE
+   so TIniFile reads it via the Win32 Unicode profile API.}
+  Body := TFile.ReadAllText(Path);
+  Assert.IsFalse(Body.Contains('Description='));
+  Assert.IsFalse(Body.Contains('OutputName='));
+  Assert.IsFalse(Body.Contains('Args='));
+  Assert.IsTrue(Body.Contains('OutputExt=mp4'));
+end;
+
+procedure TTestWcxPresets.TestSavePresetsEmptyArrayProducesEmptyFile;
+var
+  Path: string;
+  Body: string;
+begin
+  { Saving zero presets must produce a syntactically empty file rather
+    than failing or leaving stale content from a prior write. }
+  Path := TPath.Combine(FTempDir, 'empty.ini');
+  TFile.WriteAllText(Path, 'leftover_content', TEncoding.UTF8);
+  SavePresets(Path, nil);
+  Body := TFile.ReadAllText(Path);
+  Assert.AreEqual('', Body.Trim);
+end;
+
+procedure TTestWcxPresets.TestSavePresetsEmptyPathSilentlyIgnored;
+var
+  P: TWcxPresetArray;
+begin
+  { Mirror TWcxSettings.Save: an empty path is the documented "no place
+    to write" sentinel, not an error to raise. }
+  SetLength(P, 1);
+  P[0].Name := 'a'; P[0].OutputExt := 'mp3'; P[0].Enabled := True;
+  SavePresets('', P);
+  Assert.Pass('No exception');
+end;
+
+procedure TTestWcxPresets.TestSavePresetsEnabledFlagPersists;
+var
+  Path: string;
+  P, Loaded: TWcxPresetArray;
+begin
+  { Enabled=False must round-trip via LoadAll (LoadPresets drops it). }
+  Path := TPath.Combine(FTempDir, 'enabled.ini');
+  SetLength(P, 1);
+  P[0].Name := 'off';
+  P[0].OutputExt := 'mp3';
+  P[0].Enabled := False;
+  SavePresets(Path, P);
+  Loaded := LoadAllPresets(Path);
+  Assert.AreEqual(1, Integer(Length(Loaded)));
+  Assert.IsFalse(Loaded[0].Enabled);
 end;
 
 end.

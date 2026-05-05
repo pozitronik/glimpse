@@ -814,6 +814,171 @@ object WcxSettingsForm: TWcxSettingsForm
           'Bottom')
       end
     end
+    object TshPresets: TTabSheet
+      Caption = 'Presets'
+      ImageIndex = 4
+      object LbxPresets: TListBox
+        Left = 8
+        Top = 8
+        Width = 100
+        Height = 384
+        ItemHeight = 15
+        TabOrder = 0
+        OnClick = LbxPresetsClick
+      end
+      object BtnPresetAdd: TButton
+        Left = 112
+        Top = 8
+        Width = 44
+        Height = 24
+        Caption = 'Add'
+        TabOrder = 1
+        OnClick = BtnPresetAddClick
+      end
+      object BtnPresetRemove: TButton
+        Left = 112
+        Top = 36
+        Width = 44
+        Height = 24
+        Caption = 'Del'
+        TabOrder = 2
+        OnClick = BtnPresetRemoveClick
+      end
+      object BtnPresetDuplicate: TButton
+        Left = 112
+        Top = 64
+        Width = 44
+        Height = 24
+        Caption = 'Copy'
+        TabOrder = 3
+        OnClick = BtnPresetDuplicateClick
+      end
+      object BtnPresetMoveUp: TButton
+        Left = 112
+        Top = 92
+        Width = 44
+        Height = 24
+        Caption = 'Up'
+        TabOrder = 4
+        OnClick = BtnPresetMoveUpClick
+      end
+      object BtnPresetMoveDown: TButton
+        Left = 112
+        Top = 120
+        Width = 44
+        Height = 24
+        Caption = 'Down'
+        TabOrder = 5
+        OnClick = BtnPresetMoveDownClick
+      end
+      object LblPresetName: TLabel
+        Left = 164
+        Top = 12
+        Width = 32
+        Height = 15
+        Caption = 'Name:'
+      end
+      object EdtPresetName: TEdit
+        Left = 164
+        Top = 28
+        Width = 280
+        Height = 23
+        TabOrder = 6
+      end
+      object ChkPresetEnabled: TCheckBox
+        Left = 164
+        Top = 58
+        Width = 280
+        Height = 17
+        Caption = 'Enabled'
+        TabOrder = 7
+      end
+      object LblPresetDescription: TLabel
+        Left = 164
+        Top = 86
+        Width = 67
+        Height = 15
+        Caption = 'Description:'
+      end
+      object EdtPresetDescription: TEdit
+        Left = 164
+        Top = 102
+        Width = 280
+        Height = 23
+        TabOrder = 8
+      end
+      object LblPresetOutputExt: TLabel
+        Left = 164
+        Top = 132
+        Width = 80
+        Height = 15
+        Caption = 'Output ext:'
+      end
+      object EdtPresetOutputExt: TEdit
+        Left = 164
+        Top = 148
+        Width = 80
+        Height = 23
+        TabOrder = 9
+      end
+      object LblPresetOutputName: TLabel
+        Left = 164
+        Top = 178
+        Width = 95
+        Height = 15
+        Caption = 'Output name:'
+      end
+      object EdtPresetOutputName: TEdit
+        Left = 164
+        Top = 194
+        Width = 280
+        Height = 23
+        TabOrder = 10
+      end
+      object LblPresetArgs: TLabel
+        Left = 164
+        Top = 224
+        Width = 80
+        Height = 15
+        Caption = 'ffmpeg args:'
+      end
+      object MemoPresetArgs: TMemo
+        Left = 164
+        Top = 240
+        Width = 280
+        Height = 100
+        ScrollBars = ssVertical
+        TabOrder = 11
+      end
+      object LblPresetHintTemplate: TLabel
+        Left = 164
+        Top = 348
+        Width = 280
+        Height = 15
+        AutoSize = False
+        Caption = 'Output name vars: %basename%, %name%, %ext%'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
+        Font.Height = -11
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+      object LblPresetHintForbidden: TLabel
+        Left = 164
+        Top = 366
+        Width = 280
+        Height = 15
+        AutoSize = False
+        Caption = 'Forbidden in args: -i, -y, -n, pipe:0/1/2'
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
+        Font.Height = -11
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+      end
+    end
     object TshLimits: TTabSheet
       Caption = 'Size limit'
       ImageIndex = 3
@@ -930,8 +1095,8 @@ object WcxSettingsForm: TWcxSettingsForm
       Anchors = [akRight, akBottom]
       Caption = 'OK'
       Default = True
-      ModalResult = 1
       TabOrder = 2
+      OnClick = BtnOKClick
     end
     object BtnCancel: TButton
       Left = 377

@@ -43,8 +43,28 @@ type
  sections; never raises. Disabled entries, entries missing the required
  OutputExt, entries with a malformed OutputExt or OutputName, and entries
  whose Args contain a forbidden token are skipped with a DebugLog warning
- so the rest of the file still loads.}
+ so the rest of the file still loads.
+ Note: the "skip disabled" semantics are tailored to the WCX listing path
+ (a disabled preset has no place in the visible archive). The editor uses
+ LoadAllPresets instead so it can show, edit, and re-enable disabled
+ entries.}
 function LoadPresets(const APath: string): TWcxPresetArray;
+
+{Loads every preset section verbatim — including disabled entries —
+ without applying the validation filter. Used by the GUI editor so a
+ disabled or temporarily-malformed preset is visible and fixable rather
+ than silently dropped on file open. Sections that cannot be parsed at
+ all are still skipped (they would round-trip to invalid INI), but the
+ OutputExt / OutputName / Args validation is deferred to save time.}
+function LoadAllPresets(const APath: string): TWcxPresetArray;
+
+{Writes APresets to APath in their array order. Order matters — first
+ defined wins the bare name in the listing-time dedupe pass — so the
+ editor stores its working order via this routine. Overwrites the file
+ atomically by writing the full content in one shot rather than poking
+ individual TIniFile keys (TIniFile would not preserve section order on
+ a fresh file). UTF-8 with no BOM matches the loader's expectations.}
+procedure SavePresets(const APath: string; const APresets: TWcxPresetArray);
 
 {Expands the recognised template variables against AInputPath and APresetName.
  Recognised tokens: %basename% (input filename without path or extension),
@@ -303,6 +323,25 @@ begin
   Result := IncludeTrailingPathDelimiter(ExtractFilePath(ASettingsIniPath)) + 'presets.ini';
 end;
 
+{Reads one section into a preset record without applying any validation.
+ OutputExt is normalised (leading dot stripped) for editor convenience;
+ the more involved checks live in the caller.}
+function ReadPresetSection(AIni: TIniFile; const ASection: string): TWcxPreset;
+var
+  RawExt: string;
+begin
+  Result := Default(TWcxPreset);
+  Result.Name := ASection;
+  Result.Enabled := ReadBoolLenient(AIni, ASection, 'Enabled', True);
+  Result.Description := AIni.ReadString(ASection, 'Description', '').Trim;
+  Result.OutputName := AIni.ReadString(ASection, 'OutputName', '').Trim;
+  Result.Args := AIni.ReadString(ASection, 'Args', '');
+  RawExt := AIni.ReadString(ASection, 'OutputExt', '').Trim;
+  if (Length(RawExt) > 0) and (RawExt[1] = '.') then
+    RawExt := Copy(RawExt, 2, Length(RawExt) - 1);
+  Result.OutputExt := RawExt;
+end;
+
 function LoadPresets(const APath: string): TWcxPresetArray;
 var
   Ini: TIniFile;
@@ -325,20 +364,14 @@ begin
         for I := 0 to Sections.Count - 1 do
         begin
           Section := Sections[I];
-          Preset := Default(TWcxPreset);
-          Preset.Name := Section;
-          Preset.Enabled := ReadBoolLenient(Ini, Section, 'Enabled', True);
+          Preset := ReadPresetSection(Ini, Section);
           if not Preset.Enabled then
           begin
             PresetLog(Format('Preset "%s" disabled, skipped', [Section]));
             Continue;
           end;
 
-          Preset.Description := Ini.ReadString(Section, 'Description', '').Trim;
-          Preset.OutputName := Ini.ReadString(Section, 'OutputName', '').Trim;
-          Preset.Args := Ini.ReadString(Section, 'Args', '');
-
-          if not NormalizeOutputExt(Ini.ReadString(Section, 'OutputExt', ''), NormalizedExt) then
+          if not NormalizeOutputExt(Preset.OutputExt, NormalizedExt) then
           begin
             PresetLog(Format('Preset "%s" rejected: missing or invalid OutputExt', [Section]));
             Continue;
@@ -368,6 +401,81 @@ begin
     Result := Accum.ToArray;
   finally
     Accum.Free;
+  end;
+end;
+
+function LoadAllPresets(const APath: string): TWcxPresetArray;
+var
+  Ini: TIniFile;
+  Sections: TStringList;
+  Accum: TList<TWcxPreset>;
+  I: Integer;
+begin
+  Result := nil;
+  if not FileExists(APath) then
+    Exit;
+  Accum := TList<TWcxPreset>.Create;
+  try
+    Ini := TIniFile.Create(APath);
+    try
+      Sections := TStringList.Create;
+      try
+        Ini.ReadSections(Sections);
+        for I := 0 to Sections.Count - 1 do
+          Accum.Add(ReadPresetSection(Ini, Sections[I]));
+      finally
+        Sections.Free;
+      end;
+    finally
+      Ini.Free;
+    end;
+    Result := Accum.ToArray;
+  finally
+    Accum.Free;
+  end;
+end;
+
+procedure SavePresets(const APath: string; const APresets: TWcxPresetArray);
+var
+  Lines: TStringList;
+  I: Integer;
+  P: TWcxPreset;
+begin
+  if APath = '' then
+    Exit;
+  Lines := TStringList.Create;
+  try
+    {Manual emit so section ordering reflects the array verbatim — TIniFile
+     re-orders new sections to the end and would not preserve the editor's
+     drag-reorder semantics on an empty-or-rewritten file.}
+    for I := 0 to High(APresets) do
+    begin
+      P := APresets[I];
+      if I > 0 then
+        Lines.Add('');
+      Lines.Add('[' + P.Name + ']');
+      if P.Enabled then
+        Lines.Add('Enabled=1')
+      else
+        Lines.Add('Enabled=0');
+      if P.Description <> '' then
+        Lines.Add('Description=' + P.Description);
+      Lines.Add('OutputExt=' + P.OutputExt);
+      if P.OutputName <> '' then
+        Lines.Add('OutputName=' + P.OutputName);
+      {Args may legitimately be empty (default-codec transcode) so the
+       presence of the key is what the loader checks; absence means
+       "no args", which is round-trip safe.}
+      if P.Args <> '' then
+        Lines.Add('Args=' + P.Args);
+    end;
+    {UTF-16 LE with BOM is the only Unicode encoding TIniFile (Win32
+     profile APIs underneath) reads correctly. UTF-8 BOM would be parsed
+     as garbage prepended to the first section name, eating the first
+     entry on the next load.}
+    Lines.SaveToFile(APath, TEncoding.Unicode);
+  finally
+    Lines.Free;
   end;
 end;
 

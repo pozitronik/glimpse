@@ -513,7 +513,12 @@ begin
      because it produces the same legacy-only output when the preset
      array is empty.}
     if H.Settings.UsePresets then
+    begin
       H.Presets := LoadPresets(PresetsIniPath(GIniPath));
+      WcxLog(Format('Presets: UsePresets=ON, path="%s", loaded=%d', [PresetsIniPath(GIniPath), Length(H.Presets)]));
+    end
+    else
+      WcxLog(Format('Presets: UsePresets=OFF (read from "%s")', [GIniPath]));
     H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.OutputMode, H.Settings.SaveFormat, H.Settings.UsePresets, H.Presets);
 
     if H.Settings.ShowFileSizes then
@@ -924,6 +929,11 @@ GDeleteDirectoryProc := DefaultDeleteDirectory;
 {Fallback: INI next to the DLL, in case SetDefaultParams is not called
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
+
+{Temporary diagnostic logging for the preset-feature smoke test. Writes
+ next to the DLL so the user can find it without hunting. Remove or gate
+ behind a setting once the feature is proven.}
+GDebugLogPath := ChangeFileExt(GetModuleName(HInstance), '.log');
 
 {Seed the global Random once per DLL load. CalculateRandomFrameOffsets
  reads from this RNG; without seeding, every TC session would emit the

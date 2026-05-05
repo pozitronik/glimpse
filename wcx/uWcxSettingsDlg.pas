@@ -9,7 +9,7 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Controls, Vcl.ComCtrls,
   Vcl.Dialogs,
   Winapi.Windows,
-  uWcxSettings;
+  uWcxSettings, uWcxPresetEditorModel;
 
 type
   TWcxSettingsForm = class(TForm)
@@ -120,6 +120,27 @@ type
     BtnOK: TButton;
     BtnCancel: TButton;
     ColorDlg: TColorDialog;
+    {Presets tab — master-detail editor over TPresetEditorModel}
+    TshPresets: TTabSheet;
+    LbxPresets: TListBox;
+    BtnPresetAdd: TButton;
+    BtnPresetRemove: TButton;
+    BtnPresetDuplicate: TButton;
+    BtnPresetMoveUp: TButton;
+    BtnPresetMoveDown: TButton;
+    LblPresetName: TLabel;
+    EdtPresetName: TEdit;
+    ChkPresetEnabled: TCheckBox;
+    LblPresetDescription: TLabel;
+    EdtPresetDescription: TEdit;
+    LblPresetOutputExt: TLabel;
+    EdtPresetOutputExt: TEdit;
+    LblPresetOutputName: TLabel;
+    EdtPresetOutputName: TEdit;
+    LblPresetArgs: TLabel;
+    MemoPresetArgs: TMemo;
+    LblPresetHintTemplate: TLabel;
+    LblPresetHintForbidden: TLabel;
     procedure CbxOutputModeChange(Sender: TObject);
     procedure BtnFFmpegPathClick(Sender: TObject);
     procedure EdtFFmpegPathChange(Sender: TObject);
@@ -138,6 +159,13 @@ type
     procedure BtnApplyClick(Sender: TObject);
     procedure BtnDefaultsClick(Sender: TObject);
     procedure TrkRandomPercentChange(Sender: TObject);
+    procedure BtnOKClick(Sender: TObject);
+    procedure LbxPresetsClick(Sender: TObject);
+    procedure BtnPresetAddClick(Sender: TObject);
+    procedure BtnPresetRemoveClick(Sender: TObject);
+    procedure BtnPresetDuplicateClick(Sender: TObject);
+    procedure BtnPresetMoveUpClick(Sender: TObject);
+    procedure BtnPresetMoveDownClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
     FSettings: TWcxSettings;
@@ -146,8 +174,33 @@ type
     FTimestampFontSize: Integer;
     FBannerFontName: string;
     FBannerFontSize: Integer;
+    FPresetModel: TPresetEditorModel;
+    FPresetsPath: string;
+    {Tracks which row the edit fields currently mirror so a list-selection
+     change can flush the in-progress edits back to the model before
+     loading the newly-selected row.}
+    FCurrentPresetIndex: Integer;
     procedure SettingsToControls(ASettings: TWcxSettings);
     procedure ControlsToSettings(ASettings: TWcxSettings);
+    {Pulls every preset from disk into FPresetModel and refreshes the
+     listbox. Called once at dialog open and after Apply (so the next
+     edit cycle starts from the persisted state).}
+    procedure LoadPresetsFromDisk;
+    {Refreshes the listbox to mirror FPresetModel and selects ASelectIndex
+     (clamping to a valid row when out of range).}
+    procedure RefreshPresetList(ASelectIndex: Integer);
+    {Loads the preset at AIndex into the edit fields. Pass -1 to clear
+     the panel and disable editing (no rows in the model).}
+    procedure ShowPreset(AIndex: Integer);
+    {Saves the edit fields back into FPresetModel at FCurrentPresetIndex.
+     No-op when no row is currently displayed.}
+    procedure CommitCurrentPreset;
+    procedure SetEditFieldsEnabled(AEnabled: Boolean);
+    {Validates the model and writes both Glimpse.ini and presets.ini.
+     Returns False on validation failure (with a message box already
+     shown and the offending preset selected/focused). Used by both
+     Apply and OK so the persistence rules stay in one place.}
+    function TrySaveAll: Boolean;
     procedure UpdateCombinedState;
     {Greys out the randomness slider and its labels when the random
      extraction checkbox is unchecked, so the user is not given a control
@@ -164,6 +217,7 @@ type
     procedure CreateParams(var Params: TCreateParams); override;
   public
     constructor CreateWithOwner(AOwnerWnd: HWND);
+    destructor Destroy; override;
   end;
 
   {Shows the WCX settings dialog. Returns True if the user clicked OK.
@@ -178,7 +232,8 @@ implementation
 uses
   System.Math,
   uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic,
-  uSettingsDlgUI, uDefaults, uTypes;
+  uSettingsDlgUI, uDefaults, uTypes,
+  uWcxPresets;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 var
@@ -499,19 +554,231 @@ begin
   TrkRandomPercent.Enabled := Enabled;
 end;
 
-procedure TWcxSettingsForm.BtnApplyClick(Sender: TObject);
+function TWcxSettingsForm.TrySaveAll: Boolean;
+var
+  BadIdx: Integer;
+  Reason: string;
 begin
-  {Persist immediately so the archive-browsing path, which re-reads the INI,
-   picks up the changes without the user having to close the dialog first.}
+  Result := False;
   if FSettings = nil then
     Exit;
+  {Flush any in-progress edits in the right-hand panel back to the model
+   so validation and save see the user's latest input, not the snapshot
+   from the last list-selection change.}
+  CommitCurrentPreset;
+  if not FPresetModel.Validate(BadIdx, Reason) then
+  begin
+    PageControl.ActivePage := TshPresets;
+    if (BadIdx >= 0) and (BadIdx < LbxPresets.Items.Count) then
+    begin
+      LbxPresets.ItemIndex := BadIdx;
+      ShowPreset(BadIdx);
+    end;
+    MessageBox(Handle, PChar(Reason), 'Invalid preset', MB_OK or MB_ICONWARNING);
+    Exit;
+  end;
+
   ControlsToSettings(FSettings);
   FSettings.Save;
+  if FPresetsPath <> '' then
+    SavePresets(FPresetsPath, FPresetModel.ToArray);
   {Re-validate the FFmpeg path in case the user changed it; without this
    the info label keeps showing the validation result from dialog open.}
   UpdateFFmpegInfo;
   if Assigned(FOnApply) then
     FOnApply();
+  Result := True;
+end;
+
+procedure TWcxSettingsForm.BtnApplyClick(Sender: TObject);
+begin
+  TrySaveAll;
+end;
+
+procedure TWcxSettingsForm.BtnOKClick(Sender: TObject);
+begin
+  {OK is "save and close". Validation failure keeps the dialog open so
+   the user can fix the offending preset; success sets ModalResult so
+   ShowModal returns mrOk and the caller knows the dialog committed.}
+  if TrySaveAll then
+    ModalResult := mrOk;
+end;
+
+procedure TWcxSettingsForm.LoadPresetsFromDisk;
+begin
+  FPresetModel.LoadFrom(LoadAllPresets(FPresetsPath));
+  RefreshPresetList(0);
+end;
+
+procedure TWcxSettingsForm.RefreshPresetList(ASelectIndex: Integer);
+var
+  I, NewSel: Integer;
+  Caption: string;
+begin
+  LbxPresets.Items.BeginUpdate;
+  try
+    LbxPresets.Items.Clear;
+    for I := 0 to FPresetModel.Count - 1 do
+    begin
+      Caption := FPresetModel.Get(I).Name;
+      if not FPresetModel.Get(I).Enabled then
+        Caption := Caption + ' (off)';
+      LbxPresets.Items.Add(Caption);
+    end;
+  finally
+    LbxPresets.Items.EndUpdate;
+  end;
+
+  if FPresetModel.Count = 0 then
+  begin
+    LbxPresets.ItemIndex := -1;
+    ShowPreset(-1);
+    Exit;
+  end;
+
+  NewSel := ASelectIndex;
+  if NewSel < 0 then
+    NewSel := 0;
+  if NewSel >= FPresetModel.Count then
+    NewSel := FPresetModel.Count - 1;
+  LbxPresets.ItemIndex := NewSel;
+  ShowPreset(NewSel);
+end;
+
+procedure TWcxSettingsForm.SetEditFieldsEnabled(AEnabled: Boolean);
+begin
+  EdtPresetName.Enabled := AEnabled;
+  ChkPresetEnabled.Enabled := AEnabled;
+  EdtPresetDescription.Enabled := AEnabled;
+  EdtPresetOutputExt.Enabled := AEnabled;
+  EdtPresetOutputName.Enabled := AEnabled;
+  MemoPresetArgs.Enabled := AEnabled;
+end;
+
+procedure TWcxSettingsForm.ShowPreset(AIndex: Integer);
+var
+  P: TWcxPreset;
+begin
+  FCurrentPresetIndex := AIndex;
+  if (AIndex < 0) or (AIndex >= FPresetModel.Count) then
+  begin
+    EdtPresetName.Text := '';
+    ChkPresetEnabled.Checked := False;
+    EdtPresetDescription.Text := '';
+    EdtPresetOutputExt.Text := '';
+    EdtPresetOutputName.Text := '';
+    MemoPresetArgs.Text := '';
+    SetEditFieldsEnabled(False);
+    Exit;
+  end;
+
+  P := FPresetModel.Get(AIndex);
+  EdtPresetName.Text := P.Name;
+  ChkPresetEnabled.Checked := P.Enabled;
+  EdtPresetDescription.Text := P.Description;
+  EdtPresetOutputExt.Text := P.OutputExt;
+  EdtPresetOutputName.Text := P.OutputName;
+  MemoPresetArgs.Text := P.Args;
+  SetEditFieldsEnabled(True);
+end;
+
+procedure TWcxSettingsForm.CommitCurrentPreset;
+var
+  P: TWcxPreset;
+  ListCaption: string;
+begin
+  if (FCurrentPresetIndex < 0) or (FCurrentPresetIndex >= FPresetModel.Count) then
+    Exit;
+  P := FPresetModel.Get(FCurrentPresetIndex);
+  P.Name := Trim(EdtPresetName.Text);
+  P.Enabled := ChkPresetEnabled.Checked;
+  P.Description := Trim(EdtPresetDescription.Text);
+  P.OutputExt := Trim(EdtPresetOutputExt.Text);
+  P.OutputName := Trim(EdtPresetOutputName.Text);
+  P.Args := MemoPresetArgs.Text;
+  FPresetModel.Update(FCurrentPresetIndex, P);
+
+  {Reflect rename or enabled-toggle in the listbox label without rebuilding
+   the whole list, which would lose the user's selection.}
+  ListCaption := P.Name;
+  if not P.Enabled then
+    ListCaption := ListCaption + ' (off)';
+  if FCurrentPresetIndex < LbxPresets.Items.Count then
+    LbxPresets.Items[FCurrentPresetIndex] := ListCaption;
+end;
+
+procedure TWcxSettingsForm.LbxPresetsClick(Sender: TObject);
+begin
+  if LbxPresets.ItemIndex = FCurrentPresetIndex then
+    Exit;
+  CommitCurrentPreset;
+  ShowPreset(LbxPresets.ItemIndex);
+end;
+
+procedure TWcxSettingsForm.BtnPresetAddClick(Sender: TObject);
+var
+  NewIdx: Integer;
+begin
+  CommitCurrentPreset;
+  NewIdx := FPresetModel.Add;
+  RefreshPresetList(NewIdx);
+  EdtPresetName.SetFocus;
+  EdtPresetName.SelectAll;
+end;
+
+procedure TWcxSettingsForm.BtnPresetRemoveClick(Sender: TObject);
+var
+  Idx: Integer;
+begin
+  Idx := LbxPresets.ItemIndex;
+  if Idx < 0 then
+    Exit;
+  {Skip the commit on remove — the in-flight edits are about to be
+   discarded. Drop the model row directly.}
+  FCurrentPresetIndex := -1;
+  FPresetModel.Remove(Idx);
+  RefreshPresetList(Idx);
+end;
+
+procedure TWcxSettingsForm.BtnPresetDuplicateClick(Sender: TObject);
+var
+  Idx, NewIdx: Integer;
+begin
+  Idx := LbxPresets.ItemIndex;
+  if Idx < 0 then
+    Exit;
+  CommitCurrentPreset;
+  NewIdx := FPresetModel.Duplicate(Idx);
+  if NewIdx >= 0 then
+  begin
+    RefreshPresetList(NewIdx);
+    EdtPresetName.SetFocus;
+    EdtPresetName.SelectAll;
+  end;
+end;
+
+procedure TWcxSettingsForm.BtnPresetMoveUpClick(Sender: TObject);
+var
+  Idx, NewIdx: Integer;
+begin
+  Idx := LbxPresets.ItemIndex;
+  if Idx < 0 then
+    Exit;
+  CommitCurrentPreset;
+  NewIdx := FPresetModel.MoveUp(Idx);
+  RefreshPresetList(NewIdx);
+end;
+
+procedure TWcxSettingsForm.BtnPresetMoveDownClick(Sender: TObject);
+var
+  Idx, NewIdx: Integer;
+begin
+  Idx := LbxPresets.ItemIndex;
+  if Idx < 0 then
+    Exit;
+  CommitCurrentPreset;
+  NewIdx := FPresetModel.MoveDown(Idx);
+  RefreshPresetList(NewIdx);
 end;
 
 procedure TWcxSettingsForm.BtnFFmpegPathClick(Sender: TObject);
@@ -561,6 +828,14 @@ constructor TWcxSettingsForm.CreateWithOwner(AOwnerWnd: HWND);
 begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
+  FPresetModel := TPresetEditorModel.Create;
+  FCurrentPresetIndex := -1;
+end;
+
+destructor TWcxSettingsForm.Destroy;
+begin
+  FPresetModel.Free;
+  inherited;
 end;
 
 procedure TWcxSettingsForm.CreateParams(var Params: TCreateParams);
@@ -581,9 +856,14 @@ begin
   try
     Dlg.FSettings := ASettings;
     Dlg.FOnApply := AOnApply;
+    Dlg.FPresetsPath := PresetsIniPath(ASettings.IniPath);
     Dlg.SettingsToControls(ASettings);
+    Dlg.LoadPresetsFromDisk;
     if Dlg.ShowModal = mrOk then
     begin
+      {Settings + presets are already persisted by BtnOKClick → TrySaveAll;
+       just refresh the caller's settings reference so any post-dialog
+       inspection sees what the dialog committed.}
       Dlg.ControlsToSettings(ASettings);
       Result := True;
     end;

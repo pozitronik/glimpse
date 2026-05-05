@@ -35,6 +35,14 @@ type
  Pure function exposed for tests.}
 function QuoteArg(const ARaw: string): string;
 
+{Builds the tempfile path used during a preset extract.
+ Inserts ".tmp" between the basename and the extension so the real
+ extension is preserved — ffmpeg infers the output container from the
+ extension, and a naive "<name>.<ext>.tmp" form would make it see ".tmp"
+ and bail with "Unable to choose an output format". For "poster.jpg"
+ returns "poster.tmp.jpg"; for "no_ext" returns "no_ext.tmp".}
+function MakeTempPath(const AOutputPath: string): string;
+
 {Composes the ffmpeg command line for one preset run.
  Layout: <exe> -hide_banner -nostdin -loglevel error -progress pipe:1 -y
          -i <input> <user tokens> <tempout>
@@ -84,6 +92,14 @@ const
   MOVEFILE_REPLACE_EXISTING = 1;
 
 function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
+
+function MakeTempPath(const AOutputPath: string): string;
+var
+  Ext: string;
+begin
+  Ext := ExtractFileExt(AOutputPath);
+  Result := ChangeFileExt(AOutputPath, '') + '.tmp' + Ext;
+end;
 
 function QuoteArg(const ARaw: string): string;
 var
@@ -206,7 +222,7 @@ var
   ErrorText: string;
 begin
   Result := Default(TPresetExtractResult);
-  TempPath := AOutputPath + '.tmp';
+  TempPath := MakeTempPath(AOutputPath);
 
   {A leftover .tmp from a previous crashed run would normally be
    overwritten by the -y flag we pass to ffmpeg, but pre-cleaning makes
