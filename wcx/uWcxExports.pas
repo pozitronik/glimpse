@@ -95,7 +95,7 @@ uses
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
   uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize,
-  uWcxPresets, uWcxListing;
+  uWcxPresets, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor;
 
 type
   {State for one open archive (video file)}
@@ -693,6 +693,66 @@ begin
   end;
 end;
 
+{Runs a user-defined ffmpeg preset, surfacing progress through TC's
+ ProcessDataProc callback and respecting user cancel.
+ ADisplayName is the dedupe-resolved listed filename used as the fallback
+ when TC supplies only ADestPath; ADestName, when set, is the absolute
+ destination TC has already chosen and wins over the fallback.
+ Both cancel and error paths map to E_EWRITE because TC handles E_EWRITE
+ on cancel by suppressing its error popup, while a real error still
+ surfaces via the WcxLog message and the dialog TC shows for E_EWRITE.}
+function DoExtractPreset(H: TArchiveHandle; APresetIndex: Integer; const ADisplayName, ADestPath, ADestName: string): Integer;
+const
+  {Effectively no wall-clock cap: presets are arbitrary user transcodes
+   that may run for hours on long videos. The user's cancel button
+   (which signals the bridge cancel handle) is the intended stop
+   mechanism; a hung ffmpeg can still be killed via Task Manager.}
+  PRESET_EXTRACT_TIMEOUT_MS = INFINITE;
+var
+  Bridge: TWcxProgressBridge;
+  FullPath: string;
+  ExtractResult: TPresetExtractResult;
+  Preset: TWcxPreset;
+begin
+  if (APresetIndex < 0) or (APresetIndex >= Length(H.Presets)) then
+    Exit(E_BAD_DATA);
+
+  Preset := H.Presets[APresetIndex];
+
+  if ADestName <> '' then
+    FullPath := ADestName
+  else if ADestPath <> '' then
+    FullPath := IncludeTrailingPathDelimiter(ADestPath) + ADisplayName
+  else
+    Exit(E_ECREATE);
+
+  WcxLog(Format('Extract preset "%s" -> %s', [Preset.Name, FullPath]));
+
+  Bridge := TWcxProgressBridge.Create(FullPath, H.ProcessDataProc, H.ProcessDataProcW);
+  try
+    {Up-front ping registers this file with TC's progress UI and gives the
+     user a cancel point before ffmpeg even starts spinning.}
+    if not Bridge.Ping then
+      Exit(E_EWRITE);
+
+    ExtractResult := ExtractPreset(H.FFmpegPath, H.FileName, FullPath, Preset, H.VideoInfo.Duration,
+      function(APercent: Integer): Boolean
+      begin
+        Result := Bridge.ReportPercent(APercent);
+      end,
+      Bridge.CancelHandle, PRESET_EXTRACT_TIMEOUT_MS);
+
+    if ExtractResult.Success then
+      Exit(E_SUCCESS);
+
+    WcxLog(Format('Preset "%s" failed (cancelled=%s exitCode=%d): %s',
+      [Preset.Name, BoolToStr(ExtractResult.Cancelled, True), ExtractResult.ExitCode, ExtractResult.ErrorMessage]));
+    Result := E_EWRITE;
+  finally
+    Bridge.Free;
+  end;
+end;
+
 function DoProcessFile(hArcData: THandle; Operation: Integer; const ADestPath, ADestName: string): Integer;
 var
   H: TArchiveHandle;
@@ -724,15 +784,7 @@ begin
       ekCombined:
         Result := DoExtractCombined(H, ADestPath, ADestName);
       ekPreset:
-        begin
-          {Step 3 stub: the listing surfaces the preset entry so users see
-           it in the archive view, but the actual ffmpeg invocation is
-           wired in Step 6. Returning E_NOT_SUPPORTED keeps the visible
-           listing safe — TC reports the failure to the user instead of
-           silently producing a garbage file.}
-          WcxLog(Format('ProcessFile: preset entry "%s" extraction stub (Step 6 will implement)', [Entry.FileName]));
-          Result := E_NOT_SUPPORTED;
-        end;
+        Result := DoExtractPreset(H, Entry.PresetIndex, Entry.FileName, ADestPath, ADestName);
     else
       Result := E_NOT_SUPPORTED;
     end;
