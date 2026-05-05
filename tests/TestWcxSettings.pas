@@ -100,6 +100,12 @@ type
     [Test] procedure TestRandomExtractionRoundTrip;
     [Test] procedure TestRandomPercentClampedHigh;
     [Test] procedure TestRandomPercentClampedLow;
+    { UsePresets master switch — fresh installs must keep the legacy frame /
+      combined output unchanged, so the default is False and the key only
+      flips the listing behaviour when the user opts in explicitly. }
+    [Test] procedure TestUsePresetsDefault;
+    [Test] procedure TestUsePresetsRoundTrip;
+    [Test] procedure TestUsePresetsAbsentKeyKeepsDefault;
   end;
 
 implementation
@@ -1808,6 +1814,73 @@ begin
   try
     S.Load;
     Assert.AreEqual(MIN_RANDOM_PERCENT, S.RandomPercent);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestUsePresetsDefault;
+var
+  S: TWcxSettings;
+begin
+  { Fresh instance must report the documented default so the legacy listing
+    behaviour survives a settings reset. }
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_presets_def.ini'));
+  try
+    Assert.AreEqual(WCX_DEF_USE_PRESETS, S.UsePresets,
+      'UsePresets default must match WCX_DEF_USE_PRESETS');
+    Assert.IsFalse(S.UsePresets,
+      'UsePresets default must be False so existing installs keep current behaviour');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestUsePresetsRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_presets_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.UsePresets := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsTrue(S2.UsePresets,
+      'Flipped UsePresets must persist through INI');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestUsePresetsAbsentKeyKeepsDefault;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { Old INI files predate the UsePresets key. Their absence must not flip the
+    feature on for users who have never asked for it. }
+  IniPath := TPath.Combine(FTempDir, 'wcx_presets_absent.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 6);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(WCX_DEF_USE_PRESETS, S.UsePresets,
+      'Missing UsePresets key must leave the documented default intact');
   finally
     S.Free;
   end;

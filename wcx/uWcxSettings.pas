@@ -48,6 +48,12 @@ type
      cap triggers a post-render HALFTONE downscale of the assembled grid.}
     FFrameMaxSide: Integer;
     FCombinedMaxSide: Integer;
+    {Master switch for the user-defined ffmpeg preset feature. Off by default
+     so a fresh install behaves identically to the legacy frame/combined
+     output. When True, presets defined in a sibling presets.ini are appended
+     to the archive listing; when False, the preset file is ignored entirely
+     regardless of how many presets it contains.}
+    FUsePresets: Boolean;
 
   public
     constructor Create(const AIniPath: string);
@@ -99,6 +105,7 @@ type
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
     property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
+    property UsePresets: Boolean read FUsePresets write FUsePresets;
   end;
 
 const
@@ -116,6 +123,7 @@ const
   WCX_DEF_COMBINED_MAX_SIDE = 0;
   WCX_MIN_OUTPUT_SIDE = 0;
   WCX_MAX_OUTPUT_SIDE = MAX_FRAME_SIDE; {8K}
+  WCX_DEF_USE_PRESETS = False;
 
 implementation
 
@@ -157,6 +165,7 @@ begin
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
   FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
   FCombinedMaxSide := WCX_DEF_COMBINED_MAX_SIDE;
+  FUsePresets := WCX_DEF_USE_PRESETS;
 end;
 
 procedure TWcxSettings.Load;
@@ -209,6 +218,8 @@ begin
 
     FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide', FFrameMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
     FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', FCombinedMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+
+    FUsePresets := Ini.ReadBool('output', 'UsePresets', FUsePresets);
   finally
     Ini.Free;
   end;
@@ -250,6 +261,8 @@ begin
 
     Ini.WriteInteger('output', 'FrameMaxSide', FFrameMaxSide);
     Ini.WriteInteger('combined', 'CombinedMaxSide', FCombinedMaxSide);
+
+    Ini.WriteBool('output', 'UsePresets', FUsePresets);
   finally
     Ini.Free;
   end;
