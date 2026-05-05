@@ -24,7 +24,9 @@ function CloseArchive(hArcData: THandle): Integer; stdcall;
 
 {Callback setters}
 procedure SetChangeVolProc(hArcData: THandle; pChangeVolProc: TChangeVolProc); stdcall;
+procedure SetChangeVolProcW(hArcData: THandle; pChangeVolProc: TChangeVolProcW); stdcall;
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
+procedure SetProcessDataProcW(hArcData: THandle; pProcessDataProc: TProcessDataProcW); stdcall;
 
 {Reports plugin capabilities}
 function GetPackerCaps: Integer; stdcall;
@@ -116,6 +118,11 @@ type
      preset entries appended after. ReadHeaderExW iterates this; ProcessFile
      dispatches on Listing[CurrentIndex].Kind.}
     Listing: TWcxListingEntryArray;
+    {TC's progress callbacks. The Wide variant is preferred when set;
+     legacy TC builds fall back to the ANSI variant. Either or both may
+     be nil — ProcessFile then runs without surfacing progress.}
+    ProcessDataProc: TProcessDataProc;
+    ProcessDataProcW: TProcessDataProcW;
   end;
 
 var
@@ -787,9 +794,27 @@ begin
   {Not used: video files are single-volume}
 end;
 
+procedure SetChangeVolProcW(hArcData: THandle; pChangeVolProc: TChangeVolProcW); stdcall;
+begin
+  {Not used: video files are single-volume. Exported for ABI completeness so
+   modern TC builds find the symbol they expect.}
+end;
+
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 begin
-  {Callback stored but not invoked: extraction is synchronous per-frame}
+  {Stored on the handle; invoked from the preset extractor (Step 5/6) via
+   uWcxProgressBridge to surface progress and observe user cancel. Legacy
+   per-frame extraction is synchronous and does not call the callback.}
+  if hArcData = 0 then
+    Exit;
+  TArchiveHandle(hArcData).ProcessDataProc := pProcessDataProc;
+end;
+
+procedure SetProcessDataProcW(hArcData: THandle; pProcessDataProc: TProcessDataProcW); stdcall;
+begin
+  if hArcData = 0 then
+    Exit;
+  TArchiveHandle(hArcData).ProcessDataProcW := pProcessDataProc;
 end;
 
 function GetPackerCaps: Integer; stdcall;

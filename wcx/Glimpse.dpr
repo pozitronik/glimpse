@@ -32,7 +32,10 @@ uses
   uCombinedImage in '..\src\uCombinedImage.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
-  uSettingsDlgUI in '..\src\uSettingsDlgUI.pas';
+  uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
+  uWcxPresets in 'uWcxPresets.pas',
+  uWcxListing in 'uWcxListing.pas',
+  uWcxProgressBridge in 'uWcxProgressBridge.pas';
 
 exports
   OpenArchive,
@@ -43,7 +46,9 @@ exports
   ProcessFileW,
   CloseArchive,
   SetChangeVolProc,
+  SetChangeVolProcW,
   SetProcessDataProc,
+  SetProcessDataProcW,
   GetPackerCaps,
   SetDefaultParams,
   PackFiles,
