@@ -70,6 +70,8 @@ uses
   uWcxSettings in '..\wcx\uWcxSettings.pas',
   TestWcxSettings in 'TestWcxSettings.pas',
   TestWcxAPI in 'TestWcxAPI.pas',
+  uWcxPresets in '..\wcx\uWcxPresets.pas',
+  TestWcxPresets in 'TestWcxPresets.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
