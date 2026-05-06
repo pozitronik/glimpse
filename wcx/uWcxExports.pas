@@ -123,6 +123,11 @@ type
      be nil — ProcessFile then runs without surfacing progress.}
     ProcessDataProc: TProcessDataProc;
     ProcessDataProcW: TProcessDataProcW;
+    {Source video size in bytes. Reported as the synthetic UnpSize for
+     preset entries (output size is not predictable in advance, but
+     using the source size keeps the listing column believable AND gives
+     the progress bridge a meaningful denominator).}
+    SourceFileSize: Int64;
   end;
 
 var
@@ -507,6 +512,13 @@ begin
 
     H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
     H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
+    {Captured once so subsequent ReadHeader / DoExtractPreset reads stay
+     consistent even if the source file changes mid-session.}
+    try
+      H.SourceFileSize := TFile.GetSize(AFileName);
+    except
+      H.SourceFileSize := 0;
+    end;
 
     {Load presets only when the master switch is on so legacy installs
      skip the IO entirely. The listing builder still runs unconditionally
@@ -568,7 +580,12 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
-  if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
+  if H.Listing[H.CurrentIndex].Kind = ekPreset then
+    {Source file size as a placeholder — believable in the listing column
+     and gives the bridge a non-zero denominator so the progress bar
+     animates. Output size is unknown in advance.}
+    HeaderData.UnpSize := ClampSizeForAnsiHeader(H.SourceFileSize)
+  else if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
     {THeaderData.UnpSize is 32-bit signed; clamp so >2 GB combined
      images surface as MaxInt instead of wrapping into a negative size.}
     HeaderData.UnpSize := ClampSizeForAnsiHeader(H.EntrySizes[H.CurrentIndex]);
@@ -592,7 +609,13 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   StrLCopy(HeaderData.FileName, PChar(Name), Length(HeaderData.FileName) - 1);
-  if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
+  if H.Listing[H.CurrentIndex].Kind = ekPreset then
+  begin
+    Size := H.SourceFileSize;
+    HeaderData.UnpSize := DWORD(Size);
+    HeaderData.UnpSizeHigh := DWORD(Size shr 32);
+  end
+  else if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
   begin
     Size := H.EntrySizes[H.CurrentIndex];
     HeaderData.UnpSize := DWORD(Size);
@@ -773,7 +796,10 @@ begin
 
   WcxLog(Format('Extract preset "%s" -> %s', [Preset.Name, FullPath]));
 
-  Bridge := TWcxProgressBridge.Create(FullPath, H.ProcessDataProc, H.ProcessDataProcW);
+  {Total bytes for the bridge mirrors the synthetic UnpSize we reported
+   in ReadHeaderExW so deltas line up with what TC's bar denominator
+   expects. Source file size was captured at OpenArchive time.}
+  Bridge := TWcxProgressBridge.Create(FullPath, H.SourceFileSize, H.ProcessDataProc, H.ProcessDataProcW);
   try
     {Up-front ping registers this file with TC's progress UI and gives the
      user a cancel point before ffmpeg even starts spinning.}

@@ -16,8 +16,11 @@ type
     [Test] procedure TestFallsBackToAnsiWhenWideUnset;
     [Test] procedure TestNoCallbacksReturnsTrueAndDoesNotCancel;
 
-    { Percent payload encoding }
-    [Test] procedure TestReportPercentSendsNegatedSize;
+    { Percent payload encoding (positive-delta against an assumed UnpSize) }
+    [Test] procedure TestFirstReportSendsPercentAsDelta;
+    [Test] procedure TestSubsequentReportSendsDeltaFromPrevious;
+    [Test] procedure TestDeltaSumAcrossRunReachesOneHundred;
+    [Test] procedure TestBackwardPercentClampsDeltaToZero;
     [Test] procedure TestReportPercentClampsBelowZero;
     [Test] procedure TestReportPercentClampsAboveOneHundred;
 
@@ -64,6 +67,9 @@ type
 var
   GSlotA: TCallSlot;
   GSlotW: TCallSlot;
+  {Separate accumulator for the delta-sum test; isolating it keeps the
+   regular fakes' counters readable.}
+  GSumW: Integer;
 
 procedure ResetSlot(var ASlot: TCallSlot);
 begin
@@ -96,6 +102,12 @@ begin
   Result := GSlotW.NextReturn;
 end;
 
+function SumCallbackW(FileName: PWideChar; Size: Integer): Integer; stdcall;
+begin
+  Inc(GSumW, Size);
+  Result := 1;
+end;
+
 { TTestWcxProgressBridge }
 
 procedure TTestWcxProgressBridge.Setup;
@@ -112,7 +124,7 @@ var
 begin
   { Modern TC always wires SetProcessDataProcW; routing through ANSI when
     both are set would lose information on non-CP_ACP filenames. }
-  B := TWcxProgressBridge.Create('Movie.mp3', FakeCallbackA, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, FakeCallbackA, FakeCallbackW);
   try
     B.ReportPercent(50);
     Assert.AreEqual(1, GSlotW.InvokeCount, 'Wide callback should be invoked');
@@ -126,7 +138,7 @@ procedure TTestWcxProgressBridge.TestFallsBackToAnsiWhenWideUnset;
 var
   B: TWcxProgressBridge;
 begin
-  B := TWcxProgressBridge.Create('Movie.mp3', FakeCallbackA, nil);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, FakeCallbackA, nil);
   try
     B.ReportPercent(50);
     Assert.AreEqual(0, GSlotW.InvokeCount);
@@ -142,7 +154,7 @@ var
 begin
   { Some TC builds may extract without ever calling SetProcessDataProc*.
     The bridge must not crash and must not spuriously cancel. }
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, nil);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, nil);
   try
     Assert.IsTrue(B.ReportPercent(25));
     Assert.IsFalse(B.Cancelled);
@@ -152,18 +164,69 @@ begin
   end;
 end;
 
-{ Percent payload encoding }
+{ Percent payload encoding — positive-delta against UnpSize=100 }
 
-procedure TTestWcxProgressBridge.TestReportPercentSendsNegatedSize;
+procedure TTestWcxProgressBridge.TestFirstReportSendsPercentAsDelta;
 var
   B: TWcxProgressBridge;
 begin
-  { Negative-percent encoding is the TC convention for "the plugin can
-    not report bytes; here is a percentage instead". -42 means 42%. }
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  { The very first report has no previous value to subtract against, so
+    the delta IS the absolute percent — TC's bar advances by exactly that
+    amount on the first tick. }
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(42);
-    Assert.AreEqual(-42, GSlotW.LastSize);
+    Assert.AreEqual(42, GSlotW.LastSize);
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestWcxProgressBridge.TestSubsequentReportSendsDeltaFromPrevious;
+var
+  B: TWcxProgressBridge;
+begin
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
+  try
+    B.ReportPercent(20);
+    B.ReportPercent(35);
+    Assert.AreEqual(15, GSlotW.LastSize, 'Second report sends 35-20=15');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestWcxProgressBridge.TestDeltaSumAcrossRunReachesOneHundred;
+var
+  B: TWcxProgressBridge;
+  P: Integer;
+begin
+  { Property the listing layer relies on: delta sum equals 100 when a
+    run completes. Without this the synthetic UnpSize=100 would never
+    fill, leaving the bar stuck. }
+  GSumW := 0;
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, SumCallbackW);
+  try
+    for P := 0 to 100 do
+      B.ReportPercent(P);
+    Assert.AreEqual(100, GSumW);
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestWcxProgressBridge.TestBackwardPercentClampsDeltaToZero;
+var
+  B: TWcxProgressBridge;
+begin
+  { ffmpeg's clock can stutter backward briefly under odd seeks. The bar
+    can only fill, never retreat, so a regression must clamp the delta
+    to 0 (still triggers a callback so cancel detection works). }
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
+  try
+    B.ReportPercent(50);
+    B.ReportPercent(40);
+    Assert.AreEqual(0, GSlotW.LastSize);
   finally
     B.Free;
   end;
@@ -173,10 +236,12 @@ procedure TTestWcxProgressBridge.TestReportPercentClampsBelowZero;
 var
   B: TWcxProgressBridge;
 begin
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  { Negative input clamps to 0 before delta computation, so first call
+    reports a delta of 0 (the bar stays put). }
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(-7);
-    Assert.AreEqual(0, GSlotW.LastSize, 'Negative percent must clamp to 0 before negation');
+    Assert.AreEqual(0, GSlotW.LastSize);
   finally
     B.Free;
   end;
@@ -186,10 +251,11 @@ procedure TTestWcxProgressBridge.TestReportPercentClampsAboveOneHundred;
 var
   B: TWcxProgressBridge;
 begin
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  { Over-100 caps to 100 — the bar fills once and stays. }
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(150);
-    Assert.AreEqual(-100, GSlotW.LastSize, 'Over-100 percent must clamp to 100');
+    Assert.AreEqual(100, GSlotW.LastSize);
   finally
     B.Free;
   end;
@@ -203,7 +269,7 @@ var
 begin
   { ffmpeg can emit several -progress ticks within the same percent bucket.
     Without throttling we would spam TC's progress UI for no UX gain. }
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(33);
     B.ReportPercent(33);
@@ -221,7 +287,7 @@ begin
   { The throttle uses a -1 sentinel for "no call yet", so the first
     legitimate 0% report must reach the callback even though the visible
     payload happens to look identical to a Ping. }
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(0);
     Assert.AreEqual(1, GSlotW.InvokeCount);
@@ -235,13 +301,15 @@ procedure TTestWcxProgressBridge.TestPercentChangesEmitDistinctCalls;
 var
   B: TWcxProgressBridge;
 begin
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  { Three distinct percent steps emit three callback calls; the last
+    delta is 30-20=10 under the positive-delta encoding. }
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(10);
     B.ReportPercent(20);
     B.ReportPercent(30);
     Assert.AreEqual(3, GSlotW.InvokeCount);
-    Assert.AreEqual(-30, GSlotW.LastSize);
+    Assert.AreEqual(10, GSlotW.LastSize);
   finally
     B.Free;
   end;
@@ -254,7 +322,7 @@ var
   B: TWcxProgressBridge;
 begin
   GSlotW.NextReturn := 0;
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     Assert.IsFalse(B.ReportPercent(50));
     Assert.IsTrue(B.Cancelled);
@@ -271,7 +339,7 @@ begin
     watcher terminate the ffmpeg child. Use a 0-ms wait — signalled
     handles return WAIT_OBJECT_0 immediately. }
   GSlotW.NextReturn := 0;
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(50);
     Assert.AreEqual(WAIT_OBJECT_0, WaitForSingleObject(B.CancelHandle, 0),
@@ -286,7 +354,7 @@ var
   B: TWcxProgressBridge;
 begin
   GSlotW.NextReturn := 0;
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(50);
     Assert.IsFalse(B.ReportPercent(60));
@@ -304,7 +372,7 @@ begin
     callback. Otherwise late ticks could spuriously flip-flop the cancel
     flag (the fake's NextReturn might be set to 1 by then). }
   GSlotW.NextReturn := 0;
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(50);
     GSlotW.NextReturn := 1;
@@ -322,7 +390,7 @@ procedure TTestWcxProgressBridge.TestFileNamePassedToWideCallback;
 var
   B: TWcxProgressBridge;
 begin
-  B := TWcxProgressBridge.Create('фильм.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('фильм.mp3', 100, nil, FakeCallbackW);
   try
     B.ReportPercent(10);
     Assert.AreEqual('фильм.mp3', GSlotW.LastFileNameW);
@@ -336,7 +404,7 @@ var
   B: TWcxProgressBridge;
 begin
   { ANSI conversion is best-effort; ASCII filename round-trips losslessly. }
-  B := TWcxProgressBridge.Create('Movie.mp3', FakeCallbackA, nil);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, FakeCallbackA, nil);
   try
     B.ReportPercent(10);
     Assert.AreEqual(AnsiString('Movie.mp3'), GSlotA.LastFileNameA);
@@ -353,7 +421,7 @@ var
 begin
   { Ping is the cancel-poll affordance for use before the first real
     progress tick is available. }
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     B.Ping;
     Assert.AreEqual(1, GSlotW.InvokeCount);
@@ -368,7 +436,7 @@ var
   B: TWcxProgressBridge;
 begin
   GSlotW.NextReturn := 0;
-  B := TWcxProgressBridge.Create('Movie.mp3', nil, FakeCallbackW);
+  B := TWcxProgressBridge.Create('Movie.mp3', 100, nil, FakeCallbackW);
   try
     Assert.IsFalse(B.Ping);
     Assert.IsTrue(B.Cancelled);

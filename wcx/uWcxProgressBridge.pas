@@ -2,12 +2,16 @@
  callback, handling both ANSI and Wide variants, and surfaces a Win32
  cancel handle that uRunProcess.RunProcess can wait on to terminate the
  child process when the user cancels.
- Per TC's Packer Plugin spec: ProcessDataProc(FileName, Size) interprets
- a negative Size in [-1, -100] as a percentage (1..100%), positive as
- a delta byte count, zero as a "cancel poll only" ping. Return value
+ TC's spec accepts both negative-percent and positive-delta forms for
+ Size, but the negative-percent form does not animate the progress bar
+ in many TC builds — empirically only the positive-delta form is
+ universally rendered, and only when the listing reports UnpSize>0.
+ The bridge therefore emits positive deltas computed against a caller-
+ supplied total (typically the source video size, so TC's listing shows
+ a believable byte count instead of a synthetic placeholder). Sum of
+ deltas across a complete run equals the total. Return value:
  1=continue, 0=abort. Callers use ReportPercent for the metered case
- and Ping when no real progress is available yet (e.g. before ffmpeg
- emits its first -progress tick).}
+ and Ping when no real progress is available yet.}
 unit uWcxProgressBridge;
 
 interface
@@ -26,6 +30,15 @@ type
     FCancelEvent: TEvent;
     FCancelled: Boolean;
     FLastPercent: Integer;
+    {Total bytes the listing layer reports as UnpSize for this entry;
+     deltas are scaled so their sum equals this value when the run hits
+     100%. Stored as Int64 even though TC's Size param is Int32 so we
+     can safely scale large source files; per-tick deltas are clamped
+     into Int32 range before the callback.}
+    FTotalBytes: Int64;
+    {Bytes already attributed via callback calls; used to compute the
+     next delta as (target - reported).}
+    FReportedBytes: Int64;
     {Picks the modern Wide callback when available, falls back to the
      ANSI variant. When neither is set, returns 1 so the extractor runs
      without surfacing progress (TC may not have wired the callback yet).}
@@ -33,8 +46,12 @@ type
   public
     {ACallbackA / ACallbackW are captured by reference; either or both may
      be nil. The destination filename is held in both encodings so the
-     per-tick Invoke does not allocate.}
-    constructor Create(const AFileName: string; ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
+     per-tick Invoke does not allocate. ATotalBytes is the denominator
+     deltas are scaled against — typically the source video size so TC's
+     listing column matches what was advertised in ReadHeaderExW. A zero
+     or negative total degrades to silent (no callbacks emitted), which
+     is harmless when TC is not displaying a progress bar anyway.}
+    constructor Create(const AFileName: string; ATotalBytes: Int64; ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
     destructor Destroy; override;
     {Reports a progress percentage in [0, 100]. Values outside the range
      clamp silently so a transient ffmpeg out_time glitch does not crash
@@ -55,7 +72,7 @@ type
 
 implementation
 
-constructor TWcxProgressBridge.Create(const AFileName: string; ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
+constructor TWcxProgressBridge.Create(const AFileName: string; ATotalBytes: Int64; ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
 begin
   inherited Create;
   FCallbackA := ACallbackA;
@@ -74,6 +91,11 @@ begin
   {-1 sentinel so the first ReportPercent(0) is not short-circuited
    against the no-call-yet state.}
   FLastPercent := -1;
+  if ATotalBytes < 0 then
+    FTotalBytes := 0
+  else
+    FTotalBytes := ATotalBytes;
+  FReportedBytes := 0;
 end;
 
 destructor TWcxProgressBridge.Destroy;
@@ -100,6 +122,8 @@ end;
 function TWcxProgressBridge.ReportPercent(APercent: Integer): Boolean;
 var
   Clamped: Integer;
+  TargetBytes, Delta: Int64;
+  ClampedDelta: Integer;
 begin
   if FCancelled then
     Exit(False);
@@ -112,9 +136,38 @@ begin
 
   if Clamped = FLastPercent then
     Exit(True);
+
   FLastPercent := Clamped;
 
-  if InvokeCallback(-Clamped) = 0 then
+  if FTotalBytes <= 0 then
+  begin
+    {No total to scale against — emit a Ping-equivalent so cancel detection
+     still works but the bar cannot animate (TC's denominator is zero too).}
+    if InvokeCallback(0) = 0 then
+    begin
+      FCancelled := True;
+      FCancelEvent.SetEvent;
+      Exit(False);
+    end;
+    Exit(True);
+  end;
+
+  {Compute the cumulative byte target for this percent and emit the gap
+   from what was already reported. Negative gap (ffmpeg clock jittered
+   backward) clamps to 0 — TC's bar can only fill, never retreat. The
+   per-tick clamp at MaxInt protects against pathological multi-GB
+   single-step jumps; the running FReportedBytes catches up on later
+   ticks so the run still completes at FTotalBytes.}
+  TargetBytes := Clamped * FTotalBytes div 100;
+  Delta := TargetBytes - FReportedBytes;
+  if Delta < 0 then
+    Delta := 0;
+  if Delta > MaxInt then
+    Delta := MaxInt;
+  ClampedDelta := Integer(Delta);
+  Inc(FReportedBytes, ClampedDelta);
+
+  if InvokeCallback(ClampedDelta) = 0 then
   begin
     FCancelled := True;
     FCancelEvent.SetEvent;
