@@ -106,6 +106,12 @@ type
     [Test] procedure TestUsePresetsDefault;
     [Test] procedure TestUsePresetsRoundTrip;
     [Test] procedure TestUsePresetsAbsentKeyKeepsDefault;
+    { Hidden debug-log toggle — no UI control; users hand-edit the INI
+      to turn diagnostic logging on. Must default off so a fresh install
+      leaves no trace. }
+    [Test] procedure TestDebugLogEnabledDefault;
+    [Test] procedure TestDebugLogEnabledRoundTrip;
+    [Test] procedure TestDebugLogEnabledAbsentKeyKeepsDefault;
   end;
 
 implementation
@@ -1881,6 +1887,70 @@ begin
     S.Load;
     Assert.AreEqual(WCX_DEF_USE_PRESETS, S.UsePresets,
       'Missing UsePresets key must leave the documented default intact');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestDebugLogEnabledDefault;
+var
+  S: TWcxSettings;
+begin
+  { Off by default — enabling logging is an explicit opt-in via INI edit. }
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_log_def.ini'));
+  try
+    Assert.AreEqual(WCX_DEF_DEBUG_LOG_ENABLED, S.DebugLogEnabled);
+    Assert.IsFalse(S.DebugLogEnabled,
+      'Hidden diagnostic toggle must default off so normal use leaves no log file');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestDebugLogEnabledRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'wcx_log_rt.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.DebugLogEnabled := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsTrue(S2.DebugLogEnabled,
+      'Hidden setting still round-trips so a future UI affordance can flip it');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestDebugLogEnabledAbsentKeyKeepsDefault;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { INIs that predate this setting must keep the silent default. }
+  IniPath := TPath.Combine(FTempDir, 'wcx_log_absent.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 6);
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(WCX_DEF_DEBUG_LOG_ENABLED, S.DebugLogEnabled,
+      'Missing [debug] LogEnabled key must leave the documented default intact');
   finally
     S.Free;
   end;

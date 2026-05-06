@@ -54,6 +54,12 @@ type
      to the archive listing; when False, the preset file is ignored entirely
      regardless of how many presets it contains.}
     FUsePresets: Boolean;
+    {Hidden diagnostic toggle, no UI control. When True, uWcxExports points
+     GDebugLogPath at "<dll>.log" so the WcxLog calls scattered through the
+     plugin start writing to a file next to the DLL. Off by default so a
+     normal session leaves no trace; users opt in by hand-editing the INI
+     when they need to diagnose something.}
+    FDebugLogEnabled: Boolean;
 
   public
     constructor Create(const AIniPath: string);
@@ -106,6 +112,7 @@ type
     property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
     property UsePresets: Boolean read FUsePresets write FUsePresets;
+    property DebugLogEnabled: Boolean read FDebugLogEnabled write FDebugLogEnabled;
   end;
 
 const
@@ -124,6 +131,7 @@ const
   WCX_MIN_OUTPUT_SIDE = 0;
   WCX_MAX_OUTPUT_SIDE = MAX_FRAME_SIDE; {8K}
   WCX_DEF_USE_PRESETS = False;
+  WCX_DEF_DEBUG_LOG_ENABLED = False;
 
 implementation
 
@@ -166,6 +174,7 @@ begin
   FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
   FCombinedMaxSide := WCX_DEF_COMBINED_MAX_SIDE;
   FUsePresets := WCX_DEF_USE_PRESETS;
+  FDebugLogEnabled := WCX_DEF_DEBUG_LOG_ENABLED;
 end;
 
 procedure TWcxSettings.Load;
@@ -220,6 +229,8 @@ begin
     FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', FCombinedMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
 
     FUsePresets := Ini.ReadBool('output', 'UsePresets', FUsePresets);
+
+    FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
     Ini.Free;
   end;
@@ -263,6 +274,8 @@ begin
     Ini.WriteInteger('combined', 'CombinedMaxSide', FCombinedMaxSide);
 
     Ini.WriteBool('output', 'UsePresets', FUsePresets);
+
+    Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
     Ini.Free;
   end;

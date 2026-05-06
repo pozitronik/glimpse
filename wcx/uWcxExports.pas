@@ -486,6 +486,13 @@ begin
 
     H.Settings := TWcxSettings.Create(GIniPath);
     H.Settings.Load;
+    {Apply the hidden debug-log toggle. Kept here (rather than at DLL init)
+     so a hand-edit of "[debug] LogEnabled" in Glimpse.ini takes effect on
+     the next archive open without forcing a TC restart.}
+    if H.Settings.DebugLogEnabled then
+      GDebugLogPath := ChangeFileExt(GetModuleName(HInstance), '.log')
+    else
+      GDebugLogPath := '';
 
     H.FFmpegPath := FindFFmpegExe(ExtractFilePath(GIniPath), ExpandEnvVars(H.Settings.FFmpegExePath));
 
@@ -1020,10 +1027,11 @@ GDeleteDirectoryProc := DefaultDeleteDirectory;
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 
-{Temporary diagnostic logging for the preset-feature smoke test. Writes
- next to the DLL so the user can find it without hunting. Remove or gate
- behind a setting once the feature is proven.}
-GDebugLogPath := ChangeFileExt(GetModuleName(HInstance), '.log');
+{Debug logging is opt-in via the hidden "[debug] LogEnabled=1" key in
+ Glimpse.ini. Start silent; DoOpenArchive flips GDebugLogPath on or off
+ each time after reading the setting, so a hand-edit of the INI takes
+ effect on the next archive open without a TC restart.}
+GDebugLogPath := '';
 
 {Seed the global Random once per DLL load. CalculateRandomFrameOffsets
  reads from this RNG; without seeding, every TC session would emit the
