@@ -90,7 +90,7 @@ function ExceptionToWcxError(E: Exception): Integer;
 implementation
 
 uses
-  System.AnsiStrings, System.IOUtils, System.SyncObjs,
+  System.AnsiStrings, System.Classes, System.IOUtils, System.SyncObjs,
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
@@ -706,6 +706,46 @@ end;
  Both cancel and error paths map to E_EWRITE because TC handles E_EWRITE
  on cancel by suppressing its error popup, while a real error still
  surfaces via the WcxLog message and the dialog TC shows for E_EWRITE.}
+{Trims the ffmpeg stderr down to the most signal-rich one-liner for a
+ dialog box. ffmpeg often emits a multi-line preamble before the actual
+ error; prefer the LAST non-empty line because the immediate cause is
+ typically last (e.g. "Output file does not contain any stream"). When
+ ffmpeg said nothing useful, fall back to the exit code so the user
+ still has a handle for searching docs.}
+function SummarizeFFmpegError(const AErrorMessage: string; AExitCode: Integer): string;
+var
+  Lines: TStringList;
+  I: Integer;
+begin
+  Result := '';
+  Lines := TStringList.Create;
+  try
+    Lines.Text := AErrorMessage;
+    for I := Lines.Count - 1 downto 0 do
+      if Trim(Lines[I]) <> '' then
+      begin
+        Result := Trim(Lines[I]);
+        Break;
+      end;
+  finally
+    Lines.Free;
+  end;
+  if Result = '' then
+    Result := Format('ffmpeg exited with code %d (no stderr captured)', [AExitCode]);
+end;
+
+procedure ShowPresetExtractError(const APresetName, AOutputPath: string; const AResult: TPresetExtractResult);
+var
+  Msg: string;
+begin
+  Msg := Format('Preset "%s" could not produce "%s":'#13#10#13#10'%s',
+    [APresetName, ExtractFileName(AOutputPath), SummarizeFFmpegError(AResult.ErrorMessage, AResult.ExitCode)]);
+  {Foreground window as parent so the dialog appears in front of TC and
+   inherits the right modality; passing 0 risks the dialog landing behind
+   the file panel on multi-monitor setups.}
+  MessageBox(GetForegroundWindow, PChar(Msg), 'Glimpse preset extraction failed', MB_OK or MB_ICONWARNING);
+end;
+
 function DoExtractPreset(H: TArchiveHandle; APresetIndex: Integer; const ADisplayName, ADestPath, ADestName: string): Integer;
 const
   {Effectively no wall-clock cap: presets are arbitrary user transcodes
@@ -752,7 +792,31 @@ begin
 
     WcxLog(Format('Preset "%s" failed (cancelled=%s exitCode=%d): %s',
       [Preset.Name, BoolToStr(ExtractResult.Cancelled, True), ExtractResult.ExitCode, ExtractResult.ErrorMessage]));
-    Result := E_EWRITE;
+
+    if ExtractResult.Cancelled then
+    begin
+      {Cancel: TC suppresses its own dialog when it sees E_EWRITE on a
+       user-initiated cancel, so stay silent on our side too — the user
+       knows they cancelled.}
+      Result := E_EWRITE;
+      Exit;
+    end;
+
+    {Surface the real ffmpeg error. TC's follow-up dialog ("Bad data" /
+     "Write error") is generic and unhelpful for problems like "no audio
+     stream" or "unknown encoder"; this dialog gives the user the actual
+     reason they need to fix the preset or pick a different source.}
+    ShowPresetExtractError(Preset.Name, FullPath, ExtractResult);
+
+    {Distinguish the two failure modes in the WCX return code:
+     - ExitCode<>0 means ffmpeg refused (bad codec, no stream, bad args)
+       which is closer to E_BAD_DATA than to a write error.
+     - ExitCode=0 with Success=False means the rename step failed, which
+       IS a real write error.}
+    if ExtractResult.ExitCode <> 0 then
+      Result := E_BAD_DATA
+    else
+      Result := E_EWRITE;
   finally
     Bridge.Free;
   end;
