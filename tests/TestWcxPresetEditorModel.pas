@@ -29,12 +29,6 @@ type
     [Test] procedure TestDuplicateGivesUniqueName;
     [Test] procedure TestDuplicateOutOfRangeReturnsMinusOne;
 
-    { Move }
-    [Test] procedure TestMoveUpSwapsWithPredecessor;
-    [Test] procedure TestMoveUpAtTopIsNoOp;
-    [Test] procedure TestMoveDownSwapsWithSuccessor;
-    [Test] procedure TestMoveDownAtBottomIsNoOp;
-
     { Validate: rule coverage }
     [Test] procedure TestValidateAcceptsCleanModel;
     [Test] procedure TestValidateRejectsEmptyName;
@@ -271,85 +265,6 @@ begin
   M := TPresetEditorModel.Create;
   try
     Assert.AreEqual(-1, M.Duplicate(5));
-  finally
-    M.Free;
-  end;
-end;
-
-{ Move }
-
-procedure TTestWcxPresetEditorModel.TestMoveUpSwapsWithPredecessor;
-var
-  M: TPresetEditorModel;
-  Source: TWcxPresetArray;
-begin
-  SetLength(Source, 3);
-  Source[0] := MakeP('a', 'mp3');
-  Source[1] := MakeP('b', 'mp3');
-  Source[2] := MakeP('c', 'mp3');
-  M := TPresetEditorModel.Create;
-  try
-    M.LoadFrom(Source);
-    Assert.AreEqual(1, M.MoveUp(2));
-    Assert.AreEqual('a', M.Get(0).Name);
-    Assert.AreEqual('c', M.Get(1).Name);
-    Assert.AreEqual('b', M.Get(2).Name);
-  finally
-    M.Free;
-  end;
-end;
-
-procedure TTestWcxPresetEditorModel.TestMoveUpAtTopIsNoOp;
-var
-  M: TPresetEditorModel;
-  Source: TWcxPresetArray;
-begin
-  SetLength(Source, 2);
-  Source[0] := MakeP('a', 'mp3');
-  Source[1] := MakeP('b', 'mp3');
-  M := TPresetEditorModel.Create;
-  try
-    M.LoadFrom(Source);
-    Assert.AreEqual(0, M.MoveUp(0));
-    Assert.AreEqual('a', M.Get(0).Name);
-  finally
-    M.Free;
-  end;
-end;
-
-procedure TTestWcxPresetEditorModel.TestMoveDownSwapsWithSuccessor;
-var
-  M: TPresetEditorModel;
-  Source: TWcxPresetArray;
-begin
-  SetLength(Source, 3);
-  Source[0] := MakeP('a', 'mp3');
-  Source[1] := MakeP('b', 'mp3');
-  Source[2] := MakeP('c', 'mp3');
-  M := TPresetEditorModel.Create;
-  try
-    M.LoadFrom(Source);
-    Assert.AreEqual(1, M.MoveDown(0));
-    Assert.AreEqual('b', M.Get(0).Name);
-    Assert.AreEqual('a', M.Get(1).Name);
-  finally
-    M.Free;
-  end;
-end;
-
-procedure TTestWcxPresetEditorModel.TestMoveDownAtBottomIsNoOp;
-var
-  M: TPresetEditorModel;
-  Source: TWcxPresetArray;
-begin
-  SetLength(Source, 2);
-  Source[0] := MakeP('a', 'mp3');
-  Source[1] := MakeP('b', 'mp3');
-  M := TPresetEditorModel.Create;
-  try
-    M.LoadFrom(Source);
-    Assert.AreEqual(1, M.MoveDown(1));
-    Assert.AreEqual('b', M.Get(1).Name);
   finally
     M.Free;
   end;

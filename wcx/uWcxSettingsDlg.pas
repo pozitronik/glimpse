@@ -128,8 +128,6 @@ type
     BtnPresetAdd: TButton;
     BtnPresetRemove: TButton;
     BtnPresetDuplicate: TButton;
-    BtnPresetMoveUp: TButton;
-    BtnPresetMoveDown: TButton;
     LblPresetName: TLabel;
     EdtPresetName: TEdit;
     ChkPresetEnabled: TCheckBox;
@@ -168,8 +166,6 @@ type
     procedure BtnPresetAddClick(Sender: TObject);
     procedure BtnPresetRemoveClick(Sender: TObject);
     procedure BtnPresetDuplicateClick(Sender: TObject);
-    procedure BtnPresetMoveUpClick(Sender: TObject);
-    procedure BtnPresetMoveDownClick(Sender: TObject);
   private
     FOwnerWnd: HWND;
     FSettings: TWcxSettings;
@@ -772,30 +768,6 @@ begin
     EdtPresetName.SetFocus;
     EdtPresetName.SelectAll;
   end;
-end;
-
-procedure TWcxSettingsForm.BtnPresetMoveUpClick(Sender: TObject);
-var
-  Idx, NewIdx: Integer;
-begin
-  Idx := LbxPresets.ItemIndex;
-  if Idx < 0 then
-    Exit;
-  CommitCurrentPreset;
-  NewIdx := FPresetModel.MoveUp(Idx);
-  RefreshPresetList(NewIdx);
-end;
-
-procedure TWcxSettingsForm.BtnPresetMoveDownClick(Sender: TObject);
-var
-  Idx, NewIdx: Integer;
-begin
-  Idx := LbxPresets.ItemIndex;
-  if Idx < 0 then
-    Exit;
-  CommitCurrentPreset;
-  NewIdx := FPresetModel.MoveDown(Idx);
-  RefreshPresetList(NewIdx);
 end;
 
 procedure TWcxSettingsForm.BtnFFmpegPathClick(Sender: TObject);

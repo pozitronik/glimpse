@@ -45,10 +45,6 @@ type
      copy gets a unique name (sourcename_copy, _copy_2, ...) so the
      duplicate is immediately distinct.}
     function Duplicate(AIndex: Integer): Integer;
-    {Returns the new position of the moved item, or AIndex if the move
-     was a no-op (already at the boundary).}
-    function MoveUp(AIndex: Integer): Integer;
-    function MoveDown(AIndex: Integer): Integer;
 
     {Runs every validation rule against every preset and returns False
      on first failure. AInvalidIndex points to the offender so the editor
@@ -167,22 +163,6 @@ begin
   Copy.Name := GenerateUniqueName(FPresets[AIndex].Name + '_copy');
   Result := AIndex + 1;
   FPresets.Insert(Result, Copy);
-end;
-
-function TPresetEditorModel.MoveUp(AIndex: Integer): Integer;
-begin
-  if (AIndex <= 0) or (AIndex >= FPresets.Count) then
-    Exit(AIndex);
-  FPresets.Exchange(AIndex, AIndex - 1);
-  Result := AIndex - 1;
-end;
-
-function TPresetEditorModel.MoveDown(AIndex: Integer): Integer;
-begin
-  if (AIndex < 0) or (AIndex >= FPresets.Count - 1) then
-    Exit(AIndex);
-  FPresets.Exchange(AIndex, AIndex + 1);
-  Result := AIndex + 1;
 end;
 
 function TPresetEditorModel.Validate(out AInvalidIndex: Integer; out AReason: string): Boolean;

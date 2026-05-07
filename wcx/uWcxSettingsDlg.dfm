@@ -868,24 +868,6 @@ object WcxSettingsForm: TWcxSettingsForm
         TabOrder = 3
         OnClick = BtnPresetDuplicateClick
       end
-      object BtnPresetMoveUp: TButton
-        Left = 112
-        Top = 92
-        Width = 44
-        Height = 24
-        Caption = 'Up'
-        TabOrder = 4
-        OnClick = BtnPresetMoveUpClick
-      end
-      object BtnPresetMoveDown: TButton
-        Left = 112
-        Top = 120
-        Width = 44
-        Height = 24
-        Caption = 'Down'
-        TabOrder = 5
-        OnClick = BtnPresetMoveDownClick
-      end
       object LblPresetName: TLabel
         Left = 164
         Top = 12
