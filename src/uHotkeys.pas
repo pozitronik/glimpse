@@ -17,7 +17,8 @@ unit uHotkeys;
 interface
 
 uses
-  System.Classes, System.SysUtils, System.IniFiles;
+  System.Classes, System.SysUtils,
+  uUnicodeIniFile;
 
 type
   {Command-style actions the user can assign hotkeys to. Tab (VCL focus
@@ -79,8 +80,8 @@ type
     function Lookup(AKey: Word; const AShift: TShiftState): TPluginAction;
     {Load / Save read and write the [hotkeys] section with '|' as the
      between-chords separator, e.g. PrevFile=Left|PageUp|Backspace|Z.}
-    procedure Load(AIni: TIniFile);
-    procedure Save(AIni: TIniFile);
+    procedure Load(AIni: TUnicodeIniFile);
+    procedure Save(AIni: TUnicodeIniFile);
     procedure ResetToDefaults;
     {Overwrites every action's chord list with AOther's (deep copy of the
      arrays). Used by the settings dialog to snapshot/restore.}
@@ -398,7 +399,7 @@ begin
   Result := paNone;
 end;
 
-procedure THotkeyBindings.Load(AIni: TIniFile);
+procedure THotkeyBindings.Load(AIni: TUnicodeIniFile);
 var
   A: TPluginAction;
   Raw: string;
@@ -419,7 +420,7 @@ begin
   end;
 end;
 
-procedure THotkeyBindings.Save(AIni: TIniFile);
+procedure THotkeyBindings.Save(AIni: TUnicodeIniFile);
 var
   A: TPluginAction;
 begin

@@ -22,8 +22,8 @@ unit uSettingsGroups;
 interface
 
 uses
-  System.UITypes, System.IniFiles,
-  uTypes;
+  System.UITypes,
+  uTypes, uUnicodeIniFile;
 
 type
   {[extraction] group — eight fields shared verbatim between WLX and WCX.
@@ -43,9 +43,9 @@ type
     {Reads the group from AIni. Missing keys fall back to the record's
      current values (callers reset to defaults first). Numeric fields are
      clamped to their documented ranges.}
-    procedure LoadFrom(AIni: TIniFile; const ASection: string);
+    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
     {Writes the group to AIni. Round-trips exactly through LoadFrom.}
-    procedure SaveTo(AIni: TIniFile; const ASection: string);
+    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
   end;
 
   {Info-banner group — seven fields shared verbatim between WLX and WCX.
@@ -62,8 +62,8 @@ type
     Position: TBannerPosition;
 
     class function Defaults: TBannerSettingsGroup; static;
-    procedure LoadFrom(AIni: TIniFile; const ASection: string);
-    procedure SaveTo(AIni: TIniFile; const ASection: string);
+    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
   end;
 
   {Timestamp overlay group — eight fields shared between WLX and WCX,
@@ -84,8 +84,8 @@ type
     TextAlpha: Byte;
 
     class function Defaults: TTimestampSettingsGroup; static;
-    procedure LoadFrom(AIni: TIniFile; const ASection, AShowKey: string);
-    procedure SaveTo(AIni: TIniFile; const ASection, AShowKey: string);
+    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
+    procedure SaveTo(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
   end;
 
 implementation
@@ -108,7 +108,7 @@ begin
   Result.RespectAnamorphic := DEF_RESPECT_ANAMORPHIC;
 end;
 
-procedure TExtractionSettingsGroup.LoadFrom(AIni: TIniFile; const ASection: string);
+procedure TExtractionSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
 begin
   FramesCount := EnsureRange(AIni.ReadInteger(ASection, 'FramesCount', FramesCount),
     MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
@@ -124,7 +124,7 @@ begin
   RespectAnamorphic := AIni.ReadBool(ASection, 'RespectAnamorphic', RespectAnamorphic);
 end;
 
-procedure TExtractionSettingsGroup.SaveTo(AIni: TIniFile; const ASection: string);
+procedure TExtractionSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
 begin
   AIni.WriteInteger(ASection, 'FramesCount', FramesCount);
   AIni.WriteInteger(ASection, 'SkipEdges', SkipEdgesPercent);
@@ -153,7 +153,7 @@ begin
   Result.Position := DEF_BANNER_POSITION;
 end;
 
-procedure TBannerSettingsGroup.LoadFrom(AIni: TIniFile; const ASection: string);
+procedure TBannerSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
 var
   FallbackFont: string;
 begin
@@ -170,7 +170,7 @@ begin
   Position := StrToBannerPosition(AIni.ReadString(ASection, 'BannerPosition', ''), Position);
 end;
 
-procedure TBannerSettingsGroup.SaveTo(AIni: TIniFile; const ASection: string);
+procedure TBannerSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
 begin
   AIni.WriteBool(ASection, 'ShowBanner', Show);
   AIni.WriteString(ASection, 'BannerBackground', ColorToHex(Background));
@@ -201,7 +201,7 @@ begin
   Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
 end;
 
-procedure TTimestampSettingsGroup.LoadFrom(AIni: TIniFile; const ASection, AShowKey: string);
+procedure TTimestampSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
 var
   FallbackFont: string;
   FallbackColor: TColor;
@@ -227,7 +227,7 @@ begin
     MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
 end;
 
-procedure TTimestampSettingsGroup.SaveTo(AIni: TIniFile; const ASection, AShowKey: string);
+procedure TTimestampSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
 begin
   AIni.WriteBool(ASection, AShowKey, Show);
   AIni.WriteString(ASection, 'TimestampCorner', TimestampCornerToStr(Corner));

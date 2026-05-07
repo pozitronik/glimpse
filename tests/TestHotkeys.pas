@@ -117,9 +117,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes, System.IniFiles,
+  System.SysUtils, System.IOUtils, System.Classes,
   Winapi.Windows, Vcl.Controls,
-  uHotkeys;
+  uHotkeys, uUnicodeIniFile;
 
 {TTestHotkeyChord}
 
@@ -953,7 +953,7 @@ end;
 procedure TTestHotkeyBindings.IniRoundTrip_MultiChordPreserved;
 var
   A, B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
   Loaded: THotkeyChordArray;
 begin
@@ -965,7 +965,7 @@ begin
     A.Put(paSettings, [THotkeyChord.Make(VK_F9, []),
                        THotkeyChord.Make(VK_F10, [ssCtrl]),
                        THotkeyChord.Make(VK_F11, [ssShift])]);
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       A.Save(Ini);
     finally
@@ -977,7 +977,7 @@ begin
 
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Load(Ini);
     finally
@@ -998,11 +998,11 @@ end;
 procedure TTestHotkeyBindings.IniLoad_EmptyValue_Unbinds;
 var
   B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
 begin
   Path := TPath.Combine(FTempDir, 'empty.ini');
-  Ini := TIniFile.Create(Path);
+  Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', '');
   finally
@@ -1011,7 +1011,7 @@ begin
 
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Load(Ini);
     finally
@@ -1027,12 +1027,12 @@ end;
 procedure TTestHotkeyBindings.IniLoad_MissingKey_KeepsDefault;
 var
   B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
   List: THotkeyChordArray;
 begin
   Path := TPath.Combine(FTempDir, 'missing.ini');
-  Ini := TIniFile.Create(Path);
+  Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'F9');
   finally
@@ -1041,7 +1041,7 @@ begin
 
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Load(Ini);
     finally
@@ -1060,13 +1060,13 @@ end;
 procedure TTestHotkeyBindings.IniLoad_GarbageAmongValid_OtherChordsKept;
 var
   B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
   List: THotkeyChordArray;
 begin
   {"NotAKey" inside a pipe-joined list shouldn't kill the whole row.}
   Path := TPath.Combine(FTempDir, 'garbage.ini');
-  Ini := TIniFile.Create(Path);
+  Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'PrevFile', 'Left|NotAKey|PageUp');
   finally
@@ -1075,7 +1075,7 @@ begin
 
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Load(Ini);
     finally
@@ -1093,7 +1093,7 @@ end;
 procedure TTestHotkeyBindings.IniLoad_CrossActionDuplicate_FirstInEnumOrderWins;
 var
   B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
 begin
   {Behaviour lock for a hand-edited INI where the user binds the same chord
@@ -1106,7 +1106,7 @@ begin
    behaviour change so the author can decide whether to preserve
    compatibility or surface a conflict warning.}
   Path := TPath.Combine(FTempDir, 'conflict.ini');
-  Ini := TIniFile.Create(Path);
+  Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'F9');
     Ini.WriteString(HOTKEYS_SECTION, 'ToggleToolbar', 'F9');
@@ -1116,7 +1116,7 @@ begin
 
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Load(Ini);
     finally
@@ -1136,7 +1136,7 @@ end;
 procedure TTestHotkeyBindings.IniLoad_WithinActionDuplicate_BothStoredAndActionResolves;
 var
   B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
   List: THotkeyChordArray;
 begin
@@ -1150,7 +1150,7 @@ begin
    start collapsing duplicates (which would be a reasonable change, but
    needs to be intentional).}
   Path := TPath.Combine(FTempDir, 'within_dup.ini');
-  Ini := TIniFile.Create(Path);
+  Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'PrevFile', 'Left|Left');
   finally
@@ -1159,7 +1159,7 @@ begin
 
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Load(Ini);
     finally
@@ -1180,21 +1180,21 @@ end;
 procedure TTestHotkeyBindings.IniSave_SingleChord_NoSeparatorInOutput;
 var
   B: THotkeyBindings;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Path: string;
 begin
   {Regression guard: single-chord actions shouldn't write a trailing '|'.}
   Path := TPath.Combine(FTempDir, 'single.ini');
   B := THotkeyBindings.Create;
   try
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       B.Save(Ini);
     finally
       Ini.Free;
     end;
 
-    Ini := TIniFile.Create(Path);
+    Ini := TUnicodeIniFile.Create(Path);
     try
       Assert.AreEqual('F2', Ini.ReadString(HOTKEYS_SECTION, 'Settings', ''));
       Assert.AreEqual('Alt+Enter', Ini.ReadString(HOTKEYS_SECTION, 'ToggleFullScreen', ''));

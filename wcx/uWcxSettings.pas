@@ -5,8 +5,8 @@ unit uWcxSettings;
 interface
 
 uses
-  System.SysUtils, System.IniFiles, System.Math, System.UITypes,
-  uBitmapSaver, uTypes, uDefaults, uSettingsGroups;
+  System.SysUtils, System.Math, System.UITypes,
+  uBitmapSaver, uTypes, uDefaults, uSettingsGroups, uUnicodeIniFile;
 
 const
   {Bit values composed into the Mode bitmask. Each independent toggle
@@ -262,7 +262,7 @@ end;
 
 procedure TWcxSettings.Load;
 var
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
 begin
   {Reset-then-read mirrors TPluginSettings so a second Load on the same
    instance starts from a known baseline instead of inheriting whichever
@@ -270,7 +270,7 @@ begin
   ResetDefaults;
   if not FileExists(FIniPath) then
     Exit;
-  Ini := TIniFile.Create(FIniPath);
+  Ini := TUnicodeIniFile.Create(FIniPath);
   try
     {Pass the current field value as the INI fallback so the post-Reset
      default propagates through one source of truth (ResetDefaults). The
@@ -321,11 +321,11 @@ end;
 
 procedure TWcxSettings.Save;
 var
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
 begin
   if FIniPath = '' then
     Exit;
-  Ini := TIniFile.Create(FIniPath);
+  Ini := TUnicodeIniFile.Create(FIniPath);
   try
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);
     FExtraction.SaveTo(Ini, 'extraction');
@@ -354,6 +354,7 @@ begin
     Ini.WriteInteger('combined', 'CombinedMaxSide', FCombinedMaxSide);
 
     Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;

@@ -5,8 +5,8 @@ unit uSettings;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.IniFiles, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver, uTypes, uDefaults, uHotkeys, uSettingsGroups;
+  System.SysUtils, System.Classes, System.IOUtils, System.UITypes, System.Math,
+  uBitmapSaver, uTypes, uDefaults, uHotkeys, uSettingsGroups, uUnicodeIniFile;
 
 type
   TPluginSettings = class
@@ -304,13 +304,13 @@ end;
 
 procedure TPluginSettings.Load;
 var
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
 begin
   ResetDefaults;
   if not FileExists(FIniPath) then
     Exit;
 
-  Ini := TIniFile.Create(FIniPath);
+  Ini := TUnicodeIniFile.Create(FIniPath);
   try
     FFFmpegMode := StrToFFmpegMode(Ini.ReadString('ffmpeg', 'Mode', ''));
     FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', DEF_FFMPEG_EXE_PATH);
@@ -374,11 +374,11 @@ end;
 
 procedure TPluginSettings.Save;
 var
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
 begin
   if FIniPath = '' then
     Exit;
-  Ini := TIniFile.Create(FIniPath);
+  Ini := TUnicodeIniFile.Create(FIniPath);
   try
     Ini.WriteString('ffmpeg', 'Mode', FFmpegModeToStr(FFFmpegMode));
     Ini.WriteString('ffmpeg', 'ExePath', FFFmpegExePath);
@@ -427,6 +427,9 @@ begin
     Ini.WriteInteger('thumbnails', 'GridFrames', FThumbnailGridFrames);
 
     FHotkeys.Save(Ini);
+    {TUnicodeIniFile buffers writes in memory; UpdateFile flushes to disk.
+     Without it the new values would be discarded on Free.}
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;

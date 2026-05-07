@@ -12,7 +12,7 @@ unit TestSettingsGroups;
  - Load with missing keys preserves the record's current value (the
    "callers reset to defaults first" contract).
  - FontName empty-string fallback keeps the current value rather than
-   storing the empty string verbatim. This is subtle: TIniFile.ReadString
+   storing the empty string verbatim. This is subtle: TUnicodeIniFile.ReadString
    returns the default only when the key is absent, but when the key is
    present with an empty value it returns the empty string -- and the
    group code has an explicit Trim() guard for that case.
@@ -78,8 +78,8 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uTypes, uDefaults, uSettingsGroups;
+  System.SysUtils, System.IOUtils, System.UITypes,
+  uTypes, uDefaults, uSettingsGroups, uUnicodeIniFile;
 
 {TTestExtractionSettingsGroup}
 
@@ -118,7 +118,7 @@ end;
 procedure TTestExtractionSettingsGroup.SaveThenLoad_RoundTripsAllFields;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G1, G2: TExtractionSettingsGroup;
 begin
   IniPath := MakeIniPath('extraction_rt.ini');
@@ -132,7 +132,7 @@ begin
   G1.UseKeyframes := not DEF_USE_KEYFRAMES;
   G1.RespectAnamorphic := not DEF_RESPECT_ANAMORPHIC;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G1.SaveTo(Ini, 'extraction');
   finally
@@ -140,7 +140,7 @@ begin
   end;
 
   G2 := TExtractionSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G2.LoadFrom(Ini, 'extraction');
   finally
@@ -160,7 +160,7 @@ end;
 procedure TTestExtractionSettingsGroup.Load_MissingKeys_PreservesCurrentValues;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TExtractionSettingsGroup;
 begin
   {Empty section -> every key is absent. The "callers reset to defaults
@@ -174,7 +174,7 @@ begin
   G.FramesCount := 17;
   G.UseBmpPipe := False;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'extraction');
   finally
@@ -188,11 +188,11 @@ end;
 procedure TTestExtractionSettingsGroup.Load_FrameCountClamped;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TExtractionSettingsGroup;
 begin
   IniPath := MakeIniPath('extraction_clamp_fc.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('extraction', 'FramesCount', 9999);
   finally
@@ -200,7 +200,7 @@ begin
   end;
 
   G := TExtractionSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'extraction');
   finally
@@ -213,11 +213,11 @@ end;
 procedure TTestExtractionSettingsGroup.Load_SkipEdgesClamped;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TExtractionSettingsGroup;
 begin
   IniPath := MakeIniPath('extraction_clamp_skip.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('extraction', 'SkipEdges', -10);
   finally
@@ -225,7 +225,7 @@ begin
   end;
 
   G := TExtractionSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'extraction');
   finally
@@ -271,7 +271,7 @@ end;
 procedure TTestBannerSettingsGroup.SaveThenLoad_RoundTripsAllFields;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G1, G2: TBannerSettingsGroup;
 begin
   IniPath := MakeIniPath('banner_rt.ini');
@@ -284,7 +284,7 @@ begin
   G1.AutoSize := False;
   G1.Position := bpBottom;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G1.SaveTo(Ini, 'save');
   finally
@@ -292,7 +292,7 @@ begin
   end;
 
   G2 := TBannerSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G2.LoadFrom(Ini, 'save');
   finally
@@ -311,7 +311,7 @@ end;
 procedure TTestBannerSettingsGroup.Load_MissingKeys_PreservesCurrentValues;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
   IniPath := MakeIniPath('banner_empty.ini');
@@ -322,7 +322,7 @@ begin
   G.FontName := 'PreservedFont';
   G.FontSize := 33;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'save');
   finally
@@ -337,16 +337,16 @@ end;
 procedure TTestBannerSettingsGroup.Load_EmptyFont_KeepsCurrentValue;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
-  {Subtle TIniFile behaviour: an explicit "BannerFont=" with an empty
+  {Subtle TUnicodeIniFile behaviour: an explicit "BannerFont=" with an empty
    value returns the empty string from ReadString (the default param is
    only used when the key is absent). The group code must catch this
    with a Trim() guard, otherwise the empty string would silently
    replace the current font name.}
   IniPath := MakeIniPath('banner_empty_font.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('save', 'BannerFont', '');
   finally
@@ -356,7 +356,7 @@ begin
   G := TBannerSettingsGroup.Defaults;
   G.FontName := 'IncomingFont';
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'save');
   finally
@@ -370,14 +370,14 @@ end;
 procedure TTestBannerSettingsGroup.Load_WhitespaceFont_KeepsCurrentValue;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
   {Same fallback for whitespace-only -- the Trim() guard is the actual
    filter. Pinning this so the dialog cannot accidentally save a
    whitespace name and lose the user's font.}
   IniPath := MakeIniPath('banner_ws_font.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('save', 'BannerFont', '   ');
   finally
@@ -387,7 +387,7 @@ begin
   G := TBannerSettingsGroup.Defaults;
   G.FontName := 'IncomingFont';
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'save');
   finally
@@ -400,11 +400,11 @@ end;
 procedure TTestBannerSettingsGroup.Load_FontSizeClampedHigh;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
   IniPath := MakeIniPath('banner_fs_hi.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('save', 'BannerFontSize', 9999);
   finally
@@ -412,7 +412,7 @@ begin
   end;
 
   G := TBannerSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'save');
   finally
@@ -425,11 +425,11 @@ end;
 procedure TTestBannerSettingsGroup.Load_FontSizeClampedLow;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
   IniPath := MakeIniPath('banner_fs_lo.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('save', 'BannerFontSize', -50);
   finally
@@ -437,7 +437,7 @@ begin
   end;
 
   G := TBannerSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'save');
   finally
@@ -450,14 +450,14 @@ end;
 procedure TTestBannerSettingsGroup.Load_UnknownPosition_KeepsCurrent;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
   {Unrecognised enum text falls back to the record's current value
    (StrToBannerPosition's contract); pinning that the group respects
    the contract rather than blindly assigning.}
   IniPath := MakeIniPath('banner_pos_unknown.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('save', 'BannerPosition', 'sideways');
   finally
@@ -467,7 +467,7 @@ begin
   G := TBannerSettingsGroup.Defaults;
   G.Position := bpBottom;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'save');
   finally
@@ -514,7 +514,7 @@ end;
 procedure TTestTimestampSettingsGroup.SaveThenLoad_RoundTripsAllFields;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G1, G2: TTimestampSettingsGroup;
 begin
   IniPath := MakeIniPath('ts_rt.ini');
@@ -528,7 +528,7 @@ begin
   G1.TextColor := TColor($00FFEECC);
   G1.TextAlpha := 200;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G1.SaveTo(Ini, 'view', 'ShowTimecode');
   finally
@@ -536,7 +536,7 @@ begin
   end;
 
   G2 := TTimestampSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G2.LoadFrom(Ini, 'view', 'ShowTimecode');
   finally
@@ -556,7 +556,7 @@ end;
 procedure TTestTimestampSettingsGroup.Load_MissingKeys_PreservesCurrentValues;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TTimestampSettingsGroup;
 begin
   IniPath := MakeIniPath('ts_empty.ini');
@@ -567,7 +567,7 @@ begin
   G.FontName := 'PreservedFont';
   G.TextAlpha := 17;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'view', 'ShowTimecode');
   finally
@@ -582,11 +582,11 @@ end;
 procedure TTestTimestampSettingsGroup.Load_EmptyFont_KeepsCurrentValue;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TTimestampSettingsGroup;
 begin
   IniPath := MakeIniPath('ts_empty_font.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('view', 'TimestampFont', '');
   finally
@@ -596,7 +596,7 @@ begin
   G := TTimestampSettingsGroup.Defaults;
   G.FontName := 'IncomingFont';
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'view', 'ShowTimecode');
   finally
@@ -609,11 +609,11 @@ end;
 procedure TTestTimestampSettingsGroup.Load_FontSizeClamped;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TTimestampSettingsGroup;
 begin
   IniPath := MakeIniPath('ts_fs.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('view', 'TimestampFontSize', 9999);
   finally
@@ -621,7 +621,7 @@ begin
   end;
 
   G := TTimestampSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'view', 'ShowTimecode');
   finally
@@ -634,11 +634,11 @@ end;
 procedure TTestTimestampSettingsGroup.Load_TextAlphaClamped;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TTimestampSettingsGroup;
 begin
   IniPath := MakeIniPath('ts_ta.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('view', 'TimestampTextAlpha', 9999);
   finally
@@ -646,7 +646,7 @@ begin
   end;
 
   G := TTimestampSettingsGroup.Defaults;
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'view', 'ShowTimecode');
   finally
@@ -659,11 +659,11 @@ end;
 procedure TTestTimestampSettingsGroup.Load_UnknownCorner_KeepsCurrent;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TTimestampSettingsGroup;
 begin
   IniPath := MakeIniPath('ts_corner.ini');
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('view', 'TimestampCorner', 'middle');
   finally
@@ -673,7 +673,7 @@ begin
   G := TTimestampSettingsGroup.Defaults;
   G.Corner := tcTopRight;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.LoadFrom(Ini, 'view', 'ShowTimecode');
   finally
@@ -686,7 +686,7 @@ end;
 procedure TTestTimestampSettingsGroup.SaveTo_HonoursShowKeyParameter;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   G: TTimestampSettingsGroup;
   Wcx, Wlx: Boolean;
 begin
@@ -697,14 +697,14 @@ begin
   G := TTimestampSettingsGroup.Defaults;
   G.Show := True;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.SaveTo(Ini, 'combined', 'ShowTimestamp');
   finally
     Ini.Free;
   end;
 
-  Ini := TIniFile.Create(IniPath);
+  Ini := TUnicodeIniFile.Create(IniPath);
   try
     {Read both keys; the WCX one was saved, the WLX one was not.}
     Wcx := Ini.ReadBool('combined', 'ShowTimestamp', False);

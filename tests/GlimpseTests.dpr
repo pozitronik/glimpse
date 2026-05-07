@@ -80,6 +80,8 @@ uses
   TestWcxPresetExtractor in 'TestWcxPresetExtractor.pas',
   uWcxPresetEditorModel in '..\wcx\uWcxPresetEditorModel.pas',
   TestWcxPresetEditorModel in 'TestWcxPresetEditorModel.pas',
+  uUnicodeIniFile in '..\src\uUnicodeIniFile.pas',
+  TestUnicodeIniFile in 'TestUnicodeIniFile.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',

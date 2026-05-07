@@ -59,10 +59,8 @@ function LoadAllPresets(const APath: string): TWcxPresetArray;
 
 {Writes APresets to APath in their array order. Order matters — first
  defined wins the bare name in the listing-time dedupe pass — so the
- editor stores its working order via this routine. Overwrites the file
- atomically by writing the full content in one shot rather than poking
- individual TIniFile keys (TIniFile would not preserve section order on
- a fresh file). UTF-8 with no BOM matches the loader's expectations.}
+ editor stores its working order via this routine. Clears the file's
+ previous content first so removed presets do not leak back in.}
 procedure SavePresets(const APath: string; const APresets: TWcxPresetArray);
 
 {Expands the recognised template variables against AInputPath and APresetName.
@@ -137,7 +135,7 @@ implementation
 
 uses
   System.Generics.Collections, System.Classes, System.Character, System.IOUtils,
-  uDebugLog;
+  uDebugLog, uUnicodeIniFile;
 
 const
   CPresetLog = 'WCX-Presets';
@@ -145,24 +143,6 @@ const
 procedure PresetLog(const AMsg: string);
 begin
   DebugLog(CPresetLog, AMsg);
-end;
-
-{TIniFile.ReadBool only recognises 0/1 (it routes through ReadInteger). Users
- hand-editing presets.ini will write True/False/Yes/No and expect them to
- work; this helper keeps that ergonomic affordance without forcing users to
- learn the integer encoding.}
-function ReadBoolLenient(AIni: TIniFile; const ASection, AKey: string; ADefault: Boolean): Boolean;
-var
-  S: string;
-begin
-  S := AIni.ReadString(ASection, AKey, '').Trim.ToLower;
-  if S = '' then
-    Exit(ADefault);
-  if (S = 'false') or (S = 'no') or (S = '0') or (S = 'off') then
-    Exit(False);
-  if (S = 'true') or (S = 'yes') or (S = '1') or (S = 'on') then
-    Exit(True);
-  Result := ADefault;
 end;
 
 function TokenizeArgs(const AArgs: string): TArray<string>;
@@ -388,13 +368,13 @@ end;
 {Reads one section into a preset record without applying any validation.
  OutputExt is normalised (leading dot stripped) for editor convenience;
  the more involved checks live in the caller.}
-function ReadPresetSection(AIni: TIniFile; const ASection: string): TWcxPreset;
+function ReadPresetSection(AIni: TUnicodeIniFile; const ASection: string): TWcxPreset;
 var
   RawExt: string;
 begin
   Result := Default(TWcxPreset);
   Result.Name := ASection;
-  Result.Enabled := ReadBoolLenient(AIni, ASection, 'Enabled', True);
+  Result.Enabled := AIni.ReadBool(ASection, 'Enabled', True);
   Result.Description := AIni.ReadString(ASection, 'Description', '').Trim;
   Result.OutputName := AIni.ReadString(ASection, 'OutputName', '').Trim;
   Result.Args := AIni.ReadString(ASection, 'Args', '');
@@ -406,7 +386,7 @@ end;
 
 function LoadPresets(const APath: string): TWcxPresetArray;
 var
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Sections: TStringList;
   Preset: TWcxPreset;
   Accum: TList<TWcxPreset>;
@@ -418,7 +398,7 @@ begin
     Exit;
   Accum := TList<TWcxPreset>.Create;
   try
-    Ini := TIniFile.Create(APath);
+    Ini := TUnicodeIniFile.Create(APath);
     try
       Sections := TStringList.Create;
       try
@@ -468,7 +448,7 @@ end;
 
 function LoadAllPresets(const APath: string): TWcxPresetArray;
 var
-  Ini: TIniFile;
+  Ini: TUnicodeIniFile;
   Sections: TStringList;
   Accum: TList<TWcxPreset>;
   I: Integer;
@@ -478,7 +458,7 @@ begin
     Exit;
   Accum := TList<TWcxPreset>.Create;
   try
-    Ini := TIniFile.Create(APath);
+    Ini := TUnicodeIniFile.Create(APath);
     try
       Sections := TStringList.Create;
       try
@@ -499,45 +479,37 @@ end;
 
 procedure SavePresets(const APath: string; const APresets: TWcxPresetArray);
 var
-  Lines: TStringList;
+  Ini: TUnicodeIniFile;
   I: Integer;
   P: TWcxPreset;
 begin
   if APath = '' then
     Exit;
-  Lines := TStringList.Create;
+  Ini := TUnicodeIniFile.Create(APath);
   try
-    {Manual emit so section ordering reflects the array verbatim — TIniFile
-     re-orders new sections to the end and would not preserve the editor's
-     drag-reorder semantics on an empty-or-rewritten file.}
+    {Wipe the file's previous content so an editor-driven full rewrite
+     does not leak removed presets back into the saved output.
+     Order-preserving Insert behaviour in TUnicodeIniFile guarantees the
+     write order below matches the editor's array order.}
+    Ini.Clear;
     for I := 0 to High(APresets) do
     begin
       P := APresets[I];
-      if I > 0 then
-        Lines.Add('');
-      Lines.Add('[' + P.Name + ']');
-      if P.Enabled then
-        Lines.Add('Enabled=1')
-      else
-        Lines.Add('Enabled=0');
+      Ini.WriteBool(P.Name, 'Enabled', P.Enabled);
       if P.Description <> '' then
-        Lines.Add('Description=' + P.Description);
-      Lines.Add('OutputExt=' + P.OutputExt);
+        Ini.WriteString(P.Name, 'Description', P.Description);
+      Ini.WriteString(P.Name, 'OutputExt', P.OutputExt);
       if P.OutputName <> '' then
-        Lines.Add('OutputName=' + P.OutputName);
-      {Args may legitimately be empty (default-codec transcode) so the
-       presence of the key is what the loader checks; absence means
-       "no args", which is round-trip safe.}
+        Ini.WriteString(P.Name, 'OutputName', P.OutputName);
+      {Args may legitimately be empty (default-codec transcode); skip
+       the key in that case so the loader's "absent = empty" path
+       round-trips cleanly.}
       if P.Args <> '' then
-        Lines.Add('Args=' + P.Args);
+        Ini.WriteString(P.Name, 'Args', P.Args);
     end;
-    {UTF-16 LE with BOM is the only Unicode encoding TIniFile (Win32
-     profile APIs underneath) reads correctly. UTF-8 BOM would be parsed
-     as garbage prepended to the first section name, eating the first
-     entry on the next load.}
-    Lines.SaveToFile(APath, TEncoding.Unicode);
+    Ini.UpdateFile;
   finally
-    Lines.Free;
+    Ini.Free;
   end;
 end;
 
