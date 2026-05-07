@@ -808,6 +808,11 @@ begin
     Exit(E_BAD_DATA);
 
   Preset := H.Presets[APresetIndex];
+  {Apply template expansion to Args so the same %basename% / %name% /
+   %ext% tokens that work in OutputName also work in Args (e.g.
+   "Args=-metadata title=%basename%"). The local Preset is a value copy,
+   so this does not mutate H.Presets.}
+  Preset.Args := ExpandTemplate(Preset.Args, H.FileName, Preset.Name);
 
   if ADestName <> '' then
     FullPath := ADestName
