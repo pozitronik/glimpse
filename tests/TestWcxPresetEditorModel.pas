@@ -44,6 +44,11 @@ type
     [Test] procedure TestValidateRejectsBadCharInOutputName;
     [Test] procedure TestValidateRejectsForbiddenArgsToken;
     [Test] procedure TestValidateInvalidIndexPointsToOffender;
+    { Virtual-path validation in OutputName mirrors the loader's rules
+      so the editor catches bad templates before the user clicks Apply. }
+    [Test] procedure TestValidateAcceptsVirtualPathInOutputName;
+    [Test] procedure TestValidateRejectsTraversalInOutputName;
+    [Test] procedure TestValidateRejectsLeadingSeparatorInOutputName;
   end;
 
 implementation
@@ -511,6 +516,68 @@ begin
     M.LoadFrom(P);
     Assert.IsFalse(M.Validate(BadIdx, Reason));
     Assert.AreEqual(2, BadIdx);
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestWcxPresetEditorModel.TestValidateAcceptsVirtualPathInOutputName;
+var
+  M: TPresetEditorModel;
+  P: TWcxPresetArray;
+  BadIdx: Integer;
+  Reason: string;
+begin
+  { Slashes in OutputName are now legitimate — virtual subfolders. }
+  SetLength(P, 1);
+  P[0] := MakeP('audio', 'mp3');
+  P[0].OutputName := 'audio/%basename%';
+  M := TPresetEditorModel.Create;
+  try
+    M.LoadFrom(P);
+    Assert.IsTrue(M.Validate(BadIdx, Reason));
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestWcxPresetEditorModel.TestValidateRejectsTraversalInOutputName;
+var
+  M: TPresetEditorModel;
+  P: TWcxPresetArray;
+  BadIdx: Integer;
+  Reason: string;
+begin
+  { Editor must catch traversal before save so the user sees the error
+    in the dialog rather than discovering a missing entry on next open. }
+  SetLength(P, 1);
+  P[0] := MakeP('audio', 'mp3');
+  P[0].OutputName := '../escape';
+  M := TPresetEditorModel.Create;
+  try
+    M.LoadFrom(P);
+    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.AreEqual(0, BadIdx);
+    Assert.IsTrue(Reason.Contains('OutputName'));
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestWcxPresetEditorModel.TestValidateRejectsLeadingSeparatorInOutputName;
+var
+  M: TPresetEditorModel;
+  P: TWcxPresetArray;
+  BadIdx: Integer;
+  Reason: string;
+begin
+  SetLength(P, 1);
+  P[0] := MakeP('audio', 'mp3');
+  P[0].OutputName := '/audio';
+  M := TPresetEditorModel.Create;
+  try
+    M.LoadFrom(P);
+    Assert.IsFalse(M.Validate(BadIdx, Reason));
   finally
     M.Free;
   end;

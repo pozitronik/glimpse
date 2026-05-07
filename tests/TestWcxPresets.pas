@@ -91,6 +91,25 @@ type
     [Test] procedure TestSavePresetsEmptyArrayProducesEmptyFile;
     [Test] procedure TestSavePresetsEmptyPathSilentlyIgnored;
     [Test] procedure TestSavePresetsEnabledFlagPersists;
+
+    { OutputName virtual-path validation: '/' or '\' for subfolders. }
+    [Test] procedure TestValidateOutputNameAcceptsEmpty;
+    [Test] procedure TestValidateOutputNameAcceptsFlat;
+    [Test] procedure TestValidateOutputNameAcceptsVirtualFolder;
+    [Test] procedure TestValidateOutputNameAcceptsBackslash;
+    [Test] procedure TestValidateOutputNameAcceptsDeepNesting;
+    [Test] procedure TestValidateOutputNameAcceptsTemplateTokens;
+    [Test] procedure TestValidateOutputNameRejectsLeadingSlash;
+    [Test] procedure TestValidateOutputNameRejectsLeadingBackslash;
+    [Test] procedure TestValidateOutputNameRejectsParentTraversal;
+    [Test] procedure TestValidateOutputNameRejectsDotSegment;
+    [Test] procedure TestValidateOutputNameRejectsEmptySegment;
+    [Test] procedure TestValidateOutputNameRejectsForbiddenCharInSegment;
+    [Test] procedure TestNormalizeOutputNameConvertsBackslash;
+    [Test] procedure TestNormalizeOutputNameLeavesSlashesAlone;
+    [Test] procedure TestLoadPresetsAcceptsVirtualPath;
+    [Test] procedure TestLoadPresetsRejectsTraversal;
+    [Test] procedure TestBuildOutputFileNameNormalisesBackslash;
   end;
 
 implementation
@@ -855,6 +874,181 @@ begin
   Loaded := LoadAllPresets(Path);
   Assert.AreEqual(1, Integer(Length(Loaded)));
   Assert.IsFalse(Loaded[0].Enabled);
+end;
+
+{ OutputName virtual-path validation }
+
+procedure TTestWcxPresets.TestValidateOutputNameAcceptsEmpty;
+var
+  R: string;
+begin
+  { Empty falls back to the default template at expansion time. }
+  Assert.IsTrue(ValidateOutputName('', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameAcceptsFlat;
+var
+  R: string;
+begin
+  Assert.IsTrue(ValidateOutputName('foo', R));
+  Assert.IsTrue(ValidateOutputName('audio_track_1', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameAcceptsVirtualFolder;
+var
+  R: string;
+begin
+  { Single-level subfolder. }
+  Assert.IsTrue(ValidateOutputName('audio/track', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameAcceptsBackslash;
+var
+  R: string;
+begin
+  { '\' is the Windows-native form; users will type it from muscle memory.
+    Validation accepts it as equivalent to '/'. }
+  Assert.IsTrue(ValidateOutputName('audio\track', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameAcceptsDeepNesting;
+var
+  R: string;
+begin
+  Assert.IsTrue(ValidateOutputName('a/b/c/d/e', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameAcceptsTemplateTokens;
+var
+  R: string;
+begin
+  { Template tokens (%basename%, etc.) survive validation since they
+    expand later. The token markers themselves are valid filename chars. }
+  Assert.IsTrue(ValidateOutputName('%basename%/audio_%name%', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameRejectsLeadingSlash;
+var
+  R: string;
+begin
+  { Leading separator would look like a "rooted" virtual path; without
+    rejecting it the listing entry name would start with '/' which TC
+    treats as ambiguous. }
+  Assert.IsFalse(ValidateOutputName('/audio/foo', R));
+  Assert.IsTrue(R.Contains('Leading'));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameRejectsLeadingBackslash;
+var
+  R: string;
+begin
+  Assert.IsFalse(ValidateOutputName('\audio\foo', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameRejectsParentTraversal;
+var
+  R: string;
+begin
+  { Traversal segments would let a preset escape the virtual archive root
+    when TC creates the destination directory tree. }
+  Assert.IsFalse(ValidateOutputName('../foo', R));
+  Assert.IsFalse(ValidateOutputName('audio/../etc', R));
+  Assert.IsFalse(ValidateOutputName('foo/..', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameRejectsDotSegment;
+var
+  R: string;
+begin
+  { '.' is meaningless and confusing — reject so users don't think it
+    means "current folder" relative to anything. }
+  Assert.IsFalse(ValidateOutputName('./foo', R));
+  Assert.IsFalse(ValidateOutputName('foo/./bar', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameRejectsEmptySegment;
+var
+  R: string;
+begin
+  { Double separator is a typo with no useful interpretation. }
+  Assert.IsFalse(ValidateOutputName('audio//track', R));
+  Assert.IsFalse(ValidateOutputName('audio\\track', R));
+end;
+
+procedure TTestWcxPresets.TestValidateOutputNameRejectsForbiddenCharInSegment;
+var
+  R: string;
+begin
+  { Windows-illegal characters within any segment break filesystem
+    creation when TC tries to materialise the virtual folder. }
+  Assert.IsFalse(ValidateOutputName('audio:tracks/foo', R));
+  Assert.IsFalse(ValidateOutputName('foo/bar*baz', R));
+  Assert.IsFalse(ValidateOutputName('foo/bar?baz', R));
+  Assert.IsFalse(ValidateOutputName('foo/bar<baz', R));
+end;
+
+procedure TTestWcxPresets.TestNormalizeOutputNameConvertsBackslash;
+begin
+  { WCX SDK requires backslashes in entry filenames. Normalisation goes
+    forward-slash → backslash so user input with '/' (which is more
+    natural to type) ends up in the WCX-canonical form. }
+  Assert.AreEqual('audio\track', NormalizeOutputName('audio/track'));
+  Assert.AreEqual('a\b\c', NormalizeOutputName('a/b/c'));
+  Assert.AreEqual('a\b\c', NormalizeOutputName('a/b\c'));
+end;
+
+procedure TTestWcxPresets.TestNormalizeOutputNameLeavesSlashesAlone;
+begin
+  { Backslashes (the canonical form) pass through unchanged. }
+  Assert.AreEqual('audio\track', NormalizeOutputName('audio\track'));
+  Assert.AreEqual('flat', NormalizeOutputName('flat'));
+  Assert.AreEqual('', NormalizeOutputName(''));
+end;
+
+procedure TTestWcxPresets.TestLoadPresetsAcceptsVirtualPath;
+var
+  Path: string;
+  Presets: TWcxPresetArray;
+begin
+  { End-to-end: a preset with a slashed OutputName loads and survives
+    validation. The in-memory OutputName preserves the user's typed form;
+    BuildOutputFileName normalises at expansion time. }
+  Path := WriteIni('vp.ini',
+    '[audio]'#13#10 +
+    'OutputExt=mp3'#13#10 +
+    'OutputName=audio/%basename%_track'#13#10);
+  Presets := LoadPresets(Path);
+  Assert.AreEqual(1, Integer(Length(Presets)));
+  Assert.AreEqual('audio/%basename%_track', Presets[0].OutputName);
+end;
+
+procedure TTestWcxPresets.TestLoadPresetsRejectsTraversal;
+var
+  Path: string;
+  Presets: TWcxPresetArray;
+begin
+  { A preset that would escape the virtual archive root is dropped at
+    load with a debug-log warning, same as any other invalid preset. }
+  Path := WriteIni('vp_bad.ini',
+    '[audio]'#13#10 +
+    'OutputExt=mp3'#13#10 +
+    'OutputName=../escape/track'#13#10);
+  Presets := LoadPresets(Path);
+  Assert.AreEqual(0, Integer(Length(Presets)));
+end;
+
+procedure TTestWcxPresets.TestBuildOutputFileNameNormalisesBackslash;
+var
+  P: TWcxPreset;
+begin
+  { Whichever separator the user typed, the listing entry FileName uses
+    '\' (WCX-canonical) so TC actually sees the folder structure. }
+  P := Default(TWcxPreset);
+  P.Name := 'audio';
+  P.OutputExt := 'mp3';
+  P.OutputName := 'audio/%basename%';
+  Assert.AreEqual('audio\Movie.mp3',
+    BuildOutputFileName(P, 'C:\v\Movie.mkv'));
 end;
 
 end.

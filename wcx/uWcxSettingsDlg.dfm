@@ -956,7 +956,7 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 280
         Height = 15
         AutoSize = False
-        Caption = 'Output name vars: %basename%, %name%, %ext%'
+        Caption = 'Output name vars: %basename%, %name%, %ext%. / for subfolders'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
         Font.Height = -11

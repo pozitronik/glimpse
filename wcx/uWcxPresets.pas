@@ -107,6 +107,27 @@ function ValidatePresetArgs(const AArgs: string; out AReason: string): Boolean;
  future argv builder so both share the same parse rules.}
 function TokenizeArgs(const AArgs: string): TArray<string>;
 
+{Normalises a path-style OutputName template to the WCX-canonical form:
+ backslash separators (per the WCX SDK spec — TC does not recognise
+ forward slashes as folder separators in archive entry names). Both '/'
+ and '\' may appear in user input; both end up as '\' here. Keeps
+ everything else verbatim, including template tokens like %basename%.
+ Pure transform; safe to apply repeatedly.}
+function NormalizeOutputName(const ATemplate: string): string;
+
+{Validates an OutputName template that may contain virtual path segments.
+ Returns True with AReason='' on accept; False with AReason populated
+ on reject. Empty input is accepted (loader / extractor falls back to
+ the default template).
+ Reject rules:
+   - Leading separator (rooted virtual path)
+   - "." or ".." segment (path traversal or no-op confusion)
+   - Empty segment (double separator)
+   - Any of :*?"<>| inside any segment (Windows-illegal in filenames)
+ Both '/' and '\' are accepted as separators; the validator normalises
+ internally so users may type either form.}
+function ValidateOutputName(const ATemplate: string; out AReason: string): Boolean;
+
 {Returns the full path to the presets file expected to live next to the
  WCX settings INI. Pure path manipulation; does not touch the disk.
  Returns '' when the settings path is empty so callers downstream can
@@ -244,6 +265,10 @@ begin
   else
     Template := CDefaultTemplate;
   Result := ExpandTemplate(Template, AInputPath, APreset.Name) + '.' + APreset.OutputExt;
+  {Normalise to '/' so virtual subfolders in user templates feed the
+   listing builder and dedupe in canonical form regardless of which
+   separator the user typed.}
+  Result := NormalizeOutputName(Result);
 end;
 
 function DeduplicateFileNames(const ANames: TArray<string>): TArray<string>;
@@ -301,18 +326,56 @@ begin
   Result := True;
 end;
 
-function IsValidOutputName(const ATemplate: string): Boolean;
+function NormalizeOutputName(const ATemplate: string): string;
+begin
+  Result := StringReplace(ATemplate, '/', '\', [rfReplaceAll]);
+end;
+
+function ValidateOutputName(const ATemplate: string; out AReason: string): Boolean;
 const
-  {Path separators and the Windows reserved characters; the template may
-   contain template tokens like "%basename%" so '%' is not on the list.
-   '.' is allowed because users might want literal dots in names.}
-  CForbiddenChars = '\/:*?"<>|';
+  CForbiddenInSegment = ':*?"<>|';
 var
+  Normalized: string;
+  Segments: TArray<string>;
+  Segment: string;
   C: Char;
 begin
-  for C in ATemplate do
-    if Pos(C, CForbiddenChars) > 0 then
+  AReason := '';
+  if ATemplate = '' then
+    Exit(True);
+  {NormalizeOutputName converts to backslashes (the WCX-canonical form);
+   split here on the same separator so segment-level rules apply.}
+  Normalized := NormalizeOutputName(ATemplate);
+  if (Length(Normalized) > 0) and (Normalized[1] = '\') then
+  begin
+    AReason := 'Leading separator is not allowed (no rooted virtual paths)';
+    Exit(False);
+  end;
+  Segments := Normalized.Split(['\']);
+  for Segment in Segments do
+  begin
+    if Segment = '' then
+    begin
+      AReason := 'Empty path segment (double separator)';
       Exit(False);
+    end;
+    if Segment = '.' then
+    begin
+      AReason := '"." segment is not allowed';
+      Exit(False);
+    end;
+    if Segment = '..' then
+    begin
+      AReason := '".." segment is not allowed (no traversal)';
+      Exit(False);
+    end;
+    for C in Segment do
+      if Pos(C, CForbiddenInSegment) > 0 then
+      begin
+        AReason := Format('Path segment contains an invalid character: "%s"', [C]);
+        Exit(False);
+      end;
+  end;
   Result := True;
 end;
 
@@ -378,9 +441,9 @@ begin
           end;
           Preset.OutputExt := NormalizedExt;
 
-          if not IsValidOutputName(Preset.OutputName) then
+          if not ValidateOutputName(Preset.OutputName, Reason) then
           begin
-            PresetLog(Format('Preset "%s" rejected: OutputName contains invalid filename characters', [Section]));
+            PresetLog(Format('Preset "%s" rejected: OutputName invalid: %s', [Section, Reason]));
             Continue;
           end;
 

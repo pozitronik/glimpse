@@ -188,11 +188,11 @@ end;
 function TPresetEditorModel.Validate(out AInvalidIndex: Integer; out AReason: string): Boolean;
 const
   CForbiddenExt = '\/:*?"<>| ' + #9;
-  CForbiddenName = '\/:*?"<>|';
 var
   I: Integer;
   P: TWcxPreset;
   C: Char;
+  NameReason: string;
 begin
   AInvalidIndex := -1;
   AReason := '';
@@ -227,13 +227,12 @@ begin
         Exit(False);
       end;
 
-    for C in P.OutputName do
-      if Pos(C, CForbiddenName) > 0 then
-      begin
-        AInvalidIndex := I;
-        AReason := Format('OutputName contains an invalid character: "%s"', [C]);
-        Exit(False);
-      end;
+    if not ValidateOutputName(P.OutputName, NameReason) then
+    begin
+      AInvalidIndex := I;
+      AReason := 'OutputName: ' + NameReason;
+      Exit(False);
+    end;
 
     if not ValidatePresetArgs(P.Args, AReason) then
     begin
