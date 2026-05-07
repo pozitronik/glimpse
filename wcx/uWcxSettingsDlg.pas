@@ -49,7 +49,9 @@ type
     TrkRandomPercent: TTrackBar;
     TshOutput: TTabSheet;
     LblOutputMode: TLabel;
-    CbxOutputMode: TComboBox;
+    ChkModeFrames: TCheckBox;
+    ChkModeCombined: TCheckBox;
+    ChkModePresets: TCheckBox;
     LblFormat: TLabel;
     CbxFormat: TComboBox;
     LblJpegQuality: TLabel;
@@ -141,7 +143,9 @@ type
     MemoPresetArgs: TMemo;
     LblPresetHintTemplate: TLabel;
     LblPresetHintForbidden: TLabel;
-    procedure CbxOutputModeChange(Sender: TObject);
+    procedure ChkModeFramesClick(Sender: TObject);
+    procedure ChkModeCombinedClick(Sender: TObject);
+    procedure ChkModePresetsClick(Sender: TObject);
     procedure BtnFFmpegPathClick(Sender: TObject);
     procedure EdtFFmpegPathChange(Sender: TObject);
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
@@ -257,13 +261,9 @@ begin
   ChkRespectAnamorphic.Checked := ASettings.RespectAnamorphic;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
-  {Translate the new bitmask to the existing combo. ShowFrames takes
-   priority when both bits are on (legacy default). ShowPresets is
-   independent of this combo and stays untouched on save.}
-  if ASettings.ShowCombined and not ASettings.ShowFrames then
-    CbxOutputMode.ItemIndex := 1
-  else
-    CbxOutputMode.ItemIndex := 0;
+  ChkModeFrames.Checked := ASettings.ShowFrames;
+  ChkModeCombined.Checked := ASettings.ShowCombined;
+  ChkModePresets.Checked := ASettings.ShowPresets;
 
   CbxFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
@@ -321,19 +321,9 @@ begin
   ASettings.RespectAnamorphic := ChkRespectAnamorphic.Checked;
   ASettings.FFmpegExePath := EdtFFmpegPath.Text;
 
-  {The combo only governs the frames-vs-combined choice; ShowPresets
-   stays untouched here so a hand-edited Mode bit (Pass 2 surfaces it
-   in the UI) is preserved across an Apply.}
-  if CbxOutputMode.ItemIndex = 1 then
-  begin
-    ASettings.ShowFrames := False;
-    ASettings.ShowCombined := True;
-  end
-  else
-  begin
-    ASettings.ShowFrames := True;
-    ASettings.ShowCombined := False;
-  end;
+  ASettings.ShowFrames := ChkModeFrames.Checked;
+  ASettings.ShowCombined := ChkModeCombined.Checked;
+  ASettings.ShowPresets := ChkModePresets.Checked;
 
   ASettings.SaveFormat := TSaveFormat(CbxFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
@@ -372,7 +362,7 @@ procedure TWcxSettingsForm.UpdateCombinedState;
 var
   IsCombined, BannerOn: Boolean;
 begin
-  IsCombined := CbxOutputMode.ItemIndex = 1;
+  IsCombined := ChkModeCombined.Checked;
   LblColumns.Enabled := IsCombined;
   EdtColumns.Enabled := IsCombined;
   UdColumns.Enabled := IsCombined;
@@ -461,9 +451,24 @@ begin
   LblFFmpegInfo.Caption := FFmpegInfoLabelText(State, Path, Ver, Input = '');
 end;
 
-procedure TWcxSettingsForm.CbxOutputModeChange(Sender: TObject);
+procedure TWcxSettingsForm.ChkModeFramesClick(Sender: TObject);
 begin
+  {Frames have no dependent fields on this tab; the click is a no-op
+   for the dependent-state pass but matches the Combined / Presets
+   handlers for symmetry.}
+end;
+
+procedure TWcxSettingsForm.ChkModeCombinedClick(Sender: TObject);
+begin
+  {The Combined tab's controls grey out when this is off — keep the
+   dependent state in sync as the user toggles.}
   UpdateCombinedState;
+end;
+
+procedure TWcxSettingsForm.ChkModePresetsClick(Sender: TObject);
+begin
+  {No dependent state on this tab today; the Presets tab manages its
+   own enable state.}
 end;
 
 procedure TWcxSettingsForm.ChkMaxWorkersAutoClick(Sender: TObject);

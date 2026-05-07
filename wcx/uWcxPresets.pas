@@ -3,8 +3,7 @@
  invokes ffmpeg with the user's argument string against the source video.
  This unit owns the data model, INI loading, template expansion, validation,
  and the dedupe pass that resolves listing-time filename collisions.
- No process execution lives here — that belongs to the preset extractor
- (Step 5 of the WCX presets feature).}
+ No process execution lives here — that belongs to uWcxPresetExtractor.}
 unit uWcxPresets;
 
 interface

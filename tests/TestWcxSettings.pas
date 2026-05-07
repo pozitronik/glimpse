@@ -29,7 +29,6 @@ type
     [Test] procedure TestModeAllBitsRoundTrip;
     [Test] procedure TestModeMigratesLegacySeparateString;
     [Test] procedure TestModeMigratesLegacyCombinedString;
-    [Test] procedure TestModeMigratesLegacyUsePresetsKey;
     [Test] procedure TestModeOutOfRangeFallsBackToDefault;
     [Test] procedure TestSaveWritesIntegerModeAndDropsLegacyKeys;
     [Test] procedure TestShowFlagsManipulateBitsIndependently;
@@ -514,33 +513,6 @@ begin
   try
     S.Load;
     Assert.AreEqual(MODE_COMBINED, S.Mode);
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TTestWcxSettings.TestModeMigratesLegacyUsePresetsKey;
-var
-  S: TWcxSettings;
-  IniPath: string;
-  Ini: TIniFile;
-begin
-  { Users who had both Mode=combined AND UsePresets=1 get both bits set
-    on the upgraded read. }
-  IniPath := TPath.Combine(FTempDir, 'mig_usepresets.ini');
-  Ini := TIniFile.Create(IniPath);
-  try
-    Ini.WriteString('output', 'Mode', 'combined');
-    Ini.WriteBool('output', 'UsePresets', True);
-  finally
-    Ini.Free;
-  end;
-  S := TWcxSettings.Create(IniPath);
-  try
-    S.Load;
-    Assert.AreEqual(MODE_COMBINED or MODE_PRESETS, S.Mode);
-    Assert.IsTrue(S.ShowCombined);
-    Assert.IsTrue(S.ShowPresets);
   finally
     S.Free;
   end;

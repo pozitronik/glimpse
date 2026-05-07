@@ -32,9 +32,9 @@ type
     FRandomExtraction: Boolean;
     FRandomPercent: Integer;
     {[output] — Mode is a bitmask of MODE_FRAMES / MODE_COMBINED /
-     MODE_PRESETS. The three Show* properties flip individual bits.
-     Replaces the legacy enum + UsePresets pair so the three listing
-     sources can coexist independently.}
+     MODE_PRESETS. The three Show* properties flip individual bits so
+     callers can manipulate one source at a time without touching the
+     others.}
     FMode: Integer;
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
@@ -284,18 +284,11 @@ begin
     FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', FRandomExtraction);
     FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', FRandomPercent), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
 
-    {Mode is the new bitmask. Migration paths in priority order:
-       1. Numeric Mode= (e.g. "5") parses directly.
-       2. Legacy string Mode=separate / Mode=combined maps to the
-          single-bit equivalent.
-       3. Anything else falls back to the default.
-     Independently, the legacy UsePresets=1 key (when present) ORs in
-     MODE_PRESETS so users who flipped that toggle keep their setting.
-     On the next Save the file is rewritten as Mode=N and the legacy
-     keys disappear.}
+    {Mode is a bitmask of MODE_FRAMES / MODE_COMBINED / MODE_PRESETS.
+     Numeric values parse directly; the legacy string forms "separate"
+     and "combined" map to the single-bit equivalent so an INI written
+     by an older Glimpse build still loads.}
     FMode := ParseModeKey(Ini.ReadString('output', 'Mode', ''), WCX_DEF_MODE);
-    if Ini.ReadBool('output', 'UsePresets', False) then
-      FMode := FMode or MODE_PRESETS;
 
     if SameText(Ini.ReadString('output', 'Format', 'PNG'), 'JPEG') then
       FSaveFormat := sfJPEG

@@ -111,7 +111,7 @@ type
     {Populated from module-level cache when ShowFileSizes is enabled}
     TempPaths: TArray<string>;
     EntrySizes: TArray<Int64>;
-    {Loaded once at OpenArchive when UsePresets is on; empty otherwise.
+    {Loaded once at OpenArchive when ShowPresets is on; empty otherwise.
      Indexed by Listing[I].PresetIndex.}
     Presets: TWcxPresetArray;
     {Pre-built typed listing: legacy entries first (frames or combined),
@@ -971,9 +971,10 @@ end;
 
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 begin
-  {Stored on the handle; invoked from the preset extractor (Step 5/6) via
-   uWcxProgressBridge to surface progress and observe user cancel. Legacy
-   per-frame extraction is synchronous and does not call the callback.}
+  {Stored on the handle; the preset extractor invokes it via
+   uWcxProgressBridge to surface progress and observe user cancel.
+   Legacy per-frame extraction is synchronous and does not call the
+   callback.}
   if hArcData = 0 then
     Exit;
   TArchiveHandle(hArcData).ProcessDataProc := pProcessDataProc;

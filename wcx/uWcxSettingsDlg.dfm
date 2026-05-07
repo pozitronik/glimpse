@@ -299,9 +299,9 @@ object WcxSettingsForm: TWcxSettingsForm
       object LblOutputMode: TLabel
         Left = 12
         Top = 24
-        Width = 75
+        Width = 80
         Height = 15
-        Caption = 'Output mode:'
+        Caption = 'Listing modes:'
       end
       object LblFormat: TLabel
         Left = 12
@@ -331,17 +331,32 @@ object WcxSettingsForm: TWcxSettingsForm
         Height = 15
         Caption = 'Background opacity:'
       end
-      object CbxOutputMode: TComboBox
+      object ChkModeFrames: TCheckBox
         Left = 130
-        Top = 20
-        Width = 150
-        Height = 23
-        Style = csDropDownList
+        Top = 22
+        Width = 90
+        Height = 17
+        Caption = 'Frames'
         TabOrder = 0
-        OnChange = CbxOutputModeChange
-        Items.Strings = (
-          'Separate frames'
-          'Combined image')
+        OnClick = ChkModeFramesClick
+      end
+      object ChkModeCombined: TCheckBox
+        Left = 222
+        Top = 22
+        Width = 100
+        Height = 17
+        Caption = 'Combined'
+        TabOrder = 12
+        OnClick = ChkModeCombinedClick
+      end
+      object ChkModePresets: TCheckBox
+        Left = 324
+        Top = 22
+        Width = 100
+        Height = 17
+        Caption = 'Presets'
+        TabOrder = 13
+        OnClick = ChkModePresetsClick
       end
       object CbxFormat: TComboBox
         Left = 130
