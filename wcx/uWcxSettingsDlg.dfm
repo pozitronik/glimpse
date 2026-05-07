@@ -835,34 +835,34 @@ object WcxSettingsForm: TWcxSettingsForm
       object LbxPresets: TListBox
         Left = 8
         Top = 8
-        Width = 100
-        Height = 384
+        Width = 148
+        Height = 348
         ItemHeight = 15
         TabOrder = 0
         OnClick = LbxPresetsClick
       end
       object BtnPresetAdd: TButton
-        Left = 112
-        Top = 8
-        Width = 44
+        Left = 8
+        Top = 362
+        Width = 46
         Height = 24
         Caption = 'Add'
         TabOrder = 1
         OnClick = BtnPresetAddClick
       end
       object BtnPresetRemove: TButton
-        Left = 112
-        Top = 36
-        Width = 44
+        Left = 58
+        Top = 362
+        Width = 46
         Height = 24
         Caption = 'Del'
         TabOrder = 2
         OnClick = BtnPresetRemoveClick
       end
       object BtnPresetDuplicate: TButton
-        Left = 112
-        Top = 64
-        Width = 44
+        Left = 108
+        Top = 362
+        Width = 48
         Height = 24
         Caption = 'Copy'
         TabOrder = 3
