@@ -12,36 +12,36 @@ Provides an instant visual summary of a video's content without opening a media 
 
 All shortcuts below are defaults. Every row is user-configurable via the **Hotkeys** tab in Settings — bindings can be added, removed, or replaced, and each action can carry more than one chord at a time.
 
-| Key             | Action                                                                                            |
-|-----------------|---------------------------------------------------------------------------------------------------|
-| Ctrl+1..5       | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
-| +/-             | Zoom in / out                                                                                     |
-| 0               | Reset zoom to 1x                                                                                  |
-| Left/Right      | Previous / next frame (single-view mode; ignored in other modes)                                  |
-| Ctrl+Left/Right | Previous / next frame (alias of bare Left/Right)                                                  |
-| PageUp/Down     | Previous / next video file in directory                                                           |
-| Space           | Next video file in directory                                                                      |
-| Backspace       | Previous video file in directory                                                                  |
-| Z               | Previous video file in directory                                                                  |
-| Ctrl+Up/Down    | Increase / decrease frame count                                                                   |
-| Ctrl+A          | Select all                                                                                        |
-| Ctrl+Click      | Toggle frame selection                                                                            |
-| Ctrl+S          | Save frame (the focused or right-clicked one)                                                     |
-| Ctrl+Shift+S    | Save view (combined image matching the current view mode: grid, smart, filmstrip, or scroll)      |
-| Ctrl+Alt+Shift+S| Save frames (selected if any are selected, otherwise all loaded frames)                           |
-| Ctrl+C          | Copy frame to clipboard                                                                           |
-| Ctrl+Shift+C    | Copy view to clipboard                                                                            |
-| Enter           | Open the current file in the OS default player                                                    |
-| F11             | Toggle Lister maximize                                                                            |
-| Alt+Enter       | Toggle Lister full-screen (maximize without the window caption)                                   |
-| T               | Toggle timecodes                                                                                  |
-| R               | Refresh (re-extract all frames)                                                                   |
-| Ctrl+R          | Shuffle (pick fresh random frame positions and re-extract)                                        |
-| ~               | Open hamburger menu (when toolbar is collapsed)                                                   |
-| F2              | Settings                                                                                          |
-| F3              | Toggle status bar                                                                                 |
-| F4              | Toggle toolbar                                                                                    |
-| Escape          | Close Lister                                                                                      |
+| Key              | Action                                                                                            |
+|------------------|---------------------------------------------------------------------------------------------------|
+| Ctrl+1..5        | Switch view mode (smart grid / grid / scroll / filmstrip / single); repeat to cycle zoom submodes |
+| +/-              | Zoom in / out                                                                                     |
+| 0                | Reset zoom to 1x                                                                                  |
+| Left/Right       | Previous / next frame (single-view mode; ignored in other modes)                                  |
+| Ctrl+Left/Right  | Previous / next frame (alias of bare Left/Right)                                                  |
+| PageUp/Down      | Previous / next video file in directory                                                           |
+| Space            | Next video file in directory                                                                      |
+| Backspace        | Previous video file in directory                                                                  |
+| Z                | Previous video file in directory                                                                  |
+| Ctrl+Up/Down     | Increase / decrease frame count                                                                   |
+| Ctrl+A           | Select all                                                                                        |
+| Ctrl+Click       | Toggle frame selection                                                                            |
+| Ctrl+S           | Save frame (the focused or right-clicked one)                                                     |
+| Ctrl+Shift+S     | Save view (combined image matching the current view mode: grid, smart, filmstrip, or scroll)      |
+| Ctrl+Alt+Shift+S | Save frames (selected if any are selected, otherwise all loaded frames)                           |
+| Ctrl+C           | Copy frame to clipboard                                                                           |
+| Ctrl+Shift+C     | Copy view to clipboard                                                                            |
+| Enter            | Open the current file in the OS default player                                                    |
+| F11              | Toggle Lister maximize                                                                            |
+| Alt+Enter        | Toggle Lister full-screen (maximize without the window caption)                                   |
+| T                | Toggle timecodes                                                                                  |
+| R                | Refresh (re-extract all frames)                                                                   |
+| Ctrl+R           | Shuffle (pick fresh random frame positions and re-extract)                                        |
+| ~                | Open hamburger menu (when toolbar is collapsed)                                                   |
+| F2               | Settings                                                                                          |
+| F3               | Toggle status bar                                                                                 |
+| F4               | Toggle toolbar                                                                                    |
+| Escape           | Close Lister                                                                                      |
 
 ### Configuration
 
@@ -49,35 +49,33 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 
 #### General
 
-| Setting                           | Default     | Description                                                                                                              |
-|-----------------------------------|-------------|--------------------------------------------------------------------------------------------------------------------------|
-| Max workers                       | 1           | Number of parallel ffmpeg processes for frame extraction. More workers = faster loading, higher CPU usage                |
-| One per frame                     | Off         | Launches a separate worker for each frame instead of using a fixed worker count                                          |
-| Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers. 0 = auto (matches CPU core count)         |
-| Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary PNG files. Faster but uses more memory                                |
-| Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available (DXVA2, NVDEC, QuickSync). Falls back to software decoding silently        |
-| Use keyframes                     | Off         | Seeks to the nearest keyframe instead of decoding to the exact timestamp. Faster but timecodes may be less precise       |
-| Extract frames at display size    | Off         | Asks ffmpeg to produce frames already scaled to display size instead of full resolution. Significantly faster for 4K+    |
-| Scale target min (px)             | 120         | Lower bound on the scale target (bigger side). Prevents the viewport-derived target from collapsing too small            |
-| Scale target max (px)             | 1920        | Upper bound on the scale target (bigger side). Frames are left at native resolution when the target exceeds it           |
-| Re-extract on viewport change     | On          | Quietly re-extracts in the background when switching view modes or resizing Lister so frames stay at display resolution. |
-|                                   |             | Existing frames remain on screen until new ones arrive. No effect when *Extract frames at display size* is off           |
-| Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are non-square (DVD rips, broadcast, some cameras).  |
-|                                   |             | A 720x576 16:9 source comes out as 1024x576 instead of the squished raw 720x576. No-op for square-pixel videos.          |
-|                                   |             | Toggling this forces re-extraction so the live view matches the new pixel grid                                           |
-| Extensions                        | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                     |
-| FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                           |
+| Setting                           | Default     | Description                                                                                                                                                                     |
+|-----------------------------------|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Max workers                       | 1           | Number of parallel ffmpeg processes for frame extraction. More workers = faster loading, higher CPU usage                                                                       |
+| One per frame                     | Off         | Launches a separate worker for each frame instead of using a fixed worker count                                                                                                 |
+| Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers. 0 = auto (matches CPU core count)                                                                |
+| Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary PNG files. Faster but uses more memory                                                                                       |
+| Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available (DXVA2, NVDEC, QuickSync). Falls back to software decoding silently                                                               |
+| Use keyframes                     | Off         | Seeks to the nearest keyframe instead of decoding to the exact timestamp. Faster but timecodes may be less precise                                                              |
+| Extract frames at display size    | Off         | Asks ffmpeg to produce frames already scaled to display size instead of full resolution. Significantly faster for 4K+                                                           |
+| Scale target min (px)             | 120         | Lower bound on the scale target (bigger side). Prevents the viewport-derived target from collapsing too small                                                                   |
+| Scale target max (px)             | 1920        | Upper bound on the scale target (bigger side). Frames are left at native resolution when the target exceeds it                                                                  |
+| Re-extract on viewport change     | On          | Quietly re-extracts in the background when switching view modes or resizing Lister so frames stay at display resolution. No effect when *Extract frames at display size* is off |
+| Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are non-square (DVD rips, broadcast, some cameras).                                                         |
+| Extensions                        | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                                                                            |
+| FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                                                                                  |
 
 #### Sampling
 
 Controls *which* moments of the video are turned into frames — independent of the engine knobs on the General tab.
 
-| Setting                       | Default | Description                                                                                                                                                                                                                  |
-|-------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Skip edges                    | 2%      | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                                                                                                                                  |
-| Start from random positions   | Off     | When on, opening a file picks frame offsets at random within their slices instead of the deterministic midpoints. Each slice still contributes one frame, so the order of frames in the view stays consistent                |
-| Randomness                    | 50%     | Strength of the per-slice jitter window. 1% nudges the offset slightly off-centre; 100% lets a frame be picked anywhere within its slice. Drives both the on-load behaviour and the on-demand Shuffle action                 |
-| Cache random frames           | Off     | When off, random extractions read from the cache (so a previously-cached random pick still hits) but do not write fresh picks back, keeping every Shuffle truly fresh. When on, random picks are cached just like normal ones |
+| Setting                     | Default | Description                                                                                                                                                            |
+|-----------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Skip edges                  | 2%      | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                                                                            |
+| Start from random positions | Off     | When on, opening a file picks frame offsets at random within their slices instead of the deterministic midpoints.                                                      |
+| Randomness                  | 50%     | Strength of the per-slice jitter window. 1% nudges the offset slightly off-centre; 100% lets a frame be picked anywhere within its slice.                              |
+| Cache random frames         | Off     | When off, random extractions read from the cache (so a previously-cached random pick still hits) but do not write fresh picks back, keeping every Shuffle truly fresh. |
+|                             |         | When on, random picks are cached just like normal ones                                                                                                                 |
 
 The toolbar **Refresh** button is a split button: clicking it re-extracts the current offsets, while its dropdown arrow exposes a **Shuffle** item (Ctrl+R) that re-rolls the offsets and re-extracts. Shuffle works regardless of the *Start from random positions* checkbox — that toggle only governs the default behaviour when opening a file.
 
@@ -97,17 +95,16 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 
 #### Save
 
-| Setting                  | Default | Description                                                                            |
-|--------------------------|---------|----------------------------------------------------------------------------------------|
-| Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                            |
-| JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)      |
-| PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)             |
-| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save view output background                     |
-|                          |         | (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG.               |
-| Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                 |
-| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to Save view exports      |
-| Save at view resolution  | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses   |
-|                          |         | native frame resolution. Also available as a checkbox in the file save dialog.         |
+| Setting                  | Default | Description                                                                                                                                 |
+|--------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                                                                                 |
+| JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)                                                           |
+| PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)                                                                  |
+| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save view output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG. |
+| Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                                                                      |
+| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to Save view exports                                                           |
+| Save at view resolution  | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses                                                        |
+|                          |         | native frame resolution. Also available as a checkbox in the file save dialog.                                                              |
 
 #### Cache
 
@@ -159,26 +156,24 @@ Presents a video file as a virtual archive containing frame images. Opening a vi
 - Batch-extract thumbnails from many videos at once using TC's multi-file copy
 - Preview frame filenames before extracting
 - Use TC's built-in viewer to browse individual frames
+- Run user-defined ffmpeg presets (audio rip, low-bitrate preview, custom transcodes) by extracting them from the virtual archive — see [Presets](#presets)
 
 ### Configuration
 
-Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into five tabs: **General**, **Sampling**, **Output**, **Combined**, **Size limit**.
+Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into six tabs: **General**, **Sampling**, **Output**, **Combined**, **Presets**, **Size limit**.
 
 #### General
 
-| Setting                           | Default     | Description                                                                    |
-|-----------------------------------|-------------|--------------------------------------------------------------------------------|
-| Max workers                       | 1           | Number of parallel ffmpeg processes for frame extraction                       |
-| One per frame                     | Off         | Launches a separate worker for each frame                                      |
-| Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers  |
-| Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary files                       |
-| Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available. Falls back to software silently |
-| Use keyframes                     | Off         | Seeks to the nearest keyframe instead of exact timestamp. Faster seeking       |
-| Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are        |
-|                                   |             | non-square (DVD rips, broadcast, some cameras). A 720x576 16:9 source comes    |
-|                                   |             | out as 1024x576 instead of the squished raw 720x576. No-op for square-pixel    |
-|                                   |             | videos                                                                         |
-| FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect                      |
+| Setting                           | Default     | Description                                                                                                             |
+|-----------------------------------|-------------|-------------------------------------------------------------------------------------------------------------------------|
+| Max workers                       | 1           | Number of parallel ffmpeg processes for frame extraction                                                                |
+| One per frame                     | Off         | Launches a separate worker for each frame                                                                               |
+| Limit workers count               | No limit    | When "One per frame" is active, caps the total number of simultaneous workers                                           |
+| Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary files                                                                |
+| Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available. Falls back to software silently                                          |
+| Use keyframes                     | Off         | Seeks to the nearest keyframe instead of exact timestamp. Faster seeking                                                |
+| Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are non-square (DVD rips, broadcast, some cameras). |
+| FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect                                                               |
 
 #### Sampling
 
@@ -196,14 +191,14 @@ WCX has no "Cache random frames" toggle: the plugin runs on demand from TC and h
 
 #### Output
 
-| Setting            | Default         | Description                                                                                                                          |
-|--------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| Output mode        | Separate frames | `Separate frames` shows individual image files in the archive; `Combined image` produces a single grid image                         |
-| Image format       | PNG             | Image format for extracted frames (PNG or JPEG)                                                                                      |
-| JPEG quality       | 90              | Compression quality for JPEG output (1-100)                                                                                          |
-| PNG compression    | 6               | Compression level for PNG output (0-9)                                                                                               |
-| Background opacity | 255             | Opacity of cell gaps, border, and combined-image background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG. |
-| Show file sizes    | Off             | Displays actual file sizes in the archive listing. Requires extracting all frames when entering the archive                          |
+| Setting            | Default     | Description                                                                                                                                                                          |
+|--------------------|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Listing modes      | Frames only | Three independent toggles compose the archive listing:<br/>- **Frames** (individual images)<br/>- **Combined** (single grid image),<br/>- **Presets** (user-defined ffmpeg recipes). |
+| Image format       | PNG         | Image format for extracted frames (PNG or JPEG)                                                                                                                                      |
+| JPEG quality       | 90          | Compression quality for JPEG output (1-100)                                                                                                                                          |
+| PNG compression    | 6           | Compression level for PNG output (0-9)                                                                                                                                               |
+| Background opacity | 255         | Opacity of cell gaps, border, and combined-image background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG.                                                 |
+| Show file sizes    | Off         | Displays actual file sizes in the archive listing. Requires extracting all frames when entering the archive                                                                          |
 
 #### Combined
 
@@ -218,6 +213,29 @@ These settings only apply when output mode is set to "Combined image":
 | Timestamp font           | Consolas, 9pt | Font face and size for timecode labels                                   |
 | Include file info banner | Off           | Adds a header with video file name, resolution, and duration             |
 
+#### Presets
+
+User-defined ffmpeg recipes that appear as additional virtual files in the archive listing alongside (or instead of) the frame and combined entries. Each preset is a complete ffmpeg invocation — extract a preset entry and the plugin runs ffmpeg with your arguments and saves the result to TC's chosen destination.
+
+Enable preset listing by ticking the **Presets** checkbox in the Output tab. Disabled presets remain visible in the editor (so you can re-enable them) but do not appear in the archive listing.
+
+The Presets tab provides a master-detail editor: the list on the left shows every preset, the panel on the right edits the currently selected one. **Add** creates a blank preset, **Del** removes the selection, **Copy** duplicates with a fresh name. Saved on Apply or OK.
+
+| Field       | Description                                                                                                                                                                                                                                                                                                                            |
+|-------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Name        | INI section name; doubles as the `%name%` template variable. Must be unique (case-insensitive)                                                                                                                                                                                                                                         |
+| Enabled     | When off, the preset is hidden from the archive listing but kept in the editor                                                                                                                                                                                                                                                         |
+| Description | Free-text label, shown only in the editor                                                                                                                                                                                                                                                                                              |
+| Output ext  | File extension without the leading dot (e.g. `mp3`, `jpg`). Required. ffmpeg picks the muxer/encoder from this when no explicit codec is given                                                                                                                                                                                         |
+| Output name | Filename template. Defaults to `%basename%_%name%`. Recognised variables: `%basename%` (source filename without path or extension), `%name%` (preset section name), `%ext%` (source extension, lowercased, no dot). Unknown `%token%` patterns pass through verbatim. May contain `/` or `\` for virtual subfolders inside the archive |
+| ffmpeg args | Arguments inserted between `-i <input>` and the output file. Forbidden tokens (rejected at save): `-i`, `-y`, `-n`, `pipe:0`, `pipe:1`, `pipe:2`. May be empty, in which case ffmpeg picks default codecs from the output extension                                                                                                    |
+
+Presets live in `presets.ini` next to `Glimpse.ini`. The file is hand-editable — each preset is a `[name]` section with `OutputExt=`, `Args=`, etc. The editor reads and writes this file; manual edits are picked up on the next archive open. The file is UTF-8 (with or without BOM); modern editors save it correctly.
+
+When a preset extraction fails, ffmpeg's actual error appears in a dialog ("Glimpse preset extraction failed") with the relevant ffmpeg stderr line — useful for debugging your args.
+
+Naming collisions between presets get the standard `(N)` suffix in the listing; first-defined wins the bare name. Place a preset under a virtual subfolder (e.g. `OutputName=audio/%basename%`) to avoid collisions and group related presets visually.
+
 #### Size limit
 
 Caps the longer side of extracted output in pixels (the cap applies to whichever side is longer, regardless of orientation). Useful for keeping batch-extracted thumbnails compact.
@@ -226,6 +244,17 @@ Caps the longer side of extracted output in pixels (the cap applies to whichever
 |-----------------------------|--------------|----------------------------------------------------------------------------------------------------------------------------|
 | Separate frames longer side | 0 (no limit) | When `Separate frames` mode is active, ffmpeg downscales each frame so its longer side does not exceed this many pixels    |
 | Combined image longer side  | 0 (no limit) | When `Combined image` mode is active, the assembled grid is downscaled so its longer side does not exceed this many pixels |
+
+#### Diagnostics
+
+There is no UI control for debug logging — the toggle is hand-edited in `Glimpse.ini`:
+
+```ini
+[debug]
+LogEnabled=1
+```
+
+When enabled, the plugin writes to `Glimpse.log` next to the WCX DLL. Lines are tagged `WCX:` for general operations and `WCX-Presets:` for preset loader warnings (rejected presets, malformed values). The setting takes effect on the next archive open — no TC restart required. Set back to `0` (or remove the line) and reopen any archive to stop logging. The existing log file is left in place for inspection.
 
 ## Installation
 
