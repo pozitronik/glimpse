@@ -1,8 +1,10 @@
 {Builds the typed entry list a WCX archive presents to Total Commander.
- Combines the legacy frame / combined-sheet entries with the user-defined
- preset entries (when the master switch is on), then dedupes filenames
- across the whole listing so a preset whose template happens to match a
- frame filename gets the auto-suffixed treatment too.
+ Composes up to three independent listing sources — separate frames, the
+ combined contact sheet, and user-defined ffmpeg presets — based on the
+ booleans the caller passes in. Any combination is valid (including the
+ all-off "empty archive" case). Filenames are deduped across the whole
+ set so a preset template that happens to match a frame name still gets
+ the (N) suffix.
  Pure data transformation — no I/O, no globals, no FFmpeg invocation.
  The WCX export layer consumes the result to drive ReadHeaderExW iteration
  and to dispatch ProcessFile to the appropriate extractor.}
@@ -13,23 +15,22 @@ interface
 uses
   uBitmapSaver,
   uFrameOffsets,
-  uWcxSettings,
   uWcxPresets;
 
 type
   {Distinguishes the three sources an archive entry can come from.
-   - ekFrame: one of the per-frame still images in womSeparate mode
-   - ekCombined: the single contact-sheet image in womCombined mode
-   - ekPreset: a user-defined ffmpeg preset transcode (Step 6 wires the
-     actual extractor; Step 3 lists them but ProcessFile refuses extract)}
+   - ekFrame: one of the per-frame still images
+   - ekCombined: the single contact-sheet image
+   - ekPreset: a user-defined ffmpeg preset transcode}
   TWcxEntryKind = (ekFrame, ekCombined, ekPreset);
 
   {One row in the archive listing as TC sees it.
-   FileName is the post-dedupe display name; LegacyIndex points into the
-   frame offset / temp path arrays for ekFrame and into temp path slot 0
-   for ekCombined; PresetIndex points into the preset array for ekPreset.
-   The two indices are -1 when not applicable so a misuse traps loudly
-   instead of silently picking entry 0.}
+   FileName is the post-dedupe display name. LegacyIndex maps to the
+   slot in the cache arrays (TempPaths / EntrySizes) for ekFrame and
+   ekCombined entries — frames occupy slots 0..N-1 (when shown), the
+   combined image occupies the slot right after them. PresetIndex points
+   into the preset array for ekPreset; both indices are -1 when not
+   applicable so a misuse traps loudly instead of silently picking 0.}
   TWcxListingEntry = record
     FileName: string;
     Kind: TWcxEntryKind;
@@ -40,71 +41,82 @@ type
   TWcxListingEntryArray = TArray<TWcxListingEntry>;
 
 {Builds the full archive listing for a video.
- Legacy entries (frames or combined sheet, depending on AOutputMode) come
- first so existing TC scripts that key off the well-known names continue to
- work. When AUsePresets is True, every preset is appended after the legacy
- entries with its filename expanded against AVideoFileName. Filenames are
- deduped across the whole set: a preset template that produces the same
- name as a frame entry gets the (N) suffix, with the legacy entry winning
- the bare name because legacy comes first in iteration order.
- When AUsePresets is False, the preset list is ignored entirely so the
- listing matches the pre-presets behaviour bit-for-bit.}
-function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray; AOutputMode: TWcxOutputMode; ASaveFormat: TSaveFormat;
-  AUsePresets: Boolean; const APresets: TWcxPresetArray): TWcxListingEntryArray;
+ The three booleans select which sources contribute entries; their order
+ in the listing is fixed at frames first, combined next, presets last so
+ existing TC scripts that key off the legacy positions stay stable.
+ Frame entries occupy LegacyIndex 0..Length(AOffsets)-1 when shown; the
+ combined entry occupies the slot immediately after (Length(AOffsets) if
+ frames are shown, 0 otherwise). The cache layer sizes its arrays to the
+ same scheme.
+ Filename dedupe runs across the whole composed listing, not per source.
+ First-defined wins the bare name, subsequent collisions get "(N)"
+ suffixes — frames before combined before presets.}
+function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined, AShowPresets: Boolean;
+  ASaveFormat: TSaveFormat; const APresets: TWcxPresetArray): TWcxListingEntryArray;
 
 implementation
 
 uses
   uFrameFileNames;
 
-function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray; AOutputMode: TWcxOutputMode; ASaveFormat: TSaveFormat;
-  AUsePresets: Boolean; const APresets: TWcxPresetArray): TWcxListingEntryArray;
+function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined, AShowPresets: Boolean;
+  ASaveFormat: TSaveFormat; const APresets: TWcxPresetArray): TWcxListingEntryArray;
 var
-  I, LegacyCount, PresetCount: Integer;
+  I, FrameCount, LegacyCount, PresetCount, EntryIdx, CombinedSlot: Integer;
   AllNames: TArray<string>;
 begin
-  if AOutputMode = womCombined then
-    LegacyCount := 1
+  if AShowFrames then
+    FrameCount := Length(AOffsets)
   else
-    LegacyCount := Length(AOffsets);
+    FrameCount := 0;
 
-  if AUsePresets then
+  LegacyCount := FrameCount;
+  if AShowCombined then
+    Inc(LegacyCount);
+
+  if AShowPresets then
     PresetCount := Length(APresets)
   else
     PresetCount := 0;
 
-  {Build a flat name array for the dedupe pass; cross-section dedupe is
-   why the legacy and preset names share one input rather than dedupe-ing
-   each section independently.}
+  {The combined image sits in the cache slot immediately after the
+   frames; FrameCount=0 means it lands at slot 0 instead. The dispatcher
+   uses Entry.LegacyIndex to look up TempPaths, so the slot number must
+   match what PreExtractFrames will populate.}
+  CombinedSlot := FrameCount;
+
   SetLength(AllNames, LegacyCount + PresetCount);
-  if AOutputMode = womCombined then
-    AllNames[0] := GenerateCombinedFileName(AVideoFileName, ASaveFormat)
-  else
-    for I := 0 to LegacyCount - 1 do
-      AllNames[I] := GenerateFrameFileName(AVideoFileName, I, AOffsets[I].TimeOffset, ASaveFormat);
+  EntryIdx := 0;
+  if AShowFrames then
+    for I := 0 to FrameCount - 1 do
+    begin
+      AllNames[EntryIdx] := GenerateFrameFileName(AVideoFileName, I, AOffsets[I].TimeOffset, ASaveFormat);
+      Inc(EntryIdx);
+    end;
+  if AShowCombined then
+    AllNames[EntryIdx] := GenerateCombinedFileName(AVideoFileName, ASaveFormat);
   for I := 0 to PresetCount - 1 do
     AllNames[LegacyCount + I] := BuildOutputFileName(APresets[I], AVideoFileName);
 
   AllNames := DeduplicateFileNames(AllNames);
 
   SetLength(Result, LegacyCount + PresetCount);
-  for I := 0 to LegacyCount - 1 do
-  begin
-    Result[I].FileName := AllNames[I];
-    if AOutputMode = womCombined then
+  EntryIdx := 0;
+  if AShowFrames then
+    for I := 0 to FrameCount - 1 do
     begin
-      Result[I].Kind := ekCombined;
-      {Combined uses temp-path slot 0; LegacyIndex=0 keeps the lookup
-       uniform with ekFrame so the extractor can index TempPaths the same
-       way for both kinds.}
-      Result[I].LegacyIndex := 0;
-    end
-    else
-    begin
-      Result[I].Kind := ekFrame;
-      Result[I].LegacyIndex := I;
+      Result[EntryIdx].FileName := AllNames[EntryIdx];
+      Result[EntryIdx].Kind := ekFrame;
+      Result[EntryIdx].LegacyIndex := I;
+      Result[EntryIdx].PresetIndex := -1;
+      Inc(EntryIdx);
     end;
-    Result[I].PresetIndex := -1;
+  if AShowCombined then
+  begin
+    Result[EntryIdx].FileName := AllNames[EntryIdx];
+    Result[EntryIdx].Kind := ekCombined;
+    Result[EntryIdx].LegacyIndex := CombinedSlot;
+    Result[EntryIdx].PresetIndex := -1;
   end;
   for I := 0 to PresetCount - 1 do
   begin

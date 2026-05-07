@@ -8,9 +8,15 @@ uses
   System.SysUtils, System.IniFiles, System.Math, System.UITypes,
   uBitmapSaver, uTypes, uDefaults, uSettingsGroups;
 
-type
-  TWcxOutputMode = (womSeparate, womCombined);
+const
+  {Bit values composed into the Mode bitmask. Each independent toggle
+   contributes one bit, so any combination of the three listing sources
+   can be enabled simultaneously.}
+  MODE_FRAMES   = 1;
+  MODE_COMBINED = 2;
+  MODE_PRESETS  = 4;
 
+type
   TWcxSettings = class
   strict private
     FIniPath: string;
@@ -25,8 +31,11 @@ type
      frame cache so the option would be a no-op.}
     FRandomExtraction: Boolean;
     FRandomPercent: Integer;
-    {[output]}
-    FOutputMode: TWcxOutputMode;
+    {[output] — Mode is a bitmask of MODE_FRAMES / MODE_COMBINED /
+     MODE_PRESETS. The three Show* properties flip individual bits.
+     Replaces the legacy enum + UsePresets pair so the three listing
+     sources can coexist independently.}
+    FMode: Integer;
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
     FPngCompression: Integer;
@@ -48,12 +57,6 @@ type
      cap triggers a post-render HALFTONE downscale of the assembled grid.}
     FFrameMaxSide: Integer;
     FCombinedMaxSide: Integer;
-    {Master switch for the user-defined ffmpeg preset feature. Off by default
-     so a fresh install behaves identically to the legacy frame/combined
-     output. When True, presets defined in a sibling presets.ini are appended
-     to the archive listing; when False, the preset file is ignored entirely
-     regardless of how many presets it contains.}
-    FUsePresets: Boolean;
     {Hidden diagnostic toggle, no UI control. When True, uWcxExports points
      GDebugLogPath at "<dll>.log" so the WcxLog calls scattered through the
      plugin start writing to a file next to the DLL. Off by default so a
@@ -61,6 +64,13 @@ type
      when they need to diagnose something.}
     FDebugLogEnabled: Boolean;
 
+  private
+    function GetShowFrames: Boolean;
+    procedure SetShowFrames(AValue: Boolean);
+    function GetShowCombined: Boolean;
+    procedure SetShowCombined(AValue: Boolean);
+    function GetShowPresets: Boolean;
+    procedure SetShowPresets(AValue: Boolean);
   public
     constructor Create(const AIniPath: string);
     procedure Load;
@@ -82,7 +92,15 @@ type
     property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
     property RandomExtraction: Boolean read FRandomExtraction write FRandomExtraction;
     property RandomPercent: Integer read FRandomPercent write FRandomPercent;
-    property OutputMode: TWcxOutputMode read FOutputMode write FOutputMode;
+    {Mode bitmask: bitwise OR of MODE_FRAMES, MODE_COMBINED, MODE_PRESETS.
+     0 means an empty archive listing — valid but unusual. The Show*
+     properties below let callers manipulate one bit at a time without
+     touching the others, which matters for the dialog's combo box that
+     only knows about frames-vs-combined.}
+    property Mode: Integer read FMode write FMode;
+    property ShowFrames: Boolean read GetShowFrames write SetShowFrames;
+    property ShowCombined: Boolean read GetShowCombined write SetShowCombined;
+    property ShowPresets: Boolean read GetShowPresets write SetShowPresets;
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
@@ -111,13 +129,12 @@ type
     property ShowFileSizes: Boolean read FShowFileSizes write FShowFileSizes;
     property FrameMaxSide: Integer read FFrameMaxSide write FFrameMaxSide;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
-    property UsePresets: Boolean read FUsePresets write FUsePresets;
     property DebugLogEnabled: Boolean read FDebugLogEnabled write FDebugLogEnabled;
   end;
 
 const
   {WCX-specific defaults (shared defaults are in uDefaults)}
-  WCX_DEF_OUTPUT_MODE = womSeparate;
+  WCX_DEF_MODE = MODE_FRAMES;
   WCX_DEF_COMBINED_COLS = 0; {0 = auto}
   WCX_DEF_SHOW_TIMESTAMP = True;
   WCX_DEF_BACKGROUND = TColor($001E1E1E);
@@ -130,13 +147,41 @@ const
   WCX_DEF_COMBINED_MAX_SIDE = 0;
   WCX_MIN_OUTPUT_SIDE = 0;
   WCX_MAX_OUTPUT_SIDE = MAX_FRAME_SIDE; {8K}
-  WCX_DEF_USE_PRESETS = False;
   WCX_DEF_DEBUG_LOG_ENABLED = False;
 
 implementation
 
 uses
   uPathExpand, uColorConv;
+
+{Parses the [output] Mode= INI value across all supported forms:
+   - Numeric (e.g. "5") → returned as-is when in valid bitmask range
+   - Legacy string "separate" → MODE_FRAMES
+   - Legacy string "combined" → MODE_COMBINED
+   - Anything else (empty, garbage) → ADefault
+ Range check accepts 0..7 (the only valid bit combinations); higher
+ values fall back to ADefault since they would expose unsupported bits.}
+function ParseModeKey(const ARawValue: string; ADefault: Integer): Integer;
+var
+  AsInt: Integer;
+  Trimmed: string;
+begin
+  Trimmed := Trim(ARawValue);
+  if Trimmed = '' then
+    Exit(ADefault);
+  if TryStrToInt(Trimmed, AsInt) then
+  begin
+    if (AsInt >= 0) and (AsInt <= MODE_FRAMES or MODE_COMBINED or MODE_PRESETS) then
+      Exit(AsInt)
+    else
+      Exit(ADefault);
+  end;
+  if SameText(Trimmed, 'separate') then
+    Exit(MODE_FRAMES);
+  if SameText(Trimmed, 'combined') then
+    Exit(MODE_COMBINED);
+  Result := ADefault;
+end;
 
 {TWcxSettings}
 
@@ -153,7 +198,7 @@ begin
   FExtraction := TExtractionSettingsGroup.Defaults;
   FRandomExtraction := DEF_RANDOM_EXTRACTION;
   FRandomPercent := DEF_RANDOM_PERCENT;
-  FOutputMode := WCX_DEF_OUTPUT_MODE;
+  FMode := WCX_DEF_MODE;
   FSaveFormat := DEF_SAVE_FORMAT;
   FJpegQuality := DEF_JPEG_QUALITY;
   FPngCompression := DEF_PNG_COMPRESSION;
@@ -173,8 +218,46 @@ begin
   FShowFileSizes := WCX_DEF_SHOW_FILE_SIZES;
   FFrameMaxSide := WCX_DEF_FRAME_MAX_SIDE;
   FCombinedMaxSide := WCX_DEF_COMBINED_MAX_SIDE;
-  FUsePresets := WCX_DEF_USE_PRESETS;
   FDebugLogEnabled := WCX_DEF_DEBUG_LOG_ENABLED;
+end;
+
+function TWcxSettings.GetShowFrames: Boolean;
+begin
+  Result := (FMode and MODE_FRAMES) <> 0;
+end;
+
+procedure TWcxSettings.SetShowFrames(AValue: Boolean);
+begin
+  if AValue then
+    FMode := FMode or MODE_FRAMES
+  else
+    FMode := FMode and not MODE_FRAMES;
+end;
+
+function TWcxSettings.GetShowCombined: Boolean;
+begin
+  Result := (FMode and MODE_COMBINED) <> 0;
+end;
+
+procedure TWcxSettings.SetShowCombined(AValue: Boolean);
+begin
+  if AValue then
+    FMode := FMode or MODE_COMBINED
+  else
+    FMode := FMode and not MODE_COMBINED;
+end;
+
+function TWcxSettings.GetShowPresets: Boolean;
+begin
+  Result := (FMode and MODE_PRESETS) <> 0;
+end;
+
+procedure TWcxSettings.SetShowPresets(AValue: Boolean);
+begin
+  if AValue then
+    FMode := FMode or MODE_PRESETS
+  else
+    FMode := FMode and not MODE_PRESETS;
 end;
 
 procedure TWcxSettings.Load;
@@ -201,10 +284,19 @@ begin
     FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', FRandomExtraction);
     FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', FRandomPercent), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
 
-    if SameText(Ini.ReadString('output', 'Mode', 'separate'), 'combined') then
-      FOutputMode := womCombined
-    else
-      FOutputMode := womSeparate;
+    {Mode is the new bitmask. Migration paths in priority order:
+       1. Numeric Mode= (e.g. "5") parses directly.
+       2. Legacy string Mode=separate / Mode=combined maps to the
+          single-bit equivalent.
+       3. Anything else falls back to the default.
+     Independently, the legacy UsePresets=1 key (when present) ORs in
+     MODE_PRESETS so users who flipped that toggle keep their setting.
+     On the next Save the file is rewritten as Mode=N and the legacy
+     keys disappear.}
+    FMode := ParseModeKey(Ini.ReadString('output', 'Mode', ''), WCX_DEF_MODE);
+    if Ini.ReadBool('output', 'UsePresets', False) then
+      FMode := FMode or MODE_PRESETS;
+
     if SameText(Ini.ReadString('output', 'Format', 'PNG'), 'JPEG') then
       FSaveFormat := sfJPEG
     else
@@ -228,8 +320,6 @@ begin
     FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide', FFrameMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
     FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', FCombinedMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
 
-    FUsePresets := Ini.ReadBool('output', 'UsePresets', FUsePresets);
-
     FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
     Ini.Free;
@@ -249,10 +339,7 @@ begin
     Ini.WriteBool('extraction', 'RandomExtraction', FRandomExtraction);
     Ini.WriteInteger('extraction', 'RandomPercent', FRandomPercent);
 
-    if FOutputMode = womCombined then
-      Ini.WriteString('output', 'Mode', 'combined')
-    else
-      Ini.WriteString('output', 'Mode', 'separate');
+    Ini.WriteInteger('output', 'Mode', FMode);
     if FSaveFormat = sfJPEG then
       Ini.WriteString('output', 'Format', 'JPEG')
     else
@@ -272,8 +359,6 @@ begin
 
     Ini.WriteInteger('output', 'FrameMaxSide', FFrameMaxSide);
     Ini.WriteInteger('combined', 'CombinedMaxSide', FCombinedMaxSide);
-
-    Ini.WriteBool('output', 'UsePresets', FUsePresets);
 
     Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally

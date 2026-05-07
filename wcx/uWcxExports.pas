@@ -285,16 +285,17 @@ begin
   WcxTest_SetDeleteDirectoryProc(nil);
 end;
 
-{Number of legacy (frame or combined) entries the cache code sizes its
- temp arrays against. Pre-presets this was the same as GetEntryCount; the
- two diverge once preset entries are appended to the listing because
- presets do not pre-extract and so consume no temp slots.}
+{Number of legacy (frame and/or combined) entries the cache code sizes
+ its temp arrays against. With the Mode bitmask both can coexist:
+ frames occupy slots 0..N-1, combined the slot right after. Presets do
+ not pre-extract and so consume no temp slots.}
 function LegacyEntryCount(H: TArchiveHandle): Integer;
 begin
-  if H.Settings.OutputMode = womCombined then
-    Result := 1
-  else
+  Result := 0;
+  if H.Settings.ShowFrames then
     Result := Length(H.Offsets);
+  if H.Settings.ShowCombined then
+    Inc(Result);
 end;
 
 function GetEntryCount(H: TArchiveHandle): Integer;
@@ -371,11 +372,15 @@ begin
   end;
 end;
 
-{Extracts all frames, renders a combined image, and saves to cache}
+{Extracts all frames, renders a combined image, and saves to cache.
+ The combined slot is the one immediately after the frames — when frames
+ are also being shown the combined image lands at index Length(Offsets);
+ when frames are off it lands at index 0.}
 procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor);
 var
   Combined: TBitmap;
   TempPath: string;
+  Slot: Integer;
 begin
   Combined := RenderCombinedBitmap(H, AExtractor);
   if Combined = nil then
@@ -383,8 +388,12 @@ begin
   try
     TempPath := TPath.Combine(GCachedTempDir, GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
     SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
-    GCachedTempPaths[0] := TempPath;
-    GCachedEntrySizes[0] := TFile.GetSize(TempPath);
+    if H.Settings.ShowFrames then
+      Slot := Length(H.Offsets)
+    else
+      Slot := 0;
+    GCachedTempPaths[Slot] := TempPath;
+    GCachedEntrySizes[Slot] := TFile.GetSize(TempPath);
   finally
     Combined.Free;
   end;
@@ -457,10 +466,12 @@ begin
     SetLength(GCachedTempPaths, EntryCount);
     SetLength(GCachedEntrySizes, EntryCount);
 
-    if H.Settings.OutputMode = womCombined then
-      ExtractCombinedToCache(H, Extractor)
-    else
+    {Each enabled mode populates its own cache slots. Both can run in
+     the same pass when the user has both Show* bits on.}
+    if H.Settings.ShowFrames then
       ExtractSeparateToCache(H, Extractor);
+    if H.Settings.ShowCombined then
+      ExtractCombinedToCache(H, Extractor);
 
     H.TempPaths := GCachedTempPaths;
     H.EntrySizes := GCachedEntrySizes;
@@ -527,23 +538,23 @@ begin
       H.SourceFileSize := 0;
     end;
 
-    {Load presets only when the master switch is on so legacy installs
-     skip the IO entirely. The listing builder still runs unconditionally
-     because it produces the same legacy-only output when the preset
-     array is empty.}
-    if H.Settings.UsePresets then
+    {Load presets only when their bit is set in the Mode mask so legacy
+     installs skip the IO entirely. The listing builder still runs
+     unconditionally because it produces the same legacy-only output
+     when the preset array is empty.}
+    if H.Settings.ShowPresets then
     begin
       H.Presets := LoadPresets(PresetsIniPath(GIniPath));
-      WcxLog(Format('Presets: UsePresets=ON, path="%s", loaded=%d', [PresetsIniPath(GIniPath), Length(H.Presets)]));
+      WcxLog(Format('Presets: ShowPresets=ON, path="%s", loaded=%d', [PresetsIniPath(GIniPath), Length(H.Presets)]));
     end
     else
-      WcxLog(Format('Presets: UsePresets=OFF (read from "%s")', [GIniPath]));
-    H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.OutputMode, H.Settings.SaveFormat, H.Settings.UsePresets, H.Presets);
+      WcxLog(Format('Presets: ShowPresets=OFF (read from "%s")', [GIniPath]));
+    H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined, H.Settings.ShowPresets, H.Settings.SaveFormat, H.Presets);
 
     if H.Settings.ShowFileSizes then
       PreExtractFrames(H);
 
-    WcxLog(Format('OpenArchive: %s frames=%d presets=%d', [AFileName, Length(H.Offsets), Length(H.Presets)]));
+    WcxLog(Format('OpenArchive: %s mode=%d frames=%d presets=%d', [AFileName, H.Settings.Mode, Length(H.Offsets), Length(H.Presets)]));
     Result := THandle(H);
   except
     H.Free;
@@ -693,7 +704,11 @@ begin
   Result := E_SUCCESS;
 end;
 
-function DoExtractCombined(H: TArchiveHandle; const ADestPath, ADestName: string): Integer;
+{Extracts the combined contact sheet to ADestName / ADestPath.
+ ACombinedSlot is the cache slot the pre-extraction stage wrote the
+ image to (carried via the listing entry's LegacyIndex so the dispatch
+ stays decoupled from the slot scheme).}
+function DoExtractCombined(H: TArchiveHandle; ACombinedSlot: Integer; const ADestPath, ADestName: string): Integer;
 var
   Extractor: IFrameExtractor;
   Combined: TBitmap;
@@ -708,7 +723,7 @@ begin
 
   WcxLog(Format('Extract combined (%d frames) -> %s', [Length(H.Offsets), FullPath]));
 
-  if TryCopyCachedFrame(H.TempPaths, 0, FullPath, Result) then
+  if TryCopyCachedFrame(H.TempPaths, ACombinedSlot, FullPath, Result) then
     Exit;
 
   Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
@@ -884,7 +899,7 @@ begin
       ekFrame:
         Result := DoExtractSeparate(H, Entry.LegacyIndex, ADestPath, ADestName);
       ekCombined:
-        Result := DoExtractCombined(H, ADestPath, ADestName);
+        Result := DoExtractCombined(H, Entry.LegacyIndex, ADestPath, ADestName);
       ekPreset:
         Result := DoExtractPreset(H, Entry.PresetIndex, Entry.FileName, ADestPath, ADestName);
     else

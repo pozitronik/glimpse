@@ -33,7 +33,7 @@ implementation
 uses
   System.SysUtils,
   uBitmapSaver, uFrameOffsets, uFrameFileNames,
-  uWcxSettings, uWcxPresets, uWcxListing;
+  uWcxPresets, uWcxListing;
 
 { Helpers }
 
@@ -68,7 +68,7 @@ var
   Expected: string;
 begin
   Offsets := MakeOffsets(3);
-  Listing := BuildArchiveListing('C:\v\Movie.mkv', Offsets, womSeparate, sfPNG, False, nil);
+  Listing := BuildArchiveListing('C:\v\Movie.mkv', Offsets, True, False, False, sfPNG, nil);
   Assert.AreEqual(3, Integer(Length(Listing)));
   for I := 0 to 2 do
   begin
@@ -82,7 +82,7 @@ procedure TTestWcxListing.TestCombinedModeNoPresetsSingleEntry;
 var
   Listing: TWcxListingEntryArray;
 begin
-  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), womCombined, sfJPEG, False, nil);
+  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), False, True, False, sfJPEG, nil);
   Assert.AreEqual(1, Integer(Length(Listing)),
     'Combined mode produces exactly one entry regardless of frame count');
   Assert.IsTrue(Listing[0].Kind = ekCombined);
@@ -100,7 +100,7 @@ begin
   SetLength(Presets, 2);
   Presets[0] := MakePreset('audio', '', 'mp3');
   Presets[1] := MakePreset('poster', '', 'jpg');
-  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(2), womSeparate, sfPNG, False, Presets);
+  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(2), True, False, False, sfPNG, Presets);
   Assert.AreEqual(2, Integer(Length(Listing)),
     'UsePresets=False must not surface any preset entries');
 end;
@@ -110,8 +110,8 @@ var
   ListingOn, ListingOff: TWcxListingEntryArray;
   I: Integer;
 begin
-  ListingOff := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(4), womSeparate, sfPNG, False, nil);
-  ListingOn := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(4), womSeparate, sfPNG, True, nil);
+  ListingOff := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(4), True, False, False, sfPNG, nil);
+  ListingOn := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(4), True, False, True, sfPNG, nil);
   Assert.AreEqual(Integer(Length(ListingOff)), Integer(Length(ListingOn)));
   for I := 0 to High(ListingOff) do
     Assert.AreEqual(ListingOff[I].FileName, ListingOn[I].FileName);
@@ -126,7 +126,7 @@ var
 begin
   SetLength(Presets, 1);
   Presets[0] := MakePreset('audio', '%basename%_track', 'mp3');
-  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(2), womSeparate, sfPNG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(2), True, False, True, sfPNG, Presets);
   Assert.AreEqual(3, Integer(Length(Listing)),
     'Two frames + one preset = three entries');
   { Preset must be at the END so the legacy frame indices stay where TC and
@@ -146,7 +146,7 @@ begin
   Presets[0] := MakePreset('first', 'a', 'mp3');
   Presets[1] := MakePreset('second', 'b', 'mp3');
   Presets[2] := MakePreset('third', 'c', 'mp3');
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), womSeparate, sfPNG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), True, False, True, sfPNG, Presets);
   Assert.AreEqual(3, Integer(Length(Listing)));
   Assert.AreEqual('a.mp3', Listing[0].FileName);
   Assert.AreEqual('b.mp3', Listing[1].FileName);
@@ -160,7 +160,7 @@ var
 begin
   SetLength(Presets, 1);
   Presets[0] := MakePreset('audio', '', 'mp3');
-  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), womCombined, sfJPEG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), False, True, True, sfJPEG, Presets);
   Assert.AreEqual(2, Integer(Length(Listing)));
   Assert.IsTrue(Listing[0].Kind = ekCombined);
   Assert.IsTrue(Listing[1].Kind = ekPreset);
@@ -185,7 +185,7 @@ begin
   Presets[0].Enabled := True;
   Presets[0].OutputName := ChangeFileExt(FrameName, '');
   Presets[0].OutputExt := Copy(ExtractFileExt(FrameName), 2, MaxInt);
-  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(1), womSeparate, sfPNG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(1), True, False, True, sfPNG, Presets);
   Assert.AreEqual(2, Integer(Length(Listing)));
   Assert.AreEqual(FrameName, Listing[0].FileName, 'Legacy entry wins the bare name');
   Assert.AreEqual(ChangeFileExt(FrameName, '') + '(2)' + ExtractFileExt(FrameName), Listing[1].FileName);
@@ -199,7 +199,7 @@ begin
   SetLength(Presets, 2);
   Presets[0] := MakePreset('p1', 'poster', 'jpg');
   Presets[1] := MakePreset('p2', 'poster', 'jpg');
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), womSeparate, sfPNG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), True, False, True, sfPNG, Presets);
   Assert.AreEqual('poster.jpg', Listing[0].FileName);
   Assert.AreEqual('poster(2).jpg', Listing[1].FileName);
 end;
@@ -213,7 +213,7 @@ var
 begin
   { LegacyIndex on a frame entry must equal its position in the legacy
     section, because the extractor uses it to index Offsets and TempPaths. }
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(4), womSeparate, sfPNG, False, nil);
+  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(4), True, False, False, sfPNG, nil);
   for I := 0 to 3 do
     Assert.AreEqual(I, Listing[I].LegacyIndex);
 end;
@@ -224,7 +224,7 @@ var
 begin
   { Combined uses temp-path slot 0; the dispatch code expects LegacyIndex=0
     so the same TryCopyCachedFrame call works for both ekFrame and ekCombined. }
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(5), womCombined, sfPNG, False, nil);
+  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(5), False, True, False, sfPNG, nil);
   Assert.AreEqual(0, Listing[0].LegacyIndex);
 end;
 
@@ -237,7 +237,7 @@ begin
     loudly via a bounds error rather than silently picking offset 0. }
   SetLength(Presets, 1);
   Presets[0] := MakePreset('p', 'foo', 'mp3');
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(2), womSeparate, sfPNG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(2), True, False, True, sfPNG, Presets);
   Assert.AreEqual(-1, Listing[2].LegacyIndex);
 end;
 
@@ -254,7 +254,7 @@ begin
   Presets[0] := MakePreset('a', 'a', 'mp3');
   Presets[1] := MakePreset('b', 'b', 'mp3');
   Presets[2] := MakePreset('c', 'c', 'mp3');
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), womSeparate, sfPNG, True, Presets);
+  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), True, False, True, sfPNG, Presets);
   Assert.AreEqual(0, Listing[0].PresetIndex);
   Assert.AreEqual(1, Listing[1].PresetIndex);
   Assert.AreEqual(2, Listing[2].PresetIndex);

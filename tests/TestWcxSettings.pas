@@ -24,8 +24,15 @@ type
     [Test] procedure TestSaveFormatPNG;
     [Test] procedure TestMaxWorkersClamped;
     [Test] procedure TestMaxThreadsClamped;
-    [Test] procedure TestDefaultOutputMode;
-    [Test] procedure TestOutputModeCombinedRoundTrip;
+    [Test] procedure TestDefaultMode;
+    [Test] procedure TestModeCombinedRoundTrip;
+    [Test] procedure TestModeAllBitsRoundTrip;
+    [Test] procedure TestModeMigratesLegacySeparateString;
+    [Test] procedure TestModeMigratesLegacyCombinedString;
+    [Test] procedure TestModeMigratesLegacyUsePresetsKey;
+    [Test] procedure TestModeOutOfRangeFallsBackToDefault;
+    [Test] procedure TestSaveWritesIntegerModeAndDropsLegacyKeys;
+    [Test] procedure TestShowFlagsManipulateBitsIndependently;
     [Test] procedure TestCombinedColumnsDefault;
     [Test] procedure TestCombinedColumnsClamped;
     [Test] procedure TestShowTimestampDefault;
@@ -64,7 +71,7 @@ type
     { Save edge cases }
     [Test] procedure TestSaveEmptyPathNoError;
     { Unknown INI values fall back to safe defaults }
-    [Test] procedure TestUnknownOutputModeDefaultsToSeparate;
+    [Test] procedure TestUnknownModeStringDefaultsToFrames;
     [Test] procedure TestUnknownFormatDefaultsToPNG;
     { Partial INI with missing sections }
     [Test] procedure TestPartialIniUsesDefaults;
@@ -100,12 +107,11 @@ type
     [Test] procedure TestRandomExtractionRoundTrip;
     [Test] procedure TestRandomPercentClampedHigh;
     [Test] procedure TestRandomPercentClampedLow;
-    { UsePresets master switch — fresh installs must keep the legacy frame /
-      combined output unchanged, so the default is False and the key only
-      flips the listing behaviour when the user opts in explicitly. }
-    [Test] procedure TestUsePresetsDefault;
-    [Test] procedure TestUsePresetsRoundTrip;
-    [Test] procedure TestUsePresetsAbsentKeyKeepsDefault;
+    { ShowPresets bit (was the old UsePresets toggle). Off by default;
+      fresh installs keep legacy frame / combined output unchanged. The
+      bit migration is covered by TestModeMigratesLegacyUsePresetsKey. }
+    [Test] procedure TestShowPresetsDefault;
+    [Test] procedure TestShowPresetsRoundTrip;
     { Hidden debug-log toggle — no UI control; users hand-edit the INI
       to turn diagnostic logging on. Must default off so a fresh install
       leaves no trace. }
@@ -391,27 +397,35 @@ begin
   end;
 end;
 
-procedure TTestWcxSettings.TestDefaultOutputMode;
+procedure TTestWcxSettings.TestDefaultMode;
 var
   S: TWcxSettings;
 begin
-  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'test.ini'));
+  { Fresh install: only frames bit on, matching the legacy default. }
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'mode_def.ini'));
   try
-    Assert.IsTrue(S.OutputMode = womSeparate);
+    Assert.AreEqual(WCX_DEF_MODE, S.Mode);
+    Assert.AreEqual(MODE_FRAMES, S.Mode);
+    Assert.IsTrue(S.ShowFrames);
+    Assert.IsFalse(S.ShowCombined);
+    Assert.IsFalse(S.ShowPresets);
   finally
     S.Free;
   end;
 end;
 
-procedure TTestWcxSettings.TestOutputModeCombinedRoundTrip;
+procedure TTestWcxSettings.TestModeCombinedRoundTrip;
 var
   S1, S2: TWcxSettings;
   IniPath: string;
 begin
-  IniPath := TPath.Combine(FTempDir, 'mode.ini');
+  { Setting Mode to MODE_COMBINED via the ShowCombined property persists
+    as integer Mode=2 and reads back as Mode=2 with the same booleans. }
+  IniPath := TPath.Combine(FTempDir, 'mode_combined.ini');
   S1 := TWcxSettings.Create(IniPath);
   try
-    S1.OutputMode := womCombined;
+    S1.ShowFrames := False;
+    S1.ShowCombined := True;
     S1.Save;
   finally
     S1.Free;
@@ -420,9 +434,196 @@ begin
   S2 := TWcxSettings.Create(IniPath);
   try
     S2.Load;
-    Assert.IsTrue(S2.OutputMode = womCombined);
+    Assert.AreEqual(MODE_COMBINED, S2.Mode);
+    Assert.IsFalse(S2.ShowFrames);
+    Assert.IsTrue(S2.ShowCombined);
   finally
     S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestModeAllBitsRoundTrip;
+var
+  S1, S2: TWcxSettings;
+  IniPath: string;
+begin
+  { All three sources enabled at once — the bitmask is the only model
+    that supports this. Mode=7 = 1|2|4. }
+  IniPath := TPath.Combine(FTempDir, 'mode_all.ini');
+  S1 := TWcxSettings.Create(IniPath);
+  try
+    S1.ShowFrames := True;
+    S1.ShowCombined := True;
+    S1.ShowPresets := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TWcxSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(MODE_FRAMES or MODE_COMBINED or MODE_PRESETS, S2.Mode);
+    Assert.IsTrue(S2.ShowFrames);
+    Assert.IsTrue(S2.ShowCombined);
+    Assert.IsTrue(S2.ShowPresets);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestModeMigratesLegacySeparateString;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { Pre-bitmask installs persisted Mode as the string "separate" or
+    "combined". Migration on load maps these to the matching bit so the
+    user's listing behaviour is preserved across the upgrade. }
+  IniPath := TPath.Combine(FTempDir, 'mig_separate.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('output', 'Mode', 'separate');
+  finally
+    Ini.Free;
+  end;
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MODE_FRAMES, S.Mode);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestModeMigratesLegacyCombinedString;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'mig_combined.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('output', 'Mode', 'combined');
+  finally
+    Ini.Free;
+  end;
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MODE_COMBINED, S.Mode);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestModeMigratesLegacyUsePresetsKey;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { Users who had both Mode=combined AND UsePresets=1 get both bits set
+    on the upgraded read. }
+  IniPath := TPath.Combine(FTempDir, 'mig_usepresets.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('output', 'Mode', 'combined');
+    Ini.WriteBool('output', 'UsePresets', True);
+  finally
+    Ini.Free;
+  end;
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MODE_COMBINED or MODE_PRESETS, S.Mode);
+    Assert.IsTrue(S.ShowCombined);
+    Assert.IsTrue(S.ShowPresets);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestModeOutOfRangeFallsBackToDefault;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  { Mode values above the highest valid combination (7) would expose
+    bits the plugin does not understand. Fall back to the documented
+    default rather than carry stray bits forward. }
+  IniPath := TPath.Combine(FTempDir, 'mode_oor.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('output', 'Mode', 99);
+  finally
+    Ini.Free;
+  end;
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(WCX_DEF_MODE, S.Mode);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestSaveWritesIntegerModeAndDropsLegacyKeys;
+var
+  S: TWcxSettings;
+  IniPath: string;
+  Ini: TIniFile;
+  RawMode: string;
+begin
+  { Save always emits Mode as an integer; the legacy string form and
+    UsePresets key are not written, so the file naturally migrates on
+    first save after the upgrade. }
+  IniPath := TPath.Combine(FTempDir, 'save_int.ini');
+  S := TWcxSettings.Create(IniPath);
+  try
+    S.ShowFrames := True;
+    S.ShowPresets := True;
+    S.Save;
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    RawMode := Ini.ReadString('output', 'Mode', '');
+    Assert.AreEqual('5', RawMode, 'Mode is written as integer 1|4=5');
+    { UsePresets is no longer written; if present it would be a
+      migration leftover, never written by the new code path. }
+    Assert.IsFalse(Ini.ValueExists('output', 'UsePresets'),
+      'Save must not emit the legacy UsePresets key');
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestShowFlagsManipulateBitsIndependently;
+var
+  S: TWcxSettings;
+begin
+  { Toggling one Show* property must not disturb the other two. The
+    bits are orthogonal — the dialog's combo (Pass 1) only governs
+    frames-vs-combined and must leave ShowPresets alone. }
+  S := TWcxSettings.Create('');
+  try
+    S.Mode := 0;
+    S.ShowFrames := True;
+    Assert.AreEqual(MODE_FRAMES, S.Mode);
+    S.ShowPresets := True;
+    Assert.AreEqual(MODE_FRAMES or MODE_PRESETS, S.Mode);
+    S.ShowFrames := False;
+    Assert.AreEqual(MODE_PRESETS, S.Mode);
+    S.ShowPresets := False;
+    Assert.AreEqual(0, S.Mode);
+  finally
+    S.Free;
   end;
 end;
 
@@ -1108,12 +1309,14 @@ end;
 
 { Unknown INI values }
 
-procedure TTestWcxSettings.TestUnknownOutputModeDefaultsToSeparate;
+procedure TTestWcxSettings.TestUnknownModeStringDefaultsToFrames;
 var
   S: TWcxSettings;
   IniPath: string;
   Ini: TIniFile;
 begin
+  { Garbage in Mode= falls back to the documented default (MODE_FRAMES)
+    so a corrupted INI does not silently disable everything. }
   IniPath := TPath.Combine(FTempDir, 'mode_unk.ini');
   Ini := TIniFile.Create(IniPath);
   try
@@ -1125,8 +1328,7 @@ begin
   S := TWcxSettings.Create(IniPath);
   try
     S.Load;
-    Assert.IsTrue(S.OutputMode = womSeparate,
-      'Unrecognized mode string must default to womSeparate');
+    Assert.AreEqual(WCX_DEF_MODE, S.Mode);
   finally
     S.Free;
   end;
@@ -1187,7 +1389,7 @@ begin
     Assert.AreEqual(WCX_DEF_CELL_GAP, S.CellGap);
     Assert.AreEqual(WCX_DEF_SHOW_FILE_SIZES, S.ShowFileSizes);
     Assert.IsTrue(S.SaveFormat = DEF_SAVE_FORMAT);
-    Assert.IsTrue(S.OutputMode = WCX_DEF_OUTPUT_MODE);
+    Assert.AreEqual(WCX_DEF_MODE, S.Mode);
   finally
     S.Free;
   end;
@@ -1825,32 +2027,28 @@ begin
   end;
 end;
 
-procedure TTestWcxSettings.TestUsePresetsDefault;
+procedure TTestWcxSettings.TestShowPresetsDefault;
 var
   S: TWcxSettings;
 begin
-  { Fresh instance must report the documented default so the legacy listing
-    behaviour survives a settings reset. }
-  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_presets_def.ini'));
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_show_presets_def.ini'));
   try
-    Assert.AreEqual(WCX_DEF_USE_PRESETS, S.UsePresets,
-      'UsePresets default must match WCX_DEF_USE_PRESETS');
-    Assert.IsFalse(S.UsePresets,
-      'UsePresets default must be False so existing installs keep current behaviour');
+    Assert.IsFalse(S.ShowPresets,
+      'ShowPresets default must be False so existing installs keep current behaviour');
   finally
     S.Free;
   end;
 end;
 
-procedure TTestWcxSettings.TestUsePresetsRoundTrip;
+procedure TTestWcxSettings.TestShowPresetsRoundTrip;
 var
   S1, S2: TWcxSettings;
   IniPath: string;
 begin
-  IniPath := TPath.Combine(FTempDir, 'wcx_presets_rt.ini');
+  IniPath := TPath.Combine(FTempDir, 'wcx_show_presets_rt.ini');
   S1 := TWcxSettings.Create(IniPath);
   try
-    S1.UsePresets := True;
+    S1.ShowPresets := True;
     S1.Save;
   finally
     S1.Free;
@@ -1859,36 +2057,10 @@ begin
   S2 := TWcxSettings.Create(IniPath);
   try
     S2.Load;
-    Assert.IsTrue(S2.UsePresets,
-      'Flipped UsePresets must persist through INI');
+    Assert.IsTrue(S2.ShowPresets,
+      'ShowPresets bit must persist via the Mode integer');
   finally
     S2.Free;
-  end;
-end;
-
-procedure TTestWcxSettings.TestUsePresetsAbsentKeyKeepsDefault;
-var
-  S: TWcxSettings;
-  IniPath: string;
-  Ini: TIniFile;
-begin
-  { Old INI files predate the UsePresets key. Their absence must not flip the
-    feature on for users who have never asked for it. }
-  IniPath := TPath.Combine(FTempDir, 'wcx_presets_absent.ini');
-  Ini := TIniFile.Create(IniPath);
-  try
-    Ini.WriteInteger('extraction', 'FramesCount', 6);
-  finally
-    Ini.Free;
-  end;
-
-  S := TWcxSettings.Create(IniPath);
-  try
-    S.Load;
-    Assert.AreEqual(WCX_DEF_USE_PRESETS, S.UsePresets,
-      'Missing UsePresets key must leave the documented default intact');
-  finally
-    S.Free;
   end;
 end;
 

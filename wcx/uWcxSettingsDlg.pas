@@ -257,7 +257,10 @@ begin
   ChkRespectAnamorphic.Checked := ASettings.RespectAnamorphic;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
-  if ASettings.OutputMode = womCombined then
+  {Translate the new bitmask to the existing combo. ShowFrames takes
+   priority when both bits are on (legacy default). ShowPresets is
+   independent of this combo and stays untouched on save.}
+  if ASettings.ShowCombined and not ASettings.ShowFrames then
     CbxOutputMode.ItemIndex := 1
   else
     CbxOutputMode.ItemIndex := 0;
@@ -318,10 +321,19 @@ begin
   ASettings.RespectAnamorphic := ChkRespectAnamorphic.Checked;
   ASettings.FFmpegExePath := EdtFFmpegPath.Text;
 
+  {The combo only governs the frames-vs-combined choice; ShowPresets
+   stays untouched here so a hand-edited Mode bit (Pass 2 surfaces it
+   in the UI) is preserved across an Apply.}
   if CbxOutputMode.ItemIndex = 1 then
-    ASettings.OutputMode := womCombined
+  begin
+    ASettings.ShowFrames := False;
+    ASettings.ShowCombined := True;
+  end
   else
-    ASettings.OutputMode := womSeparate;
+  begin
+    ASettings.ShowFrames := True;
+    ASettings.ShowCombined := False;
+  end;
 
   ASettings.SaveFormat := TSaveFormat(CbxFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
