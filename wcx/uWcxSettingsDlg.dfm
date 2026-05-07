@@ -951,8 +951,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Left = 164
         Top = 348
         Width = 280
-        Height = 15
+        Height = 30
         AutoSize = False
+        WordWrap = True
         Caption = 'Output name vars: %basename%, %name%, %ext%. / for subfolders'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
@@ -963,7 +964,7 @@ object WcxSettingsForm: TWcxSettingsForm
       end
       object LblPresetHintForbidden: TLabel
         Left = 164
-        Top = 366
+        Top = 380
         Width = 280
         Height = 15
         AutoSize = False
