@@ -169,6 +169,7 @@ powershell -NoProfile -Command ^
         "@{Src='wcx\Win32\Release\Glimpse.wcx';    Dst=\"$staging\Glimpse.wcx\"}, " ^
         "@{Src='wcx\Win64\Release\Glimpse.wcx64';  Dst=\"$staging\Glimpse.wcx64\"}, " ^
         "@{Src='wcx\config.bat';                       Dst=\"$staging\config.bat\"}, " ^
+        "@{Src='wcx\presets.ini';                      Dst=\"$staging\presets.ini\"}, " ^
         "@{Src='README.md';                            Dst=\"$staging\README.md\"}, " ^
         "@{Src='LICENSE';                              Dst=\"$staging\LICENSE\"}" ^
     "); " ^
