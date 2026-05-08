@@ -414,6 +414,9 @@ begin
   CreateNew(nil);
   BorderStyle := bsNone;
   KeyPreview := True;
+  {Form-level ShowHint cascades through ParentShowHint (default True) so every
+   toolbar button picks up its Hint without needing per-control opt-in.}
+  ShowHint := True;
   OnKeyDown := OnFormKeyDown;
   OnKeyPress := OnFormKeyPress;
 
@@ -559,12 +562,14 @@ begin
   Inc(X, FLblFrames.Width + 4);
 
   FEditFrameCount.SetBounds(X, CY, FRAME_COUNT_EDIT_W, CtrlH);
+  FEditFrameCount.Hint := 'Number of frames to extract from the video.';
 
   FUpDown := TUpDown.Create(FToolbar);
   FUpDown.Parent := FToolbar;
   FUpDown.Associate := FEditFrameCount;
   FUpDown.Min := 1;
   FUpDown.Max := MAX_FRAME_COUNT;
+  FUpDown.Hint := 'Number of frames to extract from the video.';
   Inc(X, FRAME_COUNT_EDIT_W + FUpDown.Width + CTRL_GAP);
   FFrameCountRight := X;
 
@@ -603,6 +608,7 @@ begin
 
     FModeButtons[VM].SetBounds(X, CY, BW, CtrlH);
     FModeButtons[VM].Caption := MODE_CAPTIONS[VM];
+    FModeButtons[VM].Hint := MODE_HINTS[VM];
     FModeButtons[VM].Tag := Ord(VM);
     FModeButtons[VM].TabOrder := TabIdx;
     FModeButtons[VM].OnClick := OnModeButtonClick;
@@ -642,6 +648,7 @@ begin
   BW := Canvas.TextWidth('Timecodes') + BTN_PAD;
   FBtnTimecode.SetBounds(X, CY, BW, CtrlH);
   FBtnTimecode.Caption := 'Timecodes';
+  FBtnTimecode.Hint := 'Toggle timecode overlay on each frame (F2).';
   FBtnTimecode.GroupIndex := 1;
   FBtnTimecode.AllowAllUp := True;
   FBtnTimecode.OnClick := OnTimecodeButtonClick;
@@ -662,6 +669,7 @@ begin
       Inc(BW, REFRESH_DROPDOWN_EXTRA);
     Btn.SetBounds(X, CY, BW, CtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
+    Btn.Hint := TB_ACTIONS[I].Hint;
     Btn.Tag := TB_ACTIONS[I].Tag;
     Btn.Enabled := False;
     Btn.OnClick := OnToolbarButtonClick;
@@ -693,6 +701,7 @@ begin
   FBtnHamburger.Images := FToolbarImages;
   FBtnHamburger.ImageIndex := IDX_ICON_HAMBURGER;
   FBtnHamburger.ImageAlignment := iaCenter;
+  FBtnHamburger.Hint := 'More commands (toolbar buttons that did not fit).';
   {Square button matched to the rest of the toolbar's height}
   FBtnHamburger.SetBounds(0, CY, CtrlH, CtrlH);
   FBtnHamburger.OnClick := OnHamburgerClick;

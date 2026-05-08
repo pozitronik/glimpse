@@ -17,6 +17,7 @@ type
   TToolbarActionDef = record
     Caption: string;
     Tag: Integer;
+    Hint: string;
   end;
 
 const
@@ -39,6 +40,15 @@ const
    uPluginForm.CreateToolbar); both modes share the textual caption.}
   MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Scroll', 'Single');
 
+  {Tooltip text per view mode. Disambiguates the two modes that share the
+   "Scroll" caption (vmScroll = vertical, vmFilmstrip = horizontal).}
+  MODE_HINTS: array [TViewMode] of string = (
+    {vmSmartGrid}'Smart grid: auto-arranged grid sized to fit the viewport.',
+    {vmGrid}'Grid: fixed-cell grid of frames.',
+    {vmScroll}'Vertical scroll: full-width frames stacked top to bottom.',
+    {vmFilmstrip}'Filmstrip: full-height frames laid out left to right.',
+    {vmSingle}'Single frame: one frame at a time, navigate with arrow keys.');
+
   {Per-mode sizing submode labels}
   SIZING_LABELS: array [TViewMode, TZoomMode] of string = (
     {vmSmartGrid}('', '', ''),
@@ -51,7 +61,14 @@ const
    "Save frames" is selection-aware at runtime (the context menu
    updates its caption with the selected count); on the toolbar it
    keeps a stable caption.}
-  TB_ACTIONS: array [0 .. 6] of TToolbarActionDef = ((Caption: 'Save frame'; Tag: CM_SAVE_FRAME), (Caption: 'Save frames'; Tag: CM_SAVE_FRAMES), (Caption: 'Save view'; Tag: CM_SAVE_VIEW), (Caption: 'Copy frame'; Tag: CM_COPY_FRAME), (Caption: 'Copy view'; Tag: CM_COPY_VIEW), (Caption: 'Refresh'; Tag: CM_REFRESH), (Caption: 'Settings'; Tag: CM_SETTINGS));
+  TB_ACTIONS: array [0 .. 6] of TToolbarActionDef = (
+    (Caption: 'Save frame'; Tag: CM_SAVE_FRAME; Hint: 'Save the focused frame to a file.'),
+    (Caption: 'Save frames'; Tag: CM_SAVE_FRAMES; Hint: 'Save the currently selected frames to files.'),
+    (Caption: 'Save view'; Tag: CM_SAVE_VIEW; Hint: 'Save the entire viewer canvas as one image.'),
+    (Caption: 'Copy frame'; Tag: CM_COPY_FRAME; Hint: 'Copy the focused frame to the clipboard.'),
+    (Caption: 'Copy view'; Tag: CM_COPY_VIEW; Hint: 'Copy the entire viewer canvas to the clipboard.'),
+    (Caption: 'Refresh'; Tag: CM_REFRESH; Hint: 'Re-extract frames at the current settings. Click the arrow for Shuffle.'),
+    (Caption: 'Settings'; Tag: CM_SETTINGS; Hint: 'Open the plugin settings dialog.'));
 
   {Element indices within the ordered collapsible element array.
    Order: mode buttons, timecodes toggle, action buttons (left to right).}

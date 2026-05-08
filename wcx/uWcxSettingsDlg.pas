@@ -139,8 +139,6 @@ type
     EdtPresetOutputName: TEdit;
     LblPresetArgs: TLabel;
     MemoPresetArgs: TMemo;
-    LblPresetHintTemplate: TLabel;
-    LblPresetHintForbidden: TLabel;
     procedure ChkModeFramesClick(Sender: TObject);
     procedure ChkModeCombinedClick(Sender: TObject);
     procedure ChkModePresetsClick(Sender: TObject);
