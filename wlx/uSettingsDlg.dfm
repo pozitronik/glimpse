@@ -90,9 +90,9 @@ object SettingsForm: TSettingsForm
         Caption = 'FFmpeg path:'
       end
       object LblFFmpegInfo: TLabel
-        Left = 15
-        Top = 379
-        Width = 424
+        Left = 12
+        Top = 384
+        Width = 94
         Height = 15
         AutoSize = False
         Font.Charset = DEFAULT_CHARSET
@@ -101,6 +101,29 @@ object SettingsForm: TSettingsForm
         Font.Name = 'Segoe UI'
         Font.Style = []
         ParentFont = False
+      end
+      object EdtFFmpegInfo: TEdit
+        Left = 130
+        Top = 382
+        Width = 309
+        Height = 21
+        Hint = 
+          'Resolved ffmpeg path or validation error. Click to select / copy' +
+          '.'
+        TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        AutoSize = False
+        BevelInner = bvLowered
+        BorderStyle = bsNone
+        Color = clBtnFace
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+        ReadOnly = True
+        TabOrder = 18
       end
       object EdtMaxWorkers: TEdit
         Left = 130
@@ -128,8 +151,10 @@ object SettingsForm: TSettingsForm
         Top = 24
         Width = 130
         Height = 17
+        Hint = 
+          'Spawn one ffmpeg worker per requested frame, ignoring Max worker' +
+          's above.'
         Caption = 'One per frame'
-        Hint = 'Spawn one ffmpeg worker per requested frame, ignoring Max workers above.'
         TabOrder = 2
         OnClick = ChkMaxWorkersAutoClick
       end
@@ -138,7 +163,9 @@ object SettingsForm: TSettingsForm
         Top = 49
         Width = 45
         Height = 23
-        Hint = 'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single-threaded.'
+        Hint = 
+          'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single' +
+          '-threaded.'
         NumbersOnly = True
         TabOrder = 3
         Text = '0'
@@ -149,8 +176,10 @@ object SettingsForm: TSettingsForm
         Top = 49
         Width = 17
         Height = 23
+        Hint = 
+          'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single' +
+          '-threaded.'
         Associate = EdtMaxThreads
-        Hint = 'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single-threaded.'
         Min = -1
         Max = 64
         TabOrder = 4
@@ -161,9 +190,11 @@ object SettingsForm: TSettingsForm
         Top = 82
         Width = 427
         Height = 17
+        Hint = 
+          'Stream raw BMP from ffmpeg in memory instead of going through te' +
+          'mporary image files.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
-        Hint = 'Stream raw BMP from ffmpeg in memory instead of going through temporary image files.'
         TabOrder = 5
       end
       object ChkHwAccel: TCheckBox
@@ -171,9 +202,11 @@ object SettingsForm: TSettingsForm
         Top = 111
         Width = 427
         Height = 17
+        Hint = 
+          'Asks ffmpeg to use a GPU decoder when available. Falls back to C' +
+          'PU if it cannot.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Use hardware-accelerated decoding (GPU)'
-        Hint = 'Asks ffmpeg to use a GPU decoder when available. Falls back to CPU if it cannot.'
         TabOrder = 6
       end
       object ChkUseKeyframes: TCheckBox
@@ -181,9 +214,11 @@ object SettingsForm: TSettingsForm
         Top = 140
         Width = 427
         Height = 17
+        Hint = 
+          'Seeks only to the nearest keyframe. Much faster, but the actual ' +
+          'frame may differ from the requested timecode.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Use keyframes (faster seeking, less precise timecodes)'
-        Hint = 'Seeks only to the nearest keyframe. Much faster, but the actual frame may differ from the requested timecode.'
         TabOrder = 7
       end
       object ChkScaledExtraction: TCheckBox
@@ -191,9 +226,11 @@ object SettingsForm: TSettingsForm
         Top = 169
         Width = 427
         Height = 17
+        Hint = 
+          'Asks ffmpeg to downscale during decode using the Scale target ra' +
+          'nge below. Saves time on 4K+ video.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Extract frames at display size (faster for high-res video)'
-        Hint = 'Asks ffmpeg to downscale during decode using the Scale target range below. Saves time on 4K+ video.'
         TabOrder = 8
         OnClick = ChkScaledExtractionClick
       end
@@ -202,7 +239,9 @@ object SettingsForm: TSettingsForm
         Top = 194
         Width = 55
         Height = 23
-        Hint = 'Lower bound (pixels, longer side) for the scaled extraction range.'
+        Hint = 
+          'Lower bound (pixels, longer side) for the scaled extraction rang' +
+          'e.'
         NumbersOnly = True
         TabOrder = 9
         Text = '32'
@@ -212,8 +251,10 @@ object SettingsForm: TSettingsForm
         Top = 194
         Width = 17
         Height = 23
+        Hint = 
+          'Lower bound (pixels, longer side) for the scaled extraction rang' +
+          'e.'
         Associate = EdtMinFrameSide
-        Hint = 'Lower bound (pixels, longer side) for the scaled extraction range.'
         Min = 32
         Max = 7680
         Increment = 10
@@ -226,7 +267,9 @@ object SettingsForm: TSettingsForm
         Top = 194
         Width = 55
         Height = 23
-        Hint = 'Upper bound (pixels, longer side) for the scaled extraction range.'
+        Hint = 
+          'Upper bound (pixels, longer side) for the scaled extraction rang' +
+          'e.'
         NumbersOnly = True
         TabOrder = 11
         Text = '32'
@@ -236,8 +279,10 @@ object SettingsForm: TSettingsForm
         Top = 194
         Width = 17
         Height = 23
+        Hint = 
+          'Upper bound (pixels, longer side) for the scaled extraction rang' +
+          'e.'
         Associate = EdtMaxFrameSide
-        Hint = 'Upper bound (pixels, longer side) for the scaled extraction range.'
         Min = 32
         Max = 7680
         Increment = 10
@@ -250,9 +295,11 @@ object SettingsForm: TSettingsForm
         Top = 224
         Width = 427
         Height = 17
+        Hint = 
+          'Re-runs extraction at the new size whenever you resize the viewe' +
+          'r. Trades a moment of latency for sharper frames.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Re-extract automatically when the viewport changes'
-        Hint = 'Re-runs extraction at the new size whenever you resize the viewer. Trades a moment of latency for sharper frames.'
         TabOrder = 13
       end
       object ChkRespectAnamorphic: TCheckBox
@@ -260,9 +307,11 @@ object SettingsForm: TSettingsForm
         Top = 252
         Width = 427
         Height = 17
+        Hint = 
+          'Uses the video'#39's display aspect ratio when sizing frames, not th' +
+          'e raw pixel grid.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Respect anamorphic dimensions'
-        Hint = 'Uses the video'#39's display aspect ratio when sizing frames, not the raw pixel grid.'
         TabOrder = 14
       end
       object EdtExtensions: TEdit
@@ -270,8 +319,8 @@ object SettingsForm: TSettingsForm
         Top = 301
         Width = 427
         Height = 23
-        Anchors = [akLeft, akTop, akRight]
         Hint = 'Space-separated list of file extensions the lister handles.'
+        Anchors = [akLeft, akTop, akRight]
         TabOrder = 15
       end
       object EdtFFmpegPath: TEdit
@@ -279,8 +328,10 @@ object SettingsForm: TSettingsForm
         Top = 354
         Width = 396
         Height = 23
+        Hint = 
+          'Optional override for the ffmpeg executable path. Leave empty to' +
+          ' auto-detect from PATH.'
         Anchors = [akLeft, akTop, akRight]
-        Hint = 'Optional override for the ffmpeg executable path. Leave empty to auto-detect from PATH.'
         TabOrder = 16
         TextHint = 'Auto-detect'
         OnChange = EdtFFmpegPathChange
@@ -290,9 +341,9 @@ object SettingsForm: TSettingsForm
         Top = 354
         Width = 25
         Height = 23
+        Hint = 'Browse for the ffmpeg executable.'
         Anchors = [akTop, akRight]
         Caption = '...'
-        Hint = 'Browse for the ffmpeg executable.'
         TabOrder = 17
         OnClick = BtnFFmpegPathClick
       end
@@ -337,7 +388,9 @@ object SettingsForm: TSettingsForm
         Top = 20
         Width = 45
         Height = 23
-        Hint = 'Excludes the first and last N% of the video when picking frame positions.'
+        Hint = 
+          'Excludes the first and last N% of the video when picking frame p' +
+          'ositions.'
         NumbersOnly = True
         TabOrder = 0
         Text = '0'
@@ -357,9 +410,11 @@ object SettingsForm: TSettingsForm
         Top = 49
         Width = 427
         Height = 17
+        Hint = 
+          'Picks frame positions randomly inside the allowed range instead ' +
+          'of evenly spacing them.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Start from random positions'
-        Hint = 'Picks frame positions randomly inside the allowed range instead of evenly spacing them.'
         TabOrder = 2
       end
       object TrkRandomPercent: TTrackBar
@@ -367,8 +422,10 @@ object SettingsForm: TSettingsForm
         Top = 70
         Width = 317
         Height = 25
+        Hint = 
+          'Width of the random window around each evenly-spaced position. H' +
+          'igher = more variance.'
         Anchors = [akLeft, akTop, akRight]
-        Hint = 'Width of the random window around each evenly-spaced position. Higher = more variance.'
         Max = 100
         Min = 1
         Frequency = 5
@@ -383,9 +440,11 @@ object SettingsForm: TSettingsForm
         Top = 102
         Width = 427
         Height = 17
+        Hint = 
+          'Includes randomly-sampled frames in the disk cache. Off keeps th' +
+          'e cache deterministic across reopens.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Cache random frames'
-        Hint = 'Includes randomly-sampled frames in the disk cache. Off keeps the cache deterministic across reopens.'
         TabOrder = 4
       end
     end
@@ -519,8 +578,10 @@ object SettingsForm: TSettingsForm
         Top = 82
         Width = 130
         Height = 17
+        Hint = 
+          'Overlay each frame'#39's timecode in the viewer. F2 toggles at runti' +
+          'me.'
         Caption = 'Show timestamp'
-        Hint = 'Overlay each frame'#39's timecode in the viewer. F2 toggles at runtime.'
         TabOrder = 6
       end
       object CbxTimestampCorner: TComboBox
@@ -640,8 +701,8 @@ object SettingsForm: TSettingsForm
         Top = 194
         Width = 200
         Height = 17
-        Caption = 'Show toolbar (F4 to toggle)'
         Hint = 'Initial visibility of the toolbar. F4 toggles it on the fly.'
+        Caption = 'Show toolbar (F4 to toggle)'
         TabOrder = 19
       end
       object ChkShowStatusBar: TCheckBox
@@ -649,8 +710,8 @@ object SettingsForm: TSettingsForm
         Top = 194
         Width = 200
         Height = 17
-        Caption = 'Show status bar (F3 to toggle)'
         Hint = 'Initial visibility of the status bar. F3 toggles it on the fly.'
+        Caption = 'Show status bar (F3 to toggle)'
         TabOrder = 18
       end
     end
@@ -781,7 +842,9 @@ object SettingsForm: TSettingsForm
         Top = 107
         Width = 45
         Height = 23
-        Hint = 'Background opacity for saved images (0 = transparent, 255 = opaque). Only meaningful for PNG.'
+        Hint = 
+          'Background opacity for saved images (0 = transparent, 255 = opaq' +
+          'ue). Only meaningful for PNG.'
         NumbersOnly = True
         TabOrder = 5
         Text = '255'
@@ -802,8 +865,10 @@ object SettingsForm: TSettingsForm
         Top = 136
         Width = 278
         Height = 23
+        Hint = 
+          'Default folder for save dialogs. Leave empty to remember the las' +
+          't used folder per session.'
         Anchors = [akLeft, akTop, akRight]
-        Hint = 'Default folder for save dialogs. Leave empty to remember the last used folder per session.'
         TabOrder = 7
         TextHint = 'Leave empty for no default'
       end
@@ -812,9 +877,9 @@ object SettingsForm: TSettingsForm
         Top = 136
         Width = 25
         Height = 23
+        Hint = 'Browse for the default save folder.'
         Anchors = [akTop, akRight]
         Caption = '...'
-        Hint = 'Browse for the default save folder.'
         TabOrder = 8
         OnClick = BtnSaveFolderClick
       end
@@ -823,9 +888,11 @@ object SettingsForm: TSettingsForm
         Top = 169
         Width = 424
         Height = 17
+        Hint = 
+          'Adds a strip with the video filename and metadata to the saved c' +
+          'ombined image.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Include file info banner in combined image export'
-        Hint = 'Adds a strip with the video filename and metadata to the saved combined image.'
         TabOrder = 9
         OnClick = ChkShowBannerClick
       end
@@ -894,9 +961,9 @@ object SettingsForm: TSettingsForm
         Top = 287
         Width = 306
         Height = 17
+        Hint = 'Scales the banner font so it stays readable at any output width.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Auto-size banner font to image width'
-        Hint = 'Scales the banner font so it stays readable at any output width.'
         TabOrder = 16
         OnClick = ChkBannerAutoSizeClick
       end
@@ -916,9 +983,11 @@ object SettingsForm: TSettingsForm
         Top = 350
         Width = 424
         Height = 17
+        Hint = 
+          'On: save at the size you see in the viewer. Off: re-extract at t' +
+          'he video'#39's native frame size before saving.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Save at view resolution (uses native frame size when off)'
-        Hint = 'On: save at the size you see in the viewer. Off: re-extract at the video'#39's native frame size before saving.'
         TabOrder = 18
       end
     end
@@ -937,10 +1006,9 @@ object SettingsForm: TSettingsForm
       end
       object LblCacheFolderInfo: TLabel
         Left = 12
-        Top = 82
-        Width = 427
+        Top = 84
+        Width = 3
         Height = 15
-        AutoSize = False
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
         Font.Height = -12
@@ -975,13 +1043,35 @@ object SettingsForm: TSettingsForm
         Font.Style = []
         ParentFont = False
       end
+      object EdtCacheFolderInfo: TEdit
+        Left = 130
+        Top = 82
+        Width = 309
+        Height = 21
+        Hint = 'Resolved cache folder path. Click to select / copy.'
+        TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        AutoSize = False
+        BorderStyle = bsNone
+        Color = clBtnFace
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+        ReadOnly = True
+        TabOrder = 6
+      end
       object ChkCacheEnabled: TCheckBox
         Left = 12
         Top = 24
         Width = 140
         Height = 17
+        Hint = 
+          'Persists extracted frames between sessions so re-opening a video' +
+          ' is instant. Off forces fresh extraction every time.'
         Caption = 'Enable disk cache'
-        Hint = 'Persists extracted frames between sessions so re-opening a video is instant. Off forces fresh extraction every time.'
         TabOrder = 0
         OnClick = ChkCacheEnabledClick
       end
@@ -990,9 +1080,9 @@ object SettingsForm: TSettingsForm
         Top = 20
         Width = 88
         Height = 23
+        Hint = 'Delete all cached frames now.'
         Anchors = [akTop, akRight]
         Caption = 'Clear Cache'
-        Hint = 'Delete all cached frames now.'
         TabOrder = 1
         OnClick = BtnClearCacheClick
       end
@@ -1001,8 +1091,10 @@ object SettingsForm: TSettingsForm
         Top = 49
         Width = 278
         Height = 23
+        Hint = 
+          'Where cached frames live. Empty uses %LOCALAPPDATA%\Glimpse\cach' +
+          'e.'
         Anchors = [akLeft, akTop, akRight]
-        Hint = 'Where cached frames live. Empty uses %LOCALAPPDATA%\Glimpse\cache.'
         TabOrder = 2
         TextHint = 'Leave empty for default'
         OnChange = EdtCacheFolderChange
@@ -1012,9 +1104,9 @@ object SettingsForm: TSettingsForm
         Top = 49
         Width = 25
         Height = 23
+        Hint = 'Browse for the cache folder.'
         Anchors = [akTop, akRight]
         Caption = '...'
-        Hint = 'Browse for the cache folder.'
         TabOrder = 3
         OnClick = BtnCacheFolderClick
       end
@@ -1023,7 +1115,9 @@ object SettingsForm: TSettingsForm
         Top = 107
         Width = 65
         Height = 23
-        Hint = 'Cache size cap in megabytes. Oldest entries are evicted when this is exceeded.'
+        Hint = 
+          'Cache size cap in megabytes. Oldest entries are evicted when thi' +
+          's is exceeded.'
         NumbersOnly = True
         TabOrder = 4
         Text = '10'
@@ -1033,8 +1127,10 @@ object SettingsForm: TSettingsForm
         Top = 107
         Width = 17
         Height = 23
+        Hint = 
+          'Cache size cap in megabytes. Oldest entries are evicted when thi' +
+          's is exceeded.'
         Associate = EdtCacheMaxSize
-        Hint = 'Cache size cap in megabytes. Oldest entries are evicted when this is exceeded.'
         Min = 10
         Max = 10000
         Position = 10
@@ -1078,8 +1174,10 @@ object SettingsForm: TSettingsForm
         Top = 24
         Width = 412
         Height = 17
+        Hint = 
+          'Generate Total Commander panel thumbnails for handled video file' +
+          's.'
         Caption = 'Enable thumbnails for TC panel'
-        Hint = 'Generate Total Commander panel thumbnails for handled video files.'
         TabOrder = 0
         OnClick = ChkThumbnailsEnabledClick
       end
@@ -1088,8 +1186,10 @@ object SettingsForm: TSettingsForm
         Top = 49
         Width = 110
         Height = 23
+        Hint = 
+          'Single frame: one frame at the chosen position. Grid: a small co' +
+          'ntact sheet inside the thumbnail.'
         Style = csDropDownList
-        Hint = 'Single frame: one frame at the chosen position. Grid: a small contact sheet inside the thumbnail.'
         TabOrder = 1
         OnChange = CbxThumbnailModeChange
         Items.Strings = (
@@ -1101,7 +1201,9 @@ object SettingsForm: TSettingsForm
         Top = 78
         Width = 45
         Height = 23
-        Hint = 'Where in the video the single-frame thumbnail comes from (0 = start, 50 = middle, 100 = end).'
+        Hint = 
+          'Where in the video the single-frame thumbnail comes from (0 = st' +
+          'art, 50 = middle, 100 = end).'
         NumbersOnly = True
         TabOrder = 2
         Text = '50'
@@ -1111,8 +1213,10 @@ object SettingsForm: TSettingsForm
         Top = 78
         Width = 17
         Height = 23
+        Hint = 
+          'Where in the video the single-frame thumbnail comes from (0 = st' +
+          'art, 50 = middle, 100 = end).'
         Associate = EdtThumbnailPosition
-        Hint = 'Where in the video the single-frame thumbnail comes from (0 = start, 50 = middle, 100 = end).'
         Position = 50
         TabOrder = 3
         Thousands = False
@@ -1132,8 +1236,8 @@ object SettingsForm: TSettingsForm
         Top = 78
         Width = 17
         Height = 23
-        Associate = EdtThumbnailGridFrames
         Hint = 'Number of frames sampled into the grid thumbnail.'
+        Associate = EdtThumbnailGridFrames
         Min = 2
         Max = 16
         Position = 4
@@ -1152,9 +1256,11 @@ object SettingsForm: TSettingsForm
         Top = 24
         Width = 427
         Height = 17
+        Hint = 
+          'In Quick View only: blocks the plugin'#39's prev/next-file shortcuts' +
+          ' so TC keeps full control of selection.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Disable internal file navigation'
-        Hint = 'In Quick View only: blocks the plugin'#39's prev/next-file shortcuts so TC keeps full control of selection.'
         TabOrder = 0
       end
       object ChkQVHideToolbar: TCheckBox
@@ -1162,9 +1268,11 @@ object SettingsForm: TSettingsForm
         Top = 53
         Width = 427
         Height = 17
+        Hint = 
+          'Hide the toolbar when the plugin runs in Quick View, regardless ' +
+          'of the General-tab Show toolbar setting.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Hide toolbar'
-        Hint = 'Hide the toolbar when the plugin runs in Quick View, regardless of the General-tab Show toolbar setting.'
         TabOrder = 1
       end
       object ChkQVHideStatusBar: TCheckBox
@@ -1172,9 +1280,11 @@ object SettingsForm: TSettingsForm
         Top = 82
         Width = 427
         Height = 17
+        Hint = 
+          'Hide the status bar when the plugin runs in Quick View, regardle' +
+          'ss of the General-tab Show status bar setting.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Hide status bar'
-        Hint = 'Hide the status bar when the plugin runs in Quick View, regardless of the General-tab Show status bar setting.'
         TabOrder = 2
       end
     end
@@ -1211,9 +1321,9 @@ object SettingsForm: TSettingsForm
         Top = 338
         Width = 75
         Height = 25
+        Hint = 'Remove the shortcut assigned to the selected action.'
         Anchors = [akLeft, akBottom]
         Caption = 'Clear'
-        Hint = 'Remove the shortcut assigned to the selected action.'
         TabOrder = 1
         OnClick = BtnHotkeyClearClick
       end
@@ -1222,9 +1332,9 @@ object SettingsForm: TSettingsForm
         Top = 338
         Width = 85
         Height = 25
+        Hint = 'Open the shortcut capture dialog for the selected action.'
         Anchors = [akLeft, akBottom]
         Caption = 'Assign...'
-        Hint = 'Open the shortcut capture dialog for the selected action.'
         TabOrder = 2
         OnClick = BtnHotkeyAssignClick
       end
@@ -1233,9 +1343,9 @@ object SettingsForm: TSettingsForm
         Top = 338
         Width = 75
         Height = 25
+        Hint = 'Restore the default shortcut for every action.'
         Anchors = [akRight, akBottom]
         Caption = 'Reset all'
-        Hint = 'Restore the default shortcut for every action.'
         TabOrder = 3
         OnClick = BtnHotkeyResetAllClick
       end
@@ -1257,9 +1367,11 @@ object SettingsForm: TSettingsForm
       Top = 6
       Width = 100
       Height = 28
+      Hint = 
+        'Reset every setting on this dialog to its built-in default. Hotk' +
+        'eys are preserved.'
       Anchors = [akLeft, akBottom]
       Caption = 'Reset Defaults'
-      Hint = 'Reset every setting on this dialog to its built-in default. Hotkeys are preserved.'
       TabOrder = 0
       OnClick = BtnDefaultsClick
     end

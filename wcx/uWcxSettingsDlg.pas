@@ -38,6 +38,7 @@ type
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
     LblFFmpegInfo: TLabel;
+    EdtFFmpegInfo: TEdit;
     {Sampling tab — frame-positioning controls: frame count, skip edges,
      and the random-extraction slider. No "Cache random frames" toggle
      here: WCX runs on demand from TC and has no frame cache, so the
@@ -419,7 +420,7 @@ end;
 
 procedure TWcxSettingsForm.UpdateFFmpegInfo;
 var
-  Input, Path, Ver: string;
+  Input, Path, Ver, Prefix, Value: string;
   State: TFFmpegProbeState;
 begin
   Input := EdtFFmpegPath.Text;
@@ -442,7 +443,8 @@ begin
       State := fpsValid;
   end;
 
-  LblFFmpegInfo.Caption := FFmpegInfoLabelText(State, Path, Ver, Input = '');
+  FFmpegInfoLabelParts(State, Path, Ver, Input = '', Prefix, Value);
+  ApplyInfoParts(LblFFmpegInfo, EdtFFmpegInfo, Prefix, Value);
 end;
 
 procedure TWcxSettingsForm.ChkModeFramesClick(Sender: TObject);

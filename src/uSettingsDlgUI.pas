@@ -16,7 +16,7 @@ interface
 
 uses
   System.SysUtils,
-  Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Dialogs;
+  Vcl.Controls, Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Dialogs;
 
 {Opens AColorDialog seeded with the panel's current colour; commits the
  chosen colour back to the panel if the user accepts.}
@@ -36,6 +36,14 @@ procedure RefreshBannerFontEdit(AEdit: TEdit; AAutoSize: Boolean; const AFontNam
  the picked values back through the var parameters and refreshes AEdit.
  Picked size is clamped to [AMinSize, AMaxSize] before storage.}
 procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
+
+{Wires the two-control "info" pattern: a fixed-status TLabel (e.g.
+ "Detected:") next to a borderless read-only TEdit that holds the
+ copy-friendly value. Layout (Left/Top/Width) is owned by the DFM;
+ this helper only updates Caption / Text / Visible. Pass empty AValue
+ to hide the edit; the prefix still renders (or also clears if APrefix
+ is '').}
+procedure ApplyInfoParts(APrefixLabel: TLabel; AValueEdit: TEdit; const APrefix, AValue: string);
 
 {Same as PickTimestampFontInto but for the banner font, with two extra
  wrinkles:
@@ -66,6 +74,13 @@ begin
     AEdit.Text := Format('%s, auto', [AFontName])
   else
     AEdit.Text := Format('%s, %d pt', [AFontName, AFontSize]);
+end;
+
+procedure ApplyInfoParts(APrefixLabel: TLabel; AValueEdit: TEdit; const APrefix, AValue: string);
+begin
+  APrefixLabel.Caption := APrefix;
+  AValueEdit.Text := AValue;
+  AValueEdit.Visible := AValue <> '';
 end;
 
 {Local helper: clamps an integer into [AMin, AMax] without pulling in

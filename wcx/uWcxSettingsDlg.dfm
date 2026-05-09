@@ -63,17 +63,37 @@ object WcxSettingsForm: TWcxSettingsForm
       end
       object LblFFmpegInfo: TLabel
         Left = 12
-        Top = 249
-        Width = 427
+        Top = 251
+        Width = 3
         Height = 15
-        Anchors = [akLeft, akTop, akRight]
-        AutoSize = False
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clGray
         Font.Height = -12
         Font.Name = 'Segoe UI'
         Font.Style = []
         ParentFont = False
+      end
+      object EdtFFmpegInfo: TEdit
+        Left = 130
+        Top = 249
+        Width = 309
+        Height = 21
+        Hint = 
+          'Resolved ffmpeg path or validation error. Click to select / copy' +
+          '.'
+        TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        AutoSize = False
+        BorderStyle = bsNone
+        Color = clBtnFace
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+        ReadOnly = True
+        TabOrder = 11
       end
       object EdtMaxWorkers: TEdit
         Left = 130
@@ -101,8 +121,10 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 24
         Width = 130
         Height = 17
+        Hint = 
+          'Spawn one ffmpeg worker per requested frame, ignoring Max worker' +
+          's above.'
         Caption = 'One per frame'
-        Hint = 'Spawn one ffmpeg worker per requested frame, ignoring Max workers above.'
         TabOrder = 2
         OnClick = ChkMaxWorkersAutoClick
       end
@@ -111,7 +133,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 49
         Width = 45
         Height = 23
-        Hint = 'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single-threaded.'
+        Hint = 
+          'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single' +
+          '-threaded.'
         NumbersOnly = True
         TabOrder = 3
         Text = '0'
@@ -122,8 +146,10 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 49
         Width = 17
         Height = 23
+        Hint = 
+          'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single' +
+          '-threaded.'
         Associate = EdtMaxThreads
-        Hint = 'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single-threaded.'
         Min = -1
         Max = 64
         TabOrder = 4
@@ -134,9 +160,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 82
         Width = 427
         Height = 17
+        Hint = 
+          'Stream raw BMP from ffmpeg in memory instead of going through te' +
+          'mporary image files.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Use BMP pipe (faster extraction, higher memory usage)'
-        Hint = 'Stream raw BMP from ffmpeg in memory instead of going through temporary image files.'
         TabOrder = 5
       end
       object ChkHwAccel: TCheckBox
@@ -144,9 +172,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 111
         Width = 427
         Height = 17
+        Hint = 
+          'Asks ffmpeg to use a GPU decoder when available. Falls back to C' +
+          'PU if it cannot.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Use hardware-accelerated decoding (GPU)'
-        Hint = 'Asks ffmpeg to use a GPU decoder when available. Falls back to CPU if it cannot.'
         TabOrder = 6
       end
       object ChkUseKeyframes: TCheckBox
@@ -154,9 +184,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 140
         Width = 427
         Height = 17
+        Hint = 
+          'Seeks only to the nearest keyframe. Much faster, but the actual ' +
+          'frame may differ from the requested timecode.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Use keyframes (faster seeking, less precise timecodes)'
-        Hint = 'Seeks only to the nearest keyframe. Much faster, but the actual frame may differ from the requested timecode.'
         TabOrder = 7
       end
       object ChkRespectAnamorphic: TCheckBox
@@ -164,9 +196,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 169
         Width = 427
         Height = 17
+        Hint = 
+          'Uses the video'#39's display aspect ratio when sizing frames, not th' +
+          'e raw pixel grid.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Respect anamorphic dimensions'
-        Hint = 'Uses the video'#39's display aspect ratio when sizing frames, not the raw pixel grid.'
         TabOrder = 8
       end
       object EdtFFmpegPath: TEdit
@@ -174,8 +208,10 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 222
         Width = 396
         Height = 23
+        Hint = 
+          'Optional override for the ffmpeg executable path. Leave empty to' +
+          ' auto-detect from PATH.'
         Anchors = [akLeft, akTop, akRight]
-        Hint = 'Optional override for the ffmpeg executable path. Leave empty to auto-detect from PATH.'
         TabOrder = 9
         TextHint = 'Auto-detect'
         OnChange = EdtFFmpegPathChange
@@ -185,9 +221,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 222
         Width = 25
         Height = 23
+        Hint = 'Browse for the ffmpeg executable.'
         Anchors = [akTop, akRight]
         Caption = '...'
-        Hint = 'Browse for the ffmpeg executable.'
         TabOrder = 10
         OnClick = BtnFFmpegPathClick
       end
@@ -260,7 +296,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 49
         Width = 45
         Height = 23
-        Hint = 'Excludes the first and last N% of the video when picking frame positions.'
+        Hint = 
+          'Excludes the first and last N% of the video when picking frame p' +
+          'ositions.'
         NumbersOnly = True
         TabOrder = 2
         Text = '0'
@@ -280,9 +318,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 82
         Width = 424
         Height = 17
+        Hint = 
+          'Picks frame positions randomly inside the allowed range instead ' +
+          'of evenly spacing them.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Start from random positions'
-        Hint = 'Picks frame positions randomly inside the allowed range instead of evenly spacing them.'
         TabOrder = 4
         OnClick = ChkRandomExtractionClick
       end
@@ -291,8 +331,10 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 107
         Width = 314
         Height = 25
+        Hint = 
+          'Width of the random window around each evenly-spaced position. H' +
+          'igher = more variance, lower = closer to even spacing.'
         Anchors = [akLeft, akTop, akRight]
-        Hint = 'Width of the random window around each evenly-spaced position. Higher = more variance, lower = closer to even spacing.'
         Max = 100
         Min = 1
         Frequency = 5
@@ -312,7 +354,7 @@ object WcxSettingsForm: TWcxSettingsForm
       object LblOutputMode: TLabel
         Left = 12
         Top = 24
-        Width = 80
+        Width = 77
         Height = 15
         Caption = 'Listing modes:'
       end
@@ -349,8 +391,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 22
         Width = 90
         Height = 17
-        Caption = 'Frames'
         Hint = 'List each extracted frame as a separate file in the archive.'
+        Caption = 'Frames'
         TabOrder = 0
         OnClick = ChkModeFramesClick
       end
@@ -359,9 +401,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 22
         Width = 100
         Height = 17
+        Hint = 
+          'List a single contact-sheet image combining every extracted fram' +
+          'e.'
         Caption = 'Combined'
-        Hint = 'List a single contact-sheet image combining every extracted frame.'
-        TabOrder = 12
+        TabOrder = 9
         OnClick = ChkModeCombinedClick
       end
       object ChkModePresets: TCheckBox
@@ -369,9 +413,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 22
         Width = 100
         Height = 17
+        Hint = 
+          'List user-defined ffmpeg presets as additional virtual files. Co' +
+          'nfigure them on the Presets tab.'
         Caption = 'Presets'
-        Hint = 'List user-defined ffmpeg presets as additional virtual files. Configure them on the Presets tab.'
-        TabOrder = 13
+        TabOrder = 10
         OnClick = ChkModePresetsClick
       end
       object CbxFormat: TComboBox
@@ -429,7 +475,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 136
         Width = 45
         Height = 23
-        Hint = 'Background opacity for the combined image (0 = transparent, 255 = opaque).'
+        Hint = 
+          'Background opacity for the combined image (0 = transparent, 255 ' +
+          '= opaque).'
         NumbersOnly = True
         TabOrder = 6
         Text = '255'
@@ -450,9 +498,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 169
         Width = 424
         Height = 17
+        Hint = 
+          'Reports accurate file sizes in the listing. Pre-extracts every f' +
+          'rame on archive open, which can be slow.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Show file sizes (extracts all frames when entering archive)'
-        Hint = 'Reports accurate file sizes in the listing. Pre-extracts every frame on archive open, which can be slow.'
         TabOrder = 8
       end
     end
@@ -583,8 +633,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 80
         Height = 23
         Cursor = crHandPoint
-        BevelOuter = bvLowered
         Hint = 'Click to pick the contact-sheet background color.'
+        BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 2
         OnClick = PnlBackgroundClick
@@ -594,8 +644,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 49
         Width = 25
         Height = 23
-        Caption = '...'
         Hint = 'Pick the contact-sheet background color.'
+        Caption = '...'
         TabOrder = 3
         OnClick = PnlBackgroundClick
       end
@@ -644,8 +694,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 111
         Width = 130
         Height = 17
-        Caption = 'Show timestamp'
         Hint = 'Overlay each frame'#39's timecode on the contact sheet.'
+        Caption = 'Show timestamp'
         TabOrder = 8
       end
       object CbxTimestampCorner: TComboBox
@@ -667,8 +717,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 80
         Height = 23
         Cursor = crHandPoint
-        BevelOuter = bvLowered
         Hint = 'Click to pick the timecode background color.'
+        BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 10
         OnClick = PnlTCBackClick
@@ -678,8 +728,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 136
         Width = 25
         Height = 23
-        Caption = '...'
         Hint = 'Pick the timecode background color.'
+        Caption = '...'
         TabOrder = 11
         OnClick = PnlTCBackClick
       end
@@ -688,7 +738,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 136
         Width = 45
         Height = 23
-        Hint = 'Opacity of the timecode background (0 = transparent, 255 = opaque).'
+        Hint = 
+          'Opacity of the timecode background (0 = transparent, 255 = opaqu' +
+          'e).'
         NumbersOnly = True
         TabOrder = 12
         Text = '0'
@@ -709,8 +761,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 80
         Height = 23
         Cursor = crHandPoint
-        BevelOuter = bvLowered
         Hint = 'Click to pick the timecode text color.'
+        BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 14
         OnClick = PnlTCTextColorClick
@@ -720,8 +772,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 165
         Width = 25
         Height = 23
-        Caption = '...'
         Hint = 'Pick the timecode text color.'
+        Caption = '...'
         TabOrder = 15
         OnClick = PnlTCTextColorClick
       end
@@ -761,9 +813,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 194
         Width = 25
         Height = 23
+        Hint = 'Pick the font used for the timecode overlay.'
         Anchors = [akTop, akRight]
         Caption = '...'
-        Hint = 'Pick the font used for the timecode overlay.'
         TabOrder = 19
         OnClick = BtnTimestampFontClick
       end
@@ -772,9 +824,11 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 227
         Width = 424
         Height = 17
+        Hint = 
+          'Adds a strip with the video filename and metadata to the combine' +
+          'd image.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Include file info banner'
-        Hint = 'Adds a strip with the video filename and metadata to the combined image.'
         TabOrder = 20
         OnClick = ChkShowBannerClick
       end
@@ -784,8 +838,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 80
         Height = 23
         Cursor = crHandPoint
-        BevelOuter = bvLowered
         Hint = 'Click to pick the banner background color.'
+        BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 21
         OnClick = PnlBannerBackgroundClick
@@ -795,8 +849,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 252
         Width = 25
         Height = 23
-        Caption = '...'
         Hint = 'Pick the banner background color.'
+        Caption = '...'
         TabOrder = 22
         OnClick = PnlBannerBackgroundClick
       end
@@ -806,8 +860,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 80
         Height = 23
         Cursor = crHandPoint
-        BevelOuter = bvLowered
         Hint = 'Click to pick the banner text color.'
+        BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 23
         OnClick = PnlBannerTextColorClick
@@ -817,8 +871,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 281
         Width = 25
         Height = 23
-        Caption = '...'
         Hint = 'Pick the banner text color.'
+        Caption = '...'
         TabOrder = 24
         OnClick = PnlBannerTextColorClick
       end
@@ -837,9 +891,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 310
         Width = 25
         Height = 23
+        Hint = 'Pick the banner font.'
         Anchors = [akTop, akRight]
         Caption = '...'
-        Hint = 'Pick the banner font.'
         TabOrder = 26
         OnClick = BtnBannerFontClick
       end
@@ -848,9 +902,9 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 343
         Width = 289
         Height = 17
+        Hint = 'Scales the banner font so it stays readable at any output width.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Auto-size banner font to image width'
-        Hint = 'Scales the banner font so it stays readable at any output width.'
         TabOrder = 28
         OnClick = ChkBannerAutoSizeClick
       end
@@ -869,6 +923,41 @@ object WcxSettingsForm: TWcxSettingsForm
     object TshPresets: TTabSheet
       Caption = 'Presets'
       ImageIndex = 4
+      object LblPresetName: TLabel
+        Left = 164
+        Top = 12
+        Width = 35
+        Height = 15
+        Caption = 'Name:'
+      end
+      object LblPresetDescription: TLabel
+        Left = 164
+        Top = 86
+        Width = 63
+        Height = 15
+        Caption = 'Description:'
+      end
+      object LblPresetOutputExt: TLabel
+        Left = 164
+        Top = 132
+        Width = 59
+        Height = 15
+        Caption = 'Output ext:'
+      end
+      object LblPresetOutputName: TLabel
+        Left = 164
+        Top = 178
+        Width = 74
+        Height = 15
+        Caption = 'Output name:'
+      end
+      object LblPresetArgs: TLabel
+        Left = 164
+        Top = 224
+        Width = 67
+        Height = 15
+        Caption = 'ffmpeg args:'
+      end
       object LbxPresets: TListBox
         Left = 8
         Top = 8
@@ -884,8 +973,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 362
         Width = 46
         Height = 24
-        Caption = 'Add'
         Hint = 'Add a new preset with default values.'
+        Caption = 'Add'
         TabOrder = 1
         OnClick = BtnPresetAddClick
       end
@@ -894,8 +983,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 362
         Width = 46
         Height = 24
-        Caption = 'Del'
         Hint = 'Remove the selected preset.'
+        Caption = 'Del'
         TabOrder = 2
         OnClick = BtnPresetRemoveClick
       end
@@ -904,17 +993,10 @@ object WcxSettingsForm: TWcxSettingsForm
         Top = 362
         Width = 48
         Height = 24
-        Caption = 'Copy'
         Hint = 'Duplicate the selected preset under a new name.'
+        Caption = 'Copy'
         TabOrder = 3
         OnClick = BtnPresetDuplicateClick
-      end
-      object LblPresetName: TLabel
-        Left = 164
-        Top = 12
-        Width = 32
-        Height = 15
-        Caption = 'Name:'
       end
       object EdtPresetName: TEdit
         Left = 164
@@ -922,23 +1004,18 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 280
         Height = 23
         Hint = 'Unique preset name. Becomes the section heading in presets.ini.'
-        TabOrder = 6
+        TabOrder = 4
       end
       object ChkPresetEnabled: TCheckBox
         Left = 164
         Top = 58
         Width = 280
         Height = 17
+        Hint = 
+          'Off keeps the preset in the file but hides it from the archive l' +
+          'isting.'
         Caption = 'Enabled'
-        Hint = 'Off keeps the preset in the file but hides it from the archive listing.'
-        TabOrder = 7
-      end
-      object LblPresetDescription: TLabel
-        Left = 164
-        Top = 86
-        Width = 67
-        Height = 15
-        Caption = 'Description:'
+        TabOrder = 5
       end
       object EdtPresetDescription: TEdit
         Left = 164
@@ -946,53 +1023,39 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 280
         Height = 23
         Hint = 'Free-form note. Stored in presets.ini, not used by the plugin.'
-        TabOrder = 8
-      end
-      object LblPresetOutputExt: TLabel
-        Left = 164
-        Top = 132
-        Width = 80
-        Height = 15
-        Caption = 'Output ext:'
+        TabOrder = 7
       end
       object EdtPresetOutputExt: TEdit
         Left = 164
         Top = 148
         Width = 80
         Height = 23
-        Hint = 'Output file extension without the dot (e.g. mp4, jpg). Determines the ffmpeg container/codec unless overridden in args.'
+        Hint = 
+          'Output file extension without the dot (e.g. mp4, jpg). Determine' +
+          's the ffmpeg container/codec unless overridden in args.'
         TabOrder = 9
-      end
-      object LblPresetOutputName: TLabel
-        Left = 164
-        Top = 178
-        Width = 95
-        Height = 15
-        Caption = 'Output name:'
       end
       object EdtPresetOutputName: TEdit
         Left = 164
         Top = 194
         Width = 280
         Height = 23
-        Hint = 'Output filename template. Variables: %basename%, %name%, %ext%. Use / for subfolders inside the archive.'
-        TabOrder = 10
-      end
-      object LblPresetArgs: TLabel
-        Left = 164
-        Top = 224
-        Width = 80
-        Height = 15
-        Caption = 'ffmpeg args:'
+        Hint = 
+          'Output filename template. Variables: %basename%, %name%, %ext%. ' +
+          'Use / for subfolders inside the archive.'
+        TabOrder = 6
       end
       object MemoPresetArgs: TMemo
         Left = 164
         Top = 240
         Width = 280
         Height = 100
-        Hint = 'ffmpeg arguments inserted after the input. Forbidden: -i, -y, -n, pipe:0/1/2. The same template variables as Output name expand here too.'
+        Hint = 
+          'ffmpeg arguments inserted after the input. Forbidden: -i, -y, -n' +
+          ', pipe:0/1/2. The same template variables as Output name expand ' +
+          'here too.'
         ScrollBars = ssVertical
-        TabOrder = 11
+        TabOrder = 8
       end
     end
     object TshLimits: TTabSheet

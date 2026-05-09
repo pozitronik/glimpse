@@ -42,6 +42,7 @@ type
     EdtFFmpegPath: TEdit;
     BtnFFmpegPath: TButton;
     LblFFmpegInfo: TLabel;
+    EdtFFmpegInfo: TEdit;
     TshAppearance: TTabSheet;
     LblBackground: TLabel;
     PnlBackground: TPanel;
@@ -107,6 +108,7 @@ type
     EdtCacheFolder: TEdit;
     BtnCacheFolder: TButton;
     LblCacheFolderInfo: TLabel;
+    EdtCacheFolderInfo: TEdit;
     LblCacheMaxSize: TLabel;
     EdtCacheMaxSize: TEdit;
     UdCacheMaxSize: TUpDown;
@@ -846,7 +848,7 @@ end;
 
 procedure TSettingsForm.UpdateFFmpegInfo;
 var
-  Input, Path, Ver: string;
+  Input, Path, Ver, Prefix, Value: string;
   State: TFFmpegProbeState;
 begin
   Input := EdtFFmpegPath.Text;
@@ -869,15 +871,16 @@ begin
       State := fpsValid;
   end;
 
-  LblFFmpegInfo.Caption := FFmpegInfoLabelText(State, Path, Ver, Input = '');
+  FFmpegInfoLabelParts(State, Path, Ver, Input = '', Prefix, Value);
+  ApplyInfoParts(LblFFmpegInfo, EdtFFmpegInfo, Prefix, Value);
 end;
 
 procedure TSettingsForm.UpdateCacheFolderInfo;
 begin
   if EdtCacheFolder.Text = '' then
-    LblCacheFolderInfo.Caption := Format('Default: %s', [DefaultCacheFolder])
+    ApplyInfoParts(LblCacheFolderInfo, EdtCacheFolderInfo, 'Default:', DefaultCacheFolder)
   else
-    LblCacheFolderInfo.Caption := '';
+    ApplyInfoParts(LblCacheFolderInfo, EdtCacheFolderInfo, '', '');
 end;
 
 procedure TSettingsForm.UpdateCacheSizeInfo;

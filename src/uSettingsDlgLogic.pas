@@ -36,6 +36,12 @@ function MaxThreadsAutoLabel(AOnePerFrame: Boolean; AThreadsPos, ACpuCount: Inte
  fpsFileMissing) are simply ignored.}
 function FFmpegInfoLabelText(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean): string;
 
+{Splits the ffmpeg info text into a fixed-status prefix (e.g. "Detected:")
+ and a copy-friendly value (e.g. the path). The dialog pins the prefix in
+ a TLabel and the value in a borderless read-only TEdit so users can
+ select / copy long paths without clipping.}
+procedure FFmpegInfoLabelParts(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean; out APrefix, AValue: string);
+
 {Decodes a stored timestamp (Show, Corner) pair into the (checkbox state,
  corner combo index) expected by the settings dialogs.
 
@@ -102,6 +108,42 @@ begin
         Result := Format('Version: %s', [AVersion]);
     else
       Result := '';
+  end;
+end;
+
+procedure FFmpegInfoLabelParts(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean; out APrefix, AValue: string);
+begin
+  case AState of
+    fpsNoPath:
+      begin
+        APrefix := 'Not found';
+        AValue := '';
+      end;
+    fpsFileMissing:
+      begin
+        APrefix := 'Not found:';
+        AValue := APath;
+      end;
+    fpsInvalid:
+      begin
+        APrefix := 'Invalid executable:';
+        AValue := APath;
+      end;
+    fpsValid:
+      if AInputWasEmpty then
+      begin
+        APrefix := 'Detected:';
+        AValue := Format('%s (%s)', [APath, AVersion]);
+      end else
+      begin
+        APrefix := 'Version:';
+        AValue := AVersion;
+      end;
+    else
+      begin
+        APrefix := '';
+        AValue := '';
+      end;
   end;
 end;
 
