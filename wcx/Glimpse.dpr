@@ -36,7 +36,8 @@ uses
   uWcxPresets in 'uWcxPresets.pas',
   uWcxListing in 'uWcxListing.pas',
   uWcxProgressBridge in 'uWcxProgressBridge.pas',
-  uWcxPresetExtractor in 'uWcxPresetExtractor.pas';
+  uWcxPresetExtractor in 'uWcxPresetExtractor.pas',
+  uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports
   OpenArchive,

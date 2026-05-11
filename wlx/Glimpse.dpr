@@ -45,7 +45,8 @@ uses
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
-  uSettingsDlgUI in '..\src\uSettingsDlgUI.pas';
+  uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
+  uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports
   ListLoad,
