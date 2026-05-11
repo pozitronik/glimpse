@@ -49,6 +49,25 @@ type
     {Resolves which frame to act on: prefers AContextCellIndex, falls back
      to current frame index, then 0. Returns False if no loaded frame found.}
     function ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
+    {Selection-aware singular-action resolver. Picks the cell that a
+     toolbar / hotkey "Save frame" or "Copy frame" should act on.
+     Priority:
+       1. AContextCellIndex when in range and loaded — used by the
+          right-click context menu so the menu acts on the right-clicked
+          cell regardless of the current selection.
+       2. First selected loaded cell — covers Ctrl+click selecting a
+          frame and then triggering Save/Copy via toolbar or hotkey.
+          Multi-selection collapses to the first selected: the action is
+          singular by design (clipboard holds one image, save dialog is
+          one filename), so picking deterministically beats refusing.
+       3. CurrentFrameIndex (single-view focus) when loaded.
+       4. Cell 0 when loaded.
+       5. -1 when nothing usable is loaded — caller must skip the action.
+     Distinct from ResolveFrameIndex: that helper preserves legacy
+     semantics where -1 simply normalises to CurrentFrameIndex / 0 and
+     never consults the selection set. Both coexist; this one drives the
+     dispatch policy for Save/Copy frame.}
+    function PickActionCell(AContextCellIndex: Integer): Integer;
     {Returns the cell-index list a save / copy action will consume. Used
      by the form's WithReExtract wrapper to scope re-extraction to the
      frames the action actually reads.
@@ -190,6 +209,32 @@ begin
   if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
     AIndex := 0;
   Result := FFrameView.CellState(AIndex) = fcsLoaded;
+end;
+
+function TFrameExporter.PickActionCell(AContextCellIndex: Integer): Integer;
+var
+  I: Integer;
+begin
+  {1. Explicit context (right-click) wins when it points to a loaded cell.}
+  if (AContextCellIndex >= 0) and (AContextCellIndex < FFrameView.CellCount) and (FFrameView.CellState(AContextCellIndex) = fcsLoaded) then
+    Exit(AContextCellIndex);
+
+  {2. First selected loaded cell.}
+  for I := 0 to FFrameView.CellCount - 1 do
+    if FFrameView.CellSelected(I) and (FFrameView.CellState(I) = fcsLoaded) then
+      Exit(I);
+
+  {3. Single-view focused frame.}
+  if (FFrameView.ViewMode = vmSingle) and (FFrameView.CurrentFrameIndex >= 0) and (FFrameView.CurrentFrameIndex < FFrameView.CellCount) and
+    (FFrameView.CellState(FFrameView.CurrentFrameIndex) = fcsLoaded) then
+    Exit(FFrameView.CurrentFrameIndex);
+
+  {4. Cell 0.}
+  if (FFrameView.CellCount > 0) and (FFrameView.CellState(0) = fcsLoaded) then
+    Exit(0);
+
+  {5. Nothing loaded — caller must skip the action.}
+  Result := -1;
 end;
 
 function TFrameExporter.BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
@@ -852,6 +897,14 @@ var
 begin
   if not ResolveFrameIndex(AContextCellIndex, Idx) then
     Exit;
+  {Single-frame copies publish CF_BITMAP only (via Clipboard.Assign),
+   not the CF_DIBV5 + CF_DIB pair CopyView uses. The decoder pipeline
+   produces pf24bit frames (TFrameView.SetFrame asserts the contract)
+   so there is no alpha channel to preserve — every paste target gets
+   the same opaque pixels regardless of which DIB variant it asks for,
+   and CF_BITMAP is the broadest-compatibility format. CopyView differs
+   because the combined image carries cell-gap transparency that only
+   CF_DIBV5 can round-trip; do not collapse the two paths.}
   if FSettings.SaveAtLiveResolution then
   begin
     Tmp := RenderCellAtLiveSize(Idx);

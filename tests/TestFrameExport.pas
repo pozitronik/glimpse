@@ -19,6 +19,22 @@ type
   end;
 
   [TestFixture]
+  TTestPickActionCell = class
+  public
+    [Test] procedure ContextCellWinsOverSelection;
+    [Test] procedure ContextCellOutOfRangeFallsThrough;
+    [Test] procedure ContextCellNotLoadedFallsThrough;
+    [Test] procedure SelectionUsedWhenNoContext;
+    [Test] procedure FirstSelectedLoadedCellWins;
+    [Test] procedure UnloadedSelectedCellSkipped;
+    [Test] procedure FallsBackToCurrentFrameInSingleView;
+    [Test] procedure CurrentFrameIgnoredOutsideSingleView;
+    [Test] procedure FallsBackToCellZero;
+    [Test] procedure ReturnsMinusOneWhenNothingLoaded;
+    [Test] procedure ReturnsMinusOneWhenNoCells;
+  end;
+
+  [TestFixture]
   TTestFrameExportRender = class
   public
     { RenderCombinedFromCells }
@@ -381,6 +397,255 @@ begin
     try
       Assert.IsTrue(Exporter.ResolveFrameIndex(99, Idx));
       Assert.AreEqual(2, Idx);
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+{ TTestPickActionCell }
+
+procedure TTestPickActionCell.ContextCellWinsOverSelection;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ToggleSelection(1); { selection = [1] }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      { Right-click on cell 3 with cell 1 selected -> menu acts on 3 }
+      Assert.AreEqual(3, Exporter.PickActionCell(3));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.ContextCellOutOfRangeFallsThrough;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ToggleSelection(2); { selection = [2] }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      { Out-of-range context falls through to selection }
+      Assert.AreEqual(2, Exporter.PickActionCell(99));
+      Assert.AreEqual(2, Exporter.PickActionCell(-5));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.ContextCellNotLoadedFallsThrough;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    { Cells 0, 1, 2 exist; only 0 and 2 are loaded; cell 1 is a placeholder }
+    View := CreateTestFrameView(Form, 3, [0, 2]);
+    View.ToggleSelection(2); { selection = [2] }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      { Context points at cell 1 which is in range but not loaded -> falls
+        through to first selected loaded cell (2) }
+      Assert.AreEqual(2, Exporter.PickActionCell(1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.SelectionUsedWhenNoContext;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ToggleSelection(3); { selection = [3] }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      { No context, single-selected cell wins over cell-0 fallback }
+      Assert.AreEqual(3, Exporter.PickActionCell(-1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.FirstSelectedLoadedCellWins;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ToggleSelection(2);
+    View.ToggleSelection(4); { selection = [2, 4]; Copy frame picks 2 }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Assert.AreEqual(2, Exporter.PickActionCell(-1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.UnloadedSelectedCellSkipped;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    { Cells 0..4 exist; only 2 and 4 are loaded }
+    View := CreateTestFrameView(Form, 5, [2, 4]);
+    View.ToggleSelection(1); { selected but not loaded }
+    View.ToggleSelection(2); { selected and loaded }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      { First-loaded-selected wins (2), the unloaded selected (1) is skipped }
+      Assert.AreEqual(2, Exporter.PickActionCell(-1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.FallsBackToCurrentFrameInSingleView;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    View.ViewMode := vmSingle;
+    View.CurrentFrameIndex := 3;
+    { No selection, no context -> CurrentFrameIndex in single-view mode }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Assert.AreEqual(3, Exporter.PickActionCell(-1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.CurrentFrameIgnoredOutsideSingleView;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    {Default view mode is vmGrid (not single-view), so CurrentFrameIndex
+     should not influence the pick — falls back to cell 0 instead.}
+    View.CurrentFrameIndex := 3;
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Assert.AreEqual(0, Exporter.PickActionCell(-1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.FallsBackToCellZero;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    { No selection, no context, not single-view -> cell 0 }
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Assert.AreEqual(0, Exporter.PickActionCell(-1));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.ReturnsMinusOneWhenNothingLoaded;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    { 5 placeholder cells, none loaded -> nothing usable }
+    View := CreateTestFrameView(Form, 5, []);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Assert.AreEqual(-1, Exporter.PickActionCell(-1));
+      Assert.AreEqual(-1, Exporter.PickActionCell(2));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.ReturnsMinusOneWhenNoCells;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 0, []);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
+      Assert.AreEqual(-1, Exporter.PickActionCell(-1));
+      Assert.AreEqual(-1, Exporter.PickActionCell(0));
     finally
       Exporter.Free;
     end;

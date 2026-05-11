@@ -33,7 +33,6 @@ type
     FModeButtons: array [TViewMode] of TButton;
     FModePopups: array [TViewMode] of TPopupMenu;
     FContextMenu: TPopupMenu;
-    FContextCellIndex: Integer;
     FBtnTimecode: TSpeedButton;
     FToolbarButtons: array of TButton;
     FBtnHamburger: TButton;
@@ -129,6 +128,11 @@ type
     procedure SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
     procedure UpdateTimecodeButton;
     procedure UpdateToolbarButtons;
+    {True only when the loaded set is stable (no placeholders) and at
+     least one cell is actually loaded. Save / copy entry points (toolbar,
+     context menu, hotkeys) gate on this so they cannot fire against an
+     in-flight extraction or an empty / all-errored result.}
+    function CanExportFrames: Boolean;
     procedure OnToolbarButtonClick(Sender: TObject);
     procedure ActivateMode(AMode: TViewMode);
     procedure ZoomBy(AFactor: Double);
@@ -205,6 +209,12 @@ type
      and the TC lc_Copy lister command all route through here so the
      wrapping (WithReExtract on save/copy actions) lives in exactly one
      place. ATag accepts the CM_* constants from uToolbarLayout.}
+    {Routes a tagged action to its implementation. The singular
+     Save / Copy frame branches consult PickActionCell, which picks the
+     selected cell (or falls back to the focused / first cell) — every
+     entry path (toolbar, context menu, hotkey, TC lc_Copy) shares this
+     rule so the right-click position never overrides the visible
+     selection.}
     procedure DispatchCommand(ATag: Integer);
   end;
 
@@ -432,7 +442,6 @@ begin
 
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
-  FContextCellIndex := -1;
 
   Winapi.Windows.GetClientRect(AParentWin, R);
   SetBounds(0, 0, R.Right, R.Bottom);
@@ -1608,28 +1617,38 @@ begin
       RefreshExtraction;
     paShuffleExtraction:
       ShuffleExtraction;
-    {Save / copy hotkey actions route through DispatchCommand so the
-     keyboard path and the context-menu path share one wrapping. Only
-     paSaveFrame clears FContextCellIndex first — that is the historical
-     behaviour and it is preserved here. paCopyFrame intentionally
-     keeps the "use last right-clicked cell, fall back to current" rule
-     so pressing Ctrl+C after a right-click copies the right-clicked
-     cell (matches the previous CopyFrameToClipboard helper).}
+    {Save / copy hotkey actions dispatch through PickActionCell, which
+     picks the selected cell first and falls back to the focused / first
+     cell. Each guards on CanExportFrames so a mid-extraction keystroke
+     falls through (Result := False) instead of dispatching against an
+     unstable cell set — matches the toolbar / context-menu visual lock.}
     paSaveFrame:
-      begin
-        FContextCellIndex := -1;
-        DispatchCommand(CM_SAVE_FRAME);
-      end;
+      if CanExportFrames then
+        DispatchCommand(CM_SAVE_FRAME)
+      else
+        Result := False;
     paSaveFrames:
-      DispatchCommand(CM_SAVE_FRAMES);
+      if CanExportFrames then
+        DispatchCommand(CM_SAVE_FRAMES)
+      else
+        Result := False;
     paSaveView:
-      DispatchCommand(CM_SAVE_VIEW);
+      if CanExportFrames then
+        DispatchCommand(CM_SAVE_VIEW)
+      else
+        Result := False;
     paSelectAllFrames:
       FFrameView.SelectAll;
     paCopyFrame:
-      DispatchCommand(CM_COPY_FRAME);
+      if CanExportFrames then
+        DispatchCommand(CM_COPY_FRAME)
+      else
+        Result := False;
     paCopyView:
-      DispatchCommand(CM_COPY_VIEW);
+      if CanExportFrames then
+        DispatchCommand(CM_COPY_VIEW)
+      else
+        Result := False;
     paZoomIn:
       ZoomBy(ZOOM_IN_FACTOR);
     paZoomOut:
@@ -1876,21 +1895,37 @@ end;
 
 procedure TPluginForm.DispatchCommand(ATag: Integer);
 var
-  CtxIdx: Integer;
+  ResolvedIdx: Integer;
 begin
-  {Capture FContextCellIndex once so the BuildSaveIndices call and the
-   later FExporter.SaveFrame/CopyFrame call see the same value even if
-   re-extraction yields the message pump in between. Single source of
-   truth for save/copy dispatch — both the keyboard action handler and
-   the right-click context menu route through here.}
-  CtxIdx := FContextCellIndex;
+  {Singular Save / Copy frame routes through PickActionCell so the same
+   selection-first policy drives every entry point: context menu,
+   toolbar button, configurable hotkey, TC lc_Copy. PickActionCell
+   returns -1 when no loaded cell is reachable; the dispatch then
+   silently skips the action.
+
+   The resolved index is computed once and reused: WithReExtract pumps
+   the message loop while it re-extracts, so reading FFrameView state
+   twice could disagree if the user selects a different cell in between.
+
+   Plural / view-level actions (Save frames, Save view, Copy view)
+   always act on the full loaded set or the selection set; PickActionCell
+   does not apply.}
+  case ATag of
+    CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_COPY_FRAME, CM_COPY_VIEW:
+      if not CanExportFrames then
+        Exit;
+  end;
   case ATag of
     CM_SAVE_FRAME:
-      WithReExtract(FExporter.BuildSaveIndicesSingle(CtxIdx),
-        procedure
-        begin
-          FExporter.SaveFrame(FFileName, CtxIdx);
-        end);
+      begin
+        ResolvedIdx := FExporter.PickActionCell(-1);
+        if ResolvedIdx >= 0 then
+          WithReExtract([ResolvedIdx],
+            procedure
+            begin
+              FExporter.SaveFrame(FFileName, ResolvedIdx);
+            end);
+      end;
     CM_SAVE_FRAMES:
       WithReExtract(FExporter.BuildSaveIndicesSelectedOrAll,
         procedure
@@ -1904,11 +1939,15 @@ begin
           FExporter.SaveView(FFileName);
         end);
     CM_COPY_FRAME:
-      WithReExtract(FExporter.BuildSaveIndicesSingle(CtxIdx),
-        procedure
-        begin
-          FExporter.CopyFrame(CtxIdx);
-        end);
+      begin
+        ResolvedIdx := FExporter.PickActionCell(-1);
+        if ResolvedIdx >= 0 then
+          WithReExtract([ResolvedIdx],
+            procedure
+            begin
+              FExporter.CopyFrame(ResolvedIdx);
+            end);
+      end;
     CM_COPY_VIEW:
       WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
         procedure
@@ -1933,18 +1972,34 @@ begin
   DispatchCommand(TButton(Sender).Tag);
 end;
 
+function TPluginForm.CanExportFrames: Boolean;
+begin
+  Result := Assigned(FFrameView) and FFrameView.HasLoadedCells and not FFrameView.HasPlaceholders;
+end;
+
 procedure TPluginForm.UpdateToolbarButtons;
 var
   I: Integer;
-  HasFrames: Boolean;
+  HasFrames, CanExport: Boolean;
 begin
   HasFrames := Assigned(FFrameView) and FFrameView.HasLoadedCells;
+  {Save / copy must wait until extraction settles. PickActionCell would
+   otherwise return -1 (or a stale cell that just got reset to a
+   placeholder by a Refresh) and the action would silently no-op, which
+   reads as a broken button. Locking the buttons visually surfaces the
+   state to the user instead.}
+  CanExport := CanExportFrames;
   for I := 0 to High(FToolbarButtons) do
     case FToolbarButtons[I].Tag of
       CM_SETTINGS:
         FToolbarButtons[I].Enabled := True;
-      else
+      CM_REFRESH:
+        {Refresh stays clickable during extraction so the user can cancel
+         and restart with new settings without waiting for the current
+         run to finish.}
         FToolbarButtons[I].Enabled := HasFrames;
+      else
+        FToolbarButtons[I].Enabled := CanExport;
     end;
 end;
 
@@ -2068,41 +2123,34 @@ procedure TPluginForm.OnContextMenuPopup(Sender: TObject);
 var
   I, SelCount: Integer;
   MI: TMenuItem;
-  Pt: TPoint;
-  HasFrames, HasClickedFrame: Boolean;
+  HasFrames, CanExport: Boolean;
 begin
   HasFrames := FFrameView.CellCount > 0;
-
-  {Hit-test: which cell was right-clicked?}
-  Pt := FFrameView.ScreenToClient(FContextMenu.PopupPoint);
-  FContextCellIndex := FFrameView.CellIndexAt(Pt);
-  HasClickedFrame := (FContextCellIndex >= 0) and (FFrameView.CellState(FContextCellIndex) = fcsLoaded);
+  {Mid-extraction the loaded set is unstable (cells flip from placeholder
+   to loaded as workers finish, and Refresh resets every cell back to
+   placeholder). Save / copy wait until extraction settles so the action
+   sees a consistent set.}
+  CanExport := CanExportFrames;
 
   for I := 0 to FContextMenu.Items.Count - 1 do
   begin
     MI := FContextMenu.Items[I];
     case MI.Tag of
-      CM_SAVE_FRAME:
-        MI.Enabled := HasClickedFrame;
-      CM_SAVE_VIEW:
-        MI.Enabled := HasFrames;
+      CM_SAVE_FRAME, CM_SAVE_VIEW, CM_COPY_FRAME, CM_COPY_VIEW:
+        MI.Enabled := CanExport;
       CM_SAVE_FRAMES:
         begin
           {Selection-aware caption: when frames are selected the action
            saves only those, otherwise it saves all loaded frames. The
            caption echoes the selected count so the user knows which set
            is about to be written before the file dialog opens.}
-          MI.Enabled := HasFrames;
+          MI.Enabled := CanExport;
           SelCount := FFrameView.SelectedCount;
           if SelCount > 0 then
             MI.Caption := Format('Save frames (%d selected)...'#9'Ctrl+Alt+Shift+S', [SelCount])
           else
             MI.Caption := 'Save frames (all)...'#9'Ctrl+Alt+Shift+S';
         end;
-      CM_COPY_FRAME:
-        MI.Enabled := HasClickedFrame;
-      CM_COPY_VIEW:
-        MI.Enabled := HasFrames;
       CM_SELECT_ALL:
         MI.Enabled := HasFrames;
       CM_DESELECT_ALL:
@@ -2117,6 +2165,10 @@ end;
 
 procedure TPluginForm.OnContextMenuClick(Sender: TObject);
 begin
+  {The right-click position is purely for menu placement; it does not
+   redirect the action. Save/Copy frame consult the visible selection
+   (then fall back to cell 0) regardless of which cell the menu was
+   opened over — same rule as the toolbar / hotkey paths.}
   DispatchCommand(TMenuItem(Sender).Tag);
 end;
 
