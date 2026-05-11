@@ -819,6 +819,10 @@ begin
   inherited Create(nil);
   FPresetModel := TPresetEditorModel.Create;
   FCurrentPresetIndex := -1;
+  {Keep tooltips visible as long as the cursor stays over the control.
+   Application is per-DLL, so this only affects hints shown by our forms;
+   TC's own UI uses its own (non-VCL) tooltip mechanism.}
+  Application.HintHidePause := MaxInt;
 end;
 
 destructor TWcxSettingsForm.Destroy;
