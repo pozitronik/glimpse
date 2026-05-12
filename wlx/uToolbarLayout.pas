@@ -35,6 +35,14 @@ const
   CM_SETTINGS = 9;
   CM_REFRESH = 10;
   CM_SHUFFLE = 12;
+  {Save view variants: explicit "use these dimensions" entry points used
+   by the toolbar / hamburger Save view dropdown. CM_SAVE_VIEW (above)
+   uses the persisted SaveAtLiveResolution setting as the dialog's
+   initial state; the two below seed the dialog with the named choice
+   instead. The user can still flip the dialog checkbox on modern
+   Windows; on legacy Windows (no checkbox) the seed is the final value.}
+  CM_SAVE_VIEW_LIVE = 13;
+  CM_SAVE_VIEW_NATIVE = 14;
 
   {Toolbar buttons differentiate the two scroll modes via icons (see
    uPluginForm.CreateToolbar); both modes share the textual caption.}
@@ -232,6 +240,27 @@ begin
       MI := TMenuItem.Create(AMenu);
       MI.Caption := 'Shuffle';
       MI.Tag := CM_SHUFFLE;
+      MI.OnClick := AOnActionClick;
+      MI.Enabled := AState.HasFrames;
+      AMenu.Items.Add(MI);
+    end;
+
+    {Save view's two explicit-resolution variants are the dropdown peers
+     of Save view; mirror the Refresh/Shuffle pattern so they stay
+     reachable when Save view collapses into the hamburger. Captions
+     match the toolbar dropdown.}
+    if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
+    begin
+      MI := TMenuItem.Create(AMenu);
+      MI.Caption := 'Save view at view resolution...';
+      MI.Tag := CM_SAVE_VIEW_LIVE;
+      MI.OnClick := AOnActionClick;
+      MI.Enabled := AState.HasFrames;
+      AMenu.Items.Add(MI);
+
+      MI := TMenuItem.Create(AMenu);
+      MI.Caption := 'Save view at native size...';
+      MI.Tag := CM_SAVE_VIEW_NATIVE;
       MI.OnClick := AOnActionClick;
       MI.Enabled := AState.HasFrames;
       AMenu.Items.Add(MI);

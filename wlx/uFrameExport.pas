@@ -24,7 +24,14 @@ type
      Lifetime: the caller (TPluginForm) sets this before invoking a save
      method and clears it after, so the exporter never owns the memory.}
     FOverrideFrames: TArray<TBitmap>;
-    function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
+    {Opens the file dialog and returns the chosen path/format. The
+     AInitialLiveRes value seeds the dialog: on modern Windows it is the
+     starting state of the inline 'Save at view resolution' check button
+     (the user can flip it before accept, and the final state is what
+     gets persisted via FSettings.SaveAtLiveResolution); on legacy
+     Windows the dialog has no checkbox, so the seed becomes the
+     authoritative value and is persisted directly.}
+    function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; AInitialLiveRes: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     {Returns the bitmap that the save/copy paths should consume for cell
      AIndex, honouring FOverrideFrames when set and the toggle is off.}
     function PickSaveBitmap(AIndex: Integer): TBitmap;
@@ -95,7 +102,12 @@ type
      - vmScroll: one column of all cells.
      - vmSingle: degenerates to SaveFrame for the focused cell.
      Honours SaveAtLiveResolution.}
-    procedure SaveView(const AFileName: string);
+    {Saves a combined image of every loaded cell. AInitialLiveRes seeds
+     the file dialog's "Save at view resolution" checkbox on modern
+     Windows (the user can flip it before accepting); on legacy Windows,
+     where the dialog has no checkbox, the seed is the authoritative
+     value and is persisted as the new SaveAtLiveResolution.}
+    procedure SaveView(const AFileName: string; AInitialLiveRes: Boolean);
     procedure CopyFrame(AContextCellIndex: Integer);
     procedure CopyView;
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
@@ -662,7 +674,7 @@ begin
   FBannerInfo := AInfo;
 end;
 
-function TFrameExporter.ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
+function TFrameExporter.ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; AInitialLiveRes: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
 var
   ModernDlg: TFileSaveDialog;
   Hook: TLiveResDialogHook;
@@ -677,13 +689,13 @@ begin
    Falls through to the legacy TSaveDialog if the platform refuses the
    modern dialog (pre-Vista or unusual COM environments). The legacy
    path has no checkbox; the same toggle is reachable via the settings
-   dialog there.}
+   dialog there or via the toolbar's Save view dropdown.}
   if Win32MajorVersion >= 6 then
   begin
     try
       ModernDlg := TFileSaveDialog.Create(nil);
       try
-        Hook := TLiveResDialogHook.Create(ModernDlg, FSettings.SaveAtLiveResolution);
+        Hook := TLiveResDialogHook.Create(ModernDlg, AInitialLiveRes);
         try
           ModernDlg.Title := ATitle;
 
@@ -768,6 +780,9 @@ begin
       end;
       APath := LegacyDlg.FileName;
       FSettings.SaveFolder := ExtractFilePath(LegacyDlg.FileName);
+      {No dialog override available on legacy Windows, so the caller's
+       seed becomes the persisted choice.}
+      FSettings.SaveAtLiveResolution := AInitialLiveRes;
       FSettings.Save;
       Result := True;
     end;
@@ -813,7 +828,7 @@ begin
   if not ResolveFrameIndex(AContextCellIndex, Idx) then
     Exit;
 
-  if not ShowSaveDialog('Save frame', GenerateFrameFileName(AFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat), True, Path, Fmt) then
+  if not ShowSaveDialog('Save frame', GenerateFrameFileName(AFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat), True, FSettings.SaveAtLiveResolution, Path, Fmt) then
     Exit;
 
   if FSettings.SaveAtLiveResolution then
@@ -855,13 +870,13 @@ begin
         Break;
       end;
 
-  if not ShowSaveDialog('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.SaveFormat), False, Path, Fmt) then
+  if not ShowSaveDialog('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.SaveFormat), False, FSettings.SaveAtLiveResolution, Path, Fmt) then
     Exit;
 
   SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, SelectedOnly, AFileName);
 end;
 
-procedure TFrameExporter.SaveView(const AFileName: string);
+procedure TFrameExporter.SaveView(const AFileName: string; AInitialLiveRes: Boolean);
 var
   Bmp: TBitmap;
   Fmt: TSaveFormat;
@@ -871,7 +886,11 @@ begin
     Exit;
 
   {vmSingle's "view" is a single frame; route to SaveFrame so the user
-   gets a single-frame artefact rather than a wasteful 1-cell combined.}
+   gets a single-frame artefact rather than a wasteful 1-cell combined.
+   SaveFrame uses the persisted setting for its dialog seed; the
+   distinction between "view" and "frame" loses meaning here so the
+   per-call AInitialLiveRes override is intentionally not threaded
+   through.}
   if FFrameView.ViewMode = vmSingle then
   begin
     SaveFrame(AFileName, FFrameView.CurrentFrameIndex);
@@ -879,7 +898,7 @@ begin
   end;
 
   BaseName := ChangeFileExt(ExtractFileName(AFileName), '');
-  if not ShowSaveDialog('Save view', BaseName + '_view.png', True, Path, Fmt) then
+  if not ShowSaveDialog('Save view', BaseName + '_view.png', True, AInitialLiveRes, Path, Fmt) then
     Exit;
 
   Bmp := RenderWithBanner(RenderCombinedFromCells);

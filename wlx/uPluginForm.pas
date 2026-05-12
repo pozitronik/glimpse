@@ -42,6 +42,7 @@ type
      random-extraction trigger has a visible affordance, mirroring the
      view-mode split-button pattern.}
     FRefreshPopup: TPopupMenu;
+    FSaveViewPopup: TPopupMenu;
     {Holds embedded PNG glyphs for toolbar buttons that have no good Unicode
      equivalent; the hamburger is the first user. Owned by Self.}
     FToolbarImages: TImageList;
@@ -118,6 +119,7 @@ type
      positions). Both items dispatch through the existing OnContextMenuClick
      so the keyboard hotkeys stay the single source of truth.}
     function CreateRefreshPopup: TPopupMenu;
+    function CreateSaveViewPopup: TPopupMenu;
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -689,6 +691,7 @@ begin
    exposes Shuffle as a peer action (primary click stays Refresh).}
   SetLength(FToolbarButtons, 0);
   FRefreshPopup := nil;
+  FSaveViewPopup := nil;
   for I := 0 to High(TB_ACTIONS) do
   begin
     Btn := TButton.Create(FToolbar);
@@ -697,7 +700,7 @@ begin
     {Skip the dropdown-arrow reservation on legacy Windows for the same
      reason as the mode buttons above: BS_SPLITBUTTON does not render on
      XP/2003 and the spare width would leave a dead gap.}
-    if (TB_ACTIONS[I].Tag = CM_REFRESH) and not IsLegacyWindows then
+    if (TB_ACTIONS[I].Tag in [CM_REFRESH, CM_SAVE_VIEW]) and not IsLegacyWindows then
       Inc(BW, REFRESH_DROPDOWN_EXTRA);
     Btn.SetBounds(X, CY, BW, CtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
@@ -713,6 +716,18 @@ begin
       {Right-click pops the same Refresh / Shuffle menu — see the mode
        buttons above for why this duplicates DropDownMenu.}
       Btn.PopupMenu := FRefreshPopup;
+    end
+    else if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
+    begin
+      {Save view dropdown: explicit "...at view resolution" and "...at
+       native size" entry points. On modern Windows the file dialog's
+       checkbox is still authoritative; on legacy Windows (no checkbox)
+       this is the only way to pick the resolution per save without
+       opening the settings dialog first.}
+      FSaveViewPopup := CreateSaveViewPopup;
+      Btn.Style := bsSplitButton;
+      Btn.DropDownMenu := FSaveViewPopup;
+      Btn.PopupMenu := FSaveViewPopup;
     end;
     FElementRights[ELEM_ACTION_FIRST + I] := X + BW;
     Inc(X, BW + BTN_GAP);
@@ -888,6 +903,30 @@ begin
   MI := TMenuItem.Create(Result);
   MI.Caption := 'Shuffle'#9'Ctrl+R';
   MI.Tag := CM_SHUFFLE;
+  MI.OnClick := OnContextMenuClick;
+  Result.Items.Add(MI);
+end;
+
+function TPluginForm.CreateSaveViewPopup: TPopupMenu;
+var
+  MI: TMenuItem;
+begin
+  {Two explicit-resolution Save view variants. Their job is mainly to
+   give legacy Windows users a way to pick the resolution at all (the
+   modern file dialog's checkbox is unavailable on XP), but they also
+   work as a faster path on modern Windows: one click chooses the
+   resolution and opens the dialog with that as the seed.}
+  Result := TPopupMenu.Create(Self);
+
+  MI := TMenuItem.Create(Result);
+  MI.Caption := 'Save view at view resolution...';
+  MI.Tag := CM_SAVE_VIEW_LIVE;
+  MI.OnClick := OnContextMenuClick;
+  Result.Items.Add(MI);
+
+  MI := TMenuItem.Create(Result);
+  MI.Caption := 'Save view at native size...';
+  MI.Tag := CM_SAVE_VIEW_NATIVE;
   MI.OnClick := OnContextMenuClick;
   Result.Items.Add(MI);
 end;
@@ -1933,7 +1972,7 @@ begin
    always act on the full loaded set or the selection set; PickActionCell
    does not apply.}
   case ATag of
-    CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_COPY_FRAME, CM_COPY_VIEW:
+    CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_SAVE_VIEW_LIVE, CM_SAVE_VIEW_NATIVE, CM_COPY_FRAME, CM_COPY_VIEW:
       if not CanExportFrames then
         Exit;
   end;
@@ -1955,10 +1994,25 @@ begin
           FExporter.SaveFrames(FFileName);
         end);
     CM_SAVE_VIEW:
+      {Default Save view: seed the dialog with the persisted setting.}
       WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
         procedure
         begin
-          FExporter.SaveView(FFileName);
+          FExporter.SaveView(FFileName, FSettings.SaveAtLiveResolution);
+        end);
+    CM_SAVE_VIEW_LIVE:
+      {Explicit "view resolution" variant from the Save view dropdown.}
+      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
+        procedure
+        begin
+          FExporter.SaveView(FFileName, True);
+        end);
+    CM_SAVE_VIEW_NATIVE:
+      {Explicit "native size" variant from the Save view dropdown.}
+      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
+        procedure
+        begin
+          FExporter.SaveView(FFileName, False);
         end);
     CM_COPY_FRAME:
       begin
