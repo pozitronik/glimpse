@@ -1548,15 +1548,23 @@ end;
 
 procedure TPluginForm.RepositionProgressBar;
 var
-  Margin, BarWidth: Integer;
+  Margin: Integer;
 begin
   if not FProgressVisible then
     Exit;
+  {Spans the entire status bar instead of squeezing into the right-of-
+   panels slot. Two reasons:
+   1. In QuickView (Ctrl+Q) and other narrow lister widths the panels
+      easily eat the whole bar (their combined fixed widths exceed the
+      client area), leaving the old right-anchored slot off-screen with
+      no visible progress feedback at all.
+   2. Status panels carry static info (file name, dimensions, codec,
+      etc.) that the user doesn't need to read mid-extraction; covering
+      them while progress runs is an acceptable trade-off.
+   The bar disappears via HideProgress when extraction settles, so
+   panels are visible again the moment loading completes.}
   Margin := (FStatusBar.ClientHeight - PROGRESSBAR_H) div 2;
-  BarWidth := FStatusBar.ClientWidth - SBP_TOTAL_RIGHT - 2 * Margin;
-  if BarWidth < PROGRESSBAR_MIN_W then
-    BarWidth := PROGRESSBAR_MIN_W;
-  FProgressBar.SetBounds(SBP_TOTAL_RIGHT + Margin, Margin, BarWidth, FStatusBar.ClientHeight - 2 * Margin);
+  FProgressBar.SetBounds(Margin, Margin, FStatusBar.ClientWidth - 2 * Margin, FStatusBar.ClientHeight - 2 * Margin);
 end;
 
 procedure TPluginForm.UpdateProgress;
