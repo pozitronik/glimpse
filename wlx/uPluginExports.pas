@@ -210,33 +210,32 @@ var
 begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   GPluginDir := ExtractFilePath(string(ModulePath));
-{$IFDEF DEBUG}
-  uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
-  {Start fresh log each session}
-  if FileExists(uDebugLog.GDebugLogPath) then
-    DeleteFile(uDebugLog.GDebugLogPath);
-{$ENDIF}
-  Log('ListSetDefaultParams');
-  Log(Format('  PluginDir=%s', [GPluginDir]));
-  Log(Format('  DLL HInstance=$%s', [IntToHex(HInstance)]));
 
-  {Swap: GSettings is never nil (created at initialization with defaults)}
+  {Load settings before the first Log call so the [debug] LogEnabled
+   toggle decides whether the log file gets created at all. The default
+   for that toggle is build-dependent (True in DEBUG, False in Release;
+   see DEF_DEBUG_LOG_ENABLED) so a fresh dev install still logs out of
+   the box, while a release install stays silent until the user sets
+   LogEnabled=1 in Glimpse.ini.}
   NewSettings := TPluginSettings.Create(GPluginDir + 'Glimpse.ini');
   NewSettings.Load;
   GSettings.Free;
   GSettings := NewSettings;
 
-  {Apply the hidden [debug] LogEnabled toggle. Mirrors the WCX plugin so
-   the same key ([debug] LogEnabled=1 in Glimpse.ini) opts into a debug
-   log file in either plugin. Off by default to avoid silently writing
-   to disk on every install. The DEBUG-build override above force-enabled
-   logging for dev sessions, so this branch only matters in release.}
-{$IFNDEF DEBUG}
   if GSettings.DebugLogEnabled then
-    uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log'
+  begin
+    uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
+    {Start fresh log each TC session whenever logging is on, so a single
+     repro spans one self-contained file.}
+    if FileExists(uDebugLog.GDebugLogPath) then
+      DeleteFile(uDebugLog.GDebugLogPath);
+  end
   else
     uDebugLog.GDebugLogPath := '';
-{$ENDIF}
+
+  Log('ListSetDefaultParams');
+  Log(Format('  PluginDir=%s', [GPluginDir]));
+  Log(Format('  DLL HInstance=$%s', [IntToHex(HInstance)]));
 
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [GFFmpegPath]));

@@ -211,7 +211,15 @@ const
   DEF_QV_DISABLE_NAV = True;
   DEF_QV_HIDE_TOOLBAR = True;
   DEF_QV_HIDE_STATUSBAR = True;
+  {Default differs by build so a fresh dev install logs out of the box
+   while a release install stays silent until the user opts in. Either
+   way the user's [debug] LogEnabled value (when present in Glimpse.ini)
+   is authoritative; this constant only seeds defaults / a missing key.}
+{$IFDEF DEBUG}
+  DEF_DEBUG_LOG_ENABLED = True;
+{$ELSE}
   DEF_DEBUG_LOG_ENABLED = False;
+{$ENDIF}
 
   {Alias: uSettings historically used _PERCENT suffix}
   DEF_SKIP_EDGES_PERCENT = DEF_SKIP_EDGES;

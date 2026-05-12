@@ -124,7 +124,7 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShlObj,
-  System.SysUtils, System.Classes, System.Types, System.Math,
+  System.SysUtils, System.Classes, System.Types, System.Math, System.UITypes,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout;
