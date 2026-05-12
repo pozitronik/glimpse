@@ -483,7 +483,12 @@ begin
    first and can intercept keys TC would otherwise consume (F2/F3).}
   PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
 
-  uDebugLog.GDebugLogPath := ExtractFilePath(FSettings.IniPath) + 'glimpse_debug.log';
+  {GDebugLogPath is set once at TC startup by ListSetDefaultParams (which
+   honours [debug] LogEnabled in release builds and forces the log on in
+   DEBUG builds). Re-applying it here would override that decision per
+   file open, which is unwanted: the user's toggle is supposed to be
+   process-wide, and the DEBUG-build path is supposed to stay verbose
+   regardless of any user setting.}
 
   FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
 

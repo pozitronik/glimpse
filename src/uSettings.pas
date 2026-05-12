@@ -61,6 +61,8 @@ type
     FThumbnailGridFrames: Integer; {count for grid mode}
     {[hotkeys] — owned; reset/load/save delegates through this object.}
     FHotkeys: THotkeyBindings;
+    {[debug]}
+    FDebugLogEnabled: Boolean;
 
     class function StrToFFmpegMode(const AValue: string): TFFmpegMode; static;
     class function FFmpegModeToStr(AMode: TFFmpegMode): string; static;
@@ -181,6 +183,12 @@ type
     {[hotkeys] — the binding table owns itself; callers mutate it via its
      own Get/Put/ResetToDefaults API rather than through scalar properties.}
     property Hotkeys: THotkeyBindings read FHotkeys;
+
+    {[debug] — hidden toggle, no UI. Written into Glimpse.ini under
+     [debug] LogEnabled=1. Off by default. The plugin reads it once at
+     ListSetDefaultParams (TC startup) and applies it to GDebugLogPath;
+     hand-edits take effect on the next TC restart.}
+    property DebugLogEnabled: Boolean read FDebugLogEnabled write FDebugLogEnabled;
   end;
 
 const
@@ -203,6 +211,7 @@ const
   DEF_QV_DISABLE_NAV = True;
   DEF_QV_HIDE_TOOLBAR = True;
   DEF_QV_HIDE_STATUSBAR = True;
+  DEF_DEBUG_LOG_ENABLED = False;
 
   {Alias: uSettings historically used _PERCENT suffix}
   DEF_SKIP_EDGES_PERCENT = DEF_SKIP_EDGES;
@@ -295,6 +304,7 @@ begin
   FThumbnailMode := DEF_THUMBNAIL_MODE;
   FThumbnailPosition := DEF_THUMBNAIL_POSITION;
   FThumbnailGridFrames := DEF_THUMBNAIL_GRID_FRAMES;
+  FDebugLogEnabled := DEF_DEBUG_LOG_ENABLED;
   {FHotkeys may be nil when ResetDefaults is called from the constructor
    before the hotkey table is allocated (the ctor creates it just above,
    so this path is safe today, but guard anyway in case call order shifts.)}
@@ -367,6 +377,8 @@ begin
     FThumbnailGridFrames := EnsureRange(Ini.ReadInteger('thumbnails', 'GridFrames', DEF_THUMBNAIL_GRID_FRAMES), MIN_THUMBNAIL_GRID_FRAMES, MAX_THUMBNAIL_GRID_FRAMES);
 
     FHotkeys.Load(Ini);
+
+    FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
     Ini.Free;
   end;
@@ -427,6 +439,8 @@ begin
     Ini.WriteInteger('thumbnails', 'GridFrames', FThumbnailGridFrames);
 
     FHotkeys.Save(Ini);
+
+    Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
     {TUnicodeIniFile buffers writes in memory; UpdateFile flushes to disk.
      Without it the new values would be discarded on Free.}
     Ini.UpdateFile;

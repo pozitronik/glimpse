@@ -226,6 +226,18 @@ begin
   GSettings.Free;
   GSettings := NewSettings;
 
+  {Apply the hidden [debug] LogEnabled toggle. Mirrors the WCX plugin so
+   the same key ([debug] LogEnabled=1 in Glimpse.ini) opts into a debug
+   log file in either plugin. Off by default to avoid silently writing
+   to disk on every install. The DEBUG-build override above force-enabled
+   logging for dev sessions, so this branch only matters in release.}
+{$IFNDEF DEBUG}
+  if GSettings.DebugLogEnabled then
+    uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log'
+  else
+    uDebugLog.GDebugLogPath := '';
+{$ENDIF}
+
   GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
 
