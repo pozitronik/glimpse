@@ -60,6 +60,11 @@ type
     function RenderSmartCombinedFromCells: TBitmap;
     function RenderCombinedFromCells: TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
+    {Shrinks ABmp in place when FSettings.CombinedMaxSide > 0 and the bitmap's
+     longer side exceeds the cap. The original is freed and replaced with a
+     downscaled copy. No-op when the cap is 0 (unlimited) or the bitmap
+     already fits. Centralises the policy used by SaveView and CopyView.}
+    procedure ApplyCombinedSizeCap(var ABmp: TBitmap);
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
@@ -140,7 +145,7 @@ uses
   System.Classes, System.Types, System.Math, System.UITypes,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
-  uViewModeLayout;
+  uViewModeLayout, uBitmapResize;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
@@ -682,6 +687,19 @@ begin
     Result := ABmp;
 end;
 
+procedure TFrameExporter.ApplyCombinedSizeCap(var ABmp: TBitmap);
+var
+  Shrunk: TBitmap;
+begin
+  if (ABmp = nil) or (FSettings.CombinedMaxSide <= 0) then
+    Exit;
+  Shrunk := DownscaleBitmapToFit(ABmp, FSettings.CombinedMaxSide);
+  if Shrunk = nil then
+    Exit; {Already fits - keep the original.}
+  ABmp.Free;
+  ABmp := Shrunk;
+end;
+
 procedure TFrameExporter.UpdateBannerInfo(const AInfo: TBannerInfo);
 begin
   FBannerInfo := AInfo;
@@ -959,6 +977,7 @@ begin
       try
         Bmp := RenderWithBanner(RenderCombinedFromCells);
         try
+          ApplyCombinedSizeCap(Bmp);
           uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
         finally
           Bmp.Free;
@@ -1024,6 +1043,7 @@ begin
   try
     Bmp := RenderWithBanner(RenderCombinedFromCells);
     try
+      ApplyCombinedSizeCap(Bmp);
       {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
        onto FSettings.Background) side-by-side, so modern paste targets
        keep the transparent gaps and legacy targets see a working opaque

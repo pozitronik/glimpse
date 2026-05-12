@@ -1006,12 +1006,50 @@ object SettingsForm: TSettingsForm
         Top = 350
         Width = 424
         Height = 17
-        Hint = 
+        Hint =
           'On: save at the size you see in the viewer. Off: re-extract at t' +
           'he video'#39's native frame size before saving.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Save at view resolution (uses native frame size when off)'
         TabOrder = 18
+      end
+      object LblCombinedMaxSide: TLabel
+        Left = 12
+        Top = 380
+        Width = 105
+        Height = 15
+        Caption = 'Max combined side:'
+      end
+      object EdtCombinedMaxSide: TEdit
+        Left = 130
+        Top = 376
+        Width = 60
+        Height = 23
+        Hint =
+          'Cap on the longer side of the rendered Save view / Copy view ima' +
+          'ge in pixels. The image is shrunk proportionally if it exceeds t' +
+          'his value. 0 disables the cap.'
+        NumbersOnly = True
+        TabOrder = 19
+        Text = '0'
+      end
+      object UdCombinedMaxSide: TUpDown
+        Left = 190
+        Top = 376
+        Width = 17
+        Height = 23
+        Associate = EdtCombinedMaxSide
+        Max = 32768
+        Increment = 256
+        TabOrder = 20
+        Thousands = False
+      end
+      object LblCombinedMaxSideUnit: TLabel
+        Left = 213
+        Top = 380
+        Width = 14
+        Height = 15
+        Caption = 'px'
       end
     end
     object TshCache: TTabSheet

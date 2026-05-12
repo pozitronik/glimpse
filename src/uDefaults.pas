@@ -62,6 +62,21 @@ const
    image" behaviour for users who do not opt in.}
   DEF_SAVE_AT_LIVE_RESOLUTION = False;
 
+  {Cap on the longer side (in pixels) of the rendered combined image
+   produced by Save view / Copy view. After the combined image (with
+   optional banner) is rendered, if its longer side exceeds this value,
+   the bitmap is shrunk proportionally to fit. 0 disables the cap.
+   Default 0 (unlimited) preserves the historical "save at full native
+   resolution" behaviour for users who do not opt in; users hitting
+   clipboard OOM or huge save files can dial in a cap (8192 is a good
+   starting point on a 32-bit build).
+   Mirrors WCX_DEF_COMBINED_MAX_SIDE in WCX (same default; the plugins
+   keep separate values but share the property name to make the shared
+   concept obvious).}
+  DEF_COMBINED_MAX_SIDE = 0;
+  MIN_COMBINED_MAX_SIDE = 0;
+  MAX_COMBINED_MAX_SIDE = 32768;
+
   {Extension list}
   DEF_EXTENSION_LIST = 'mp4,mkv,avi,mov,wmv,webm,flv,ts,m2ts,m4v,3gp,ogv,mpg,mpeg,vob,asf,rm,rmvb,f4v';
 

@@ -119,6 +119,14 @@ type
     [Test]
     procedure TestSaveAtLiveResolutionRoundTrip;
     [Test]
+    procedure TestCombinedMaxSideDefault;
+    [Test]
+    procedure TestCombinedMaxSideRoundTrip;
+    [Test]
+    procedure TestCombinedMaxSideClampedHigh;
+    [Test]
+    procedure TestCombinedMaxSideClampedLow;
+    [Test]
     procedure TestTimestampCornerDefault;
     [Test]
     procedure TestTimestampCornerRoundTripAllValues;
@@ -1524,6 +1532,95 @@ begin
     Assert.AreEqual(not DEF_SAVE_AT_LIVE_RESOLUTION, S2.SaveAtLiveResolution);
   finally
     S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_COMBINED_MAX_SIDE, S.CombinedMaxSide,
+      'Default CombinedMaxSide caps the rendered Save view / Copy view image to a clipboard-safe size');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+const
+  CustomValue = 4096;
+begin
+  IniPath := TPath.Combine(FTempDir, 'combined_max_side.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CombinedMaxSide := CustomValue;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(CustomValue, S2.CombinedMaxSide);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideClampedHigh;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Out-of-range high values must clamp to MAX_COMBINED_MAX_SIDE so a typo
+   like "999999" cannot allocate a multi-gigapixel bitmap on save.}
+  IniPath := TPath.Combine(FTempDir, 'combined_max_side_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'CombinedMaxSide', 999999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_COMBINED_MAX_SIDE, S.CombinedMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideClampedLow;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Negative values clamp to 0 (the unlimited sentinel) - keep the load
+   path tolerant of malformed user edits.}
+  IniPath := TPath.Combine(FTempDir, 'combined_max_side_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'CombinedMaxSide', -100);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_COMBINED_MAX_SIDE, S.CombinedMaxSide);
+  finally
+    S.Free;
   end;
 end;
 

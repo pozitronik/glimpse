@@ -44,6 +44,7 @@ type
     FBackgroundAlpha: Byte;
     FSaveFolder: string;
     FSaveAtLiveResolution: Boolean;
+    FCombinedMaxSide: Integer;
     {[save] — banner group shared with WCX}
     FBanner: TBannerSettingsGroup;
     {[cache]}
@@ -158,6 +159,7 @@ type
     property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
     property SaveAtLiveResolution: Boolean read FSaveAtLiveResolution write FSaveAtLiveResolution;
+    property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
     property BannerTextColor: TColor read FBanner.TextColor write FBanner.TextColor;
@@ -307,6 +309,7 @@ begin
   FBackgroundAlpha := DEF_BACKGROUND_ALPHA;
   FSaveFolder := DEF_SAVE_FOLDER;
   FSaveAtLiveResolution := DEF_SAVE_AT_LIVE_RESOLUTION;
+  FCombinedMaxSide := DEF_COMBINED_MAX_SIDE;
   FBanner := TBannerSettingsGroup.Defaults;
   FBanner.Show := DEF_SHOW_BANNER;
   FCacheEnabled := DEF_CACHE_ENABLED;
@@ -378,6 +381,7 @@ begin
     FBackgroundAlpha := EnsureRange(Ini.ReadInteger('save', 'BackgroundAlpha', DEF_BACKGROUND_ALPHA), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
     FSaveFolder := Ini.ReadString('save', 'SaveFolder', DEF_SAVE_FOLDER);
     FSaveAtLiveResolution := Ini.ReadBool('save', 'AtLiveResolution', DEF_SAVE_AT_LIVE_RESOLUTION);
+    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('save', 'CombinedMaxSide', DEF_COMBINED_MAX_SIDE), MIN_COMBINED_MAX_SIDE, MAX_COMBINED_MAX_SIDE);
     FBanner.LoadFrom(Ini, 'save');
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
@@ -441,6 +445,7 @@ begin
     Ini.WriteInteger('save', 'BackgroundAlpha', FBackgroundAlpha);
     Ini.WriteString('save', 'SaveFolder', FSaveFolder);
     Ini.WriteBool('save', 'AtLiveResolution', FSaveAtLiveResolution);
+    Ini.WriteInteger('save', 'CombinedMaxSide', FCombinedMaxSide);
     FBanner.SaveTo(Ini, 'save');
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
