@@ -1446,10 +1446,12 @@ begin
   Ctx.RespectAnamorphic := FSettings.RespectAnamorphic;
   Total := Length(AIndices);
 
+  FormLog(Format('WithReExtract: starting target=%d cells indices=%d', [Target, Total]));
   Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache, TFFmpegFrameExtractor.Create(FFFmpegPath));
   try
     Reextractor.OnLabel := procedure(const AText: string)
       begin
+        FormLog(Format('WithReExtract: OnLabel - showing progress (%s)', [AText]));
         FProgressBar.Style := pbstNormal;
         FProgressBar.Min := 0;
         FProgressBar.Max := Total;
@@ -1466,6 +1468,7 @@ begin
       end;
     Reextractor.OnDone := procedure
       begin
+        FormLog('WithReExtract: OnDone - hiding progress');
         HideProgress;
       end;
 
@@ -1473,6 +1476,7 @@ begin
   finally
     Reextractor.Free;
   end;
+  FormLog(Format('WithReExtract: re-extract finished, Frames length=%d', [Length(Frames)]));
 
   try
     FExporter.SetOverrideFrames(Frames);

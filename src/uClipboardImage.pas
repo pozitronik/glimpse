@@ -61,7 +61,12 @@ function TryClipboardOpenWithRetry(const AOpenAction: TClipboardOpenAction): Boo
 implementation
 
 uses
-  Winapi.Windows, Vcl.Clipbrd;
+  Winapi.Windows, Vcl.Clipbrd, uDebugLog;
+
+procedure Log(const AMsg: string);
+begin
+  DebugLog('Clipboard', AMsg);
+end;
 
 const
   {Win32 constants not always exported by Winapi.Windows under that name.
@@ -122,11 +127,15 @@ begin
 
   Result := GlobalAlloc(GMEM_MOVEABLE, TotalBytes);
   if Result = 0 then
+  begin
+    Log(Format('BuildAlphaDIBV5: GlobalAlloc(%d bytes) failed for %dx%d (lastError=%d)', [TotalBytes, ASrc.Width, ASrc.Height, GetLastError]));
     Exit;
+  end;
 
   Header := PBitmapV5Header(GlobalLock(Result));
   if Header = nil then
   begin
+    Log(Format('BuildAlphaDIBV5: GlobalLock failed for %d-byte block (lastError=%d)', [TotalBytes, GetLastError]));
     GlobalFree(Result);
     Result := 0;
     Exit;
@@ -192,11 +201,15 @@ begin
 
   Result := GlobalAlloc(GMEM_MOVEABLE, TotalBytes);
   if Result = 0 then
+  begin
+    Log(Format('BuildFlatDIB: GlobalAlloc(%d bytes) failed for %dx%d (lastError=%d)', [TotalBytes, W, H, GetLastError]));
     Exit;
+  end;
 
   Header := PBitmapInfoHeader(GlobalLock(Result));
   if Header = nil then
   begin
+    Log(Format('BuildFlatDIB: GlobalLock failed for %d-byte block (lastError=%d)', [TotalBytes, GetLastError]));
     GlobalFree(Result);
     Result := 0;
     Exit;
@@ -273,11 +286,12 @@ begin
   Result := 0;
   Mem := BuildFlatDIB(ASrc, ABackground);
   if Mem = 0 then
-    Exit;
+    Exit; {BuildFlatDIB already logged the failure detail}
 
   Header := PBitmapInfoHeader(GlobalLock(Mem));
   if Header = nil then
   begin
+    Log(Format('BuildFlatHBITMAP: GlobalLock failed (lastError=%d)', [GetLastError]));
     GlobalFree(Mem);
     Exit;
   end;
@@ -289,6 +303,8 @@ begin
     if ScreenDC <> 0 then
       try
         Result := CreateDIBitmap(ScreenDC, Header^, CBM_INIT, PixelBits, PBitmapInfo(Header)^, DIB_RGB_COLORS);
+        if Result = 0 then
+          Log(Format('BuildFlatHBITMAP: CreateDIBitmap failed for %dx%d (lastError=%d)', [ASrc.Width, ASrc.Height, GetLastError]));
       finally
         ReleaseDC(0, ScreenDC);
       end;
@@ -318,13 +334,18 @@ begin
     Exit;
   end;
 
+  Log(Format('CopyBitmapToClipboard: %dx%d pf32bit', [ABitmap.Width, ABitmap.Height]));
+
   MemV5 := BuildAlphaDIBV5(ABitmap);
   if MemV5 = 0 then
-    Exit;
+    Exit; {BuildAlphaDIBV5 already logged}
 
   MemFlat := BuildFlatDIB(ABitmap, ABackground);
   if MemFlat = 0 then
   begin
+    {BuildFlatDIB already logged; we now also note that we cannot publish
+     anything because the side-by-side contract requires both formats.}
+    Log('CopyBitmapToClipboard: aborting publish - CF_DIB allocation failed after CF_DIBV5 succeeded');
     GlobalFree(MemV5);
     Exit;
   end;
@@ -342,6 +363,7 @@ begin
    Lister). Same pump as the working pf24bit Clipboard.Assign path.}
   if not TryClipboardOpenWithRetry then
   begin
+    Log('CopyBitmapToClipboard: TryClipboardOpenWithRetry exhausted retries');
     GlobalFree(MemV5);
     GlobalFree(MemFlat);
     if HbmFlat <> 0 then
@@ -352,6 +374,7 @@ begin
     EmptyClipboard;
     if SetClipboardData(CF_DIBV5, MemV5) = 0 then
     begin
+      Log(Format('CopyBitmapToClipboard: SetClipboardData(CF_DIBV5) failed (lastError=%d)', [GetLastError]));
       GlobalFree(MemV5);
       GlobalFree(MemFlat);
       if HbmFlat <> 0 then
@@ -364,10 +387,14 @@ begin
       {CF_DIBV5 is already on the clipboard; failing to add the legacy
        sibling just means legacy paste will fall back to whatever the
        OS synthesises. Keep going so we still try CF_BITMAP.}
+      Log(Format('CopyBitmapToClipboard: SetClipboardData(CF_DIB) failed (lastError=%d), continuing with CF_DIBV5 only', [GetLastError]));
       GlobalFree(MemFlat);
     end;
     if (HbmFlat <> 0) and (SetClipboardData(CF_BITMAP, HbmFlat) = 0) then
+    begin
+      Log(Format('CopyBitmapToClipboard: SetClipboardData(CF_BITMAP) failed (lastError=%d)', [GetLastError]));
       DeleteObject(HbmFlat);
+    end;
     Result := True;
   finally
     Clipboard.Close;

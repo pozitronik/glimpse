@@ -124,7 +124,7 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShlObj,
-  System.SysUtils, System.Types, System.Math,
+  System.SysUtils, System.Classes, System.Types, System.Math,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout;
@@ -901,11 +901,23 @@ begin
   if not ShowSaveDialog('Save view', BaseName + '_view.png', True, AInitialLiveRes, Path, Fmt) then
     Exit;
 
-  Bmp := RenderWithBanner(RenderCombinedFromCells);
+  {Rendering the combined image at native size for many cells can blow
+   past 32-bit address space (or simply exhaust the heap). Catch the
+   memory exceptions here and surface a domain-specific error so the
+   user gets a hint about the cause and possible workarounds, rather
+   than the host's generic OS-level message.}
   try
-    uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
-  finally
-    Bmp.Free;
+    Bmp := RenderWithBanner(RenderCombinedFromCells);
+    try
+      uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
+    finally
+      Bmp.Free;
+    end;
+  except
+    on E: EOutOfMemory do
+      MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
+    on E: EOutOfResources do
+      MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
   end;
 end;
 
@@ -948,17 +960,30 @@ begin
     CopyFrame(FFrameView.CurrentFrameIndex);
     Exit;
   end;
-  Bmp := RenderWithBanner(RenderCombinedFromCells);
+  {Same OOM-safety wrapper as SaveView, plus a check for the silent
+   failure path inside CopyBitmapToClipboard: when GlobalAlloc returns
+   0 mid-publish the helper bails with Result := False without raising,
+   which historically meant the user saw the clipboard simply not
+   change. Surface that as an explicit error too.}
   try
-    {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
-     onto FSettings.Background) side-by-side, so modern paste targets
-     keep the transparent gaps and legacy targets see a working opaque
-     image instead of the broken paste they get from the OS's default
-     CF_DIB synthesis. ABackground only matters when the rendered
-     bitmap carries alpha; for opaque sources it is ignored.}
-    CopyBitmapToClipboard(Bmp, FSettings.Background);
-  finally
-    Bmp.Free;
+    Bmp := RenderWithBanner(RenderCombinedFromCells);
+    try
+      {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
+       onto FSettings.Background) side-by-side, so modern paste targets
+       keep the transparent gaps and legacy targets see a working opaque
+       image instead of the broken paste they get from the OS's default
+       CF_DIB synthesis. ABackground only matters when the rendered
+       bitmap carries alpha; for opaque sources it is ignored.}
+      if not CopyBitmapToClipboard(Bmp, FSettings.Background) then
+        MessageDlg('Clipboard write failed - the combined image is too large to copy.' + sLineBreak + sLineBreak + 'Lower the Scale target in Settings, reduce the frame count, or use Save view to write the image to a file instead.', mtError, [mbOK], 0);
+    finally
+      Bmp.Free;
+    end;
+  except
+    on E: EOutOfMemory do
+      MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
+    on E: EOutOfResources do
+      MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
   end;
 end;
 
