@@ -46,7 +46,8 @@ uses
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
-  uNoShadowHints in '..\src\uNoShadowHints.pas';
+  uNoShadowHints in '..\src\uNoShadowHints.pas',
+  uPlatformDetect in '..\src\uPlatformDetect.pas';
 
 exports
   ListLoad,

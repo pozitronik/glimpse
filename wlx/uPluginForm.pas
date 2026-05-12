@@ -222,7 +222,8 @@ implementation
 
 uses
   System.IOUtils, Winapi.ShellAPI,
-  uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage;
+  uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
+  uPlatformDetect;
 
 {Embedded toolbar glyph resources; see CreateToolbar for use. The .res is
  generated from icons.rc by cgrc as a pre-build step in build.bat and
@@ -612,9 +613,12 @@ begin
 
     {Auto-width: measure caption text and add padding. Scroll/Filmstrip
      also reserve space for a directional arrow icon to the left of the
-     caption.}
+     caption. The split-arrow reservation is skipped on legacy Windows
+     (XP/2003) because BS_SPLITBUTTON does not render there — keeping
+     the extra width would leave a dead gap between the caption and the
+     iaRight icon.}
     BW := Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
-    if FModePopups[VM] <> nil then
+    if (FModePopups[VM] <> nil) and not IsLegacyWindows then
       Inc(BW, SPLIT_ARROW_W);
     if VM in [vmScroll, vmFilmstrip] then
       Inc(BW, ICON_W + ICON_GAP);
@@ -641,11 +645,16 @@ begin
       FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end;
 
-    {Split button: click activates mode, arrow shows submodes}
+    {Split button: click activates mode, arrow shows submodes. PopupMenu
+     duplicates the same menu on right-click for every OS so the submodes
+     stay reachable on legacy Windows (where the split arrow does not
+     render) and gives modern users a discoverable alternative to the
+     small arrow glyph.}
     if FModePopups[VM] <> nil then
     begin
       FModeButtons[VM].Style := bsSplitButton;
       FModeButtons[VM].DropDownMenu := FModePopups[VM];
+      FModeButtons[VM].PopupMenu := FModePopups[VM];
     end;
 
     FElementRights[Ord(VM)] := X + BW;
@@ -678,7 +687,10 @@ begin
     Btn := TButton.Create(FToolbar);
     Btn.Parent := FToolbar;
     BW := Canvas.TextWidth(TB_ACTIONS[I].Caption) + BTN_PAD;
-    if TB_ACTIONS[I].Tag = CM_REFRESH then
+    {Skip the dropdown-arrow reservation on legacy Windows for the same
+     reason as the mode buttons above: BS_SPLITBUTTON does not render on
+     XP/2003 and the spare width would leave a dead gap.}
+    if (TB_ACTIONS[I].Tag = CM_REFRESH) and not IsLegacyWindows then
       Inc(BW, REFRESH_DROPDOWN_EXTRA);
     Btn.SetBounds(X, CY, BW, CtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
@@ -691,6 +703,9 @@ begin
       FRefreshPopup := CreateRefreshPopup;
       Btn.Style := bsSplitButton;
       Btn.DropDownMenu := FRefreshPopup;
+      {Right-click pops the same Refresh / Shuffle menu — see the mode
+       buttons above for why this duplicates DropDownMenu.}
+      Btn.PopupMenu := FRefreshPopup;
     end;
     FElementRights[ELEM_ACTION_FIRST + I] := X + BW;
     Inc(X, BW + BTN_GAP);
