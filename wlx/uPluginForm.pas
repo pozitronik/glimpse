@@ -546,6 +546,10 @@ const
    by virtue of the IDX_ICON_ARROW glyph; Refresh has no glyph so the
    space is added explicitly to match the visual weight.}
   REFRESH_DROPDOWN_EXTRA = 14;
+  {Save view's caption is longer than Refresh, so the bsSplitButton arrow
+   pinches the rendered text when only REFRESH_DROPDOWN_EXTRA is reserved.
+   Add a small buffer on top so the full caption stays visible.}
+  SAVE_VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
   SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
   PB_H = 16; {Progress bar height}
   ICON_W = 16; {Toolbar icon width}
@@ -705,8 +709,13 @@ begin
     {Skip the dropdown-arrow reservation on legacy Windows for the same
      reason as the mode buttons above: BS_SPLITBUTTON does not render on
      XP/2003 and the spare width would leave a dead gap.}
-    if (TB_ACTIONS[I].Tag in [CM_REFRESH, CM_SAVE_VIEW]) and not IsLegacyWindows then
-      Inc(BW, REFRESH_DROPDOWN_EXTRA);
+    if not IsLegacyWindows then
+      case TB_ACTIONS[I].Tag of
+        CM_REFRESH:
+          Inc(BW, REFRESH_DROPDOWN_EXTRA);
+        CM_SAVE_VIEW:
+          Inc(BW, SAVE_VIEW_DROPDOWN_EXTRA);
+      end;
     Btn.SetBounds(X, CY, BW, CtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
     Btn.Hint := TB_ACTIONS[I].Hint;
