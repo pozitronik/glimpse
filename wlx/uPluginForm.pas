@@ -2009,6 +2009,7 @@ end;
 procedure TPluginForm.DispatchCommand(ATag: Integer);
 var
   ResolvedIdx: Integer;
+  ReExtract: TReExtractAction;
 begin
   {Singular Save / Copy frame routes through PickActionCell so the same
    selection-first policy drives every entry point: context menu,
@@ -2022,50 +2023,40 @@ begin
 
    Plural / view-level actions (Save frames, Save view, Copy view)
    always act on the full loaded set or the selection set; PickActionCell
-   does not apply.}
+   does not apply.
+
+   Save methods receive a re-extract callback so the dialog opens
+   immediately and re-extract runs only after the user commits. The
+   alternative (wrapping the dialog in WithReExtract upfront) blocked
+   TC for seconds before the dialog appeared and re-extracted even when
+   the user then cancelled.}
   case ATag of
     CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_SAVE_VIEW_LIVE, CM_SAVE_VIEW_NATIVE, CM_COPY_FRAME, CM_COPY_VIEW:
       if not CanExportFrames then
         Exit;
   end;
+  ReExtract := procedure(const AIndices: TArray<Integer>; AAction: TProc)
+    begin
+      WithReExtract(AIndices, AAction);
+    end;
   case ATag of
     CM_SAVE_FRAME:
       begin
         ResolvedIdx := FExporter.PickActionCell(-1);
         if ResolvedIdx >= 0 then
-          WithReExtract([ResolvedIdx],
-            procedure
-            begin
-              FExporter.SaveFrame(FFileName, ResolvedIdx);
-            end);
+          FExporter.SaveFrame(FFileName, ResolvedIdx, ReExtract);
       end;
     CM_SAVE_FRAMES:
-      WithReExtract(FExporter.BuildSaveIndicesSelectedOrAll,
-        procedure
-        begin
-          FExporter.SaveFrames(FFileName);
-        end);
+      FExporter.SaveFrames(FFileName, ReExtract);
     CM_SAVE_VIEW:
       {Default Save view: seed the dialog with the persisted setting.}
-      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
-        procedure
-        begin
-          FExporter.SaveView(FFileName, FSettings.SaveAtLiveResolution);
-        end);
+      FExporter.SaveView(FFileName, FSettings.SaveAtLiveResolution, ReExtract);
     CM_SAVE_VIEW_LIVE:
       {Explicit "view resolution" variant from the Save view dropdown.}
-      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
-        procedure
-        begin
-          FExporter.SaveView(FFileName, True);
-        end);
+      FExporter.SaveView(FFileName, True, ReExtract);
     CM_SAVE_VIEW_NATIVE:
       {Explicit "native size" variant from the Save view dropdown.}
-      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
-        procedure
-        begin
-          FExporter.SaveView(FFileName, False);
-        end);
+      FExporter.SaveView(FFileName, False, ReExtract);
     CM_COPY_FRAME:
       begin
         ResolvedIdx := FExporter.PickActionCell(-1);

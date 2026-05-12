@@ -5,10 +5,20 @@ unit uFrameExport;
 interface
 
 uses
+  System.SysUtils,
   Vcl.Graphics,
   uFrameView, uSettings, uBitmapSaver, uCombinedImage, uFrameOffsets;
 
 type
+  {Callback the host injects so the save methods can request a re-extract
+   at native resolution AFTER their dialog has been confirmed (instead of
+   the dispatch wrapping the entire flow in a re-extract upfront, which
+   blocked TC for seconds before the dialog even appeared). The host's
+   implementation is expected to set/clear FOverrideFrames around AAction
+   so PickSaveBitmap picks up the re-extracted bitmaps. Pass nil to skip
+   the re-extract path entirely (the save then uses live cells only).}
+  TReExtractAction = reference to procedure(const AIndices: TArray<Integer>; AAction: TProc);
+
   {Handles save-to-file and copy-to-clipboard for video frames.}
   TFrameExporter = class
   strict private
@@ -88,26 +98,29 @@ type
     {Saves a single frame to a user-chosen file. Honours
      SaveAtLiveResolution: native frame size when off, on-screen cell
      size when on (letterbox in vmGrid/Filmstrip/Scroll/Single,
-     crop-to-fill in vmSmartGrid).}
-    procedure SaveFrame(const AFileName: string; AContextCellIndex: Integer);
+     crop-to-fill in vmSmartGrid).
+     AReExtract is invoked after the dialog accepts iff the user chose
+     native resolution; the host wraps re-extract via WithReExtract so
+     the dialog appears immediately and the re-extract work runs only
+     when the user has committed to the save.}
+    procedure SaveFrame(const AFileName: string; AContextCellIndex: Integer; AReExtract: TReExtractAction = nil);
     {Saves multiple frames as separate files. Selection-aware: when at
      least one frame is selected only those are written, otherwise every
      loaded frame is written. Per-frame resolution policy mirrors
-     SaveFrame.}
-    procedure SaveFrames(const AFileName: string);
-    {Saves a combined image laid out per the live view mode:
-     - vmGrid: regular grid, columns from live layout.
-     - vmSmartGrid: smart layout (panel-aspect-driven row counts).
-     - vmFilmstrip: one row of all cells.
-     - vmScroll: one column of all cells.
-     - vmSingle: degenerates to SaveFrame for the focused cell.
-     Honours SaveAtLiveResolution.}
+     SaveFrame. AReExtract gates the post-dialog re-extract the same way
+     SaveFrame does.}
+    procedure SaveFrames(const AFileName: string; AReExtract: TReExtractAction = nil);
     {Saves a combined image of every loaded cell. AInitialLiveRes seeds
      the file dialog's "Save at view resolution" checkbox on modern
      Windows (the user can flip it before accepting); on legacy Windows,
      where the dialog has no checkbox, the seed is the authoritative
-     value and is persisted as the new SaveAtLiveResolution.}
-    procedure SaveView(const AFileName: string; AInitialLiveRes: Boolean);
+     value and is persisted as the new SaveAtLiveResolution.
+     Layout per the live view mode (vmGrid: live columns, vmSmartGrid:
+     smart panel-aspect rows, vmFilmstrip: one row, vmScroll: one
+     column, vmSingle: degenerates to SaveFrame).
+     AReExtract gates the post-dialog re-extract the same way SaveFrame
+     does.}
+    procedure SaveView(const AFileName: string; AInitialLiveRes: Boolean; AReExtract: TReExtractAction = nil);
     procedure CopyFrame(AContextCellIndex: Integer);
     procedure CopyView;
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
@@ -124,7 +137,7 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShlObj,
-  System.SysUtils, System.Classes, System.Types, System.Math, System.UITypes,
+  System.Classes, System.Types, System.Math, System.UITypes,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout;
@@ -818,38 +831,56 @@ begin
   end;
 end;
 
-procedure TFrameExporter.SaveFrame(const AFileName: string; AContextCellIndex: Integer);
+procedure TFrameExporter.SaveFrame(const AFileName: string; AContextCellIndex: Integer; AReExtract: TReExtractAction);
 var
   Idx: Integer;
   Fmt: TSaveFormat;
   Path: string;
-  Tmp: TBitmap;
+  WriteAction: TProc;
 begin
   if not ResolveFrameIndex(AContextCellIndex, Idx) then
     Exit;
 
+  {Dialog FIRST so the user gets immediate feedback. The seconds-long
+   re-extract that may follow runs only after the user has committed to
+   the save (and only when they picked native resolution); previously it
+   ran upfront, freezing TC for seconds before the dialog even appeared.}
   if not ShowSaveDialog('Save frame', GenerateFrameFileName(AFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat), True, FSettings.SaveAtLiveResolution, Path, Fmt) then
     Exit;
 
-  if FSettings.SaveAtLiveResolution then
-  begin
-    Tmp := RenderCellAtLiveSize(Idx);
-    try
-      uBitmapSaver.SaveBitmapToFile(Tmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
-    finally
-      Tmp.Free;
+  WriteAction := procedure
+    var
+      Tmp: TBitmap;
+    begin
+      if FSettings.SaveAtLiveResolution then
+      begin
+        Tmp := RenderCellAtLiveSize(Idx);
+        try
+          uBitmapSaver.SaveBitmapToFile(Tmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
+        finally
+          Tmp.Free;
+        end;
+      end
+      else
+        uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(Idx), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
     end;
-  end
+
+  {Native-resolution path may need re-extract; defer to host. Live-
+   resolution path uses on-screen cells directly, no re-extract needed.}
+  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+    AReExtract([Idx], WriteAction)
   else
-    uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(Idx), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
+    WriteAction;
 end;
 
-procedure TFrameExporter.SaveFrames(const AFileName: string);
+procedure TFrameExporter.SaveFrames(const AFileName: string; AReExtract: TReExtractAction);
 var
   I, FirstIdx: Integer;
   Path: string;
   Fmt: TSaveFormat;
   SelectedOnly: Boolean;
+  WriteAction: TProc;
+  Indices: TArray<Integer>;
 begin
   if FFrameView.CellCount = 0 then
     Exit;
@@ -870,17 +901,30 @@ begin
         Break;
       end;
 
+  {Dialog first; re-extract (if needed) only after the user accepts.
+   See SaveFrame for the rationale.}
   if not ShowSaveDialog('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.SaveFormat), False, FSettings.SaveAtLiveResolution, Path, Fmt) then
     Exit;
 
-  SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, SelectedOnly, AFileName);
+  WriteAction := procedure
+    begin
+      SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, SelectedOnly, AFileName);
+    end;
+
+  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+  begin
+    Indices := BuildSaveIndicesSelectedOrAll;
+    AReExtract(Indices, WriteAction);
+  end
+  else
+    WriteAction;
 end;
 
-procedure TFrameExporter.SaveView(const AFileName: string; AInitialLiveRes: Boolean);
+procedure TFrameExporter.SaveView(const AFileName: string; AInitialLiveRes: Boolean; AReExtract: TReExtractAction);
 var
-  Bmp: TBitmap;
   Fmt: TSaveFormat;
   Path, BaseName: string;
+  WriteAction: TProc;
 begin
   if FFrameView.CellCount = 0 then
     Exit;
@@ -893,32 +937,44 @@ begin
    through.}
   if FFrameView.ViewMode = vmSingle then
   begin
-    SaveFrame(AFileName, FFrameView.CurrentFrameIndex);
+    SaveFrame(AFileName, FFrameView.CurrentFrameIndex, AReExtract);
     Exit;
   end;
 
   BaseName := ChangeFileExt(ExtractFileName(AFileName), '');
+  {Dialog first; the rendering + re-extract that may follow run only
+   after the user accepts. See SaveFrame for the rationale.}
   if not ShowSaveDialog('Save view', BaseName + '_view.png', True, AInitialLiveRes, Path, Fmt) then
     Exit;
 
-  {Rendering the combined image at native size for many cells can blow
-   past 32-bit address space (or simply exhaust the heap). Catch the
-   memory exceptions here and surface a domain-specific error so the
-   user gets a hint about the cause and possible workarounds, rather
-   than the host's generic OS-level message.}
-  try
-    Bmp := RenderWithBanner(RenderCombinedFromCells);
-    try
-      uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
-    finally
-      Bmp.Free;
+  WriteAction := procedure
+    var
+      Bmp: TBitmap;
+    begin
+      {Rendering the combined image at native size for many cells can blow
+       past 32-bit address space (or simply exhaust the heap). Catch the
+       memory exceptions here and surface a domain-specific error so the
+       user gets a hint about the cause and possible workarounds, rather
+       than the host's generic OS-level message.}
+      try
+        Bmp := RenderWithBanner(RenderCombinedFromCells);
+        try
+          uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
+        finally
+          Bmp.Free;
+        end;
+      except
+        on E: EOutOfMemory do
+          MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
+        on E: EOutOfResources do
+          MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
+      end;
     end;
-  except
-    on E: EOutOfMemory do
-      MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
-    on E: EOutOfResources do
-      MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
-  end;
+
+  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+    AReExtract(BuildSaveIndicesAllLoaded, WriteAction)
+  else
+    WriteAction;
 end;
 
 procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer);
