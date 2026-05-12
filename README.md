@@ -81,30 +81,33 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 
 #### Appearance
 
-| Setting           | Default       | Description                                                                       |
-|-------------------|---------------|-----------------------------------------------------------------------------------|
-| Background        | Dark grey     | Background color behind the frame grid                                            |
-| Timecode bg       | Dark grey     | Background color of the timecode overlay on each frame                            |
-| Timecode opacity  | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)    |
-| Timestamp font    | Segoe UI, 8pt | Font face and size for timecode labels on frames                                  |
-| Cell gap (px)     | 0             | Spacing in pixels between frame cells in the viewer (0-20)                        |
-| Border (px)       | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200)  |
-| Timestamp corner  | Bottom left   | Corner of each cell where the timecode label is drawn                             |
-| Show toolbar      | On            | Display the toolbar at the top of the lister window (F4 to toggle)                |
-| Show status bar   | On            | Display the status bar at the bottom of the lister window (F3 to toggle)          |
+| Setting             | Default       | Description                                                                      |
+|---------------------|---------------|----------------------------------------------------------------------------------|
+| Background          | Dark grey     | Background color behind the frame grid                                           |
+| Timecode bg         | Dark grey     | Background color of the timecode overlay on each frame                           |
+| Timecode opacity    | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)   |
+| Timestamp font      | Segoe UI, 8pt | Font face and size for timecode labels on frames                                 |
+| Cell gap (px)       | 0             | Spacing in pixels between frame cells in the viewer (0-20)                       |
+| Border (px)         | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200) |
+| Timestamp corner    | Bottom left   | Corner of each cell where the timecode label is drawn                            |
+| Show toolbar        | On            | Display the toolbar at the top of the lister window (F4 to toggle)               |
+| Show status bar     | On            | Display the status bar at the bottom of the lister window (F3 to toggle)         |
+| Progress bar layout | Auto          | Where the extraction progress bar sits in the status bar.                        |
 
 #### Save
 
-| Setting                  | Default | Description                                                                                                                                 |
-|--------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                                                                                 |
-| JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)                                                           |
-| PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)                                                                  |
-| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save view output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG. |
-| Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                                                                      |
-| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to Save view exports                                                           |
-| Save at view resolution  | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses                                                        |
-|                          |         | native frame resolution. Also available as a checkbox in the file save dialog.                                                              |
+| Setting                  | Default | Description                                                                                                                                                                                             |
+|--------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Format                   | PNG     | Image format for saved frames (PNG or JPEG)                                                                                                                                                             |
+| JPEG quality             | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)                                                                                                                       |
+| PNG compression          | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)                                                                                                                              |
+| Background opacity       | 255     | Opacity of cell gaps, border, and Copy/Save view output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG.                                                             |
+| Default folder           | (empty) | Default destination folder for saved frames. Empty = prompt every time                                                                                                                                  |
+| Include file info banner | Off     | Adds a header with video file name, resolution, and duration to Save view exports                                                                                                                       |
+| Save at view resolution  | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses native frame resolution. Also available as a checkbox in the file save dialog (Vista+).                            |
+| Max combined side (px)   | 0       | Cap on the longer side of the rendered Save view / Copy view image. The combined image (with optional banner) is shrunk proportionally if its longer side exceeds this many pixels. 0 disables the cap. |
+
+The toolbar **Save view** button is a split button: clicking it honors the *Save at view resolution* setting, while its dropdown arrow exposes one-shot **Save view at view resolution...** and **Save view at native size...** items that override the setting for that single action without persisting. On legacy Windows (XP / Server 2003) the dropdown is reached via right-click on the same button (the system dropdown arrow is unavailable there); right-click also works on Vista+ as an alternate access path.
 
 #### Cache
 
@@ -146,6 +149,17 @@ Every command-style action in the plugin is configurable. Each action can carry 
 - Tab, Alt+F4, and bare modifier keys are not user-configurable — they belong to VCL focus cycling and the Windows window-management shell.
 
 When the plugin holds keyboard focus, all other key combinations are owned by this table, regardless of Lister's built-in defaults. An unbound action simply does nothing; Lister's original shortcuts (Escape to close, `1`..`9` to switch text/binary/hex views, etc.) are still available via Lister's menu.
+
+#### Diagnostics
+
+There is no UI control for debug logging — the toggle is hand-edited in the WLX `Glimpse.ini`:
+
+```ini
+[debug]
+LogEnabled=1
+```
+
+When enabled, the plugin writes to `glimpse_debug.log` next to the WLX DLL. The file is wiped at each Total Commander startup (when logging is on), so a single repro session lives in one self-contained file. The setting takes effect on the next TC startup. Set back to `0` (or remove the line) to stop logging. Debug builds default to logging on; release builds default to off — the explicit INI value always wins.
 
 ## WCX Plugin (Packer)
 
