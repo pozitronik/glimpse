@@ -645,6 +645,13 @@ begin
       FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end;
 
+    {Legacy Windows pulls the iaRight icon flush against the button's
+     right edge; modern Windows leaves a small visual margin courtesy of
+     the themed button paint. Add the missing inset manually on XP so the
+     glyph doesn't touch the border.}
+    if (VM in [vmScroll, vmFilmstrip]) and IsLegacyWindows then
+      FModeButtons[VM].ImageMargins.Right := 2;
+
     {Split button: click activates mode, arrow shows submodes. PopupMenu
      duplicates the same menu on right-click for every OS so the submodes
      stay reachable on legacy Windows (where the split arrow does not
