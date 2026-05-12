@@ -724,7 +724,7 @@ object SettingsForm: TSettingsForm
       object CbxProgressBarLayout: TComboBox
         Left = 150
         Top = 220
-        Width = 130
+        Width = 105
         Height = 23
         Style = csDropDownList
         Hint =

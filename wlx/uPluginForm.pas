@@ -1156,7 +1156,19 @@ begin
 
   UpdateViewModeButtons;
   FToolbar.Visible := FSettings.ShowToolbar and not(FQuickViewMode and FSettings.QVHideToolbar);
-  FStatusBar.Visible := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
+  {OR with FProgressVisible so an in-flight progress display does not get
+   cancelled when the user opens / accepts the settings dialog mid-
+   extraction. The bar is shown by ShowProgress (which sets the status
+   bar visible regardless of the user's persisted preference) and only
+   hidden by HideProgress when the run finishes; without this guard,
+   accepting the dialog would force the bar back to its persisted
+   "off" state and the still-running progress would vanish.}
+  FStatusBar.Visible := FProgressVisible or (FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar));
+  {Pick up any change to the progress bar layout setting on the fly,
+   so the user sees the new layout before the current run completes
+   instead of having to wait for the next extraction.}
+  if FProgressVisible then
+    RepositionProgressBar;
   {Copy the current style so fields the live view owns (FontStyles: live view
    renders non-bold) survive while settings-driven fields update.}
   Style := FFrameView.TimestampStyle;
