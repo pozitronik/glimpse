@@ -1547,24 +1547,47 @@ begin
 end;
 
 procedure TPluginForm.RepositionProgressBar;
+const
+  {Tiny inset so the bar doesn't touch the status bar's borders.}
+  Margin = 1;
 var
-  Margin: Integer;
+  Layout: TProgressBarLayout;
+  Left, Width: Integer;
 begin
   if not FProgressVisible then
     Exit;
-  {Spans the entire status bar instead of squeezing into the right-of-
-   panels slot. Two reasons:
-   1. In QuickView (Ctrl+Q) and other narrow lister widths the panels
-      easily eat the whole bar (their combined fixed widths exceed the
-      client area), leaving the old right-anchored slot off-screen with
-      no visible progress feedback at all.
-   2. Status panels carry static info (file name, dimensions, codec,
-      etc.) that the user doesn't need to read mid-extraction; covering
-      them while progress runs is an acceptable trade-off.
-   The bar disappears via HideProgress when extraction settles, so
-   panels are visible again the moment loading completes.}
-  Margin := (FStatusBar.ClientHeight - PROGRESSBAR_H) div 2;
-  FProgressBar.SetBounds(Margin, Margin, FStatusBar.ClientWidth - 2 * Margin, FStatusBar.ClientHeight - 2 * Margin);
+
+  {Resolve the user's policy. Auto picks AfterPanels when the lister is
+   wide enough to fit both the panels (sum reserved as SBP_TOTAL_RIGHT)
+   and at least one progress bar minimum width plus margins; otherwise
+   it switches to OverPanels so the bar stays on screen.}
+  Layout := FSettings.ProgressBarLayout;
+  if Layout = pblAuto then
+  begin
+    if FStatusBar.ClientWidth >= SBP_TOTAL_RIGHT + PROGRESSBAR_MIN_W + 2 * Margin then
+      Layout := pblAfterPanels
+    else
+      Layout := pblOverPanels;
+  end;
+
+  case Layout of
+    pblAfterPanels:
+      begin
+        Left := SBP_TOTAL_RIGHT + Margin;
+        Width := FStatusBar.ClientWidth - SBP_TOTAL_RIGHT - 2 * Margin;
+        if Width < PROGRESSBAR_MIN_W then
+          Width := PROGRESSBAR_MIN_W;
+      end;
+    else  {pblOverPanels: cover the panels for the duration of the extraction.
+           HideProgress restores them when the bar hides.}
+      Left := Margin;
+      Width := FStatusBar.ClientWidth - 2 * Margin;
+  end;
+
+  {Bar height fills the status bar (less the tiny margins top and bottom).
+   The previous fixed PROGRESSBAR_H of 14 inside a 21-px status bar left
+   ~3 px of panel text peeking under the bar in OverPanels mode.}
+  FProgressBar.SetBounds(Left, Margin, Width, FStatusBar.ClientHeight - 2 * Margin);
 end;
 
 procedure TPluginForm.UpdateProgress;

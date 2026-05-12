@@ -61,6 +61,8 @@ type
     FThumbnailGridFrames: Integer; {count for grid mode}
     {[hotkeys] — owned; reset/load/save delegates through this object.}
     FHotkeys: THotkeyBindings;
+    {[view] — progress-bar layout policy}
+    FProgressBarLayout: TProgressBarLayout;
     {[debug]}
     FDebugLogEnabled: Boolean;
 
@@ -180,6 +182,10 @@ type
     property ThumbnailPosition: Integer read FThumbnailPosition write FThumbnailPosition;
     property ThumbnailGridFrames: Integer read FThumbnailGridFrames write FThumbnailGridFrames;
 
+    {[view] — progress bar layout policy. Lives on the General tab next
+     to "Show status bar".}
+    property ProgressBarLayout: TProgressBarLayout read FProgressBarLayout write FProgressBarLayout;
+
     {[hotkeys] — the binding table owns itself; callers mutate it via its
      own Get/Put/ResetToDefaults API rather than through scalar properties.}
     property Hotkeys: THotkeyBindings read FHotkeys;
@@ -211,6 +217,7 @@ const
   DEF_QV_DISABLE_NAV = True;
   DEF_QV_HIDE_TOOLBAR = True;
   DEF_QV_HIDE_STATUSBAR = True;
+  DEF_PROGRESS_BAR_LAYOUT = pblAuto;
   {Default differs by build so a fresh dev install logs out of the box
    while a release install stays silent until the user opts in. Either
    way the user's [debug] LogEnabled value (when present in Glimpse.ini)
@@ -312,6 +319,7 @@ begin
   FThumbnailMode := DEF_THUMBNAIL_MODE;
   FThumbnailPosition := DEF_THUMBNAIL_POSITION;
   FThumbnailGridFrames := DEF_THUMBNAIL_GRID_FRAMES;
+  FProgressBarLayout := DEF_PROGRESS_BAR_LAYOUT;
   FDebugLogEnabled := DEF_DEBUG_LOG_ENABLED;
   {FHotkeys may be nil when ResetDefaults is called from the constructor
    before the hotkey table is allocated (the ctor creates it just above,
@@ -355,6 +363,7 @@ begin
     FBackground := HexToColor(Ini.ReadString('view', 'Background', ''), DEF_BACKGROUND);
     FShowToolbar := Ini.ReadBool('view', 'ShowToolbar', DEF_SHOW_TOOLBAR);
     FShowStatusBar := Ini.ReadBool('view', 'ShowStatusBar', DEF_SHOW_STATUS_BAR);
+    FProgressBarLayout := StrToProgressBarLayout(Ini.ReadString('view', 'ProgressBarLayout', ''), DEF_PROGRESS_BAR_LAYOUT);
     FTimestamp.LoadFrom(Ini, 'view', 'ShowTimecode');
     FCellGap := Max(Ini.ReadInteger('view', 'CellGap', DEF_CELL_GAP), MIN_CELL_GAP);
     FCombinedBorder := Max(Ini.ReadInteger('view', 'CombinedBorder', DEF_COMBINED_BORDER), MIN_COMBINED_BORDER);
@@ -419,6 +428,7 @@ begin
     Ini.WriteString('view', 'Background', ColorToHex(FBackground));
     Ini.WriteBool('view', 'ShowToolbar', FShowToolbar);
     Ini.WriteBool('view', 'ShowStatusBar', FShowStatusBar);
+    Ini.WriteString('view', 'ProgressBarLayout', ProgressBarLayoutToStr(FProgressBarLayout));
     FTimestamp.SaveTo(Ini, 'view', 'ShowTimecode');
     Ini.WriteInteger('view', 'CellGap', FCellGap);
     Ini.WriteInteger('view', 'CombinedBorder', FCombinedBorder);

@@ -72,6 +72,8 @@ type
     CbxTimestampCorner: TComboBox;
     ChkShowToolbar: TCheckBox;
     ChkShowStatusBar: TCheckBox;
+    LblProgressBarLayout: TLabel;
+    CbxProgressBarLayout: TComboBox;
     TshSave: TTabSheet;
     LblSaveFormat: TLabel;
     CbxSaveFormat: TComboBox;
@@ -280,6 +282,7 @@ begin
   CbxTimestampCorner.ItemIndex := ComboIdx;
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
+  CbxProgressBarLayout.ItemIndex := Ord(ASettings.ProgressBarLayout);
 
   CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
@@ -368,6 +371,7 @@ begin
   ASettings.TimestampCorner := Corner;
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
+  ASettings.ProgressBarLayout := TProgressBarLayout(CbxProgressBarLayout.ItemIndex);
 
   ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;

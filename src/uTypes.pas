@@ -17,6 +17,13 @@ type
   {Info banner placement relative to the combined image.}
   TBannerPosition = (bpTop, bpBottom);
 
+  {Status-bar progress bar layout policy. AfterPanels reserves a slot to
+   the right of the info panels (legacy behaviour, fine on wide windows
+   but the bar disappears off-screen in narrow ones); OverPanels paints
+   the bar full-width on top of the panels; Auto picks AfterPanels when
+   the lister is wide enough to fit both, otherwise OverPanels.}
+  TProgressBarLayout = (pblAfterPanels, pblOverPanels, pblAuto);
+
   {Bundles extraction parameters that travel together through the
    extraction pipeline (controller -> worker -> extractor).}
   TExtractionOptions = record
@@ -39,6 +46,8 @@ function StrToTimestampCorner(const AValue: string; ADefault: TTimestampCorner):
 function TimestampCornerToStr(ACorner: TTimestampCorner): string;
 function StrToBannerPosition(const AValue: string; ADefault: TBannerPosition): TBannerPosition;
 function BannerPositionToStr(APosition: TBannerPosition): string;
+function StrToProgressBarLayout(const AValue: string; ADefault: TProgressBarLayout): TProgressBarLayout;
+function ProgressBarLayoutToStr(ALayout: TProgressBarLayout): string;
 
 implementation
 
@@ -96,6 +105,30 @@ begin
       Result := 'top';
     bpBottom:
       Result := 'bottom';
+  end;
+end;
+
+function StrToProgressBarLayout(const AValue: string; ADefault: TProgressBarLayout): TProgressBarLayout;
+begin
+  if SameText(AValue, 'after') then
+    Result := pblAfterPanels
+  else if SameText(AValue, 'over') then
+    Result := pblOverPanels
+  else if SameText(AValue, 'auto') then
+    Result := pblAuto
+  else
+    Result := ADefault;
+end;
+
+function ProgressBarLayoutToStr(ALayout: TProgressBarLayout): string;
+begin
+  case ALayout of
+    pblAfterPanels:
+      Result := 'after';
+    pblOverPanels:
+      Result := 'over';
+    pblAuto:
+      Result := 'auto';
   end;
 end;
 

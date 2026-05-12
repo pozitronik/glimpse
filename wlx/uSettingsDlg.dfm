@@ -714,6 +714,29 @@ object SettingsForm: TSettingsForm
         Caption = 'Show status bar (F3 to toggle)'
         TabOrder = 18
       end
+      object LblProgressBarLayout: TLabel
+        Left = 12
+        Top = 224
+        Width = 116
+        Height = 15
+        Caption = 'Progress bar position:'
+      end
+      object CbxProgressBarLayout: TComboBox
+        Left = 150
+        Top = 220
+        Width = 130
+        Height = 23
+        Style = csDropDownList
+        Hint =
+          'After panels: bar sits to the right of the info panels (clipped' +
+          ' on narrow lister widths). Over panels: bar covers the panels f' +
+          'ull-width while shown. Auto: picks based on lister width.'
+        TabOrder = 20
+        Items.Strings = (
+          'After panels'
+          'Over panels'
+          'Auto')
+      end
     end
     object TshSave: TTabSheet
       Caption = 'Save'
