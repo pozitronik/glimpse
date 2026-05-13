@@ -169,6 +169,23 @@ function DefaultTimestampStyle: TTimestampStyle;
  @return Combined bitmap, or nil if AFrames is empty. Caller owns result.}
 function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 
+{Resolves the column count the uniform grid will use. Mirrors the
+ selection RenderCombinedImage applies internally so callers (e.g. the
+ dimension predictor in TFrameExporter) get the same value the renderer
+ will pick - 0 means auto, in which case ceil(sqrt(N)) is used and capped
+ at FrameCount. Returns 1 when AFrameCount is zero so callers can divide
+ safely.}
+function ResolveCombinedGridCols(AFrameCount, ARequestedCols: Integer): Integer;
+
+{Computes the bitmap dimensions RenderCombinedImage would produce for
+ the given inputs, without performing the render. Single source of
+ truth shared by RenderCombinedImage (for its own SetSize) and by
+ layout predictors that need to know the output size before deciding to
+ actually render. AFrameCount is the number of cells in the grid (used
+ to compute Rows = ceil(N/Cols)); ACols is the resolved column count
+ (use ResolveCombinedGridCols when only the requested count is in hand).}
+function ComputeCombinedImageSize(AFrameCount, ACols, ACellW, ACellH, ABorder, ACellGap: Integer): TPoint;
+
 {Renders frames into a smart-grid combined image. Cells per row come from
  ARowCounts (sum must equal Length(AFrames)); within each row cells are
  uniform-width, between rows widths can differ. Frames are crop-to-filled
@@ -907,11 +924,39 @@ begin
   Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
 end;
 
+function ResolveCombinedGridCols(AFrameCount, ARequestedCols: Integer): Integer;
+begin
+  if AFrameCount <= 0 then
+    Exit(1);
+  Result := ARequestedCols;
+  if Result <= 0 then
+    Result := Ceil(Sqrt(AFrameCount));
+  if Result > AFrameCount then
+    Result := AFrameCount;
+end;
+
+function ComputeCombinedImageSize(AFrameCount, ACols, ACellW, ACellH, ABorder, ACellGap: Integer): TPoint;
+var
+  Rows, Border: Integer;
+begin
+  Result.X := 0;
+  Result.Y := 0;
+  if (AFrameCount <= 0) or (ACols <= 0) then
+    Exit;
+  Border := ABorder;
+  if Border < 0 then
+    Border := 0;
+  Rows := Ceil(AFrameCount / ACols);
+  Result.X := ACols * ACellW + Max(ACols - 1, 0) * ACellGap + 2 * Border;
+  Result.Y := Rows * ACellH + Max(Rows - 1, 0) * ACellGap + 2 * Border;
+end;
+
 function RenderCombinedImage(const AFrames: TArray<TBitmap>; const AOffsets: TFrameOffsetArray; const AGrid: TCombinedGridStyle; const ATimestamp: TTimestampStyle): TBitmap;
 var
-  Cols, Rows, CellW, CellH, I, Row, Col, X, Y: Integer;
+  Cols, CellW, CellH, I, Row, Col, X, Y: Integer;
   FrameCount: Integer;
   Border: Integer;
+  Sz: TPoint;
   Lifted: TBitmap;
 begin
   FrameCount := Length(AFrames);
@@ -922,12 +967,7 @@ begin
   if Border < 0 then
     Border := 0;
 
-  Cols := AGrid.Columns;
-  if Cols <= 0 then
-    Cols := Ceil(Sqrt(FrameCount));
-  if Cols > FrameCount then
-    Cols := FrameCount;
-  Rows := Ceil(FrameCount / Cols);
+  Cols := ResolveCombinedGridCols(FrameCount, AGrid.Columns);
 
   {Use first non-nil frame dimensions as cell size}
   CellW := 320;
@@ -940,9 +980,10 @@ begin
       Break;
     end;
 
+  Sz := ComputeCombinedImageSize(FrameCount, Cols, CellW, CellH, Border, AGrid.CellGap);
   Result := TBitmap.Create;
   Result.PixelFormat := pf24bit;
-  Result.SetSize(Cols * CellW + Max(Cols - 1, 0) * AGrid.CellGap + 2 * Border, Rows * CellH + Max(Rows - 1, 0) * AGrid.CellGap + 2 * Border);
+  Result.SetSize(Sz.X, Sz.Y);
   Result.Canvas.Brush.Color := AGrid.Background;
   Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
 

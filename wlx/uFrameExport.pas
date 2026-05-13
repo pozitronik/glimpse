@@ -53,6 +53,19 @@ type
     {Render helpers exposed at protected scope so a test subclass can
      exercise them directly. They are pipeline internals; production
      code reaches them only through SaveFrame / SaveView / CopyFrame.}
+    {Pulls the panel-inner dimensions and the smart-grid arrangement
+     parameters that RenderSmartCombinedFromCells and PredictCombinedSize
+     both need. Centralises the FrameView fallback to a 16:9 box and the
+     per-mode column policy in a single place so render and predict
+     cannot disagree.}
+    procedure GetSmartGridParameters(out APanelInnerW, APanelInnerH: Integer; out AAspectRatio: Double);
+    procedure ComputeSmartCombinedLayout(AForceLiveRes: Boolean; const AFrames: TArray<TBitmap>; out AOutputW, AOutputH: Integer; out ARowCounts: TArray<Integer>);
+    {Resolves cell pixel size and column count for a uniform-grid render
+     in either live (panel-pixel) or native (frame-pixel) mode. Used by
+     RenderGridCombinedAtLiveResolution, RenderCombinedFromCells (native
+     branch) and PredictCombinedSize so a future change to the per-mode
+     column rule or to the cell-bitmap fallback applies everywhere.}
+    procedure ComputeUniformLayoutInputs(AForceLiveRes: Boolean; out ACols, ACellW, ACellH: Integer);
     function ScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
     function ScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
     function RenderCellAtLiveSize(AIndex: Integer): TBitmap;
@@ -496,6 +509,137 @@ begin
     Result := ScaleBitmapLetterbox(Src, W, H, FSettings.Background);
 end;
 
+procedure TFrameExporter.GetSmartGridParameters(out APanelInnerW, APanelInnerH: Integer; out AAspectRatio: Double);
+begin
+  {Panel inner area drives the smart-grid arrangement. Falls back to a
+   16:9 box when the FrameView has not been sized yet (e.g., save
+   triggered before the lister fully laid out).}
+  APanelInnerW := Max(1, FFrameView.BaseW - 2 * FFrameView.CellMargin);
+  APanelInnerH := Max(1, FFrameView.BaseH - 2 * FFrameView.CellMargin);
+  if (APanelInnerW <= 1) or (APanelInnerH <= 1) then
+  begin
+    APanelInnerW := 1600;
+    APanelInnerH := 900;
+  end;
+  AAspectRatio := FFrameView.AspectRatio;
+  if AAspectRatio <= 0 then
+    AAspectRatio := 9.0 / 16.0;
+end;
+
+procedure TFrameExporter.ComputeSmartCombinedLayout(AForceLiveRes: Boolean; const AFrames: TArray<TBitmap>; out AOutputW, AOutputH: Integer; out ARowCounts: TArray<Integer>);
+var
+  N, I, Border, Gap, MaxCells, NativeW, InnerW, InnerH: Integer;
+  PanelInnerW, PanelInnerH: Integer;
+  AspectRatio: Double;
+  Bmp: TBitmap;
+begin
+  AOutputW := 0;
+  AOutputH := 0;
+  SetLength(ARowCounts, 0);
+
+  N := Length(AFrames);
+  if N = 0 then
+    N := FFrameView.CellCount;
+  if N = 0 then
+    Exit;
+
+  Border := Max(0, FSettings.CombinedBorder);
+  Gap := Max(0, FSettings.CellGap);
+
+  GetSmartGridParameters(PanelInnerW, PanelInnerH, AspectRatio);
+  ARowCounts := ComputeSmartGridRows(N, PanelInnerW, PanelInnerH, Gap, AspectRatio);
+  if Length(ARowCounts) = 0 then
+    Exit;
+
+  if AForceLiveRes then
+  begin
+    {Pixel-faithful to the live view: total output = panel size, inner
+     area = panel inner. Border setting still wraps the inner area so
+     saved images and live view stay visually consistent.}
+    InnerW := PanelInnerW;
+    InnerH := PanelInnerH;
+  end else begin
+    {Native: anchor inner_W to the widest row, then preserve the panel's
+     inner aspect ratio so rows look the same as on screen. NativeW comes
+     from the first non-nil frame; uniform across a video. Frames passed
+     by the renderer are preferred so override-frames (set by re-extract)
+     are honoured; the predictor passes nil so we fall back to FrameView
+     cells.}
+    MaxCells := 1;
+    for I := 0 to High(ARowCounts) do
+      if ARowCounts[I] > MaxCells then
+        MaxCells := ARowCounts[I];
+
+    NativeW := 320;
+    if Length(AFrames) > 0 then
+    begin
+      for I := 0 to High(AFrames) do
+        if (AFrames[I] <> nil) and (AFrames[I].Width > 0) then
+        begin
+          NativeW := AFrames[I].Width;
+          Break;
+        end;
+    end else begin
+      for I := 0 to N - 1 do
+      begin
+        Bmp := FFrameView.CellBitmap(I);
+        if (Bmp <> nil) and (Bmp.Width > 0) then
+        begin
+          NativeW := Bmp.Width;
+          Break;
+        end;
+      end;
+    end;
+
+    InnerW := MaxCells * NativeW + Max(MaxCells - 1, 0) * Gap;
+    InnerH := Max(1, Round(InnerW * (PanelInnerH / PanelInnerW)));
+  end;
+
+  AOutputW := InnerW + 2 * Border;
+  AOutputH := InnerH + 2 * Border;
+end;
+
+procedure TFrameExporter.ComputeUniformLayoutInputs(AForceLiveRes: Boolean; out ACols, ACellW, ACellH: Integer);
+var
+  N, I: Integer;
+  CellRect: TRect;
+  Bmp: TBitmap;
+begin
+  N := FFrameView.CellCount;
+  if AForceLiveRes then
+  begin
+    CellRect := FFrameView.GetCellRect(0);
+    ACellW := Max(1, CellRect.Width);
+    ACellH := Max(1, CellRect.Height);
+    ACols := CountLiveGridColumns;
+  end else begin
+    {Native cell size from first non-nil cell bitmap; matches the
+     fallback RenderCombinedImage uses when scanning AFrames internally.}
+    ACellW := 320;
+    ACellH := 240;
+    for I := 0 to N - 1 do
+    begin
+      Bmp := FFrameView.CellBitmap(I);
+      if Bmp <> nil then
+      begin
+        ACellW := Bmp.Width;
+        ACellH := Bmp.Height;
+        Break;
+      end;
+    end;
+    case FFrameView.ViewMode of
+      vmFilmstrip:
+        ACols := N;
+      vmScroll:
+        ACols := 1;
+    else
+      ACols := CountLiveGridColumns;
+    end;
+  end;
+  if ACols < 1 then
+    ACols := 1;
+end;
+
 {Live-resolution variant of the uniform-grid render: cell pixel size
  matches what the live view is currently showing on screen, and the
  column count tracks the live layout. Used by vmGrid, vmFilmstrip, and
@@ -509,17 +653,13 @@ var
   Offsets: TFrameOffsetArray;
   Grid: TCombinedGridStyle;
   Ts: TTimestampStyle;
-  CellRect: TRect;
   CellW, CellH, Cols, I, N: Integer;
 begin
   N := CollectFramesAndOffsets(Frames, Offsets);
   if N = 0 then
     Exit(nil);
 
-  CellRect := FFrameView.GetCellRect(0);
-  CellW := Max(1, CellRect.Width);
-  CellH := Max(1, CellRect.Height);
-  Cols := CountLiveGridColumns;
+  ComputeUniformLayoutInputs(True, Cols, CellW, CellH);
 
   BuildGridStyle(Grid);
   Grid.Columns := Cols;
@@ -555,72 +695,18 @@ var
   Grid: TCombinedGridStyle;
   Ts: TTimestampStyle;
   RowCounts: TArray<Integer>;
-  N, I, Border, Gap: Integer;
-  PanelInnerW, PanelInnerH: Integer;
-  OutputW, OutputH, InnerW, InnerH: Integer;
-  MaxCells, NativeW: Integer;
-  AspectRatio: Double;
+  N, OutputW, OutputH: Integer;
 begin
   N := CollectFramesAndOffsets(Frames, Offsets);
   if N = 0 then
     Exit(nil);
 
-  BuildGridStyle(Grid);
-  BuildTimestampStyle(Ts);
-  Border := Max(0, Grid.Border);
-  Gap := Max(0, Grid.CellGap);
-
-  {Panel inner area drives the smart-grid arrangement. Falls back to a
-   16:9 box when the FrameView has not been sized yet (e.g., save
-   triggered before the lister fully laid out).}
-  PanelInnerW := Max(1, FFrameView.BaseW - 2 * FFrameView.CellMargin);
-  PanelInnerH := Max(1, FFrameView.BaseH - 2 * FFrameView.CellMargin);
-  if (PanelInnerW <= 1) or (PanelInnerH <= 1) then
-  begin
-    PanelInnerW := 1600;
-    PanelInnerH := 900;
-  end;
-
-  AspectRatio := FFrameView.AspectRatio;
-  if AspectRatio <= 0 then
-    AspectRatio := 9.0 / 16.0;
-
-  RowCounts := ComputeSmartGridRows(N, PanelInnerW, PanelInnerH, Gap, AspectRatio);
+  ComputeSmartCombinedLayout(FSettings.SaveAtLiveResolution, Frames, OutputW, OutputH, RowCounts);
   if Length(RowCounts) = 0 then
     Exit(nil);
 
-  if FSettings.SaveAtLiveResolution then
-  begin
-    {Pixel-faithful to the live view: total output = panel size, inner
-     area = panel inner. Border setting still wraps the inner area so
-     saved images and live view stay visually consistent.}
-    InnerW := PanelInnerW;
-    InnerH := PanelInnerH;
-    OutputW := InnerW + 2 * Border;
-    OutputH := InnerH + 2 * Border;
-  end else begin
-    {Native: anchor inner_W to the widest row, then preserve the panel's
-     inner aspect ratio so rows look the same as on screen. NativeW comes
-     from the first non-nil frame; uniform across a video.}
-    MaxCells := 1;
-    for I := 0 to High(RowCounts) do
-      if RowCounts[I] > MaxCells then
-        MaxCells := RowCounts[I];
-
-    NativeW := 320;
-    for I := 0 to N - 1 do
-      if (Frames[I] <> nil) and (Frames[I].Width > 0) then
-      begin
-        NativeW := Frames[I].Width;
-        Break;
-      end;
-
-    InnerW := MaxCells * NativeW + Max(MaxCells - 1, 0) * Gap;
-    InnerH := Max(1, Round(InnerW * (PanelInnerH / PanelInnerW)));
-    OutputW := InnerW + 2 * Border;
-    OutputH := InnerH + 2 * Border;
-  end;
-
+  BuildGridStyle(Grid);
+  BuildTimestampStyle(Ts);
   Result := RenderSmartCombinedImage(Frames, Offsets, RowCounts, OutputW, OutputH, Grid, Ts);
 end;
 
@@ -649,7 +735,7 @@ var
   Offsets: TFrameOffsetArray;
   Grid: TCombinedGridStyle;
   Ts: TTimestampStyle;
-  N: Integer;
+  N, Cols, CellW, CellH: Integer;
 begin
   if FFrameView.ViewMode = vmSmartGrid then
     Exit(RenderSmartCombinedFromCells);
@@ -667,22 +753,14 @@ begin
   BuildGridStyle(Grid);
   BuildTimestampStyle(Ts);
 
-  {Native-resolution path for the uniform-row modes. Pin Columns to the
-   live layout so the saved image preserves the on-screen arrangement:
-   filmstrip is one wide row, scroll is one tall column, and vmGrid
-   tracks the column count the live view is currently using (which
-   varies with panel width, e.g. a narrow panel renders 9 frames as
-   1x9 — without this, the saver would default to ceil(sqrt(N)) = 3x3
-   and ignore the user's chosen aspect).}
-  case FFrameView.ViewMode of
-    vmGrid:
-      Grid.Columns := CountLiveGridColumns;
-    vmFilmstrip:
-      Grid.Columns := N;
-    vmScroll:
-      Grid.Columns := 1;
-  end;
-
+  {Native-resolution path for the uniform-row modes. Cell pixel size
+   comes from the first non-nil frame; columns follow the live layout
+   so the saved image preserves the on-screen arrangement (filmstrip =
+   one wide row, scroll = one tall column, vmGrid = current live column
+   count). ComputeUniformLayoutInputs centralises both rules so render
+   and PredictCombinedSize stay in lockstep.}
+  ComputeUniformLayoutInputs(False, Cols, CellW, CellH);
+  Grid.Columns := Cols;
   Result := RenderCombinedImage(Frames, Offsets, Grid, Ts);
 end;
 
@@ -707,22 +785,18 @@ end;
 
 procedure TFrameExporter.PredictCombinedSize(AForceLiveRes: Boolean; out AW, AH: Integer);
 var
-  N, I, Cols, Rows, CellW, CellH, Border, Gap: Integer;
+  N, Cols, CellW, CellH, Border, Gap: Integer;
   CellRect: TRect;
-  PanelInnerW, PanelInnerH: Integer;
   RowCounts: TArray<Integer>;
-  MaxCells, NativeW, InnerW, InnerH: Integer;
-  AspectRatio: Double;
   Bmp: TBitmap;
+  EmptyFrames: TArray<TBitmap>;
+  Sz: TPoint;
 begin
   AW := 0;
   AH := 0;
   N := FFrameView.CellCount;
   if N = 0 then
     Exit;
-
-  Border := Max(0, FSettings.CombinedBorder);
-  Gap := Max(0, FSettings.CellGap);
 
   {vmSingle: SaveView/CopyView degenerate to single-frame paths so the
    "view"-level resolution is the focused frame's dimensions.}
@@ -746,89 +820,20 @@ begin
     Exit;
   end;
 
-  {vmSmartGrid uses panel-aspect-driven row counts; mirror
-   RenderSmartCombinedFromCells line for line.}
   if FFrameView.ViewMode = vmSmartGrid then
   begin
-    PanelInnerW := Max(1, FFrameView.BaseW - 2 * FFrameView.CellMargin);
-    PanelInnerH := Max(1, FFrameView.BaseH - 2 * FFrameView.CellMargin);
-    if (PanelInnerW <= 1) or (PanelInnerH <= 1) then
-    begin
-      PanelInnerW := 1600;
-      PanelInnerH := 900;
-    end;
-
-    if AForceLiveRes then
-    begin
-      AW := PanelInnerW + 2 * Border;
-      AH := PanelInnerH + 2 * Border;
-    end else begin
-      AspectRatio := FFrameView.AspectRatio;
-      if AspectRatio <= 0 then
-        AspectRatio := 9.0 / 16.0;
-      RowCounts := ComputeSmartGridRows(N, PanelInnerW, PanelInnerH, Gap, AspectRatio);
-      if Length(RowCounts) = 0 then
-        Exit;
-      MaxCells := 1;
-      for I := 0 to High(RowCounts) do
-        if RowCounts[I] > MaxCells then
-          MaxCells := RowCounts[I];
-      NativeW := 320;
-      for I := 0 to N - 1 do
-      begin
-        Bmp := FFrameView.CellBitmap(I);
-        if (Bmp <> nil) and (Bmp.Width > 0) then
-        begin
-          NativeW := Bmp.Width;
-          Break;
-        end;
-      end;
-      InnerW := MaxCells * NativeW + Max(MaxCells - 1, 0) * Gap;
-      InnerH := Max(1, Round(InnerW * (PanelInnerH / PanelInnerW)));
-      AW := InnerW + 2 * Border;
-      AH := InnerH + 2 * Border;
-    end;
+    SetLength(EmptyFrames, 0);
+    ComputeSmartCombinedLayout(AForceLiveRes, EmptyFrames, AW, AH, RowCounts);
     Exit;
   end;
 
-  {Uniform-row modes (vmGrid, vmFilmstrip, vmScroll). Cell size and
-   columns follow the same rules the renderer uses.}
-  if AForceLiveRes then
-  begin
-    CellRect := FFrameView.GetCellRect(0);
-    CellW := Max(1, CellRect.Width);
-    CellH := Max(1, CellRect.Height);
-    Cols := CountLiveGridColumns;
-  end else begin
-    CellW := 320;
-    CellH := 240;
-    for I := 0 to N - 1 do
-    begin
-      Bmp := FFrameView.CellBitmap(I);
-      if Bmp <> nil then
-      begin
-        CellW := Bmp.Width;
-        CellH := Bmp.Height;
-        Break;
-      end;
-    end;
-    case FFrameView.ViewMode of
-      vmGrid:
-        Cols := CountLiveGridColumns;
-      vmFilmstrip:
-        Cols := N;
-      vmScroll:
-        Cols := 1;
-    else
-      Cols := CountLiveGridColumns;
-    end;
-  end;
-
-  if Cols < 1 then
-    Cols := 1;
-  Rows := Ceil(N / Cols);
-  AW := Cols * CellW + Max(Cols - 1, 0) * Gap + 2 * Border;
-  AH := Rows * CellH + Max(Rows - 1, 0) * Gap + 2 * Border;
+  {Uniform-row modes (vmGrid, vmFilmstrip, vmScroll).}
+  Border := Max(0, FSettings.CombinedBorder);
+  Gap := Max(0, FSettings.CellGap);
+  ComputeUniformLayoutInputs(AForceLiveRes, Cols, CellW, CellH);
+  Sz := ComputeCombinedImageSize(N, Cols, CellW, CellH, Border, Gap);
+  AW := Sz.X;
+  AH := Sz.Y;
 end;
 
 procedure TFrameExporter.ApplyCombinedSizeCap(var ABmp: TBitmap);
