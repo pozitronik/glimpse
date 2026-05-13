@@ -31,6 +31,18 @@ type
     [Test] procedure TestPf32BitOnePixelWideDoesNotCrash;
   end;
 
+  [TestFixture]
+  TTestComputeCappedSize = class
+  public
+    [Test] procedure ZeroCap_ReturnsFalseAndPassThroughDims;
+    [Test] procedure NegativeCap_ReturnsFalseAndPassThroughDims;
+    [Test] procedure WithinCap_ReturnsFalseAndPassThroughDims;
+    [Test] procedure ExactFit_ReturnsFalseAndPassThroughDims;
+    [Test] procedure LandscapeDownscale_PreservesAspect;
+    [Test] procedure PortraitDownscale_PreservesAspect;
+    [Test] procedure ZeroDims_ReturnsFalseAndPassThroughDims;
+  end;
+
 implementation
 
 uses
@@ -368,7 +380,76 @@ begin
   end;
 end;
 
+{ TTestComputeCappedSize }
+
+procedure TTestComputeCappedSize.ZeroCap_ReturnsFalseAndPassThroughDims;
+var
+  CW, CH: Integer;
+begin
+  Assert.IsFalse(ComputeCappedSize(1920, 1080, 0, CW, CH), 'Cap=0 disables shrink');
+  Assert.AreEqual(1920, CW);
+  Assert.AreEqual(1080, CH);
+end;
+
+procedure TTestComputeCappedSize.NegativeCap_ReturnsFalseAndPassThroughDims;
+var
+  CW, CH: Integer;
+begin
+  Assert.IsFalse(ComputeCappedSize(1920, 1080, -100, CW, CH));
+  Assert.AreEqual(1920, CW);
+  Assert.AreEqual(1080, CH);
+end;
+
+procedure TTestComputeCappedSize.WithinCap_ReturnsFalseAndPassThroughDims;
+var
+  CW, CH: Integer;
+begin
+  Assert.IsFalse(ComputeCappedSize(800, 600, 1024, CW, CH), 'Image already fits');
+  Assert.AreEqual(800, CW);
+  Assert.AreEqual(600, CH);
+end;
+
+procedure TTestComputeCappedSize.ExactFit_ReturnsFalseAndPassThroughDims;
+var
+  CW, CH: Integer;
+begin
+  {Boundary: cap exactly equals longer side - no shrink, no upscale.}
+  Assert.IsFalse(ComputeCappedSize(1024, 768, 1024, CW, CH));
+  Assert.AreEqual(1024, CW);
+  Assert.AreEqual(768, CH);
+end;
+
+procedure TTestComputeCappedSize.LandscapeDownscale_PreservesAspect;
+var
+  CW, CH: Integer;
+begin
+  {1920x1080 capped at 960: longer side 1920 -> 960, scale 0.5.}
+  Assert.IsTrue(ComputeCappedSize(1920, 1080, 960, CW, CH));
+  Assert.AreEqual(960, CW);
+  Assert.AreEqual(540, CH);
+end;
+
+procedure TTestComputeCappedSize.PortraitDownscale_PreservesAspect;
+var
+  CW, CH: Integer;
+begin
+  {1080x1920 capped at 960: longer side 1920 -> 960, scale 0.5.}
+  Assert.IsTrue(ComputeCappedSize(1080, 1920, 960, CW, CH));
+  Assert.AreEqual(540, CW);
+  Assert.AreEqual(960, CH);
+end;
+
+procedure TTestComputeCappedSize.ZeroDims_ReturnsFalseAndPassThroughDims;
+var
+  CW, CH: Integer;
+begin
+  Assert.IsFalse(ComputeCappedSize(0, 1080, 100, CW, CH));
+  Assert.AreEqual(0, CW);
+  Assert.AreEqual(1080, CH);
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestBitmapResize);
+  TDUnitX.RegisterTestFixture(TTestComputeCappedSize);
 
 end.

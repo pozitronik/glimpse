@@ -11,6 +11,20 @@ interface
 uses
   Winapi.Windows, Vcl.Graphics;
 
+{Computes the dimensions a bitmap would have after downscaling its longer
+ side to fit within ACap. ACW/ACH are set to the post-cap size when the
+ cap actually shrinks the image; otherwise they receive AW/AH unchanged.
+
+ Returns True iff a downscale would happen (cap > 0 and longer side
+ exceeds it). Use the return value to decide whether to allocate a new
+ bitmap or whether the displayed dimensions differ from the source.
+
+ Centralises the longest-side scaling math used by both
+ DownscaleBitmapToFit (which actually performs the downscale) and the
+ layout predictor in TPluginForm (which only needs to know the post-cap
+ dimensions).}
+function ComputeCappedSize(AW, AH, ACap: Integer; out ACW, ACH: Integer): Boolean;
+
 {Downscales ABmp so its longer side fits within AMaxSide.
  Aspect ratio is preserved; orientation does not matter because the
  cap applies to whichever dimension is larger.
@@ -108,30 +122,37 @@ begin
   end;
 end;
 
-function DownscaleBitmapToFit(ABmp: TBitmap; AMaxSide: Integer): TBitmap;
+function ComputeCappedSize(AW, AH, ACap: Integer; out ACW, ACH: Integer): Boolean;
 var
-  W, H, NewW, NewH, BmpLong: Integer;
+  Long: Integer;
   Scale: Double;
 begin
-  Result := nil;
-
-  if ABmp = nil then
+  ACW := AW;
+  ACH := AH;
+  Result := False;
+  if (ACap <= 0) or (AW <= 0) or (AH <= 0) then
     Exit;
-  if AMaxSide <= 0 then
+  Long := Max(AW, AH);
+  if Long <= ACap then
+    Exit;
+  Scale := ACap / Long;
+  ACW := Max(1, Round(AW * Scale));
+  ACH := Max(1, Round(AH * Scale));
+  Result := True;
+end;
+
+function DownscaleBitmapToFit(ABmp: TBitmap; AMaxSide: Integer): TBitmap;
+var
+  W, H, NewW, NewH: Integer;
+begin
+  Result := nil;
+  if ABmp = nil then
     Exit;
 
   W := ABmp.Width;
   H := ABmp.Height;
-  if (W <= 0) or (H <= 0) then
+  if not ComputeCappedSize(W, H, AMaxSide, NewW, NewH) then
     Exit;
-
-  BmpLong := Max(W, H);
-  if BmpLong <= AMaxSide then
-    Exit;
-
-  Scale := AMaxSide / BmpLong;
-  NewW := Max(1, Round(W * Scale));
-  NewH := Max(1, Round(H * Scale));
 
   if ABmp.PixelFormat = pf32bit then
   begin

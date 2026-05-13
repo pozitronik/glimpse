@@ -248,7 +248,7 @@ implementation
 uses
   System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
-  uPlatformDetect;
+  uBitmapResize, uPlatformDetect;
 
 type
   {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
@@ -1078,9 +1078,6 @@ begin
 end;
 
 function TPluginForm.PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
-var
-  Cap, BmpLong: Integer;
-  Scale: Double;
 begin
   AW := 0;
   AH := 0;
@@ -1092,19 +1089,7 @@ begin
   FExporter.PredictCombinedSize(AForceLiveRes, AW, AH);
   if (AW <= 0) or (AH <= 0) then
     Exit;
-  ACappedW := AW;
-  ACappedH := AH;
-  Cap := FSettings.CombinedMaxSide;
-  if Cap > 0 then
-  begin
-    BmpLong := Max(AW, AH);
-    if BmpLong > Cap then
-    begin
-      Scale := Cap / BmpLong;
-      ACappedW := Max(1, Round(AW * Scale));
-      ACappedH := Max(1, Round(AH * Scale));
-    end;
-  end;
+  ComputeCappedSize(AW, AH, FSettings.CombinedMaxSide, ACappedW, ACappedH);
   Result := True;
 end;
 
