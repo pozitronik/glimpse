@@ -126,16 +126,6 @@ type
     function CreateRefreshPopup: TPopupMenu;
     function CreateSaveViewPopup: TPopupMenu;
     function CreateCopyViewPopup: TPopupMenu;
-    {Predicts the rendered combined-image dimensions and the post-cap
-     dimensions for a one-shot resolution choice. ACappedW/H equal AW/H
-     when the CombinedMaxSide cap does not apply (cap=0 or image already
-     fits). Returns False when no frames are loaded yet.}
-    function PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
-    {Returns the bracketed dimension suffix used on the Save/Copy view
-     dropdown menu items, e.g. " [1920x1080]" or
-     " [19200x10800 -> 8192x4608]" when CombinedMaxSide caps the output.
-     Empty string when no frames are loaded yet.}
-    function FormatPredictedSize(AForceLiveRes: Boolean): string;
     {Walks the items of the given popup and rewrites Save/Copy view
      dropdown captions with their current predicted-size suffix. Called
      from each popup's OnPopup so the suffix tracks live cell size,
@@ -248,7 +238,7 @@ implementation
 uses
   System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
-  uBitmapResize, uPlatformDetect;
+  uPlatformDetect;
 
 type
   {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
@@ -1077,35 +1067,6 @@ begin
   Result.Items.Add(MI);
 end;
 
-function TPluginForm.PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
-begin
-  AW := 0;
-  AH := 0;
-  ACappedW := 0;
-  ACappedH := 0;
-  Result := False;
-  if FExporter = nil then
-    Exit;
-  FExporter.PredictCombinedSize(AForceLiveRes, AW, AH);
-  if (AW <= 0) or (AH <= 0) then
-    Exit;
-  ComputeCappedSize(AW, AH, FSettings.CombinedMaxSide, ACappedW, ACappedH);
-  Result := True;
-end;
-
-function TPluginForm.FormatPredictedSize(AForceLiveRes: Boolean): string;
-var
-  W, H, CW, CH: Integer;
-begin
-  Result := '';
-  if not PredictDisplayedSize(AForceLiveRes, W, H, CW, CH) then
-    Exit;
-  if (CW <> W) or (CH <> H) then
-    Result := Format(' [%dx%d → %dx%d]', [W, H, CW, CH])
-  else
-    Result := Format(' [%dx%d]', [W, H]);
-end;
-
 procedure TPluginForm.UpdateResolutionMenuLabels(AMenu: TPopupMenu);
 var
   I: Integer;
@@ -1142,7 +1103,10 @@ begin
     else
       Continue;
     end;
-    MI.Caption := Base + FormatPredictedSize(ForceLive);
+    if FExporter <> nil then
+      MI.Caption := Base + FExporter.FormatPredictedSize(ForceLive)
+    else
+      MI.Caption := Base;
     {Mark the item that matches the persisted SaveAtLiveResolution as
      the current default with a radio bullet. Tells the user, in
      context, what the bare toolbar click would do without making them
@@ -1324,7 +1288,7 @@ begin
    CombinedMaxSide would shrink the image. Hidden when the predictor
    has nothing meaningful to report (e.g. before the first extraction
    completes).}
-  if PredictDisplayedSize(FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH) then
+  if (FExporter <> nil) and FExporter.PredictDisplayedSize(FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH) then
   begin
     if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
       AddPanel(Format('%dx%d → %dx%d', [PredW, PredH, PredCappedW, PredCappedH]), SBP_RESULT_W,
