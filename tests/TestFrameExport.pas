@@ -140,6 +140,27 @@ type
   end;
 
   [TestFixture]
+  TTestPredictMatchesRender = class
+  public
+    {Pinning tests: PredictCombinedSize duplicates layout math from three
+     renderers (RenderCombinedFromCells, RenderGridCombinedAtLiveResolution,
+     RenderSmartCombinedFromCells). Without these tests, any future change
+     to renderer layout silently desynchronises the prediction used by
+     toolbar dropdown labels and the status-bar resolution panel. Each
+     test drives both paths from the same TFrameView+settings and asserts
+     identical output dimensions; if a refactor breaks the contract these
+     fail fast, not at the next user-visible release.}
+    [Test] procedure VmGrid_Native;
+    [Test] procedure VmGrid_Live;
+    [Test] procedure VmFilmstrip_Native;
+    [Test] procedure VmFilmstrip_Live;
+    [Test] procedure VmScroll_Native;
+    [Test] procedure VmScroll_Live;
+    [Test] procedure VmSmartGrid_Native;
+    [Test] procedure VmSmartGrid_Live;
+  end;
+
+  [TestFixture]
   TTestFrameExportClipboardNoOp = class
   public
     {The Save* paths all end in a modal TSaveDialog so they can't be driven
@@ -2244,6 +2265,98 @@ begin
   end;
 end;
 
+{ TTestPredictMatchesRender }
+
+procedure AssertPredictEqualsRender(AMode: TViewMode; AForceLive: Boolean; ACellCount: Integer);
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  PW, PH: Integer;
+  Bmp: TBitmap;
+  LoadedAll: array of Integer;
+  I: Integer;
+  ContextLabel: string;
+begin
+  SetLength(LoadedAll, ACellCount);
+  for I := 0 to ACellCount - 1 do
+    LoadedAll[I] := I;
+
+  ContextLabel := Format('Mode=%d ForceLive=%s N=%d', [Ord(AMode), BoolToStr(AForceLive, True), ACellCount]);
+
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, ACellCount, LoadedAll);
+    View.ViewMode := AMode;
+    Settings := CreateSettingsWithBanner(False);
+    try
+      {Predictor reads AForceLiveRes as a parameter; the renderer reads
+       FSettings.SaveAtLiveResolution. Set both to the same value so the
+       comparison is apples-to-apples.}
+      Settings.SaveAtLiveResolution := AForceLive;
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Exporter.PredictCombinedSize(AForceLive, PW, PH);
+        Bmp := Exporter.TestRenderCombinedFromCells;
+        try
+          Assert.IsNotNull(Bmp, ContextLabel + ': renderer returned nil; cannot compare');
+          Assert.AreEqual(Bmp.Width, PW, ContextLabel + ': predicted width must equal rendered width');
+          Assert.AreEqual(Bmp.Height, PH, ContextLabel + ': predicted height must equal rendered height');
+        finally
+          Bmp.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPredictMatchesRender.VmGrid_Native;
+begin
+  AssertPredictEqualsRender(vmGrid, False, 6);
+end;
+
+procedure TTestPredictMatchesRender.VmGrid_Live;
+begin
+  AssertPredictEqualsRender(vmGrid, True, 6);
+end;
+
+procedure TTestPredictMatchesRender.VmFilmstrip_Native;
+begin
+  AssertPredictEqualsRender(vmFilmstrip, False, 5);
+end;
+
+procedure TTestPredictMatchesRender.VmFilmstrip_Live;
+begin
+  AssertPredictEqualsRender(vmFilmstrip, True, 5);
+end;
+
+procedure TTestPredictMatchesRender.VmScroll_Native;
+begin
+  AssertPredictEqualsRender(vmScroll, False, 5);
+end;
+
+procedure TTestPredictMatchesRender.VmScroll_Live;
+begin
+  AssertPredictEqualsRender(vmScroll, True, 5);
+end;
+
+procedure TTestPredictMatchesRender.VmSmartGrid_Native;
+begin
+  AssertPredictEqualsRender(vmSmartGrid, False, 6);
+end;
+
+procedure TTestPredictMatchesRender.VmSmartGrid_Live;
+begin
+  AssertPredictEqualsRender(vmSmartGrid, True, 6);
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
   TDUnitX.RegisterTestFixture(TTestFrameExportRender);
@@ -2254,5 +2367,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameExportLiveResolution);
   TDUnitX.RegisterTestFixture(TTestFrameExportSaveFramesToDir);
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
+  TDUnitX.RegisterTestFixture(TTestPredictMatchesRender);
 
 end.
