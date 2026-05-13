@@ -261,10 +261,30 @@ type
     property OnGetPanelHint: TStatusBarHintProvider read FOnGetPanelHint write FOnGetPanelHint;
   end;
 
+{Walks AStatusBar's panels left-to-right; returns the index of the panel
+ under the X coord, or -1 when AX is past the last panel. APanelLeft is
+ set to the left edge of the matched panel; when -1 (past-end) it is set
+ to the right edge of the last panel so callers can compose a "trailing
+ dead zone" rect. Returns -1 for an empty status bar (APanelLeft=0).
+ Centralises the arithmetic shared by OnStatusBarDblClick and the per-
+ panel hint dispatch in TGlimpseStatusBar.CMHintShow.}
+function StatusBarPanelHitTest(AStatusBar: TStatusBar; AX: Integer; out APanelLeft: Integer): Integer;
+var
+  I: Integer;
+begin
+  Result := -1;
+  APanelLeft := 0;
+  for I := 0 to AStatusBar.Panels.Count - 1 do
+  begin
+    if AX < APanelLeft + AStatusBar.Panels[I].Width then
+      Exit(I);
+    Inc(APanelLeft, AStatusBar.Panels[I].Width);
+  end;
+end;
+
 procedure TGlimpseStatusBar.CMHintShow(var Msg: TCMHintShow);
 var
-  Pt: TPoint;
-  PanelLeft, I, HitIdx: Integer;
+  PanelLeft, HitIdx: Integer;
   HintText: string;
 begin
   if not Assigned(FOnGetPanelHint) then
@@ -273,18 +293,7 @@ begin
     Exit;
   end;
 
-  Pt := Msg.HintInfo.CursorPos;
-  HitIdx := -1;
-  PanelLeft := 0;
-  for I := 0 to Panels.Count - 1 do
-  begin
-    if Pt.X < PanelLeft + Panels[I].Width then
-    begin
-      HitIdx := I;
-      Break;
-    end;
-    Inc(PanelLeft, Panels[I].Width);
-  end;
+  HitIdx := StatusBarPanelHitTest(Self, Msg.HintInfo.CursorPos.X, PanelLeft);
 
   HintText := FOnGetPanelHint(HitIdx);
   if HintText = '' then
@@ -1349,25 +1358,16 @@ end;
 procedure TPluginForm.OnStatusBarDblClick(Sender: TObject);
 var
   Pt: TPoint;
-  PanelLeft, I: Integer;
+  HitIdx, PanelLeft: Integer;
 begin
   if FStatusBar.Panels.Count = 0 then
     Exit;
-
   Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
-  PanelLeft := 0;
-  for I := 0 to FStatusBar.Panels.Count - 1 do
-  begin
-    if Pt.X < PanelLeft + FStatusBar.Panels[I].Width then
-    begin
-      Clipboard.AsText := FStatusBar.Panels[I].Text;
-      Exit;
-    end;
-    Inc(PanelLeft, FStatusBar.Panels[I].Width);
-  end;
-
-  {Click past last panel: copy last panel}
-  Clipboard.AsText := FStatusBar.Panels[FStatusBar.Panels.Count - 1].Text;
+  HitIdx := StatusBarPanelHitTest(FStatusBar, Pt.X, PanelLeft);
+  {Click past last panel: copy last panel.}
+  if HitIdx < 0 then
+    HitIdx := FStatusBar.Panels.Count - 1;
+  Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
 end;
 
 procedure TPluginForm.ApplySettings;
