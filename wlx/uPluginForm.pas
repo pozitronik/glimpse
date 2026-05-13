@@ -122,6 +122,11 @@ type
     function CreateRefreshPopup: TPopupMenu;
     function CreateSaveViewPopup: TPopupMenu;
     function CreateCopyViewPopup: TPopupMenu;
+    {Predicts the rendered combined-image dimensions and the post-cap
+     dimensions for a one-shot resolution choice. ACappedW/H equal AW/H
+     when the CombinedMaxSide cap does not apply (cap=0 or image already
+     fits). Returns False when no frames are loaded yet.}
+    function PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
     {Returns the bracketed dimension suffix used on the Save/Copy view
      dropdown menu items, e.g. " [1920x1080]" or
      " [19200x10800 -> 8192x4608]" when CombinedMaxSide caps the output.
@@ -406,6 +411,10 @@ const
 
   {Status bar panel widths}
   SBP_RESOLUTION_W = 120;
+  {Predicted Save view / Copy view output dimensions for the persisted
+   Save at view resolution toggle. Wider than SBP_RESOLUTION_W so the
+   "WxH -> CxC" form (when the cap kicks in) does not get clipped.}
+  SBP_RESULT_W = 200;
   SBP_FRAMERATE_W = 100;
   SBP_DURATION_W = 100;
   SBP_BITRATE_W = 100;
@@ -419,7 +428,7 @@ const
   SBP_FRAMEPOS_W = 70;
   SBP_LOADTIME_W = 110;
   {Total width including per-panel borders added by the common control}
-  SBP_TOTAL_RIGHT = 1000;
+  SBP_TOTAL_RIGHT = 1200;
 
   {Command tags, mode captions, sizing labels, and toolbar actions
    are defined in uToolbarLayout}
@@ -999,31 +1008,48 @@ begin
   Result.Items.Add(MI);
 end;
 
-function TPluginForm.FormatPredictedSize(AForceLiveRes: Boolean): string;
+function TPluginForm.PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
 var
-  W, H, Cap, BmpLong, NewW, NewH: Integer;
+  Cap, BmpLong: Integer;
   Scale: Double;
 begin
-  Result := '';
+  AW := 0;
+  AH := 0;
+  ACappedW := 0;
+  ACappedH := 0;
+  Result := False;
   if FExporter = nil then
     Exit;
-  FExporter.PredictCombinedSize(AForceLiveRes, W, H);
-  if (W <= 0) or (H <= 0) then
+  FExporter.PredictCombinedSize(AForceLiveRes, AW, AH);
+  if (AW <= 0) or (AH <= 0) then
     Exit;
-
+  ACappedW := AW;
+  ACappedH := AH;
   Cap := FSettings.CombinedMaxSide;
   if Cap > 0 then
   begin
-    BmpLong := Max(W, H);
+    BmpLong := Max(AW, AH);
     if BmpLong > Cap then
     begin
       Scale := Cap / BmpLong;
-      NewW := Max(1, Round(W * Scale));
-      NewH := Max(1, Round(H * Scale));
-      Exit(Format(' [%dx%d → %dx%d]', [W, H, NewW, NewH]));
+      ACappedW := Max(1, Round(AW * Scale));
+      ACappedH := Max(1, Round(AH * Scale));
     end;
   end;
-  Result := Format(' [%dx%d]', [W, H]);
+  Result := True;
+end;
+
+function TPluginForm.FormatPredictedSize(AForceLiveRes: Boolean): string;
+var
+  W, H, CW, CH: Integer;
+begin
+  Result := '';
+  if not PredictDisplayedSize(AForceLiveRes, W, H, CW, CH) then
+    Exit;
+  if (CW <> W) or (CH <> H) then
+    Result := Format(' [%dx%d → %dx%d]', [W, H, CW, CH])
+  else
+    Result := Format(' [%dx%d]', [W, H]);
 end;
 
 procedure TPluginForm.UpdateResolutionMenuLabels(AMenu: TPopupMenu);
@@ -1182,6 +1208,7 @@ procedure TPluginForm.UpdateStatusBar;
 var
   AudioStr: string;
   FileIdx, FileTotal: Integer;
+  PredW, PredH, PredCappedW, PredCappedH: Integer;
 begin
   FStatusBar.Panels.Clear;
 
@@ -1208,6 +1235,19 @@ begin
   {Resolution}
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
     AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W);
+
+  {Predicted Save view / Copy view output dimensions for the persisted
+   Save at view resolution toggle. Cap is shown as "WxH -> CxC" when
+   CombinedMaxSide would shrink the image. Hidden when the predictor
+   has nothing meaningful to report (e.g. before the first extraction
+   completes).}
+  if PredictDisplayedSize(FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH) then
+  begin
+    if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
+      AddPanel(Format('%dx%d → %dx%d', [PredW, PredH, PredCappedW, PredCappedH]), SBP_RESULT_W)
+    else
+      AddPanel(Format('%dx%d', [PredW, PredH]), SBP_RESULT_W);
+  end;
 
   {Framerate}
   if FVideoInfo.Fps > 0 then
