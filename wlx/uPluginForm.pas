@@ -55,6 +55,10 @@ type
     FVisibleElementCount: Integer;
     {Status bar}
     FStatusBar: TStatusBar;
+    {Per-panel hint texts, parallel to FStatusBar.Panels. Populated by
+     UpdateStatusBar; the TGlimpseStatusBar subclass reads this through
+     its OnGetPanelHint callback inside CMHintShow.}
+    FPanelHints: TArray<string>;
     {Content}
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
@@ -245,6 +249,71 @@ uses
   System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
   uPlatformDetect;
+
+type
+  {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
+   0-based index of the panel under the cursor, or -1 when the cursor is
+   past the last panel.}
+  TStatusBarHintProvider = reference to function(APanelIndex: Integer): string;
+
+  {TStatusBar specialisation that surfaces a per-panel hint instead of a
+   single per-control Hint. Drives the hint mechanism via CMHintShow's
+   CursorRect: setting CursorRect to the panel under the cursor makes the
+   VCL re-issue CMHintShow when the cursor crosses into a different panel,
+   which in turn lets us swap HintStr without the brittle
+   "set Hint + CancelHint" dance that does not always re-pop on the same
+   control.}
+  TGlimpseStatusBar = class(TStatusBar)
+  private
+    FOnGetPanelHint: TStatusBarHintProvider;
+    procedure CMHintShow(var Msg: TCMHintShow); message CM_HINTSHOW;
+  public
+    property OnGetPanelHint: TStatusBarHintProvider read FOnGetPanelHint write FOnGetPanelHint;
+  end;
+
+procedure TGlimpseStatusBar.CMHintShow(var Msg: TCMHintShow);
+var
+  Pt: TPoint;
+  PanelLeft, I, HitIdx: Integer;
+  HintText: string;
+begin
+  if not Assigned(FOnGetPanelHint) then
+  begin
+    inherited;
+    Exit;
+  end;
+
+  Pt := Msg.HintInfo.CursorPos;
+  HitIdx := -1;
+  PanelLeft := 0;
+  for I := 0 to Panels.Count - 1 do
+  begin
+    if Pt.X < PanelLeft + Panels[I].Width then
+    begin
+      HitIdx := I;
+      Break;
+    end;
+    Inc(PanelLeft, Panels[I].Width);
+  end;
+
+  HintText := FOnGetPanelHint(HitIdx);
+  if HintText = '' then
+  begin
+    {No hint for this region. Suppress the popup but still set a tight
+     CursorRect so the next cross-panel move re-queries us.}
+    Msg.Result := 1;
+  end else begin
+    Msg.HintInfo.HintStr := HintText;
+    Msg.Result := 0;
+  end;
+
+  if HitIdx >= 0 then
+    Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, PanelLeft + Panels[HitIdx].Width, Height)
+  else
+    {Past the last panel: cursor rect is the trailing dead zone, so we
+     stay quiet until the cursor enters a real panel.}
+    Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, ClientWidth, Height);
+end;
 
 {Embedded toolbar glyph resources; see CreateToolbar for use. The .res is
  generated from icons.rc by cgrc as a pre-build step in build.bat and
@@ -1170,14 +1239,29 @@ begin
 end;
 
 procedure TPluginForm.CreateStatusBar;
+var
+  Bar: TGlimpseStatusBar;
 begin
-  FStatusBar := TStatusBar.Create(Self);
+  Bar := TGlimpseStatusBar.Create(Self);
+  Bar.OnGetPanelHint :=
+    function(APanelIndex: Integer): string
+    begin
+      if (APanelIndex >= 0) and (APanelIndex < Length(FPanelHints)) then
+        Result := FPanelHints[APanelIndex]
+      else
+        Result := '';
+    end;
+  FStatusBar := Bar;
   FStatusBar.Parent := Self;
   FStatusBar.Height := STATUSBAR_HEIGHT;
   FStatusBar.SimplePanel := False;
   FStatusBar.SizeGrip := False;
   FStatusBar.Font.Size := STATUSBAR_FONT;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
+  {Per-panel hints come from CMHintShow inside TGlimpseStatusBar; the
+   ShowHint flag still has to be on so the VCL routes hint messages to
+   the control in the first place.}
+  FStatusBar.ShowHint := True;
   FStatusBar.Visible := False;
 
   FProgressBar := TProgressBar.Create(FStatusBar);
@@ -1195,7 +1279,7 @@ procedure TPluginForm.UpdateStatusBar;
       Result := Format('%d kbps', [AKbps]);
   end;
 
-  procedure AddPanel(const AText: string; AWidth: Integer; AAlignment: TAlignment = taLeftJustify);
+  procedure AddPanel(const AText: string; AWidth: Integer; const AHint: string = ''; AAlignment: TAlignment = taLeftJustify);
   var
     Panel: TStatusPanel;
   begin
@@ -1203,6 +1287,8 @@ procedure TPluginForm.UpdateStatusBar;
     Panel.Text := AText;
     Panel.Width := AWidth;
     Panel.Alignment := AAlignment;
+    SetLength(FPanelHints, Length(FPanelHints) + 1);
+    FPanelHints[High(FPanelHints)] := AHint;
   end;
 
 var
@@ -1211,6 +1297,7 @@ var
   PredW, PredH, PredCappedW, PredCappedH: Integer;
 begin
   FStatusBar.Panels.Clear;
+  SetLength(FPanelHints, 0);
 
   if not FVideoInfo.IsValid then
     Exit;
@@ -1219,7 +1306,8 @@ begin
    Omitted when the current file can't be located (e.g. extension not in
    the list or directory unreadable).}
   if GetFilePosition(FFileName, FSettings.ExtensionList, FileIdx, FileTotal) then
-    AddPanel(Format('%d / %d', [FileIdx, FileTotal]), SBP_FILEPOS_W);
+    AddPanel(Format('%d / %d', [FileIdx, FileTotal]), SBP_FILEPOS_W,
+      'Position of this video among the supported video files in the same folder.');
 
   {Frame position: shown as "current / total" only in single view, where
    the notion of "current frame" is visible. Other modes render the whole
@@ -1227,14 +1315,17 @@ begin
   if Length(FOffsets) > 0 then
   begin
     if FFrameView.ViewMode = vmSingle then
-      AddPanel(Format('%d / %d', [FFrameView.CurrentFrameIndex + 1, Length(FOffsets)]), SBP_FRAMEPOS_W)
+      AddPanel(Format('%d / %d', [FFrameView.CurrentFrameIndex + 1, Length(FOffsets)]), SBP_FRAMEPOS_W,
+        'Current frame number / total frames extracted from this video.')
     else
-      AddPanel(IntToStr(Length(FOffsets)), SBP_FRAMEPOS_W);
+      AddPanel(IntToStr(Length(FOffsets)), SBP_FRAMEPOS_W,
+        'Total frames extracted from this video.');
   end;
 
   {Resolution}
   if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
-    AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W);
+    AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W,
+      'Native frame resolution of the source video (width x height in pixels).');
 
   {Predicted Save view / Copy view output dimensions for the persisted
    Save at view resolution toggle. Cap is shown as "WxH -> CxC" when
@@ -1244,26 +1335,32 @@ begin
   if PredictDisplayedSize(FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH) then
   begin
     if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
-      AddPanel(Format('%dx%d → %dx%d', [PredW, PredH, PredCappedW, PredCappedH]), SBP_RESULT_W)
+      AddPanel(Format('%dx%d → %dx%d', [PredW, PredH, PredCappedW, PredCappedH]), SBP_RESULT_W,
+        'Combined Save view / Copy view output dimensions for the current Save at view resolution setting. The right-hand pair shows the post-cap size after CombinedMaxSide shrinks the image.')
     else
-      AddPanel(Format('%dx%d', [PredW, PredH]), SBP_RESULT_W);
+      AddPanel(Format('%dx%d', [PredW, PredH]), SBP_RESULT_W,
+        'Combined Save view / Copy view output dimensions for the current Save at view resolution setting.');
   end;
 
   {Framerate}
   if FVideoInfo.Fps > 0 then
-    AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), SBP_FRAMERATE_W);
+    AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), SBP_FRAMERATE_W,
+      'Source video frame rate (frames per second).');
 
   {Duration}
   if FVideoInfo.Duration > 0 then
-    AddPanel(FormatDurationHMS(FVideoInfo.Duration), SBP_DURATION_W);
+    AddPanel(FormatDurationHMS(FVideoInfo.Duration), SBP_DURATION_W,
+      'Total video duration (hours:minutes:seconds).');
 
   {Overall bitrate}
   if FVideoInfo.Bitrate > 0 then
-    AddPanel(FormatBitrate(FVideoInfo.Bitrate), SBP_BITRATE_W);
+    AddPanel(FormatBitrate(FVideoInfo.Bitrate), SBP_BITRATE_W,
+      'Overall bitrate of the source container (video + audio + overhead).');
 
   {Video codec}
   if FVideoInfo.VideoCodec <> '' then
-    AddPanel(FVideoInfo.VideoCodec, SBP_VIDEOCODEC_W);
+    AddPanel(FVideoInfo.VideoCodec, SBP_VIDEOCODEC_W,
+      'Video codec used to encode the source.');
 
   {Audio section}
   if FVideoInfo.AudioCodec <> '' then
@@ -1275,15 +1372,19 @@ begin
       AudioStr := AudioStr + ' ' + FVideoInfo.AudioChannels;
     if FVideoInfo.AudioBitrateKbps > 0 then
       AudioStr := AudioStr + Format(' %d kbps', [FVideoInfo.AudioBitrateKbps]);
-    AddPanel(AudioStr, SBP_AUDIO_W);
+    AddPanel(AudioStr, SBP_AUDIO_W,
+      'First audio stream: codec, sample rate, channel layout, bitrate.');
   end
   else
-    AddPanel('No audio', SBP_NOAUDIO_W);
+    AddPanel('No audio', SBP_NOAUDIO_W,
+      'Source has no audio stream.');
 
   {Load time (shown after extraction completes)}
   if FLoadTimeStr <> '' then
   begin
-    AddPanel(FLoadTimeStr, SBP_LOADTIME_W, taRightJustify);
+    AddPanel(FLoadTimeStr, SBP_LOADTIME_W,
+      'Time taken to extract the displayed frames (cache hits vs ffmpeg invocations).',
+      taRightJustify);
     {Dummy panel absorbs last-panel stretching from the common control}
     AddPanel('', 0);
   end;
