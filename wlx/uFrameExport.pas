@@ -136,6 +136,16 @@ type
      receives true native-resolution pixels rather than the
      viewport-scaled live cells.}
     procedure CopyView(AForceLiveRes: Boolean; AReExtract: TReExtractAction = nil);
+    {Predicts the pixel dimensions the rendered combined image would have
+     for a one-shot resolution choice, before banner attachment and before
+     the CombinedMaxSide cap. Mirrors the layout math in
+     RenderCombinedFromCells / RenderSmartCombinedFromCells /
+     RenderGridCombinedAtLiveResolution; banner height is intentionally
+     omitted (it adds a small variable height that is hard to predict
+     without setting up a canvas). Returns 0,0 when there are no cells.
+     Used by the toolbar dropdown to label the Save view / Copy view
+     variants with their predicted output size.}
+    procedure PredictCombinedSize(AForceLiveRes: Boolean; out AW, AH: Integer);
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
     {Caller-supplied save-resolution bitmaps. Set before invoking a save
      or copy method when SaveAtLiveResolution is off and the caller has
@@ -693,6 +703,132 @@ begin
   end
   else
     Result := ABmp;
+end;
+
+procedure TFrameExporter.PredictCombinedSize(AForceLiveRes: Boolean; out AW, AH: Integer);
+var
+  N, I, Cols, Rows, CellW, CellH, Border, Gap: Integer;
+  CellRect: TRect;
+  PanelInnerW, PanelInnerH: Integer;
+  RowCounts: TArray<Integer>;
+  MaxCells, NativeW, InnerW, InnerH: Integer;
+  AspectRatio: Double;
+  Bmp: TBitmap;
+begin
+  AW := 0;
+  AH := 0;
+  N := FFrameView.CellCount;
+  if N = 0 then
+    Exit;
+
+  Border := Max(0, FSettings.CombinedBorder);
+  Gap := Max(0, FSettings.CellGap);
+
+  {vmSingle: SaveView/CopyView degenerate to single-frame paths so the
+   "view"-level resolution is the focused frame's dimensions.}
+  if FFrameView.ViewMode = vmSingle then
+  begin
+    if AForceLiveRes then
+    begin
+      CellRect := FFrameView.GetCellRect(FFrameView.CurrentFrameIndex);
+      AW := Max(1, CellRect.Width);
+      AH := Max(1, CellRect.Height);
+    end else begin
+      AW := 320;
+      AH := 240;
+      Bmp := FFrameView.CellBitmap(FFrameView.CurrentFrameIndex);
+      if (Bmp <> nil) and (Bmp.Width > 0) then
+      begin
+        AW := Bmp.Width;
+        AH := Bmp.Height;
+      end;
+    end;
+    Exit;
+  end;
+
+  {vmSmartGrid uses panel-aspect-driven row counts; mirror
+   RenderSmartCombinedFromCells line for line.}
+  if FFrameView.ViewMode = vmSmartGrid then
+  begin
+    PanelInnerW := Max(1, FFrameView.BaseW - 2 * FFrameView.CellMargin);
+    PanelInnerH := Max(1, FFrameView.BaseH - 2 * FFrameView.CellMargin);
+    if (PanelInnerW <= 1) or (PanelInnerH <= 1) then
+    begin
+      PanelInnerW := 1600;
+      PanelInnerH := 900;
+    end;
+
+    if AForceLiveRes then
+    begin
+      AW := PanelInnerW + 2 * Border;
+      AH := PanelInnerH + 2 * Border;
+    end else begin
+      AspectRatio := FFrameView.AspectRatio;
+      if AspectRatio <= 0 then
+        AspectRatio := 9.0 / 16.0;
+      RowCounts := ComputeSmartGridRows(N, PanelInnerW, PanelInnerH, Gap, AspectRatio);
+      if Length(RowCounts) = 0 then
+        Exit;
+      MaxCells := 1;
+      for I := 0 to High(RowCounts) do
+        if RowCounts[I] > MaxCells then
+          MaxCells := RowCounts[I];
+      NativeW := 320;
+      for I := 0 to N - 1 do
+      begin
+        Bmp := FFrameView.CellBitmap(I);
+        if (Bmp <> nil) and (Bmp.Width > 0) then
+        begin
+          NativeW := Bmp.Width;
+          Break;
+        end;
+      end;
+      InnerW := MaxCells * NativeW + Max(MaxCells - 1, 0) * Gap;
+      InnerH := Max(1, Round(InnerW * (PanelInnerH / PanelInnerW)));
+      AW := InnerW + 2 * Border;
+      AH := InnerH + 2 * Border;
+    end;
+    Exit;
+  end;
+
+  {Uniform-row modes (vmGrid, vmFilmstrip, vmScroll). Cell size and
+   columns follow the same rules the renderer uses.}
+  if AForceLiveRes then
+  begin
+    CellRect := FFrameView.GetCellRect(0);
+    CellW := Max(1, CellRect.Width);
+    CellH := Max(1, CellRect.Height);
+    Cols := CountLiveGridColumns;
+  end else begin
+    CellW := 320;
+    CellH := 240;
+    for I := 0 to N - 1 do
+    begin
+      Bmp := FFrameView.CellBitmap(I);
+      if Bmp <> nil then
+      begin
+        CellW := Bmp.Width;
+        CellH := Bmp.Height;
+        Break;
+      end;
+    end;
+    case FFrameView.ViewMode of
+      vmGrid:
+        Cols := CountLiveGridColumns;
+      vmFilmstrip:
+        Cols := N;
+      vmScroll:
+        Cols := 1;
+    else
+      Cols := CountLiveGridColumns;
+    end;
+  end;
+
+  if Cols < 1 then
+    Cols := 1;
+  Rows := Ceil(N / Cols);
+  AW := Cols * CellW + Max(Cols - 1, 0) * Gap + 2 * Border;
+  AH := Rows * CellH + Max(Rows - 1, 0) * Gap + 2 * Border;
 end;
 
 procedure TFrameExporter.ApplyCombinedSizeCap(var ABmp: TBitmap);

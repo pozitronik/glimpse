@@ -122,6 +122,18 @@ type
     function CreateRefreshPopup: TPopupMenu;
     function CreateSaveViewPopup: TPopupMenu;
     function CreateCopyViewPopup: TPopupMenu;
+    {Returns the bracketed dimension suffix used on the Save/Copy view
+     dropdown menu items, e.g. " [1920x1080]" or
+     " [19200x10800 -> 8192x4608]" when CombinedMaxSide caps the output.
+     Empty string when no frames are loaded yet.}
+    function FormatPredictedSize(AForceLiveRes: Boolean): string;
+    {Walks the items of the given popup and rewrites Save/Copy view
+     dropdown captions with their current predicted-size suffix. Called
+     from each popup's OnPopup so the suffix tracks live cell size,
+     view-mode changes, and CombinedMaxSide edits without per-event
+     wiring.}
+    procedure UpdateResolutionMenuLabels(AMenu: TPopupMenu);
+    procedure OnViewDropdownPopup(Sender: TObject);
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -859,6 +871,7 @@ begin
   State.ModeImageIndex[vmFilmstrip] := IDX_ICON_ARROW_H;
 
   PopulateHamburgerMenu(FHamburgerMenu, State, OnHamburgerModeClick, OnHamburgerZoomClick, OnHamburgerTimecodeClick, OnHamburgerActionClick);
+  UpdateResolutionMenuLabels(FHamburgerMenu);
 end;
 
 procedure TPluginForm.OnHamburgerModeClick(Sender: TObject);
@@ -949,15 +962,16 @@ begin
    work as a faster path on modern Windows: one click chooses the
    resolution and opens the dialog with that as the seed.}
   Result := TPopupMenu.Create(Self);
+  Result.OnPopup := OnViewDropdownPopup;
 
   MI := TMenuItem.Create(Result);
-  MI.Caption := 'Save view at view resolution...';
+  MI.Caption := CAPTION_SAVE_VIEW_LIVE;
   MI.Tag := CM_SAVE_VIEW_LIVE;
   MI.OnClick := OnContextMenuClick;
   Result.Items.Add(MI);
 
   MI := TMenuItem.Create(Result);
-  MI.Caption := 'Save view at native size...';
+  MI.Caption := CAPTION_SAVE_VIEW_NATIVE;
   MI.Tag := CM_SAVE_VIEW_NATIVE;
   MI.OnClick := OnContextMenuClick;
   Result.Items.Add(MI);
@@ -970,18 +984,91 @@ begin
   {Mirror of CreateSaveViewPopup. No dialog follows so the captions
    omit the trailing ellipsis - the action commits immediately.}
   Result := TPopupMenu.Create(Self);
+  Result.OnPopup := OnViewDropdownPopup;
 
   MI := TMenuItem.Create(Result);
-  MI.Caption := 'Copy view at view resolution';
+  MI.Caption := CAPTION_COPY_VIEW_LIVE;
   MI.Tag := CM_COPY_VIEW_LIVE;
   MI.OnClick := OnContextMenuClick;
   Result.Items.Add(MI);
 
   MI := TMenuItem.Create(Result);
-  MI.Caption := 'Copy view at native size';
+  MI.Caption := CAPTION_COPY_VIEW_NATIVE;
   MI.Tag := CM_COPY_VIEW_NATIVE;
   MI.OnClick := OnContextMenuClick;
   Result.Items.Add(MI);
+end;
+
+function TPluginForm.FormatPredictedSize(AForceLiveRes: Boolean): string;
+var
+  W, H, Cap, BmpLong, NewW, NewH: Integer;
+  Scale: Double;
+begin
+  Result := '';
+  if FExporter = nil then
+    Exit;
+  FExporter.PredictCombinedSize(AForceLiveRes, W, H);
+  if (W <= 0) or (H <= 0) then
+    Exit;
+
+  Cap := FSettings.CombinedMaxSide;
+  if Cap > 0 then
+  begin
+    BmpLong := Max(W, H);
+    if BmpLong > Cap then
+    begin
+      Scale := Cap / BmpLong;
+      NewW := Max(1, Round(W * Scale));
+      NewH := Max(1, Round(H * Scale));
+      Exit(Format(' [%dx%d → %dx%d]', [W, H, NewW, NewH]));
+    end;
+  end;
+  Result := Format(' [%dx%d]', [W, H]);
+end;
+
+procedure TPluginForm.UpdateResolutionMenuLabels(AMenu: TPopupMenu);
+var
+  I: Integer;
+  MI: TMenuItem;
+  Base: string;
+  ForceLive: Boolean;
+begin
+  if AMenu = nil then
+    Exit;
+  for I := 0 to AMenu.Items.Count - 1 do
+  begin
+    MI := AMenu.Items[I];
+    case MI.Tag of
+      CM_SAVE_VIEW_LIVE:
+        begin
+          Base := CAPTION_SAVE_VIEW_LIVE;
+          ForceLive := True;
+        end;
+      CM_SAVE_VIEW_NATIVE:
+        begin
+          Base := CAPTION_SAVE_VIEW_NATIVE;
+          ForceLive := False;
+        end;
+      CM_COPY_VIEW_LIVE:
+        begin
+          Base := CAPTION_COPY_VIEW_LIVE;
+          ForceLive := True;
+        end;
+      CM_COPY_VIEW_NATIVE:
+        begin
+          Base := CAPTION_COPY_VIEW_NATIVE;
+          ForceLive := False;
+        end;
+    else
+      Continue;
+    end;
+    MI.Caption := Base + FormatPredictedSize(ForceLive);
+  end;
+end;
+
+procedure TPluginForm.OnViewDropdownPopup(Sender: TObject);
+begin
+  UpdateResolutionMenuLabels(Sender as TPopupMenu);
 end;
 
 procedure TPluginForm.CreateFrameView;

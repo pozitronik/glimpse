@@ -50,6 +50,14 @@ const
   CM_COPY_VIEW_LIVE = 15;
   CM_COPY_VIEW_NATIVE = 16;
 
+  {Base captions for the Save/Copy view dropdown variants. Centralised
+   so the toolbar dropdown, the hamburger overflow, and the runtime
+   resolution-suffix updater all start from the same string.}
+  CAPTION_SAVE_VIEW_LIVE = 'Save view at view resolution...';
+  CAPTION_SAVE_VIEW_NATIVE = 'Save view at native size...';
+  CAPTION_COPY_VIEW_LIVE = 'Copy view at view resolution';
+  CAPTION_COPY_VIEW_NATIVE = 'Copy view at native size';
+
   {Toolbar buttons differentiate the two scroll modes via icons (see
    uPluginForm.CreateToolbar); both modes share the textual caption.}
   MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Scroll', 'Single');
@@ -258,14 +266,14 @@ begin
     if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
     begin
       MI := TMenuItem.Create(AMenu);
-      MI.Caption := 'Save view at view resolution...';
+      MI.Caption := CAPTION_SAVE_VIEW_LIVE;
       MI.Tag := CM_SAVE_VIEW_LIVE;
       MI.OnClick := AOnActionClick;
       MI.Enabled := AState.HasFrames;
       AMenu.Items.Add(MI);
 
       MI := TMenuItem.Create(AMenu);
-      MI.Caption := 'Save view at native size...';
+      MI.Caption := CAPTION_SAVE_VIEW_NATIVE;
       MI.Tag := CM_SAVE_VIEW_NATIVE;
       MI.OnClick := AOnActionClick;
       MI.Enabled := AState.HasFrames;
@@ -276,14 +284,14 @@ begin
     if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
     begin
       MI := TMenuItem.Create(AMenu);
-      MI.Caption := 'Copy view at view resolution';
+      MI.Caption := CAPTION_COPY_VIEW_LIVE;
       MI.Tag := CM_COPY_VIEW_LIVE;
       MI.OnClick := AOnActionClick;
       MI.Enabled := AState.HasFrames;
       AMenu.Items.Add(MI);
 
       MI := TMenuItem.Create(AMenu);
-      MI.Caption := 'Copy view at native size';
+      MI.Caption := CAPTION_COPY_VIEW_NATIVE;
       MI.Tag := CM_COPY_VIEW_NATIVE;
       MI.OnClick := AOnActionClick;
       MI.Enabled := AState.HasFrames;
