@@ -1158,6 +1158,13 @@ begin
       Continue;
     end;
     MI.Caption := Base + FormatPredictedSize(ForceLive);
+    {Mark the item that matches the persisted SaveAtLiveResolution as
+     the current default with a radio bullet. Tells the user, in
+     context, what the bare toolbar click would do without making them
+     open the settings dialog. RadioItem groups Live/Native into a
+     mutually-exclusive pair so only one bullet shows at a time.}
+    MI.RadioItem := True;
+    MI.Checked := ForceLive = FSettings.SaveAtLiveResolution;
   end;
 end;
 
