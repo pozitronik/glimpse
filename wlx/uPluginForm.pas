@@ -495,8 +495,9 @@ const
   SBP_FILEPOS_W = 80;
   SBP_FRAMEPOS_W = 70;
   SBP_LOADTIME_W = 110;
-  {Total width including per-panel borders added by the common control}
-  SBP_TOTAL_RIGHT = 1200;
+  {Total panel width is computed dynamically in RepositionProgressBar
+   from FStatusBar.Panels - any new SBP_*_W constant added to AddPanel
+   calls is automatically picked up, no hand-maintained sum to drift.}
 
   {Command tags, mode captions, sizing labels, and toolbar actions
    are defined in uToolbarLayout}
@@ -1796,19 +1797,27 @@ const
   Margin = 1;
 var
   Layout: TProgressBarLayout;
-  Left, Width: Integer;
+  Left, Width, PanelsRight, I: Integer;
 begin
   if not FProgressVisible then
     Exit;
 
+  {Right edge of the last panel - the boundary the AfterPanels layout
+   needs to clear. Computed from the live panel widths so adding or
+   removing an SBP_*_W panel in UpdateStatusBar requires no separate
+   bookkeeping here.}
+  PanelsRight := 0;
+  for I := 0 to FStatusBar.Panels.Count - 1 do
+    Inc(PanelsRight, FStatusBar.Panels[I].Width);
+
   {Resolve the user's policy. Auto picks AfterPanels when the lister is
-   wide enough to fit both the panels (sum reserved as SBP_TOTAL_RIGHT)
-   and at least one progress bar minimum width plus margins; otherwise
-   it switches to OverPanels so the bar stays on screen.}
+   wide enough to fit the panels and at least one progress bar minimum
+   width plus margins; otherwise it switches to OverPanels so the bar
+   stays on screen.}
   Layout := FSettings.ProgressBarLayout;
   if Layout = pblAuto then
   begin
-    if FStatusBar.ClientWidth >= SBP_TOTAL_RIGHT + PROGRESSBAR_MIN_W + 2 * Margin then
+    if FStatusBar.ClientWidth >= PanelsRight + PROGRESSBAR_MIN_W + 2 * Margin then
       Layout := pblAfterPanels
     else
       Layout := pblOverPanels;
@@ -1817,8 +1826,8 @@ begin
   case Layout of
     pblAfterPanels:
       begin
-        Left := SBP_TOTAL_RIGHT + Margin;
-        Width := FStatusBar.ClientWidth - SBP_TOTAL_RIGHT - 2 * Margin;
+        Left := PanelsRight + Margin;
+        Width := FStatusBar.ClientWidth - PanelsRight - 2 * Margin;
         if Width < PROGRESSBAR_MIN_W then
           Width := PROGRESSBAR_MIN_W;
       end;
