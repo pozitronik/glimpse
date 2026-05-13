@@ -10,7 +10,6 @@ type
   TTestUnicodeIniFile = class
   private
     FTempDir: string;
-    function WriteBytes(const AFileName: string; const ABytes: array of Byte): string;
   public
     [Setup] procedure Setup;
     [TearDown] procedure TearDown;
@@ -83,18 +82,6 @@ procedure TTestUnicodeIniFile.TearDown;
 begin
   if TDirectory.Exists(FTempDir) then
     TDirectory.Delete(FTempDir, True);
-end;
-
-function TTestUnicodeIniFile.WriteBytes(const AFileName: string; const ABytes: array of Byte): string;
-var
-  Buf: TBytes;
-  I: Integer;
-begin
-  Result := TPath.Combine(FTempDir, AFileName);
-  SetLength(Buf, Length(ABytes));
-  for I := 0 to High(ABytes) do
-    Buf[I] := ABytes[I];
-  TFile.WriteAllBytes(Result, Buf);
 end;
 
 { DecodeIniBytes }
