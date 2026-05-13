@@ -109,6 +109,8 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 
 The toolbar **Save view** button is a split button: clicking it honors the *Save at view resolution* setting, while its dropdown arrow exposes one-shot **Save view at view resolution...** and **Save view at native size...** items that override the setting for that single action without persisting. On legacy Windows (XP / Server 2003) the dropdown is reached via right-click on the same button (the system dropdown arrow is unavailable there); right-click also works on Vista+ as an alternate access path.
 
+The toolbar **Copy view** button works the same way: a split button whose dropdown exposes one-shot **Copy view at view resolution** and **Copy view at native size** items. The native-size variant re-extracts at native resolution before publishing to the clipboard, so the clipboard receives true native-resolution pixels rather than the viewport-scaled live cells. The default Copy view click honors the same persisted *Save at view resolution* setting that Save view uses (the setting governs both surfaces).
+
 #### Cache
 
 | Setting           | Default              | Description                                                                                     |

@@ -127,7 +127,15 @@ type
      does.}
     procedure SaveView(const AFileName: string; AInitialLiveRes: Boolean; AReExtract: TReExtractAction = nil);
     procedure CopyFrame(AContextCellIndex: Integer);
-    procedure CopyView;
+    {Copies a combined image of every loaded cell to the clipboard.
+     AForceLiveRes overrides FSettings.SaveAtLiveResolution for this call
+     only (no persist); set True to copy at panel pixel size, False to
+     copy at native frame size. AReExtract gates the pre-copy re-extract:
+     when AForceLiveRes is False and AReExtract is supplied, the host
+     re-extracts at native resolution before the copy so the clipboard
+     receives true native-resolution pixels rather than the
+     viewport-scaled live cells.}
+    procedure CopyView(AForceLiveRes: Boolean; AReExtract: TReExtractAction = nil);
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
     {Caller-supplied save-resolution bitmaps. Set before invoking a save
      or copy method when SaveAtLiveResolution is off and the caller has
@@ -1024,9 +1032,10 @@ begin
     Clipboard.Assign(PickSaveBitmap(Idx));
 end;
 
-procedure TFrameExporter.CopyView;
+procedure TFrameExporter.CopyView(AForceLiveRes: Boolean; AReExtract: TReExtractAction);
 var
-  Bmp: TBitmap;
+  WriteAction: TProc;
+  PriorLiveRes: Boolean;
 begin
   if FFrameView.CellCount = 0 then
     Exit;
@@ -1035,31 +1044,53 @@ begin
     CopyFrame(FFrameView.CurrentFrameIndex);
     Exit;
   end;
-  {Same OOM-safety wrapper as SaveView, plus a check for the silent
-   failure path inside CopyBitmapToClipboard: when GlobalAlloc returns
-   0 mid-publish the helper bails with Result := False without raising,
-   which historically meant the user saw the clipboard simply not
-   change. Surface that as an explicit error too.}
-  try
-    Bmp := RenderWithBanner(RenderCombinedFromCells);
-    try
-      ApplyCombinedSizeCap(Bmp);
-      {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
-       onto FSettings.Background) side-by-side, so modern paste targets
-       keep the transparent gaps and legacy targets see a working opaque
-       image instead of the broken paste they get from the OS's default
-       CF_DIB synthesis. ABackground only matters when the rendered
-       bitmap carries alpha; for opaque sources it is ignored.}
-      if not CopyBitmapToClipboard(Bmp, FSettings.Background) then
-        MessageDlg('Clipboard write failed - the combined image is too large to copy.' + sLineBreak + sLineBreak + 'Lower the Scale target in Settings, reduce the frame count, or use Save view to write the image to a file instead.', mtError, [mbOK], 0);
-    finally
-      Bmp.Free;
+
+  {The render pipeline reads FSettings.SaveAtLiveResolution to decide live
+   vs native; for a one-shot dropdown choice we flip it for the duration
+   of this call only and restore in finally. No FSettings.Save call -
+   the persisted value is unchanged, only the in-memory copy briefly.}
+  PriorLiveRes := FSettings.SaveAtLiveResolution;
+
+  WriteAction := procedure
+    var
+      Bmp: TBitmap;
+    begin
+      {Same OOM-safety wrapper as SaveView, plus a check for the silent
+       failure path inside CopyBitmapToClipboard: when GlobalAlloc returns
+       0 mid-publish the helper bails with Result := False without raising,
+       which historically meant the user saw the clipboard simply not
+       change. Surface that as an explicit error too.}
+      try
+        Bmp := RenderWithBanner(RenderCombinedFromCells);
+        try
+          ApplyCombinedSizeCap(Bmp);
+          {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
+           onto FSettings.Background) side-by-side, so modern paste targets
+           keep the transparent gaps and legacy targets see a working opaque
+           image instead of the broken paste they get from the OS's default
+           CF_DIB synthesis. ABackground only matters when the rendered
+           bitmap carries alpha; for opaque sources it is ignored.}
+          if not CopyBitmapToClipboard(Bmp, FSettings.Background) then
+            MessageDlg('Clipboard write failed - the combined image is too large to copy.' + sLineBreak + sLineBreak + 'Lower the Scale target in Settings, reduce the frame count, or use Save view to write the image to a file instead.', mtError, [mbOK], 0);
+        finally
+          Bmp.Free;
+        end;
+      except
+        on E: EOutOfMemory do
+          MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
+        on E: EOutOfResources do
+          MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
+      end;
     end;
-  except
-    on E: EOutOfMemory do
-      MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
-    on E: EOutOfResources do
-      MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
+
+  FSettings.SaveAtLiveResolution := AForceLiveRes;
+  try
+    if (not AForceLiveRes) and Assigned(AReExtract) then
+      AReExtract(BuildSaveIndicesAllLoaded, WriteAction)
+    else
+      WriteAction;
+  finally
+    FSettings.SaveAtLiveResolution := PriorLiveRes;
   end;
 end;
 

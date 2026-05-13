@@ -226,10 +226,11 @@ begin
     { VisibleCount = 6: all modes + timecodes visible, all 7 actions hidden.
       The hamburger injects extra items next to dropdown actions: Shuffle
       next to Refresh, plus the two explicit-resolution variants next to
-      Save view, so the expected count is TB_ACTIONS + 3. }
+      Save view, plus the two next to Copy view, so the expected count is
+      TB_ACTIONS + 5. }
     PopulateHamburgerMenu(Menu, MakeState(ELEM_ACTION_FIRST, vmGrid, False, True),
       nil, nil, nil, nil);
-    Assert.AreEqual(Length(TB_ACTIONS) + 3, CountNonSeparators(Menu));
+    Assert.AreEqual(Length(TB_ACTIONS) + 5, CountNonSeparators(Menu));
   finally
     Menu.Free;
   end;
@@ -248,8 +249,8 @@ begin
     State := MakeState(ELEM_TIMECODE_INDEX, vmGrid, True, True);
     PopulateHamburgerMenu(Menu, State, nil, nil, nil, nil);
     { Timecodes + 7 actions + Shuffle (next to Refresh) + 2 Save view
-      variants (next to Save view) = 11 }
-    Assert.AreEqual(11, CountNonSeparators(Menu));
+      variants + 2 Copy view variants = 13 }
+    Assert.AreEqual(13, CountNonSeparators(Menu));
     Found := False;
     for I := 0 to Menu.Items.Count - 1 do
       if Menu.Items[I].Caption = 'Timecodes' then
@@ -271,8 +272,8 @@ begin
     PopulateHamburgerMenu(Menu, MakeState(3, vmGrid, False, True),
       nil, nil, nil, nil);
     { 2 modes + Timecodes + 7 actions + Shuffle + 2 Save view variants
-      = 13 non-separator items }
-    Assert.AreEqual(13, CountNonSeparators(Menu));
+      + 2 Copy view variants = 15 non-separator items }
+    Assert.AreEqual(15, CountNonSeparators(Menu));
     { First non-separator should be Filmstrip (Scroll horizontal) }
     Assert.AreEqual(MODE_CAPTIONS[vmFilmstrip], Menu.Items[0].Caption);
   finally
@@ -289,8 +290,8 @@ begin
     PopulateHamburgerMenu(Menu, MakeState(0, vmGrid, False, True),
       nil, nil, nil, nil);
     { 5 modes + Timecodes + 7 actions + Shuffle + 2 Save view variants
-      = 16 non-separator items }
-    Assert.AreEqual(ELEM_TOTAL_COUNT + 3, CountNonSeparators(Menu));
+      + 2 Copy view variants = 18 non-separator items }
+    Assert.AreEqual(ELEM_TOTAL_COUNT + 5, CountNonSeparators(Menu));
     { First item should be the first mode }
     Assert.AreEqual(MODE_CAPTIONS[vmSmartGrid], Menu.Items[0].Caption);
   finally

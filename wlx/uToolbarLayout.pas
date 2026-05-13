@@ -43,6 +43,12 @@ const
    Windows; on legacy Windows (no checkbox) the seed is the final value.}
   CM_SAVE_VIEW_LIVE = 13;
   CM_SAVE_VIEW_NATIVE = 14;
+  {Copy view variants: same dropdown idea as Save view, but with no
+   dialog the user cannot revisit the choice mid-flight, so the named
+   choice is the final resolution for that single Copy view (the
+   persisted SaveAtLiveResolution setting is not touched).}
+  CM_COPY_VIEW_LIVE = 15;
+  CM_COPY_VIEW_NATIVE = 16;
 
   {Toolbar buttons differentiate the two scroll modes via icons (see
    uPluginForm.CreateToolbar); both modes share the textual caption.}
@@ -261,6 +267,24 @@ begin
       MI := TMenuItem.Create(AMenu);
       MI.Caption := 'Save view at native size...';
       MI.Tag := CM_SAVE_VIEW_NATIVE;
+      MI.OnClick := AOnActionClick;
+      MI.Enabled := AState.HasFrames;
+      AMenu.Items.Add(MI);
+    end;
+
+    {Copy view dropdown peers, mirroring Save view.}
+    if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
+    begin
+      MI := TMenuItem.Create(AMenu);
+      MI.Caption := 'Copy view at view resolution';
+      MI.Tag := CM_COPY_VIEW_LIVE;
+      MI.OnClick := AOnActionClick;
+      MI.Enabled := AState.HasFrames;
+      AMenu.Items.Add(MI);
+
+      MI := TMenuItem.Create(AMenu);
+      MI.Caption := 'Copy view at native size';
+      MI.Tag := CM_COPY_VIEW_NATIVE;
       MI.OnClick := AOnActionClick;
       MI.Enabled := AState.HasFrames;
       AMenu.Items.Add(MI);

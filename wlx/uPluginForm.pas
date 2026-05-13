@@ -43,6 +43,7 @@ type
      view-mode split-button pattern.}
     FRefreshPopup: TPopupMenu;
     FSaveViewPopup: TPopupMenu;
+    FCopyViewPopup: TPopupMenu;
     {Holds embedded PNG glyphs for toolbar buttons that have no good Unicode
      equivalent; the hamburger is the first user. Owned by Self.}
     FToolbarImages: TImageList;
@@ -120,6 +121,7 @@ type
      so the keyboard hotkeys stay the single source of truth.}
     function CreateRefreshPopup: TPopupMenu;
     function CreateSaveViewPopup: TPopupMenu;
+    function CreateCopyViewPopup: TPopupMenu;
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -546,10 +548,11 @@ const
    by virtue of the IDX_ICON_ARROW glyph; Refresh has no glyph so the
    space is added explicitly to match the visual weight.}
   REFRESH_DROPDOWN_EXTRA = 14;
-  {Save view's caption is longer than Refresh, so the bsSplitButton arrow
-   pinches the rendered text when only REFRESH_DROPDOWN_EXTRA is reserved.
-   Add a small buffer on top so the full caption stays visible.}
-  SAVE_VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
+  {Save view / Copy view captions are longer than Refresh, so the
+   bsSplitButton arrow pinches the rendered text when only
+   REFRESH_DROPDOWN_EXTRA is reserved. Add a small buffer on top so the
+   full caption stays visible.}
+  VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
   SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
   PB_H = 16; {Progress bar height}
   ICON_W = 16; {Toolbar icon width}
@@ -701,6 +704,7 @@ begin
   SetLength(FToolbarButtons, 0);
   FRefreshPopup := nil;
   FSaveViewPopup := nil;
+  FCopyViewPopup := nil;
   for I := 0 to High(TB_ACTIONS) do
   begin
     Btn := TButton.Create(FToolbar);
@@ -713,8 +717,8 @@ begin
       case TB_ACTIONS[I].Tag of
         CM_REFRESH:
           Inc(BW, REFRESH_DROPDOWN_EXTRA);
-        CM_SAVE_VIEW:
-          Inc(BW, SAVE_VIEW_DROPDOWN_EXTRA);
+        CM_SAVE_VIEW, CM_COPY_VIEW:
+          Inc(BW, VIEW_DROPDOWN_EXTRA);
       end;
     Btn.SetBounds(X, CY, BW, CtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
@@ -742,6 +746,20 @@ begin
       Btn.Style := bsSplitButton;
       Btn.DropDownMenu := FSaveViewPopup;
       Btn.PopupMenu := FSaveViewPopup;
+    end
+    else if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
+    begin
+      {Copy view dropdown: same idea as Save view but commits immediately
+       (no dialog), so the variants are the only way to override the
+       persisted SaveAtLiveResolution setting for a single Copy view.
+       The native variant also re-extracts at native resolution before
+       publishing to the clipboard, which the default Copy view used to
+       skip - the dropdown thus also fixes the long-standing "Copy view
+       at native resolution copies low-res cells" surprise.}
+      FCopyViewPopup := CreateCopyViewPopup;
+      Btn.Style := bsSplitButton;
+      Btn.DropDownMenu := FCopyViewPopup;
+      Btn.PopupMenu := FCopyViewPopup;
     end;
     FElementRights[ELEM_ACTION_FIRST + I] := X + BW;
     Inc(X, BW + BTN_GAP);
@@ -941,6 +959,27 @@ begin
   MI := TMenuItem.Create(Result);
   MI.Caption := 'Save view at native size...';
   MI.Tag := CM_SAVE_VIEW_NATIVE;
+  MI.OnClick := OnContextMenuClick;
+  Result.Items.Add(MI);
+end;
+
+function TPluginForm.CreateCopyViewPopup: TPopupMenu;
+var
+  MI: TMenuItem;
+begin
+  {Mirror of CreateSaveViewPopup. No dialog follows so the captions
+   omit the trailing ellipsis - the action commits immediately.}
+  Result := TPopupMenu.Create(Self);
+
+  MI := TMenuItem.Create(Result);
+  MI.Caption := 'Copy view at view resolution';
+  MI.Tag := CM_COPY_VIEW_LIVE;
+  MI.OnClick := OnContextMenuClick;
+  Result.Items.Add(MI);
+
+  MI := TMenuItem.Create(Result);
+  MI.Caption := 'Copy view at native size';
+  MI.Tag := CM_COPY_VIEW_NATIVE;
   MI.OnClick := OnContextMenuClick;
   Result.Items.Add(MI);
 end;
@@ -2040,7 +2079,8 @@ begin
    TC for seconds before the dialog appeared and re-extracted even when
    the user then cancelled.}
   case ATag of
-    CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_SAVE_VIEW_LIVE, CM_SAVE_VIEW_NATIVE, CM_COPY_FRAME, CM_COPY_VIEW:
+    CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_SAVE_VIEW_LIVE, CM_SAVE_VIEW_NATIVE,
+    CM_COPY_FRAME, CM_COPY_VIEW, CM_COPY_VIEW_LIVE, CM_COPY_VIEW_NATIVE:
       if not CanExportFrames then
         Exit;
   end;
@@ -2077,11 +2117,14 @@ begin
             end);
       end;
     CM_COPY_VIEW:
-      WithReExtract(FExporter.BuildSaveIndicesAllLoaded,
-        procedure
-        begin
-          FExporter.CopyView;
-        end);
+      {Default Copy view: honour the persisted SaveAtLiveResolution.}
+      FExporter.CopyView(FSettings.SaveAtLiveResolution, ReExtract);
+    CM_COPY_VIEW_LIVE:
+      {Explicit "view resolution" variant from the Copy view dropdown.}
+      FExporter.CopyView(True, ReExtract);
+    CM_COPY_VIEW_NATIVE:
+      {Explicit "native size" variant from the Copy view dropdown.}
+      FExporter.CopyView(False, ReExtract);
     CM_SELECT_ALL:
       FFrameView.SelectAll;
     CM_DESELECT_ALL:

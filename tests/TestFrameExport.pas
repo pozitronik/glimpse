@@ -1612,7 +1612,7 @@ begin
     try
       Exporter := TFrameExporter.Create(View, Settings);
       try
-        Exporter.CopyView;
+        Exporter.CopyView(Settings.SaveAtLiveResolution);
       finally
         Exporter.Free;
       end;
