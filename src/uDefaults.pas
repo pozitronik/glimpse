@@ -194,9 +194,8 @@ const
     '%audio%' +
     '%load_time align=right%';
 
-  {Status bar font defaults — match the pre-template hardcoded values
-   (Tahoma is the system default for TStatusBar.Font.Name; size 9 was
-   the explicit STATUSBAR_FONT constant in uPluginForm).}
+  {Status bar font defaults — Tahoma 9 is the long-standing common-
+   control look on Windows; users override via the settings dialog.}
   DEF_STATUSBAR_FONT_NAME = 'Tahoma';
   DEF_STATUSBAR_FONT_SIZE = 9;
   MIN_STATUSBAR_FONT_SIZE = 6;

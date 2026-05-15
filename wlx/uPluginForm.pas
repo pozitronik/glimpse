@@ -509,8 +509,6 @@ const
    enough that the user sees the high-res refresh promptly after release.}
   VIEWPORT_REFRESH_DEBOUNCE_MS = 500;
   FRAME_COUNT_EDIT_W = 40; {width of the frame count edit control}
-  STATUSBAR_HEIGHT = 21;
-  STATUSBAR_FONT = 9;
   PROGRESSBAR_H = 14; {desired height of the embedded progress bar}
   PROGRESSBAR_MIN_W = 40; {minimum width before clamping}
 
@@ -1246,11 +1244,11 @@ begin
   Bar := TGlimpseStatusBar.Create(Self);
   FStatusBar := Bar;
   FStatusBar.Parent := Self;
-  FStatusBar.Height := STATUSBAR_HEIGHT;
+  {Initial Height is set by ApplyStatusBarSettings (called below) once
+   the configured font has been measured — no point picking a number
+   that the same paint cycle will overwrite.}
   FStatusBar.SimplePanel := False;
   FStatusBar.SizeGrip := False;
-  FStatusBar.Font.Name := DEF_STATUSBAR_FONT_NAME;
-  FStatusBar.Font.Size := DEF_STATUSBAR_FONT_SIZE;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
   {Per-panel hints come from CMHintShow inside TGlimpseStatusBar; the
    ShowHint flag still has to be on so the VCL routes hint messages to
