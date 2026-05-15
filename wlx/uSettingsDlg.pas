@@ -103,6 +103,7 @@ type
     LblBannerPosition: TLabel;
     CbxBannerPosition: TComboBox;
     ChkSaveAtLiveResolution: TCheckBox;
+    ChkCopyAtLiveResolution: TCheckBox;
     LblCombinedMaxSide: TLabel;
     EdtCombinedMaxSide: TEdit;
     UdCombinedMaxSide: TUpDown;
@@ -302,6 +303,7 @@ begin
   UpdateBannerFontDisplay;
   CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
   ChkSaveAtLiveResolution.Checked := ASettings.SaveAtLiveResolution;
+  ChkCopyAtLiveResolution.Checked := ASettings.CopyAtLiveResolution;
   UdCombinedMaxSide.Position := ASettings.CombinedMaxSide;
 
   ChkCacheEnabled.Checked := ASettings.CacheEnabled;
@@ -391,6 +393,7 @@ begin
   ASettings.BannerFontAutoSize := ChkBannerAutoSize.Checked;
   ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
   ASettings.SaveAtLiveResolution := ChkSaveAtLiveResolution.Checked;
+  ASettings.CopyAtLiveResolution := ChkCopyAtLiveResolution.Checked;
   ASettings.CombinedMaxSide := UdCombinedMaxSide.Position;
 
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;

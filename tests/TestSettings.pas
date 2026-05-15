@@ -119,6 +119,12 @@ type
     [Test]
     procedure TestSaveAtLiveResolutionRoundTrip;
     [Test]
+    procedure TestCopyAtLiveResolutionDefault;
+    [Test]
+    procedure TestCopyAtLiveResolutionRoundTrip;
+    [Test]
+    procedure TestCopyAtLiveResolutionDoesNotMirrorSave;
+    [Test]
     procedure TestCombinedMaxSideDefault;
     [Test]
     procedure TestCombinedMaxSideRoundTrip;
@@ -1532,6 +1538,72 @@ begin
     Assert.AreEqual(not DEF_SAVE_AT_LIVE_RESOLUTION, S2.SaveAtLiveResolution);
   finally
     S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCopyAtLiveResolutionDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_COPY_AT_LIVE_RESOLUTION, S.CopyAtLiveResolution,
+      'Default for CopyAtLiveResolution preserves pre-split native-clipboard behaviour');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCopyAtLiveResolutionRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'copy_live_res.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CopyAtLiveResolution := not DEF_COPY_AT_LIVE_RESOLUTION;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_COPY_AT_LIVE_RESOLUTION, S2.CopyAtLiveResolution);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCopyAtLiveResolutionDoesNotMirrorSave;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Migration policy: an existing INI with [save] AtLiveResolution but no
+   [copy] section must NOT seed CopyAtLiveResolution from save's value.
+   The new key gets the default; users opt in explicitly.}
+  IniPath := TPath.Combine(FTempDir, 'mirror_test.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteBool('save', 'AtLiveResolution', not DEF_COPY_AT_LIVE_RESOLUTION);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_COPY_AT_LIVE_RESOLUTION, S.CopyAtLiveResolution,
+      'CopyAtLiveResolution must use its own default when [copy] section is missing');
+    Assert.AreEqual(not DEF_COPY_AT_LIVE_RESOLUTION, S.SaveAtLiveResolution,
+      'SaveAtLiveResolution must still load from [save]');
+  finally
+    S.Free;
   end;
 end;
 

@@ -139,7 +139,14 @@ type
      AReExtract gates the post-dialog re-extract the same way SaveFrame
      does.}
     procedure SaveView(const AFileName: string; AInitialLiveRes: Boolean; AReExtract: TReExtractAction = nil);
-    procedure CopyFrame(AContextCellIndex: Integer);
+    {Copies a single frame to the clipboard. Honours the persisted
+     CopyAtLiveResolution: live = render at on-screen cell size and
+     publish; native = publish the cell's native bitmap. AReExtract is
+     invoked when native resolution is requested AND the live cells
+     are not already at native size — so the clipboard receives true
+     native pixels rather than the viewport-scaled live cell. Mirrors
+     the CopyView pattern.}
+    procedure CopyFrame(AContextCellIndex: Integer; AReExtract: TReExtractAction = nil);
     {Copies a combined image of every loaded cell to the clipboard.
      AForceLiveRes overrides FSettings.SaveAtLiveResolution for this call
      only (no persist); set True to copy at panel pixel size, False to
@@ -1182,13 +1189,15 @@ begin
     WriteAction;
 end;
 
-procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer);
+procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer; AReExtract: TReExtractAction);
 var
   Idx: Integer;
-  Tmp: TBitmap;
+  WriteAction: TProc;
+  PriorLiveRes: Boolean;
 begin
   if not ResolveFrameIndex(AContextCellIndex, Idx) then
     Exit;
+
   {Single-frame copies publish CF_BITMAP only (via Clipboard.Assign),
    not the CF_DIBV5 + CF_DIB pair CopyView uses. The decoder pipeline
    produces pf24bit frames (TFrameView.SetFrame asserts the contract)
@@ -1196,18 +1205,40 @@ begin
    the same opaque pixels regardless of which DIB variant it asks for,
    and CF_BITMAP is the broadest-compatibility format. CopyView differs
    because the combined image carries cell-gap transparency that only
-   CF_DIBV5 can round-trip; do not collapse the two paths.}
-  if FSettings.SaveAtLiveResolution then
-  begin
-    Tmp := RenderCellAtLiveSize(Idx);
-    try
-      Clipboard.Assign(Tmp);
-    finally
-      Tmp.Free;
+   CF_DIBV5 can round-trip; do not collapse the two paths.
+
+   The render path reads FSettings.SaveAtLiveResolution; we temp-flip it
+   to CopyAtLiveResolution for the duration of this call so the copy
+   surface honours its own setting. AReExtract sees the flipped value
+   too (it queries SaveAtLiveResolution to decide whether re-extract is
+   needed), so the gate is consistent across render and re-extract.}
+  WriteAction := procedure
+    var
+      Tmp: TBitmap;
+    begin
+      if FSettings.SaveAtLiveResolution then
+      begin
+        Tmp := RenderCellAtLiveSize(Idx);
+        try
+          Clipboard.Assign(Tmp);
+        finally
+          Tmp.Free;
+        end;
+      end
+      else
+        Clipboard.Assign(PickSaveBitmap(Idx));
     end;
-  end
-  else
-    Clipboard.Assign(PickSaveBitmap(Idx));
+
+  PriorLiveRes := FSettings.SaveAtLiveResolution;
+  FSettings.SaveAtLiveResolution := FSettings.CopyAtLiveResolution;
+  try
+    if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+      AReExtract([Idx], WriteAction)
+    else
+      WriteAction;
+  finally
+    FSettings.SaveAtLiveResolution := PriorLiveRes;
+  end;
 end;
 
 procedure TFrameExporter.CopyView(AForceLiveRes: Boolean; AReExtract: TReExtractAction);

@@ -55,12 +55,23 @@ const
   DEF_JPEG_QUALITY = 90;
   DEF_PNG_COMPRESSION = 6;
 
-  {When True, file save and clipboard copy render the output at the size
-   the live view currently shows on screen (cell pixel dimensions taken
-   from the layout). When False, output uses native frame resolution.
+  {When True, file save renders the output at the size the live view
+   currently shows on screen (cell pixel dimensions taken from the
+   layout). When False, output uses native frame resolution.
    Default False to preserve the long-standing "frame-resolution combined
-   image" behaviour for users who do not opt in.}
+   image" behaviour for users who do not opt in.
+
+   Sister setting DEF_COPY_AT_LIVE_RESOLUTION governs the clipboard path
+   independently; see comment below.}
   DEF_SAVE_AT_LIVE_RESOLUTION = False;
+
+  {Same idea as DEF_SAVE_AT_LIVE_RESOLUTION but for clipboard copies.
+   Split out so users can have e.g. native-resolution file saves and
+   smaller view-resolution clipboard copies (typical "save the full
+   thing, paste a thumbnail into a chat" workflow). Default False
+   matches the historical pre-split behaviour where a single setting
+   drove both surfaces.}
+  DEF_COPY_AT_LIVE_RESOLUTION = False;
 
   {Cap on the longer side (in pixels) of the rendered combined image
    produced by Save view / Copy view. After the combined image (with

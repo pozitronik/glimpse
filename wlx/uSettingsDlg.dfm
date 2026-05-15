@@ -1003,7 +1003,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkSaveAtLiveResolution: TCheckBox
         Left = 12
-        Top = 350
+        Top = 344
         Width = 424
         Height = 17
         Hint =
@@ -1013,16 +1013,29 @@ object SettingsForm: TSettingsForm
         Caption = 'Save at view resolution (uses native frame size when off)'
         TabOrder = 18
       end
+      object ChkCopyAtLiveResolution: TCheckBox
+        Left = 12
+        Top = 365
+        Width = 424
+        Height = 17
+        Hint =
+          'On: copy to clipboard at the size you see in the viewer. Off: re' +
+          '-extract at native frame size before copying. Independent of the' +
+          ' save setting above.'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Copy at view resolution (uses native frame size when off)'
+        TabOrder = 19
+      end
       object LblCombinedMaxSide: TLabel
         Left = 12
-        Top = 380
+        Top = 393
         Width = 105
         Height = 15
         Caption = 'Max combined side:'
       end
       object EdtCombinedMaxSide: TEdit
         Left = 130
-        Top = 376
+        Top = 389
         Width = 60
         Height = 23
         Hint =
@@ -1030,23 +1043,23 @@ object SettingsForm: TSettingsForm
           'ge in pixels. The image is shrunk proportionally if it exceeds t' +
           'his value. 0 disables the cap.'
         NumbersOnly = True
-        TabOrder = 19
+        TabOrder = 20
         Text = '0'
       end
       object UdCombinedMaxSide: TUpDown
         Left = 190
-        Top = 376
+        Top = 389
         Width = 17
         Height = 23
         Associate = EdtCombinedMaxSide
         Max = 32768
         Increment = 256
-        TabOrder = 20
+        TabOrder = 21
         Thousands = False
       end
       object LblCombinedMaxSideUnit: TLabel
         Left = 213
-        Top = 380
+        Top = 393
         Width = 14
         Height = 15
         Caption = 'px'

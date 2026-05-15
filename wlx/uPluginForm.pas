@@ -498,10 +498,11 @@ const
 
   {Status bar panel widths}
   SBP_RESOLUTION_W = 120;
-  {Predicted Save view / Copy view output dimensions for the persisted
-   Save at view resolution toggle. Wider than SBP_RESOLUTION_W so the
-   "WxH -> CxC" form (when the cap kicks in) does not get clipped.}
-  SBP_RESULT_W = 200;
+  {Predicted Save / Copy view output dimensions. Two adjacent panels
+   (one per surface, since SaveAtLiveResolution and CopyAtLiveResolution
+   are independent settings) so the width must accommodate both the
+   "Save: " / "Copy: " prefix and the post-cap "WxH -> CxC" form.}
+  SBP_RESULT_W = 240;
   SBP_FRAMERATE_W = 100;
   SBP_DURATION_W = 100;
   SBP_BITRATE_W = 100;
@@ -1102,13 +1103,15 @@ var
   I: Integer;
   MI: TMenuItem;
   Base: string;
-  ForceLive: Boolean;
+  ForceLive, IsCopy: Boolean;
+  PersistedLive: Boolean;
 begin
   if AMenu = nil then
     Exit;
   for I := 0 to AMenu.Items.Count - 1 do
   begin
     MI := AMenu.Items[I];
+    IsCopy := False;
     case MI.Tag of
       CM_SAVE_VIEW_LIVE:
         begin
@@ -1124,11 +1127,13 @@ begin
         begin
           Base := CAPTION_COPY_VIEW_LIVE;
           ForceLive := True;
+          IsCopy := True;
         end;
       CM_COPY_VIEW_NATIVE:
         begin
           Base := CAPTION_COPY_VIEW_NATIVE;
           ForceLive := False;
+          IsCopy := True;
         end;
     else
       Continue;
@@ -1137,13 +1142,18 @@ begin
       MI.Caption := Base + FExporter.FormatPredictedSize(ForceLive)
     else
       MI.Caption := Base;
-    {Mark the item that matches the persisted SaveAtLiveResolution as
-     the current default with a radio bullet. Tells the user, in
-     context, what the bare toolbar click would do without making them
-     open the settings dialog. RadioItem groups Live/Native into a
-     mutually-exclusive pair so only one bullet shows at a time.}
+    {Mark the item that matches the persisted setting for the corresponding
+     surface as the current default with a radio bullet. Save items track
+     SaveAtLiveResolution, copy items track CopyAtLiveResolution - the two
+     settings can diverge so the bullets must too. RadioItem groups
+     Live/Native into a mutually-exclusive pair so only one bullet shows
+     per pair.}
+    if IsCopy then
+      PersistedLive := FSettings.CopyAtLiveResolution
+    else
+      PersistedLive := FSettings.SaveAtLiveResolution;
     MI.RadioItem := True;
-    MI.Checked := ForceLive = FSettings.SaveAtLiveResolution;
+    MI.Checked := ForceLive = PersistedLive;
   end;
 end;
 
@@ -1277,10 +1287,25 @@ procedure TPluginForm.UpdateStatusBar;
     FPanelHints[High(FPanelHints)] := AHint;
   end;
 
+  procedure AddPredictedSizePanel(const ALabel: string; AForceLiveRes: Boolean);
+  var
+    PredW, PredH, PredCappedW, PredCappedH: Integer;
+    Text: string;
+  begin
+    if (FExporter = nil) or not FExporter.PredictDisplayedSize(AForceLiveRes, PredW, PredH, PredCappedW, PredCappedH) then
+      Exit;
+    if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
+      Text := Format('%s: %dx%d → %dx%d', [ALabel, PredW, PredH, PredCappedW, PredCappedH])
+    else
+      Text := Format('%s: %dx%d', [ALabel, PredW, PredH]);
+    AddPanel(Text, SBP_RESULT_W,
+      Format('%s view output dimensions for the current "%s at view resolution" setting. When CombinedMaxSide would shrink the image, the right-hand pair shows the post-cap size.',
+        [ALabel, ALabel]));
+  end;
+
 var
   AudioStr: string;
   FileIdx, FileTotal: Integer;
-  PredW, PredH, PredCappedW, PredCappedH: Integer;
 begin
   FStatusBar.Panels.Clear;
   SetLength(FPanelHints, 0);
@@ -1313,20 +1338,14 @@ begin
     AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W,
       'Native frame resolution of the source video (width x height in pixels).');
 
-  {Predicted Save view / Copy view output dimensions for the persisted
-   Save at view resolution toggle. Cap is shown as "WxH -> CxC" when
-   CombinedMaxSide would shrink the image. Hidden when the predictor
-   has nothing meaningful to report (e.g. before the first extraction
-   completes).}
-  if (FExporter <> nil) and FExporter.PredictDisplayedSize(FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH) then
-  begin
-    if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
-      AddPanel(Format('%dx%d → %dx%d', [PredW, PredH, PredCappedW, PredCappedH]), SBP_RESULT_W,
-        'Combined Save view / Copy view output dimensions for the current Save at view resolution setting. The right-hand pair shows the post-cap size after CombinedMaxSide shrinks the image.')
-    else
-      AddPanel(Format('%dx%d', [PredW, PredH]), SBP_RESULT_W,
-        'Combined Save view / Copy view output dimensions for the current Save at view resolution setting.');
-  end;
+  {Predicted Save view / Copy view output dimensions. Two adjacent
+   panels - one for each surface - because the live-resolution toggle is
+   now per-action (SaveAtLiveResolution / CopyAtLiveResolution) and the
+   two predictions can differ. Cap is shown as "WxH -> CxC" when
+   CombinedMaxSide would shrink the image. Each panel is hidden when its
+   predictor has nothing to report (e.g. before the first extraction).}
+  AddPredictedSizePanel('Save', FSettings.SaveAtLiveResolution);
+  AddPredictedSizePanel('Copy', FSettings.CopyAtLiveResolution);
 
   {Framerate}
   if FVideoInfo.Fps > 0 then
@@ -2340,18 +2359,21 @@ begin
          toolbar button, configurable hotkey, and TC lc_Copy all pass
          -1 (the default) and so keep the selection-first rule.
          PickActionCell's step 1 ignores out-of-range / unloaded values
-         so we don't need extra guards.}
+         so we don't need extra guards.
+
+         The re-extract gate now lives inside CopyFrame (it temp-flips
+         SaveAtLiveResolution := CopyAtLiveResolution and decides from
+         there), so the dispatch just hands over the callback rather
+         than wrapping the call in WithReExtract upfront. Mirrors the
+         CopyView / SaveView pattern.}
         ResolvedIdx := FExporter.PickActionCell(AContextCellIndex);
         if ResolvedIdx >= 0 then
-          WithReExtract([ResolvedIdx],
-            procedure
-            begin
-              FExporter.CopyFrame(ResolvedIdx);
-            end);
+          FExporter.CopyFrame(ResolvedIdx, ReExtract);
       end;
     CM_COPY_VIEW:
-      {Default Copy view: honour the persisted SaveAtLiveResolution.}
-      FExporter.CopyView(FSettings.SaveAtLiveResolution, ReExtract);
+      {Default Copy view: honour the persisted CopyAtLiveResolution
+       (separate setting from the save side since 1.1.3.4).}
+      FExporter.CopyView(FSettings.CopyAtLiveResolution, ReExtract);
     CM_COPY_VIEW_LIVE:
       {Explicit "view resolution" variant from the Copy view dropdown.}
       FExporter.CopyView(True, ReExtract);

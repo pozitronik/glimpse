@@ -44,6 +44,7 @@ type
     FBackgroundAlpha: Byte;
     FSaveFolder: string;
     FSaveAtLiveResolution: Boolean;
+    FCopyAtLiveResolution: Boolean;
     FCombinedMaxSide: Integer;
     {[save] — banner group shared with WCX}
     FBanner: TBannerSettingsGroup;
@@ -159,6 +160,7 @@ type
     property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property SaveFolder: string read FSaveFolder write FSaveFolder;
     property SaveAtLiveResolution: Boolean read FSaveAtLiveResolution write FSaveAtLiveResolution;
+    property CopyAtLiveResolution: Boolean read FCopyAtLiveResolution write FCopyAtLiveResolution;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
@@ -309,6 +311,7 @@ begin
   FBackgroundAlpha := DEF_BACKGROUND_ALPHA;
   FSaveFolder := DEF_SAVE_FOLDER;
   FSaveAtLiveResolution := DEF_SAVE_AT_LIVE_RESOLUTION;
+  FCopyAtLiveResolution := DEF_COPY_AT_LIVE_RESOLUTION;
   FCombinedMaxSide := DEF_COMBINED_MAX_SIDE;
   FBanner := TBannerSettingsGroup.Defaults;
   FBanner.Show := DEF_SHOW_BANNER;
@@ -384,6 +387,13 @@ begin
     FCombinedMaxSide := EnsureRange(Ini.ReadInteger('save', 'CombinedMaxSide', DEF_COMBINED_MAX_SIDE), MIN_COMBINED_MAX_SIDE, MAX_COMBINED_MAX_SIDE);
     FBanner.LoadFrom(Ini, 'save');
 
+    {Clipboard-copy live-resolution toggle. Lives in its own [copy]
+     section (separate from [save]) so the two surfaces can be tuned
+     independently. Defaults to False (matches pre-split behaviour) and
+     does NOT seed from [save] AtLiveResolution - users on the old INI
+     get the default for the new key, save settings stay untouched.}
+    FCopyAtLiveResolution := Ini.ReadBool('copy', 'AtLiveResolution', DEF_COPY_AT_LIVE_RESOLUTION);
+
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
     FCacheMaxSizeMB := EnsureRange(Ini.ReadInteger('cache', 'MaxSizeMB', DEF_CACHE_MAX_SIZE_MB), 10, 10000);
@@ -447,6 +457,8 @@ begin
     Ini.WriteBool('save', 'AtLiveResolution', FSaveAtLiveResolution);
     Ini.WriteInteger('save', 'CombinedMaxSide', FCombinedMaxSide);
     FBanner.SaveTo(Ini, 'save');
+
+    Ini.WriteBool('copy', 'AtLiveResolution', FCopyAtLiveResolution);
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
     Ini.WriteString('cache', 'Folder', FCacheFolder);
