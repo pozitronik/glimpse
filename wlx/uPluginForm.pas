@@ -646,6 +646,10 @@ begin
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
   FExporter.Free;
+  {The renderer holds the resolver closure, which captures Self via
+   FCachedStatusBarValues. Freeing the renderer drops the closure, the
+   captured ActRec, and every cached UnicodeString it owns.}
+  FStatusBarRenderer.Free;
   inherited;
 end;
 
