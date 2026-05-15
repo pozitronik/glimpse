@@ -2501,6 +2501,12 @@ begin
    constructing sub-controls, so FFrameView may not exist yet}
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
+  {Status bar's predicted Save / Copy view dimensions depend on cell sizes
+   and viewport - both change with the lister window. Refresh after the
+   layout pass; safe before FStatusBar exists since it is created in
+   CreateStatusBar (called before the first user-triggered Resize).}
+  if Assigned(FStatusBar) then
+    UpdateStatusBar;
   {Viewport width/height may have changed the MaxSide bucket; debounce and
    let the timer decide whether to refresh. ScheduleViewportRefresh is a
    no-op before the timer field is constructed, so calling during early
@@ -2670,6 +2676,12 @@ begin
    only change which cache wrapper future random extractions use).}
   if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged, scRandomExtractionChanged]) <> [] then
     RefreshExtraction;
+
+  {Status bar's predicted Save / Copy view dimensions react to several
+   knobs (Save/CopyAtLiveResolution, CombinedMaxSide) that do not
+   trigger RefreshExtraction. Refresh unconditionally here so any Apply
+   /OK reflects in the panels even when no re-extract follows.}
+  UpdateStatusBar;
 end;
 
 procedure TPluginForm.OnSettingsApply(Sender: TObject);
