@@ -1283,12 +1283,35 @@ begin
 end;
 
 procedure TPluginForm.ApplyStatusBarSettings;
+const
+  {Pixels of slack added above and below the rendered text so the panel
+   border doesn't kiss the glyphs and the bar still has the boxed look
+   the common control uses at the default Tahoma 9 height of 21 px.}
+  STATUSBAR_VPADDING = 6;
+var
+  Bmp: TBitmap;
+  TextH: Integer;
 begin
   if FStatusBarRenderer = nil then
     Exit;
   FStatusBarRenderer.SetFont(FSettings.StatusBarFontName, FSettings.StatusBarFontSize);
   FStatusBarRenderer.SetAutoWidthLive(FSettings.StatusBarAutoWidthLive);
   FStatusBarRenderer.ApplyTemplate(FSettings.StatusBarTemplate);
+
+  {Resize the bar to fit the font. Bigger fonts otherwise clip top and
+   bottom inside the legacy 21 px slot. The progress bar fills
+   ClientHeight so it follows automatically once the bar grows.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.Canvas.Font.Assign(FStatusBar.Font);
+    {'Hg' is the standard ascender + descender pair used to measure a
+     font's true vertical reach (matches GDI's GetTextMetrics output).}
+    TextH := Bmp.Canvas.TextHeight('Hg');
+  finally
+    Bmp.Free;
+  end;
+  FStatusBar.Height := TextH + STATUSBAR_VPADDING;
+  RepositionProgressBar;
 end;
 
 function ViewModeDisplayName(AMode: TViewMode): string;

@@ -37,7 +37,12 @@ begin
   if IsLegacyWindows then
     Result := ' -> '
   else
-    Result := ' → ';
+    {Pascal Unicode escape rather than the literal '→' character: the
+     project's .pas files are saved as UTF-8 without BOM, which Delphi
+     reads as ANSI, so a literal U+2192 in source ends up as the three
+     CP-1251 bytes 0xE2 0x86 0x92 ('†' + ''') instead of an arrow.
+     #$2192 is encoding-agnostic and round-trips reliably.}
+    Result := ' ' + #$2192 + ' ';
 end;
 
 end.

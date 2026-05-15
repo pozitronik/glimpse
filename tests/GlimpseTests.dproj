@@ -124,6 +124,7 @@
         <DCCReference Include="TestStatusBarTemplate.pas"/>
         <DCCReference Include="TestStatusBarFormatters.pas"/>
         <DCCReference Include="TestStatusBarRenderer.pas"/>
+        <DCCReference Include="TestPlatformDetect.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>

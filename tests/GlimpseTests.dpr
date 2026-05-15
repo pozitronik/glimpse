@@ -102,7 +102,8 @@ uses
   TestStatusBarTokens in 'TestStatusBarTokens.pas',
   TestStatusBarTemplate in 'TestStatusBarTemplate.pas',
   TestStatusBarFormatters in 'TestStatusBarFormatters.pas',
-  TestStatusBarRenderer in 'TestStatusBarRenderer.pas';
+  TestStatusBarRenderer in 'TestStatusBarRenderer.pas',
+  TestPlatformDetect in 'TestPlatformDetect.pas';
 
 var
   Runner: ITestRunner;
