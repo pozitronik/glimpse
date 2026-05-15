@@ -737,6 +737,76 @@ object SettingsForm: TSettingsForm
           'Over panels'
           'Auto')
       end
+      object LblStatusBarTemplate: TLabel
+        Left = 12
+        Top = 252
+        Width = 108
+        Height = 15
+        Caption = 'Status bar template:'
+      end
+      object EdtStatusBarTemplate: TEdit
+        Left = 12
+        Top = 270
+        Width = 427
+        Height = 23
+        Anchors = [akLeft, akTop, akRight]
+        Hint =
+          'Tokens enclosed in %...% in the order they should appear. Each ' +
+          'token becomes one panel. Optional attributes: width=auto|N, ' +
+          'align=left|right|center. Empty resets to default.'
+        TabOrder = 21
+      end
+      object MemStatusBarLegend: TMemo
+        Left = 12
+        Top = 296
+        Width = 427
+        Height = 64
+        Anchors = [akLeft, akTop, akRight]
+        Color = clBtnFace
+        ReadOnly = True
+        ScrollBars = ssVertical
+        TabOrder = 22
+        TabStop = False
+      end
+      object LblStatusBarFont: TLabel
+        Left = 12
+        Top = 370
+        Width = 87
+        Height = 15
+        Caption = 'Status bar font:'
+      end
+      object EdtStatusBarFont: TEdit
+        Left = 149
+        Top = 366
+        Width = 259
+        Height = 23
+        TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        ReadOnly = True
+        TabOrder = 23
+      end
+      object BtnStatusBarFont: TButton
+        Left = 414
+        Top = 366
+        Width = 25
+        Height = 23
+        Anchors = [akTop, akRight]
+        Caption = '...'
+        TabOrder = 24
+        OnClick = BtnStatusBarFontClick
+      end
+      object ChkStatusBarAutoWidthLive: TCheckBox
+        Left = 12
+        Top = 396
+        Width = 350
+        Height = 17
+        Hint =
+          'When OFF (default), each auto-width panel is sized once to its ' +
+          'sample text and locked. When ON, widths re-measure on every ' +
+          'refresh, tracking the live text but causing slight layout shift.'
+        Caption = 'Recalculate auto-width panels on every update'
+        TabOrder = 25
+      end
     end
     object TshSave: TTabSheet
       Caption = 'Save'

@@ -74,6 +74,13 @@ type
     ChkShowStatusBar: TCheckBox;
     LblProgressBarLayout: TLabel;
     CbxProgressBarLayout: TComboBox;
+    LblStatusBarTemplate: TLabel;
+    EdtStatusBarTemplate: TEdit;
+    MemStatusBarLegend: TMemo;
+    LblStatusBarFont: TLabel;
+    EdtStatusBarFont: TEdit;
+    BtnStatusBarFont: TButton;
+    ChkStatusBarAutoWidthLive: TCheckBox;
     TshSave: TTabSheet;
     LblSaveFormat: TLabel;
     CbxSaveFormat: TComboBox;
@@ -167,6 +174,7 @@ type
     procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
     procedure BtnBannerFontClick(Sender: TObject);
+    procedure BtnStatusBarFontClick(Sender: TObject);
     procedure CbxSaveFormatChange(Sender: TObject);
     procedure BtnSaveFolderClick(Sender: TObject);
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
@@ -196,6 +204,8 @@ type
     FTimestampFontSize: Integer;
     FBannerFontName: string;
     FBannerFontSize: Integer;
+    FStatusBarFontName: string;
+    FStatusBarFontSize: Integer;
     {Local snapshot of the bindings so the live table isn't mutated unless
      the user confirms with OK/Apply. Mirrors the per-row listview rows.}
     FHotkeys: uHotkeys.THotkeyBindings;
@@ -213,8 +223,11 @@ type
     procedure PickColor(APanel: TPanel);
     procedure PickTimestampFont;
     procedure PickBannerFont;
+    procedure PickStatusBarFont;
     procedure UpdateTimestampFontDisplay;
     procedure UpdateBannerFontDisplay;
+    procedure UpdateStatusBarFontDisplay;
+    procedure PopulateStatusBarLegend;
     procedure BrowseFolder(AEdit: TEdit);
     procedure PopulateHotkeyList;
     procedure RefreshHotkeyRow(AAction: uHotkeys.TPluginAction);
@@ -243,7 +256,8 @@ implementation
 uses
   System.IOUtils, System.Math,
   uDefaults, uFFmpegExe, uCache, uProbeCache, uBitmapSaver, uPathExpand,
-  uSettingsDlgLogic, uSettingsDlgUI, uCaptureShortcutDlg;
+  uSettingsDlgLogic, uSettingsDlgUI, uCaptureShortcutDlg,
+  uStatusBarTokens;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 var
@@ -288,6 +302,11 @@ begin
   ChkShowToolbar.Checked := ASettings.ShowToolbar;
   ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
   CbxProgressBarLayout.ItemIndex := Ord(ASettings.ProgressBarLayout);
+  EdtStatusBarTemplate.Text := ASettings.StatusBarTemplate;
+  FStatusBarFontName := ASettings.StatusBarFontName;
+  FStatusBarFontSize := ASettings.StatusBarFontSize;
+  UpdateStatusBarFontDisplay;
+  ChkStatusBarAutoWidthLive.Checked := ASettings.StatusBarAutoWidthLive;
 
   CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
@@ -379,6 +398,10 @@ begin
   ASettings.ShowToolbar := ChkShowToolbar.Checked;
   ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
   ASettings.ProgressBarLayout := TProgressBarLayout(CbxProgressBarLayout.ItemIndex);
+  ASettings.StatusBarTemplate := EdtStatusBarTemplate.Text;
+  ASettings.StatusBarFontName := FStatusBarFontName;
+  ASettings.StatusBarFontSize := FStatusBarFontSize;
+  ASettings.StatusBarAutoWidthLive := ChkStatusBarAutoWidthLive.Checked;
 
   ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;
@@ -446,6 +469,46 @@ end;
 procedure TSettingsForm.BtnBannerFontClick(Sender: TObject);
 begin
   PickBannerFont;
+end;
+
+procedure TSettingsForm.UpdateStatusBarFontDisplay;
+begin
+  RefreshTimestampFontEdit(EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize);
+end;
+
+procedure TSettingsForm.PickStatusBarFont;
+begin
+  PickTimestampFontInto(FontDlg, EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize,
+    MIN_STATUSBAR_FONT_SIZE, MAX_STATUSBAR_FONT_SIZE);
+end;
+
+procedure TSettingsForm.BtnStatusBarFontClick(Sender: TObject);
+begin
+  PickStatusBarFont;
+end;
+
+procedure TSettingsForm.PopulateStatusBarLegend;
+var
+  K: TStatusBarTokenKind;
+  Lines: TStringList;
+begin
+  {One line per token: "%name% — description". Fed verbatim into the
+   read-only memo on the Appearance tab. Built from the canonical
+   catalogue so adding a new token automatically shows up here on the
+   next dialog open — no risk of legend drift against tkUnknown.}
+  Lines := TStringList.Create;
+  try
+    for K in AllStatusBarTokenKinds do
+      Lines.Add(Format('%%%s%% - %s',
+        [StatusBarTokenName(K), StatusBarTokenHint(K)]));
+    Lines.Add('');
+    Lines.Add('Attributes: width=auto|N (default auto), align=left|right|center, ' +
+      'cap=true|false (save_dimension and copy_dimension only).');
+    Lines.Add('All-uppercase token name (e.g. %VIEW_MODE%) uppercases its rendered text.');
+    MemStatusBarLegend.Lines.Assign(Lines);
+  finally
+    Lines.Free;
+  end;
 end;
 
 procedure TSettingsForm.ChkBannerAutoSizeClick(Sender: TObject);
@@ -938,6 +1001,7 @@ begin
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
   Application.HintHidePause := MaxInt;
+  PopulateStatusBarLegend;
 end;
 
 destructor TSettingsForm.Destroy;
