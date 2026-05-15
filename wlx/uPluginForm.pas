@@ -2423,13 +2423,16 @@ begin
       FExporter.SaveView(FFileName, False, ReExtract);
     CM_COPY_FRAME:
       begin
-        {Only Copy frame honours AContextCellIndex - the right-click
-         context menu wires its captured cursor cell through here so
-         "Copy frame" copies the cell the user actually clicked. The
-         toolbar button, configurable hotkey, and TC lc_Copy all pass
-         -1 (the default) and so keep the selection-first rule.
-         PickActionCell's step 1 ignores out-of-range / unloaded values
-         so we don't need extra guards.
+        {Only Copy frame forwards AContextCellIndex to PickActionCell.
+         The right-click context menu wires its captured cursor cell
+         through here so a no-selection user gets the cell they clicked
+         on; when a selection exists, PickActionCell's step 1 takes
+         precedence and Copy frame acts on the first selected cell
+         regardless of where the right-click landed (matches Save frame
+         from the same menu and matches TC's "right-click anywhere acts
+         on the selection" convention). The toolbar button, configurable
+         hotkey, and TC lc_Copy all pass -1 and so never reach the
+         context-cell branch — selection-first behaves identically there.
 
          The re-extract gate now lives inside CopyFrame (it temp-flips
          SaveAtLiveResolution := CopyAtLiveResolution and decides from

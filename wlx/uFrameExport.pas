@@ -293,14 +293,31 @@ function TFrameExporter.PickActionCell(AContextCellIndex: Integer): Integer;
 var
   I: Integer;
 begin
-  {1. Explicit context (right-click) wins when it points to a loaded cell.}
-  if (AContextCellIndex >= 0) and (AContextCellIndex < FFrameView.CellCount) and (FFrameView.CellState(AContextCellIndex) = fcsLoaded) then
-    Exit(AContextCellIndex);
+  {Priority order, "selection-first":
 
-  {2. First selected loaded cell.}
+     1. First selected loaded cell — selection is a longer-lived, more
+        deliberate gesture than a right-click and so wins even when the
+        right-click happened on a different cell. Matches TC's own
+        context-menu rule (right-clicking anywhere acts on the selection
+        when one exists).
+     2. Explicit context (right-click) — only consulted when no
+        selection exists. Lets a no-selection user click any cell and
+        get that one operated on.
+     3. Single-view focused frame — there is exactly one visible frame
+        and it is the natural target.
+     4. Cell 0 — last-ditch fallback so the action does something
+        rather than silently no-op when the user has neither selected
+        nor pointed at anything.
+     5. -1 when nothing is loaded; the caller must skip the action.}
+
+  {1. First selected loaded cell.}
   for I := 0 to FFrameView.CellCount - 1 do
     if FFrameView.CellSelected(I) and (FFrameView.CellState(I) = fcsLoaded) then
       Exit(I);
+
+  {2. Explicit context (right-click) when it points to a loaded cell.}
+  if (AContextCellIndex >= 0) and (AContextCellIndex < FFrameView.CellCount) and (FFrameView.CellState(AContextCellIndex) = fcsLoaded) then
+    Exit(AContextCellIndex);
 
   {3. Single-view focused frame.}
   if (FFrameView.ViewMode = vmSingle) and (FFrameView.CurrentFrameIndex >= 0) and (FFrameView.CurrentFrameIndex < FFrameView.CellCount) and

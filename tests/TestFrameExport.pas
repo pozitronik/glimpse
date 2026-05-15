@@ -21,7 +21,8 @@ type
   [TestFixture]
   TTestPickActionCell = class
   public
-    [Test] procedure ContextCellWinsOverSelection;
+    [Test] procedure SelectionWinsOverContextCell;
+    [Test] procedure ContextCellUsedWhenNoSelection;
     [Test] procedure ContextCellOutOfRangeFallsThrough;
     [Test] procedure ContextCellNotLoadedFallsThrough;
     [Test] procedure SelectionUsedWhenNoContext;
@@ -428,7 +429,7 @@ end;
 
 { TTestPickActionCell }
 
-procedure TTestPickActionCell.ContextCellWinsOverSelection;
+procedure TTestPickActionCell.SelectionWinsOverContextCell;
 var
   Form: TForm;
   View: TFrameView;
@@ -440,7 +441,31 @@ begin
     View.ToggleSelection(1); { selection = [1] }
     Exporter := TFrameExporter.Create(View, nil);
     try
-      { Right-click on cell 3 with cell 1 selected -> menu acts on 3 }
+      { Right-click on cell 3 with cell 1 selected -> menu acts on 1.
+        Selection is the more deliberate gesture and wins regardless of
+        where the right-click landed; matches TC's context-menu rule. }
+      Assert.AreEqual(1, Exporter.PickActionCell(3));
+    finally
+      Exporter.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestPickActionCell.ContextCellUsedWhenNoSelection;
+var
+  Form: TForm;
+  View: TFrameView;
+  Exporter: TFrameExporter;
+begin
+  Form := TForm.CreateNew(nil);
+  try
+    { No selection, right-click on cell 3 -> menu acts on 3.
+      Confirms the context cell is the fallback when selection is empty. }
+    View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
+    Exporter := TFrameExporter.Create(View, nil);
+    try
       Assert.AreEqual(3, Exporter.PickActionCell(3));
     finally
       Exporter.Free;
