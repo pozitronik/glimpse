@@ -81,18 +81,68 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 
 #### Appearance
 
-| Setting             | Default       | Description                                                                      |
-|---------------------|---------------|----------------------------------------------------------------------------------|
-| Background          | Dark grey     | Background color behind the frame grid                                           |
-| Timecode bg         | Dark grey     | Background color of the timecode overlay on each frame                           |
-| Timecode opacity    | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)   |
-| Timestamp font      | Segoe UI, 8pt | Font face and size for timecode labels on frames                                 |
-| Cell gap (px)       | 0             | Spacing in pixels between frame cells in the viewer (0-20)                       |
-| Border (px)         | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200) |
-| Timestamp corner    | Bottom left   | Corner of each cell where the timecode label is drawn                            |
-| Show toolbar        | On            | Display the toolbar at the top of the lister window (F4 to toggle)               |
-| Show status bar     | On            | Display the status bar at the bottom of the lister window (F3 to toggle)         |
-| Progress bar layout | Auto          | Where the extraction progress bar sits in the status bar.                        |
+| Setting                                       | Default       | Description                                                                                                                   |
+|-----------------------------------------------|---------------|-------------------------------------------------------------------------------------------------------------------------------|
+| Background                                    | Dark grey     | Background color behind the frame grid                                                                                        |
+| Timecode bg                                   | Dark grey     | Background color of the timecode overlay on each frame                                                                        |
+| Timecode opacity                              | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)                                                |
+| Timestamp font                                | Segoe UI, 8pt | Font face and size for timecode labels on frames                                                                              |
+| Cell gap (px)                                 | 0             | Spacing in pixels between frame cells in the viewer (0-20)                                                                    |
+| Border (px)                                   | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200)                                              |
+| Timestamp corner                              | Bottom left   | Corner of each cell where the timecode label is drawn                                                                         |
+| Show toolbar                                  | On            | Display the toolbar at the top of the lister window (F4 to toggle)                                                            |
+| Show status bar                               | On            | Display the status bar at the bottom of the lister window (F3 to toggle)                                                      |
+| Progress bar layout                           | Auto          | Where the extraction progress bar sits in the status bar.                                                                     |
+| Status bar template                           | (see below)   | Token string controlling which panels appear in the status bar and in what order                                              |
+| Status bar font                               | Tahoma, 9pt   | Font face and size for the status bar; the bar's height adapts to the metrics                                                 |
+| Recalculate auto-width panels on every update | On            | When on, auto-width panels re-measure to live text on every refresh; when off, they size once to a worst-case sample and lock |
+
+##### Status bar template
+
+The status bar is built from a token string in which every `%name%` becomes one panel, in the order written. Whitespace between tokens is ignored. Unknown identifiers render as their literal source text so typos are visible.
+
+Default template (reproduces the panel layout used before this feature):
+
+```
+%file_position%%frame_position%%resolution%%save_dimension%%copy_dimension%%fps%%duration%%bitrate%%video_codec%%audio%%load_time align=right%
+```
+
+Tokens:
+
+| Token              | Shows                                                                            |
+|--------------------|----------------------------------------------------------------------------------|
+| `%file_position%`  | Position of the current file among supported files in the folder (e.g. `3 / 12`) |
+| `%filename%`       | Current file name                                                                |
+| `%frames%`         | Total number of extracted frames                                                 |
+| `%frame_position%` | Current frame / total in single view; total only in other modes                  |
+| `%resolution%`     | Source video resolution (e.g. `1920x1080`)                                       |
+| `%fps%`            | Source frame rate                                                                |
+| `%duration%`       | Source duration (`H:MM:SS`)                                                      |
+| `%bitrate%`        | Source container bitrate                                                         |
+| `%video_codec%`    | Source video codec                                                               |
+| `%audio%`          | First audio stream summary, or `No audio`                                        |
+| `%load_time%`      | Time spent extracting the displayed frames (after extraction)                    |
+| `%save_dimension%` | Predicted Save view output dimensions                                            |
+| `%copy_dimension%` | Predicted Copy view output dimensions                                            |
+| `%view_mode%`      | Active view mode (`Smart Grid`, `Grid`, `Scroll`, `Filmstrip`, `Single`)         |
+| `%zoom%`           | Active zoom mode                                                                 |
+
+Optional attributes inside a token (xml-style, no spaces in values):
+
+| Attribute | Values                              | Effect                                                                                                                |
+|-----------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `width`   | `auto` (default) or pixels          | Forces a fixed pixel width. `auto` measures from text                                                                 |
+| `align`   | `left` (default), `right`, `center` | Panel text alignment                                                                                                  |
+| `cap`     | `true` (default), `false`           | `save_dimension` / `copy_dimension` only: shows the post-cap `WxH -> CxC` form when CombinedMaxSide shrinks the image |
+
+A token whose identifier is fully uppercase (e.g. `%VIEW_MODE%`) uppercases its rendered text. Mixed-case identifiers (e.g. `%Resolution%`) leave the text as-is.
+
+When a token's data is unavailable:
+
+- `width=auto` panels collapse out of the bar (matches the legacy "no panel for missing data" behaviour).
+- Fixed `width=N` panels stay at their slot and show `?` so the layout doesn't shift unexpectedly.
+
+The progress bar continues to live outside the template — its position relative to the panels is governed by the *Progress bar layout* setting.
 
 #### Save
 
