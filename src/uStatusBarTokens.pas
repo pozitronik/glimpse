@@ -28,9 +28,14 @@ type
     tkFilePosition,
     tkFilename,
     tkFrames,
+    tkFramePosition,
     tkResolution,
     tkFps,
     tkDuration,
+    tkBitrate,
+    tkVideoCodec,
+    tkAudio,
+    tkLoadTime,
     tkSaveDimension,
     tkCopyDimension,
     tkViewMode,
@@ -46,6 +51,13 @@ const
    'true' shows the post-cap dimensions after the transform glyph;
    'false' shows just the predicted pre-cap dimensions.}
   ATTR_CAP = 'cap';
+
+  {Reserved attribute name shared by every token. Drives panel text
+   alignment. Recognised values: 'left' (default), 'right', 'center'.}
+  ATTR_ALIGN = 'align';
+  ATTR_ALIGN_LEFT = 'left';
+  ATTR_ALIGN_RIGHT = 'right';
+  ATTR_ALIGN_CENTER = 'center';
 
 {Canonical lowercase name for AKind. tkUnknown returns ''.}
 function StatusBarTokenName(AKind: TStatusBarTokenKind): string;
@@ -83,9 +95,14 @@ begin
     tkFilePosition:  Result := 'file_position';
     tkFilename:      Result := 'filename';
     tkFrames:        Result := 'frames';
+    tkFramePosition: Result := 'frame_position';
     tkResolution:    Result := 'resolution';
     tkFps:           Result := 'fps';
     tkDuration:      Result := 'duration';
+    tkBitrate:       Result := 'bitrate';
+    tkVideoCodec:    Result := 'video_codec';
+    tkAudio:         Result := 'audio';
+    tkLoadTime:      Result := 'load_time';
     tkSaveDimension: Result := 'save_dimension';
     tkCopyDimension: Result := 'copy_dimension';
     tkViewMode:      Result := 'view_mode';
@@ -100,10 +117,15 @@ begin
   case AKind of
     tkFilePosition:  Result := 'Position of the current file in the folder';
     tkFilename:      Result := 'Current file name';
-    tkFrames:        Result := 'Number of extracted frames';
+    tkFrames:        Result := 'Total number of extracted frames';
+    tkFramePosition: Result := 'Current frame in single-view, total otherwise';
     tkResolution:    Result := 'Source video resolution';
     tkFps:           Result := 'Source frame rate';
     tkDuration:      Result := 'Source duration';
+    tkBitrate:       Result := 'Source container bitrate';
+    tkVideoCodec:    Result := 'Source video codec';
+    tkAudio:         Result := 'First audio stream summary';
+    tkLoadTime:      Result := 'Time spent extracting the displayed frames';
     tkSaveDimension: Result := 'Predicted Save view output dimensions';
     tkCopyDimension: Result := 'Predicted Copy view output dimensions';
     tkViewMode:      Result := 'Active view mode';
@@ -118,13 +140,18 @@ begin
   case AKind of
     tkFilePosition:  Result := '999 / 999';
     tkFilename:      Result := 'a-very-long-video-filename.mkv';
-    tkFrames:        Result := '999 frames';
+    tkFrames:        Result := '9999';
+    tkFramePosition: Result := '999 / 999';
     tkResolution:    Result := '9999x9999';
-    tkFps:           Result := '999.00 fps';
+    tkFps:           Result := '999.99 fps';
     tkDuration:      Result := '99:99:99';
+    tkBitrate:       Result := '9999.9 Mbps';
+    tkVideoCodec:    Result := 'h265_hevc';
+    tkAudio:         Result := 'aac 48000 Hz stereo 320 kbps';
+    tkLoadTime:      Result := 'cache 99/99 99.99s';
     tkSaveDimension: Result := 'Save: 9999x9999 -> 9999x9999';
     tkCopyDimension: Result := 'Copy: 9999x9999 -> 9999x9999';
-    tkViewMode:      Result := 'Filmstrip';
+    tkViewMode:      Result := 'Smart Grid';
     tkZoom:          Result := 'Fit window';
   else
     Result := '';

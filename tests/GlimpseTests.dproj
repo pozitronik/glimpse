@@ -118,8 +118,12 @@
         <DCCReference Include="TestSettingsGroups.pas"/>
         <DCCReference Include="..\src\uStatusBarTokens.pas"/>
         <DCCReference Include="..\src\uStatusBarTemplate.pas"/>
+        <DCCReference Include="..\src\uStatusBarFormatters.pas"/>
+        <DCCReference Include="..\wlx\uStatusBarRenderer.pas"/>
         <DCCReference Include="TestStatusBarTokens.pas"/>
         <DCCReference Include="TestStatusBarTemplate.pas"/>
+        <DCCReference Include="TestStatusBarFormatters.pas"/>
+        <DCCReference Include="TestStatusBarRenderer.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>

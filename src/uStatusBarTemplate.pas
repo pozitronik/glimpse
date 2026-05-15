@@ -29,6 +29,11 @@ type
      tcUpper - identifier was fully uppercase; renderer uppercases value}
   TStatusBarTokenCase = (tcAsIs, tcUpper);
 
+  {Panel text alignment derived from the optional align=... attribute.
+   Prefixed sba* to avoid clashing with VCL's TAlignment.taLeftJustify
+   et al; the renderer maps these onto Vcl.Classes.TAlignment.}
+  TStatusBarTokenAlign = (sbaLeft, sbaRight, sbaCenter);
+
   TStatusBarTokenAttr = record
     Name: string;   {lowercased at parse time, so callers compare directly}
     Value: string;  {preserved as written; semantics belong to the consumer}
@@ -52,6 +57,10 @@ type
      for missing, 'auto', or unparseable values (caller falls back to
      auto-measurement).}
     function TryGetWidth(out AWidth: Integer): Boolean;
+    {Reads the optional align=left|right|center attribute. Defaults to
+     sbaLeft for missing or unrecognised values (silent fallback rather
+     than error — keeps the bar usable for a typo).}
+    function GetAlignment: TStatusBarTokenAlign;
   end;
 
   TStatusBarTokenArray = TArray<TStatusBarToken>;
@@ -88,6 +97,19 @@ begin
     if SameText(Attributes[I].Name, AName) then
       Exit(True);
   Result := False;
+end;
+
+function TStatusBarToken.GetAlignment: TStatusBarTokenAlign;
+var
+  V: string;
+begin
+  V := AttrValue(ATTR_ALIGN, '');
+  if SameText(V, ATTR_ALIGN_RIGHT) then
+    Result := sbaRight
+  else if SameText(V, ATTR_ALIGN_CENTER) then
+    Result := sbaCenter
+  else
+    Result := sbaLeft;
 end;
 
 function TStatusBarToken.TryGetWidth(out AWidth: Integer): Boolean;

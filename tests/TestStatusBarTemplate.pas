@@ -75,6 +75,18 @@ type
     [Test]
     procedure TestTryGetWidthRejectsNonPositive;
 
+    {Alignment helper}
+    [Test]
+    procedure TestAlignDefaultsToLeftWhenMissing;
+    [Test]
+    procedure TestAlignParsesRight;
+    [Test]
+    procedure TestAlignParsesCenter;
+    [Test]
+    procedure TestAlignFallsBackToLeftOnGarbage;
+    [Test]
+    procedure TestAlignIsCaseInsensitive;
+
     {Malformed input}
     [Test]
     procedure TestUnclosedTokenBecomesUnknown;
@@ -346,6 +358,47 @@ begin
   Assert.IsFalse(Tok.TryGetWidth(W));
   Tok := ParseSingle('%resolution width=-5%');
   Assert.IsFalse(Tok.TryGetWidth(W));
+end;
+
+procedure TTestStatusBarTemplate.TestAlignDefaultsToLeftWhenMissing;
+var
+  Tok: TStatusBarToken;
+begin
+  Tok := ParseSingle('%resolution%');
+  Assert.AreEqual(Ord(sbaLeft), Ord(Tok.GetAlignment));
+end;
+
+procedure TTestStatusBarTemplate.TestAlignParsesRight;
+var
+  Tok: TStatusBarToken;
+begin
+  Tok := ParseSingle('%load_time align=right%');
+  Assert.AreEqual(Ord(sbaRight), Ord(Tok.GetAlignment));
+end;
+
+procedure TTestStatusBarTemplate.TestAlignParsesCenter;
+var
+  Tok: TStatusBarToken;
+begin
+  Tok := ParseSingle('%resolution align=center%');
+  Assert.AreEqual(Ord(sbaCenter), Ord(Tok.GetAlignment));
+end;
+
+procedure TTestStatusBarTemplate.TestAlignFallsBackToLeftOnGarbage;
+var
+  Tok: TStatusBarToken;
+begin
+  Tok := ParseSingle('%resolution align=middle%');
+  Assert.AreEqual(Ord(sbaLeft), Ord(Tok.GetAlignment),
+    'Unrecognised align values silently fall back to left rather than crash');
+end;
+
+procedure TTestStatusBarTemplate.TestAlignIsCaseInsensitive;
+var
+  Tok: TStatusBarToken;
+begin
+  Tok := ParseSingle('%resolution align=RIGHT%');
+  Assert.AreEqual(Ord(sbaRight), Ord(Tok.GetAlignment));
 end;
 
 procedure TTestStatusBarTemplate.TestUnclosedTokenBecomesUnknown;

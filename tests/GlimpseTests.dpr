@@ -97,8 +97,12 @@ uses
   TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas',
   uStatusBarTokens in '..\src\uStatusBarTokens.pas',
   uStatusBarTemplate in '..\src\uStatusBarTemplate.pas',
+  uStatusBarFormatters in '..\src\uStatusBarFormatters.pas',
+  uStatusBarRenderer in '..\wlx\uStatusBarRenderer.pas',
   TestStatusBarTokens in 'TestStatusBarTokens.pas',
-  TestStatusBarTemplate in 'TestStatusBarTemplate.pas';
+  TestStatusBarTemplate in 'TestStatusBarTemplate.pas',
+  TestStatusBarFormatters in 'TestStatusBarFormatters.pas',
+  TestStatusBarRenderer in 'TestStatusBarRenderer.pas';
 
 var
   Runner: ITestRunner;
