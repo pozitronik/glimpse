@@ -172,6 +172,41 @@ const
   MIN_THUMBNAIL_GRID_FRAMES = 2;
   MAX_THUMBNAIL_GRID_FRAMES = 16;
 
+  {Status bar template defaults. Reproduces the panel order the WLX bar
+   used before the template engine landed: file position, frame
+   position, source resolution, predicted Save / Copy view dimensions,
+   fps, duration, bitrate, video codec, audio summary, load time. Every
+   token defaults to width=auto so the panel collapses out cleanly when
+   its datum is unavailable (matches the legacy "no panel for missing
+   data" behaviour). load_time is right-justified to mirror the legacy
+   layout. Tokens %view_mode%, %zoom%, %filename% and %frames% are not
+   in the default but remain available for users to add.}
+  DEF_STATUSBAR_TEMPLATE =
+    '%file_position%' +
+    '%frame_position%' +
+    '%resolution%' +
+    '%save_dimension%' +
+    '%copy_dimension%' +
+    '%fps%' +
+    '%duration%' +
+    '%bitrate%' +
+    '%video_codec%' +
+    '%audio%' +
+    '%load_time align=right%';
+
+  {Status bar font defaults — match the pre-template hardcoded values
+   (Tahoma is the system default for TStatusBar.Font.Name; size 9 was
+   the explicit STATUSBAR_FONT constant in uPluginForm).}
+  DEF_STATUSBAR_FONT_NAME = 'Tahoma';
+  DEF_STATUSBAR_FONT_SIZE = 9;
+
+  {Off by default: auto-width panels measure their representative sample
+   text once at template / font apply time and lock the width. Avoids
+   the layout shift that would happen if the bar re-measured live text
+   on every Refresh. Power users with stable terminal-style layouts can
+   opt in via the settings dialog.}
+  DEF_STATUSBAR_AUTO_WIDTH_LIVE = False;
+
 implementation
 
 end.

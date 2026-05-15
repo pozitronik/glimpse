@@ -13,7 +13,8 @@ uses
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
-  uSaveResolutionExtractor;
+  uSaveResolutionExtractor,
+  uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
 
 type
   {Plugin form created as a child of TC's Lister window.}
@@ -55,10 +56,16 @@ type
     FVisibleElementCount: Integer;
     {Status bar}
     FStatusBar: TStatusBar;
-    {Per-panel hint texts, parallel to FStatusBar.Panels. Populated by
-     UpdateStatusBar; the TGlimpseStatusBar subclass reads this through
-     its OnGetPanelHint callback inside CMHintShow.}
-    FPanelHints: TArray<string>;
+    {Owns parsing of the user template, panel build-out, and per-panel
+     hint lookup. Lives for the form's lifetime; ApplyTemplate /
+     SetFont / Refresh drive it. The bar's panels are written through
+     this object exclusively.}
+    FStatusBarRenderer: TStatusBarRenderer;
+    {Snapshot of plugin state, refreshed once per UpdateStatusBar call.
+     The renderer's resolver lambda reads this rather than hitting
+     collaborators per-token, so a Refresh emits a coherent view of
+     state instead of racing changes mid-iteration.}
+    FCachedStatusBarValues: TStatusBarValues;
     {Content}
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
@@ -124,6 +131,10 @@ type
     procedure OnFrameViewCtrlWheel(Sender: TObject; AWheelDelta: Integer);
     procedure CreateStatusBar;
     procedure UpdateStatusBar;
+    {Snapshot every datum the status-bar formatter consumes. Reads
+     FFileName / FSettings / FOffsets / FFrameView / FVideoInfo /
+     FExporter / FLoadTimeStr; safe to call any time, never mutates.}
+    procedure BuildStatusBarValues(out AValues: TStatusBarValues);
     procedure OnStatusBarDblClick(Sender: TObject);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
@@ -257,7 +268,7 @@ implementation
 uses
   System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
-  uPlatformDetect;
+  uPlatformDetect, uDefaults;
 
 type
   {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
@@ -496,28 +507,11 @@ const
   PROGRESSBAR_H = 14; {desired height of the embedded progress bar}
   PROGRESSBAR_MIN_W = 40; {minimum width before clamping}
 
-  {Status bar panel widths}
-  SBP_RESOLUTION_W = 120;
-  {Predicted Save / Copy view output dimensions. Two adjacent panels
-   (one per surface, since SaveAtLiveResolution and CopyAtLiveResolution
-   are independent settings) so the width must accommodate both the
-   "Save: " / "Copy: " prefix and the post-cap "WxH -> CxC" form.}
-  SBP_RESULT_W = 240;
-  SBP_FRAMERATE_W = 100;
-  SBP_DURATION_W = 100;
-  SBP_BITRATE_W = 100;
-  SBP_VIDEOCODEC_W = 90;
-  SBP_AUDIO_W = 300;
-  SBP_NOAUDIO_W = 110;
-  {Panel width fits "999 / 999" comfortably. File count in a typical video
-   folder sits well below 1000; capping visual width here keeps the panel
-   from stretching when the user stumbles into a huge directory.}
-  SBP_FILEPOS_W = 80;
-  SBP_FRAMEPOS_W = 70;
-  SBP_LOADTIME_W = 110;
-  {Total panel width is computed dynamically in RepositionProgressBar
-   from FStatusBar.Panels - any new SBP_*_W constant added to AddPanel
-   calls is automatically picked up, no hand-maintained sum to drift.}
+  {Status bar panel widths are now driven by the template engine in
+   uStatusBarRenderer: each token's "width=auto" measurement uses the
+   sample text registered in uStatusBarTokens.StatusBarTokenSampleText,
+   and explicit "width=N" overrides them per token in the user's
+   template (DEF_STATUSBAR_TEMPLATE for the default layout).}
 
   {Command tags, mode captions, sizing labels, and toolbar actions
    are defined in uToolbarLayout}
@@ -1239,20 +1233,13 @@ var
   Bar: TGlimpseStatusBar;
 begin
   Bar := TGlimpseStatusBar.Create(Self);
-  Bar.OnGetPanelHint :=
-    function(APanelIndex: Integer): string
-    begin
-      if (APanelIndex >= 0) and (APanelIndex < Length(FPanelHints)) then
-        Result := FPanelHints[APanelIndex]
-      else
-        Result := '';
-    end;
   FStatusBar := Bar;
   FStatusBar.Parent := Self;
   FStatusBar.Height := STATUSBAR_HEIGHT;
   FStatusBar.SimplePanel := False;
   FStatusBar.SizeGrip := False;
-  FStatusBar.Font.Size := STATUSBAR_FONT;
+  FStatusBar.Font.Name := DEF_STATUSBAR_FONT_NAME;
+  FStatusBar.Font.Size := DEF_STATUSBAR_FONT_SIZE;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
   {Per-panel hints come from CMHintShow inside TGlimpseStatusBar; the
    ShowHint flag still has to be on so the VCL routes hint messages to
@@ -1263,135 +1250,140 @@ begin
   FProgressBar := TProgressBar.Create(FStatusBar);
   FProgressBar.Parent := FStatusBar;
   FProgressBar.Visible := False;
+
+  {Renderer owns the status bar's panels from here on. The resolver
+   reads from FCachedStatusBarValues which UpdateStatusBar refreshes
+   once per call — guarantees a coherent snapshot across all tokens
+   in a single Refresh.}
+  FStatusBarRenderer := TStatusBarRenderer.Create(FStatusBar,
+    function(const AToken: TStatusBarToken): string
+    begin
+      Result := FormatStatusBarToken(AToken, FCachedStatusBarValues);
+    end);
+
+  Bar.OnGetPanelHint :=
+    function(APanelIndex: Integer): string
+    begin
+      Result := FStatusBarRenderer.HintForPanel(APanelIndex);
+    end;
+
+  {Default template at construction. Phase 4 will replace this with the
+   user's saved template loaded from settings; for now the bar emits
+   the same panel layout the hand-rolled UpdateStatusBar produced.}
+  FStatusBarRenderer.SetAutoWidthLive(DEF_STATUSBAR_AUTO_WIDTH_LIVE);
+  FStatusBarRenderer.ApplyTemplate(DEF_STATUSBAR_TEMPLATE);
+end;
+
+function ViewModeDisplayName(AMode: TViewMode): string;
+begin
+  case AMode of
+    vmSmartGrid: Result := 'Smart Grid';
+    vmGrid:      Result := 'Grid';
+    vmScroll:    Result := 'Scroll';
+    vmFilmstrip: Result := 'Filmstrip';
+    vmSingle:    Result := 'Single';
+  else
+    Result := '';
+  end;
+end;
+
+function ZoomModeDisplayName(AMode: TZoomMode): string;
+begin
+  case AMode of
+    zmFitWindow:   Result := 'Fit window';
+    zmFitIfLarger: Result := 'Fit if larger';
+    zmActual:      Result := 'Actual size';
+  else
+    Result := '';
+  end;
+end;
+
+procedure TPluginForm.BuildStatusBarValues(out AValues: TStatusBarValues);
+var
+  PredW, PredH, PredCappedW, PredCappedH: Integer;
+begin
+  AValues := Default(TStatusBarValues);
+  {Pre-template behaviour: the bar showed nothing until video info was
+   probed. Preserved here so panels stay hidden until extraction starts
+   filling them in.}
+  if not FVideoInfo.IsValid then
+    Exit;
+  AValues.VideoInfoValid := True;
+
+  AValues.Filename := FFileName;
+
+  AValues.FilePositionAvailable := GetFilePosition(FFileName,
+    FSettings.ExtensionList, AValues.FilePositionIndex, AValues.FilePositionTotal);
+
+  AValues.FramesAvailable := Length(FOffsets) > 0;
+  AValues.FramesTotal := Length(FOffsets);
+  if FFrameView <> nil then
+  begin
+    AValues.CurrentFrameIndex := FFrameView.CurrentFrameIndex;
+    AValues.IsSingleViewMode := FFrameView.ViewMode = vmSingle;
+    AValues.ViewModeName := ViewModeDisplayName(FFrameView.ViewMode);
+    AValues.ZoomModeName := ZoomModeDisplayName(FFrameView.ZoomMode);
+  end;
+
+  AValues.SourceWidth := FVideoInfo.Width;
+  AValues.SourceHeight := FVideoInfo.Height;
+  AValues.SourceFps := FVideoInfo.Fps;
+  AValues.SourceDurationSec := FVideoInfo.Duration;
+  AValues.SourceBitrateKbps := FVideoInfo.Bitrate;
+  AValues.SourceVideoCodec := FVideoInfo.VideoCodec;
+
+  AValues.SourceAudioCodec := FVideoInfo.AudioCodec;
+  AValues.SourceAudioSampleRate := FVideoInfo.AudioSampleRate;
+  AValues.SourceAudioChannels := FVideoInfo.AudioChannels;
+  AValues.SourceAudioBitrateKbps := FVideoInfo.AudioBitrateKbps;
+
+  if FExporter <> nil then
+  begin
+    AValues.SaveDimAvailable := FExporter.PredictDisplayedSize(
+      FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
+    if AValues.SaveDimAvailable then
+    begin
+      AValues.SaveDimW := PredW;
+      AValues.SaveDimH := PredH;
+      AValues.SaveDimCappedW := PredCappedW;
+      AValues.SaveDimCappedH := PredCappedH;
+    end;
+    AValues.CopyDimAvailable := FExporter.PredictDisplayedSize(
+      FSettings.CopyAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
+    if AValues.CopyDimAvailable then
+    begin
+      AValues.CopyDimW := PredW;
+      AValues.CopyDimH := PredH;
+      AValues.CopyDimCappedW := PredCappedW;
+      AValues.CopyDimCappedH := PredCappedH;
+    end;
+  end;
+
+  AValues.LoadTimeText := FLoadTimeStr;
 end;
 
 procedure TPluginForm.UpdateStatusBar;
-
-  function FormatBitrate(AKbps: Integer): string;
-  begin
-    if AKbps >= 1000 then
-      Result := Format('%.1f Mbps', [AKbps / 1000])
-    else
-      Result := Format('%d kbps', [AKbps]);
-  end;
-
-  procedure AddPanel(const AText: string; AWidth: Integer; const AHint: string = ''; AAlignment: TAlignment = taLeftJustify);
-  var
-    Panel: TStatusPanel;
-  begin
-    Panel := FStatusBar.Panels.Add;
-    Panel.Text := AText;
-    Panel.Width := AWidth;
-    Panel.Alignment := AAlignment;
-    SetLength(FPanelHints, Length(FPanelHints) + 1);
-    FPanelHints[High(FPanelHints)] := AHint;
-  end;
-
-  procedure AddPredictedSizePanel(const ALabel: string; AForceLiveRes: Boolean);
-  var
-    PredW, PredH, PredCappedW, PredCappedH: Integer;
-    Text: string;
-  begin
-    if (FExporter = nil) or not FExporter.PredictDisplayedSize(AForceLiveRes, PredW, PredH, PredCappedW, PredCappedH) then
-      Exit;
-    if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
-      Text := Format('%s: %dx%d%s%dx%d', [ALabel, PredW, PredH, ResolutionTransformGlyph, PredCappedW, PredCappedH])
-    else
-      Text := Format('%s: %dx%d', [ALabel, PredW, PredH]);
-    AddPanel(Text, SBP_RESULT_W,
-      Format('%s view output dimensions for the current "%s at view resolution" setting. When CombinedMaxSide would shrink the image, the right-hand pair shows the post-cap size.',
-        [ALabel, ALabel]));
-  end;
-
 var
-  AudioStr: string;
-  FileIdx, FileTotal: Integer;
+  Last: Integer;
+  Dummy: TStatusPanel;
 begin
-  FStatusBar.Panels.Clear;
-  SetLength(FPanelHints, 0);
-
-  if not FVideoInfo.IsValid then
+  if FStatusBarRenderer = nil then
     Exit;
-
-  {File position: 1-based index within the directory's supported files.
-   Omitted when the current file can't be located (e.g. extension not in
-   the list or directory unreadable).}
-  if GetFilePosition(FFileName, FSettings.ExtensionList, FileIdx, FileTotal) then
-    AddPanel(Format('%d / %d', [FileIdx, FileTotal]), SBP_FILEPOS_W,
-      'Position of this video among the supported video files in the same folder.');
-
-  {Frame position: shown as "current / total" only in single view, where
-   the notion of "current frame" is visible. Other modes render the whole
-   grid, so the "current" slot is meaningless; show just the total.}
-  if Length(FOffsets) > 0 then
+  BuildStatusBarValues(FCachedStatusBarValues);
+  FStatusBarRenderer.Refresh;
+  {Append a 0-width dummy panel only when the last visible panel has
+   non-default alignment. Without it the common control lets the last
+   panel stretch to fill remaining width, defeating the right- or
+   center-justify the user asked for. Other panels can stretch
+   harmlessly (left-justified text just leaves blank space on the
+   right), so the dummy is only added when it would actually matter —
+   matches the pre-template behaviour for the load_time panel.}
+  Last := FStatusBar.Panels.Count - 1;
+  if (Last >= 0) and (FStatusBar.Panels[Last].Alignment <> taLeftJustify) then
   begin
-    if FFrameView.ViewMode = vmSingle then
-      AddPanel(Format('%d / %d', [FFrameView.CurrentFrameIndex + 1, Length(FOffsets)]), SBP_FRAMEPOS_W,
-        'Current frame number / total frames extracted from this video.')
-    else
-      AddPanel(IntToStr(Length(FOffsets)), SBP_FRAMEPOS_W,
-        'Total frames extracted from this video.');
-  end;
-
-  {Resolution}
-  if (FVideoInfo.Width > 0) and (FVideoInfo.Height > 0) then
-    AddPanel(Format('%dx%d', [FVideoInfo.Width, FVideoInfo.Height]), SBP_RESOLUTION_W,
-      'Native frame resolution of the source video (width x height in pixels).');
-
-  {Predicted Save view / Copy view output dimensions. Two adjacent
-   panels - one for each surface - because the live-resolution toggle is
-   now per-action (SaveAtLiveResolution / CopyAtLiveResolution) and the
-   two predictions can differ. Cap is shown as "WxH -> CxC" when
-   CombinedMaxSide would shrink the image. Each panel is hidden when its
-   predictor has nothing to report (e.g. before the first extraction).}
-  AddPredictedSizePanel('Save', FSettings.SaveAtLiveResolution);
-  AddPredictedSizePanel('Copy', FSettings.CopyAtLiveResolution);
-
-  {Framerate}
-  if FVideoInfo.Fps > 0 then
-    AddPanel(Format('%.4g fps', [FVideoInfo.Fps]), SBP_FRAMERATE_W,
-      'Source video frame rate (frames per second).');
-
-  {Duration}
-  if FVideoInfo.Duration > 0 then
-    AddPanel(FormatDurationHMS(FVideoInfo.Duration), SBP_DURATION_W,
-      'Total video duration (hours:minutes:seconds).');
-
-  {Overall bitrate}
-  if FVideoInfo.Bitrate > 0 then
-    AddPanel(FormatBitrate(FVideoInfo.Bitrate), SBP_BITRATE_W,
-      'Overall bitrate of the source container (video + audio + overhead).');
-
-  {Video codec}
-  if FVideoInfo.VideoCodec <> '' then
-    AddPanel(FVideoInfo.VideoCodec, SBP_VIDEOCODEC_W,
-      'Video codec used to encode the source.');
-
-  {Audio section}
-  if FVideoInfo.AudioCodec <> '' then
-  begin
-    AudioStr := FVideoInfo.AudioCodec;
-    if FVideoInfo.AudioSampleRate > 0 then
-      AudioStr := AudioStr + Format(' %d Hz', [FVideoInfo.AudioSampleRate]);
-    if FVideoInfo.AudioChannels <> '' then
-      AudioStr := AudioStr + ' ' + FVideoInfo.AudioChannels;
-    if FVideoInfo.AudioBitrateKbps > 0 then
-      AudioStr := AudioStr + Format(' %d kbps', [FVideoInfo.AudioBitrateKbps]);
-    AddPanel(AudioStr, SBP_AUDIO_W,
-      'First audio stream: codec, sample rate, channel layout, bitrate.');
-  end
-  else
-    AddPanel('No audio', SBP_NOAUDIO_W,
-      'Source has no audio stream.');
-
-  {Load time (shown after extraction completes)}
-  if FLoadTimeStr <> '' then
-  begin
-    AddPanel(FLoadTimeStr, SBP_LOADTIME_W,
-      'Time taken to extract the displayed frames (cache hits vs ffmpeg invocations).',
-      taRightJustify);
-    {Dummy panel absorbs last-panel stretching from the common control}
-    AddPanel('', 0);
+    Dummy := FStatusBar.Panels.Add;
+    Dummy.Width := 0;
+    Dummy.Text := '';
   end;
 end;
 
