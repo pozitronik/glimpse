@@ -1,7 +1,7 @@
 {Parser for the user-editable status-bar template string. Each panel of
  the live status bar corresponds to one '%name%' or '%name attr=value%'
  token. Whitespace and any other characters between tokens are silently
- ignored: the model is "one token per cell", not "tokens interleaved
+ ignored: the model is "one token per panel", not "tokens interleaved
  with literal text".
 
  Unknown identifiers parse into tkUnknown tokens that carry their raw

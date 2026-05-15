@@ -5,7 +5,7 @@
    - canonical lowercase name (matched against template identifiers)
    - default tooltip text shown when hovering the panel
    - representative text used to size the panel when width=auto and the
-     "recalculate auto-sized cells on every update" toggle is OFF
+     "recalculate auto-width panels on every update" toggle is OFF
 
  Live values (e.g. the resolution string for the current file) are
  produced by the renderer from plugin state. This unit is value-free
@@ -68,7 +68,7 @@ function StatusBarTokenName(AKind: TStatusBarTokenKind): string;
 function StatusBarTokenHint(AKind: TStatusBarTokenKind): string;
 
 {Representative text used to size the panel when width=auto and the
- "recalculate auto-sized cells on every update" toggle is OFF. The
+ "recalculate auto-width panels on every update" toggle is OFF. The
  width is measured once with this string at template / font apply time;
  a real value never exceeds it for typical inputs (e.g. resolutions up
  to 9999x9999).}

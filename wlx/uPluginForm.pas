@@ -1527,7 +1527,7 @@ begin
    (grid<->single), so kick the debounce timer; the actual refresh only
    fires if the computed MaxSide actually changes.}
   ScheduleViewportRefresh;
-  {Status bar's frame-position cell switches between "N / Total" and
+  {Status bar's frame-position panel switches between "N / Total" and
    "Total" based on mode.}
   UpdateStatusBar;
 
@@ -2705,7 +2705,7 @@ begin
   FSettings.Save;
 
   RefreshExtraction;
-  {Status bar's frame-position cell reflects the new total immediately,
+  {Status bar's frame-position panel reflects the new total immediately,
    before extraction finishes (which would also refresh it).}
   UpdateStatusBar;
 end;
