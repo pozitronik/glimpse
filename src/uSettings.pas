@@ -65,6 +65,14 @@ type
     FHotkeys: THotkeyBindings;
     {[view] — progress-bar layout policy}
     FProgressBarLayout: TProgressBarLayout;
+    {[statusbar] — user-configurable token template + font + auto-width
+     measurement policy. The template feeds uStatusBarTemplate.Parse;
+     missing or empty values fall back to the DEF_STATUSBAR_* constants
+     so an upgraded INI from before this feature retains today's bar.}
+    FStatusBarTemplate: string;
+    FStatusBarFontName: string;
+    FStatusBarFontSize: Integer;
+    FStatusBarAutoWidthLive: Boolean;
     {[debug]}
     FDebugLogEnabled: Boolean;
 
@@ -189,6 +197,12 @@ type
     {[view] — progress bar layout policy. Lives on the General tab next
      to "Show status bar".}
     property ProgressBarLayout: TProgressBarLayout read FProgressBarLayout write FProgressBarLayout;
+
+    {[statusbar]}
+    property StatusBarTemplate: string read FStatusBarTemplate write FStatusBarTemplate;
+    property StatusBarFontName: string read FStatusBarFontName write FStatusBarFontName;
+    property StatusBarFontSize: Integer read FStatusBarFontSize write FStatusBarFontSize;
+    property StatusBarAutoWidthLive: Boolean read FStatusBarAutoWidthLive write FStatusBarAutoWidthLive;
 
     {[hotkeys] — the binding table owns itself; callers mutate it via its
      own Get/Put/ResetToDefaults API rather than through scalar properties.}
@@ -326,6 +340,10 @@ begin
   FThumbnailPosition := DEF_THUMBNAIL_POSITION;
   FThumbnailGridFrames := DEF_THUMBNAIL_GRID_FRAMES;
   FProgressBarLayout := DEF_PROGRESS_BAR_LAYOUT;
+  FStatusBarTemplate := DEF_STATUSBAR_TEMPLATE;
+  FStatusBarFontName := DEF_STATUSBAR_FONT_NAME;
+  FStatusBarFontSize := DEF_STATUSBAR_FONT_SIZE;
+  FStatusBarAutoWidthLive := DEF_STATUSBAR_AUTO_WIDTH_LIVE;
   FDebugLogEnabled := DEF_DEBUG_LOG_ENABLED;
   {FHotkeys may be nil when ResetDefaults is called from the constructor
    before the hotkey table is allocated (the ctor creates it just above,
@@ -409,6 +427,22 @@ begin
 
     FHotkeys.Load(Ini);
 
+    {Status bar template + font + measurement policy. An empty Template
+     value (user cleared the field, or hand-edited the INI) is treated
+     as "use the default" rather than "render a blank bar" — empties
+     creep in via UI bugs and we'd rather degrade safely than ship a
+     broken bar.}
+    FStatusBarTemplate := Ini.ReadString('statusbar', 'Template', DEF_STATUSBAR_TEMPLATE);
+    if FStatusBarTemplate.Trim = '' then
+      FStatusBarTemplate := DEF_STATUSBAR_TEMPLATE;
+    FStatusBarFontName := Ini.ReadString('statusbar', 'FontName', DEF_STATUSBAR_FONT_NAME);
+    if FStatusBarFontName.Trim = '' then
+      FStatusBarFontName := DEF_STATUSBAR_FONT_NAME;
+    FStatusBarFontSize := EnsureRange(
+      Ini.ReadInteger('statusbar', 'FontSize', DEF_STATUSBAR_FONT_SIZE),
+      MIN_STATUSBAR_FONT_SIZE, MAX_STATUSBAR_FONT_SIZE);
+    FStatusBarAutoWidthLive := Ini.ReadBool('statusbar', 'AutoWidthLive', DEF_STATUSBAR_AUTO_WIDTH_LIVE);
+
     FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
     Ini.Free;
@@ -474,6 +508,11 @@ begin
     Ini.WriteInteger('thumbnails', 'GridFrames', FThumbnailGridFrames);
 
     FHotkeys.Save(Ini);
+
+    Ini.WriteString('statusbar', 'Template', FStatusBarTemplate);
+    Ini.WriteString('statusbar', 'FontName', FStatusBarFontName);
+    Ini.WriteInteger('statusbar', 'FontSize', FStatusBarFontSize);
+    Ini.WriteBool('statusbar', 'AutoWidthLive', FStatusBarAutoWidthLive);
 
     Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
     {TUnicodeIniFile buffers writes in memory; UpdateFile flushes to disk.

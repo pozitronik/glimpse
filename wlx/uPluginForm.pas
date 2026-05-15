@@ -135,6 +135,13 @@ type
      FFileName / FSettings / FOffsets / FFrameView / FVideoInfo /
      FExporter / FLoadTimeStr; safe to call any time, never mutates.}
     procedure BuildStatusBarValues(out AValues: TStatusBarValues);
+    {Pushes the four status-bar settings (template, font name + size,
+     auto-width-live flag) into the renderer. Triggers a re-parse +
+     re-measure + Refresh so panel widths and panel set track the new
+     template / font on the next paint cycle. No-op when the renderer
+     is not yet constructed (defensive — settings can be loaded before
+     CreateStatusBar in some lifecycle paths).}
+    procedure ApplyStatusBarSettings;
     procedure OnStatusBarDblClick(Sender: TObject);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
@@ -1267,11 +1274,21 @@ begin
       Result := FStatusBarRenderer.HintForPanel(APanelIndex);
     end;
 
-  {Default template at construction. Phase 4 will replace this with the
-   user's saved template loaded from settings; for now the bar emits
-   the same panel layout the hand-rolled UpdateStatusBar produced.}
-  FStatusBarRenderer.SetAutoWidthLive(DEF_STATUSBAR_AUTO_WIDTH_LIVE);
-  FStatusBarRenderer.ApplyTemplate(DEF_STATUSBAR_TEMPLATE);
+  {FSettings is populated before CreateStatusBar (see SetParentAndLoad),
+   so push the user's saved template / font / measurement policy in.
+   Initial Refresh runs against an empty FCachedStatusBarValues so the
+   bar is empty until UpdateStatusBar fires for the first opened
+   file — matching the pre-template behaviour.}
+  ApplyStatusBarSettings;
+end;
+
+procedure TPluginForm.ApplyStatusBarSettings;
+begin
+  if FStatusBarRenderer = nil then
+    Exit;
+  FStatusBarRenderer.SetFont(FSettings.StatusBarFontName, FSettings.StatusBarFontSize);
+  FStatusBarRenderer.SetAutoWidthLive(FSettings.StatusBarAutoWidthLive);
+  FStatusBarRenderer.ApplyTemplate(FSettings.StatusBarTemplate);
 end;
 
 function ViewModeDisplayName(AMode: TViewMode): string;
@@ -2669,10 +2686,13 @@ begin
   if (Changes * [scSkipEdgesChanged, scScaledExtractionChanged, scUseKeyframesChanged, scRespectAnamorphicChanged, scRandomExtractionChanged]) <> [] then
     RefreshExtraction;
 
-  {Status bar's predicted Save / Copy view dimensions react to several
-   knobs (Save/CopyAtLiveResolution, CombinedMaxSide) that do not
-   trigger RefreshExtraction. Refresh unconditionally here so any Apply
-   /OK reflects in the panels even when no re-extract follows.}
+  {Status-bar template / font / measurement policy may have changed
+   on this Apply. ApplyStatusBarSettings re-pushes them to the renderer
+   and runs a Refresh internally; the explicit UpdateStatusBar that
+   follows is a no-op for template/font but reseats panel TEXT against
+   the freshly-snapshotted values (predicted dims react to several
+   knobs that do not trigger RefreshExtraction).}
+  ApplyStatusBarSettings;
   UpdateStatusBar;
 end;
 

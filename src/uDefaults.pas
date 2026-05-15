@@ -199,6 +199,8 @@ const
    the explicit STATUSBAR_FONT constant in uPluginForm).}
   DEF_STATUSBAR_FONT_NAME = 'Tahoma';
   DEF_STATUSBAR_FONT_SIZE = 9;
+  MIN_STATUSBAR_FONT_SIZE = 6;
+  MAX_STATUSBAR_FONT_SIZE = 24;
 
   {Off by default: auto-width panels measure their representative sample
    text once at template / font apply time and lock the width. Avoids

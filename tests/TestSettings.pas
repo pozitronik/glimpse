@@ -125,6 +125,28 @@ type
     [Test]
     procedure TestCopyAtLiveResolutionDoesNotMirrorSave;
     [Test]
+    procedure TestStatusBarTemplateDefault;
+    [Test]
+    procedure TestStatusBarTemplateRoundTrip;
+    [Test]
+    procedure TestStatusBarEmptyTemplateFallsBackToDefault;
+    [Test]
+    procedure TestStatusBarFontDefaults;
+    [Test]
+    procedure TestStatusBarFontRoundTrip;
+    [Test]
+    procedure TestStatusBarEmptyFontNameFallsBackToDefault;
+    [Test]
+    procedure TestStatusBarFontSizeClampedHigh;
+    [Test]
+    procedure TestStatusBarFontSizeClampedLow;
+    [Test]
+    procedure TestStatusBarAutoWidthLiveDefault;
+    [Test]
+    procedure TestStatusBarAutoWidthLiveRoundTrip;
+    [Test]
+    procedure TestStatusBarMissingSectionGetsAllDefaults;
+    [Test]
     procedure TestCombinedMaxSideDefault;
     [Test]
     procedure TestCombinedMaxSideRoundTrip;
@@ -1602,6 +1624,238 @@ begin
       'CopyAtLiveResolution must use its own default when [copy] section is missing');
     Assert.AreEqual(not DEF_COPY_AT_LIVE_RESOLUTION, S.SaveAtLiveResolution,
       'SaveAtLiveResolution must still load from [save]');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarTemplateDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, S.StatusBarTemplate,
+      'Default template reproduces the panel layout used before the template engine landed');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarTemplateRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+const
+  CUSTOM = '%resolution%%fps%%duration align=right%';
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_template.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarTemplate := CUSTOM;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(CUSTOM, S2.StatusBarTemplate);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarEmptyTemplateFallsBackToDefault;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Hand-edited or UI-cleared template must not produce a blank bar; the
+   Load path treats whitespace-only as "use default" so the user always
+   sees something instead of an empty status area.}
+  IniPath := TPath.Combine(FTempDir, 'sb_empty_template.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'Template', '   ');
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, S.StatusBarTemplate);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, S.StatusBarFontName);
+    Assert.AreEqual(DEF_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_font.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarFontName := 'Consolas';
+    S1.StatusBarFontSize := 11;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual('Consolas', S2.StatusBarFontName);
+    Assert.AreEqual(11, S2.StatusBarFontSize);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarEmptyFontNameFallsBackToDefault;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_empty_font.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'FontName', '   ');
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, S.StatusBarFontName,
+      'Empty font name would resolve to the system default at runtime; pin to a known value instead');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontSizeClampedHigh;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_font_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'FontSize', 999);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontSizeClampedLow;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_font_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'FontSize', 1);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarAutoWidthLiveDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_AUTO_WIDTH_LIVE, S.StatusBarAutoWidthLive,
+      'Off by default — preserves no-flicker layout out of the box');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarAutoWidthLiveRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_autolive.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarAutoWidthLive := not DEF_STATUSBAR_AUTO_WIDTH_LIVE;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_STATUSBAR_AUTO_WIDTH_LIVE, S2.StatusBarAutoWidthLive);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarMissingSectionGetsAllDefaults;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Upgrade from a pre-template INI: the file exists, has unrelated
+   sections, but no [statusbar]. All four keys must end up at their
+   declared defaults so the bar keeps its legacy look.}
+  IniPath := TPath.Combine(FTempDir, 'sb_missing.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('view', 'Mode', 'Grid');
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, S.StatusBarTemplate);
+    Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, S.StatusBarFontName);
+    Assert.AreEqual(DEF_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+    Assert.AreEqual(DEF_STATUSBAR_AUTO_WIDTH_LIVE, S.StatusBarAutoWidthLive);
   finally
     S.Free;
   end;
