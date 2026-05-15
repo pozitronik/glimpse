@@ -142,6 +142,16 @@ type
      wiring.}
     procedure UpdateResolutionMenuLabels(AMenu: TPopupMenu);
     procedure OnViewDropdownPopup(Sender: TObject);
+    {Returns the zoom mode that should actually be applied for the
+     current FFrameView.ViewMode. View modes that have no zoom-selector
+     popup (vmGrid, vmSmartGrid - see CreateModePopup) are always-fit
+     by design, so any requested zoom is clamped to zmFitWindow. Use
+     this anywhere external state (persisted settings, TC's lister
+     params) tries to push a zoom mode onto FFrameView, otherwise the
+     unsupported value sticks and the renderer enters a degenerate
+     branch (e.g. vmGrid+zmActual+NativeW>=BaseW collapses to 1 column,
+     visually identical to vmScroll).}
+    function ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -1381,6 +1391,14 @@ begin
   Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
 end;
 
+function TPluginForm.ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;
+begin
+  if FModePopups[FFrameView.ViewMode] = nil then
+    Result := zmFitWindow
+  else
+    Result := ARequestedZoom;
+end;
+
 procedure TPluginForm.ApplySettings;
 var
   VM: TViewMode;
@@ -1391,7 +1409,7 @@ begin
 
   FUpDown.Position := FSettings.FramesCount;
   FFrameView.ViewMode := FSettings.ViewMode;
-  FFrameView.ZoomMode := FSettings.ZoomMode;
+  FFrameView.ZoomMode := ResolveZoomModeForCurrentView(FSettings.ZoomMode);
 
   {Restore per-mode zoom selections in all popup menus}
   for VM := Low(TViewMode) to High(TViewMode) do
@@ -1526,7 +1544,12 @@ procedure TPluginForm.ApplyListerParams(AParams: Integer);
 var
   NewZM: TZoomMode;
 begin
-  NewZM := ListerParamsToZoomMode(AParams);
+  {TC's ShowFlags carry no view-mode semantics; the lcp_FitToWindow /
+   lcp_FitLargerOnly bits are about TEXT viewer fit. Translating them to
+   our zoom enum yields zmActual when neither bit is set (TC default),
+   which would push always-fit modes (vmGrid, vmSmartGrid) into a
+   degenerate 1-column rendering. Clamp to the supported set first.}
+  NewZM := ResolveZoomModeForCurrentView(ListerParamsToZoomMode(AParams));
   if FFrameView.ZoomMode = NewZM then
     Exit;
 
