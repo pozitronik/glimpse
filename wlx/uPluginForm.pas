@@ -1295,7 +1295,7 @@ procedure TPluginForm.UpdateStatusBar;
     if (FExporter = nil) or not FExporter.PredictDisplayedSize(AForceLiveRes, PredW, PredH, PredCappedW, PredCappedH) then
       Exit;
     if (PredCappedW <> PredW) or (PredCappedH <> PredH) then
-      Text := Format('%s: %dx%d → %dx%d', [ALabel, PredW, PredH, PredCappedW, PredCappedH])
+      Text := Format('%s: %dx%d%s%dx%d', [ALabel, PredW, PredH, ResolutionTransformGlyph, PredCappedW, PredCappedH])
     else
       Text := Format('%s: %dx%d', [ALabel, PredW, PredH]);
     AddPanel(Text, SBP_RESULT_W,

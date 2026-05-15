@@ -193,7 +193,7 @@ uses
   System.Classes, System.Types, System.Math, System.UITypes,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
-  uViewModeLayout, uBitmapResize;
+  uViewModeLayout, uBitmapResize, uPlatformDetect;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
@@ -875,7 +875,7 @@ begin
   if not PredictDisplayedSize(AForceLiveRes, W, H, CW, CH) then
     Exit;
   if (CW <> W) or (CH <> H) then
-    Result := Format(' [%dx%d → %dx%d]', [W, H, CW, CH])
+    Result := Format(' [%dx%d%s%dx%d]', [W, H, ResolutionTransformGlyph, CW, CH])
   else
     Result := Format(' [%dx%d]', [W, H]);
 end;

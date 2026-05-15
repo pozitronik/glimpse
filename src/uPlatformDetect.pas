@@ -14,6 +14,14 @@ interface
  reliably available.}
 function IsLegacyWindows: Boolean;
 
+{Returns a "X transforms into Y" connective with surrounding spaces baked
+ in. Modern Windows gets the typographic right-arrow U+2192; XP falls
+ back to ASCII " -> " because Tahoma's Arrows-block coverage is patchy
+ across XP service-pack levels and the missing-glyph box is jarring.
+ Used by the status-bar predicted-size panel and by the dropdown menu
+ captions that show pre-cap -> post-cap dimensions.}
+function ResolutionTransformGlyph: string;
+
 implementation
 
 uses
@@ -22,6 +30,14 @@ uses
 function IsLegacyWindows: Boolean;
 begin
   Result := TOSVersion.Major < 6;
+end;
+
+function ResolutionTransformGlyph: string;
+begin
+  if IsLegacyWindows then
+    Result := ' -> '
+  else
+    Result := ' → ';
 end;
 
 end.
