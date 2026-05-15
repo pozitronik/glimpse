@@ -65,6 +65,15 @@ type
     FLblError: TLabel;
     {Export}
     FExporter: TFrameExporter;
+    {Cell index under the cursor at the moment the right-click context
+     menu opens; -1 when the cursor wasn't over a cell. Captured in
+     OnContextMenuPopup and consumed by OnContextMenuClick to give the
+     "Copy frame" item context-cell semantics (the item copies the cell
+     the user right-clicked, not the selected one). Other entry points
+     for Copy frame (toolbar button, hotkey, TC lc_Copy) deliberately do
+     not pass a context cell, so they keep the selection-first rule that
+     PickActionCell falls back to.}
+    FContextCellIndex: Integer;
     {Extraction}
     FExtractCtrl: TExtractionController;
     FProbeCache: TProbeCache;
@@ -230,7 +239,7 @@ type
      entry path (toolbar, context menu, hotkey, TC lc_Copy) shares this
      rule so the right-click position never overrides the visible
      selection.}
-    procedure DispatchCommand(ATag: Integer);
+    procedure DispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1);
   end;
 
 implementation
@@ -517,6 +526,7 @@ var
   R: TRect;
 begin
   CreateNew(nil);
+  FContextCellIndex := -1;
   BorderStyle := bsNone;
   KeyPreview := True;
   {Form-level ShowHint cascades through ParentShowHint (default True) so every
@@ -2247,7 +2257,7 @@ begin
   FSettings.Save;
 end;
 
-procedure TPluginForm.DispatchCommand(ATag: Integer);
+procedure TPluginForm.DispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1);
 var
   ResolvedIdx: Integer;
   ReExtract: TReExtractAction;
@@ -2301,7 +2311,14 @@ begin
       FExporter.SaveView(FFileName, False, ReExtract);
     CM_COPY_FRAME:
       begin
-        ResolvedIdx := FExporter.PickActionCell(-1);
+        {Only Copy frame honours AContextCellIndex - the right-click
+         context menu wires its captured cursor cell through here so
+         "Copy frame" copies the cell the user actually clicked. The
+         toolbar button, configurable hotkey, and TC lc_Copy all pass
+         -1 (the default) and so keep the selection-first rule.
+         PickActionCell's step 1 ignores out-of-range / unloaded values
+         so we don't need extra guards.}
+        ResolvedIdx := FExporter.PickActionCell(AContextCellIndex);
         if ResolvedIdx >= 0 then
           WithReExtract([ResolvedIdx],
             procedure
@@ -2489,6 +2506,12 @@ var
   MI: TMenuItem;
   HasFrames, CanExport: Boolean;
 begin
+  {Capture the cell under the cursor so OnContextMenuClick can route
+   the right-clicked cell through DispatchCommand for Copy frame.
+   CellIndexAt returns -1 when the cursor isn't over a real cell;
+   PickActionCell's downstream loaded-state check filters placeholders.}
+  FContextCellIndex := FFrameView.CellIndexAt(FFrameView.ScreenToClient(Mouse.CursorPos));
+
   HasFrames := FFrameView.CellCount > 0;
   {Mid-extraction the loaded set is unstable (cells flip from placeholder
    to loaded as workers finish, and Refresh resets every cell back to
@@ -2529,11 +2552,11 @@ end;
 
 procedure TPluginForm.OnContextMenuClick(Sender: TObject);
 begin
-  {The right-click position is purely for menu placement; it does not
-   redirect the action. Save/Copy frame consult the visible selection
-   (then fall back to cell 0) regardless of which cell the menu was
-   opened over — same rule as the toolbar / hotkey paths.}
-  DispatchCommand(TMenuItem(Sender).Tag);
+  {Pass the captured right-click cell through so DispatchCommand's
+   Copy frame branch can prefer it over the selection. Save frame and
+   the view-level actions deliberately ignore the parameter and keep
+   the selection-first rule (see DispatchCommand).}
+  DispatchCommand(TMenuItem(Sender).Tag, FContextCellIndex);
 end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
