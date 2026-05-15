@@ -18,6 +18,7 @@ interface
 
 uses
   System.Classes, System.SysUtils,
+  Vcl.Menus,
   uUnicodeIniFile;
 
 type
@@ -36,7 +37,9 @@ type
     paFrameCountInc, paFrameCountDec,
     {Frame output}
     paSaveFrame, paSaveFrames, paSaveView,
+    paSaveViewLive, paSaveViewNative,
     paSelectAllFrames, paCopyFrame, paCopyView,
+    paCopyViewLive, paCopyViewNative,
     {Zoom}
     paZoomIn, paZoomOut, paZoomReset,
     {View mode}
@@ -51,6 +54,10 @@ type
     function Equals(const AOther: THotkeyChord): Boolean;
     function ToDisplayStr: string;
     function ToIniStr: string;
+    {VCL TShortCut Word for use with TMenuItem.ShortCut. Returns 0 when
+     the chord is unbound, which TMenuItem renders as "no shortcut" — so
+     callers can assign unconditionally without guarding.}
+    function ToShortCut: TShortCut;
     class function Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord; static;
     class function None: THotkeyChord; static;
     class function FromIniStr(const AValue: string): THotkeyChord; static;
@@ -262,6 +269,13 @@ end;
 function THotkeyChord.ToIniStr: string;
 begin
   Result := ToDisplayStr;
+end;
+
+function THotkeyChord.ToShortCut: TShortCut;
+begin
+  if not IsAssigned then
+    Exit(0);
+  Result := Vcl.Menus.ShortCut(Key, Modifiers);
 end;
 
 class function THotkeyChord.Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord;
@@ -524,6 +538,13 @@ begin
       Result := [THotkeyChord.Make(Ord('S'), [ssCtrl])];
     paSaveView:
       Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift])];
+    paSaveViewLive:
+      {Save view at view resolution. Mnemonic: L = Live (the on-screen
+       cell pixel dimensions). Shift modifier marks the Save side.}
+      Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssShift])];
+    paSaveViewNative:
+      {Save view at native resolution. Mnemonic: N = Native.}
+      Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssShift])];
     paSaveFrames:
       Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt, ssShift])];
     paSelectAllFrames:
@@ -532,6 +553,12 @@ begin
       Result := [THotkeyChord.Make(Ord('C'), [ssCtrl])];
     paCopyView:
       Result := [THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift])];
+    paCopyViewLive:
+      {Copy view at view resolution. Alt modifier marks the Copy side
+       (Shift was already taken by Save side variants).}
+      Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssAlt])];
+    paCopyViewNative:
+      Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssAlt])];
     paZoomIn:
       Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];
     paZoomOut:
@@ -576,9 +603,13 @@ begin
     paSaveFrame: Result := 'SaveFrame';
     paSaveFrames: Result := 'SaveFrames';
     paSaveView: Result := 'SaveView';
+    paSaveViewLive: Result := 'SaveViewLive';
+    paSaveViewNative: Result := 'SaveViewNative';
     paSelectAllFrames: Result := 'SelectAllFrames';
     paCopyFrame: Result := 'CopyFrame';
     paCopyView: Result := 'CopyView';
+    paCopyViewLive: Result := 'CopyViewLive';
+    paCopyViewNative: Result := 'CopyViewNative';
     paZoomIn: Result := 'ZoomIn';
     paZoomOut: Result := 'ZoomOut';
     paZoomReset: Result := 'ZoomReset';
@@ -614,10 +645,14 @@ begin
     paFrameCountDec: Result := 'Decrease frame count';
     paSaveFrame: Result := 'Save frame';
     paSaveFrames: Result := 'Save frames';
-    paSaveView: Result := 'Save view';
+    paSaveView: Result := 'Save view (honour persisted resolution toggle)';
+    paSaveViewLive: Result := 'Save view at view resolution (one-shot)';
+    paSaveViewNative: Result := 'Save view at native size (one-shot)';
     paSelectAllFrames: Result := 'Select all frames';
     paCopyFrame: Result := 'Copy frame to clipboard';
-    paCopyView: Result := 'Copy view to clipboard';
+    paCopyView: Result := 'Copy view to clipboard (honour persisted resolution toggle)';
+    paCopyViewLive: Result := 'Copy view at view resolution (one-shot)';
+    paCopyViewNative: Result := 'Copy view at native size (one-shot)';
     paZoomIn: Result := 'Zoom in';
     paZoomOut: Result := 'Zoom out';
     paZoomReset: Result := 'Reset zoom';

@@ -1108,6 +1108,8 @@ var
   Base: string;
   ForceLive, IsCopy: Boolean;
   PersistedLive: Boolean;
+  Action: TPluginAction;
+  Chords: THotkeyChordArray;
 begin
   if AMenu = nil then
     Exit;
@@ -1120,23 +1122,27 @@ begin
         begin
           Base := CAPTION_SAVE_VIEW_LIVE;
           ForceLive := True;
+          Action := paSaveViewLive;
         end;
       CM_SAVE_VIEW_NATIVE:
         begin
           Base := CAPTION_SAVE_VIEW_NATIVE;
           ForceLive := False;
+          Action := paSaveViewNative;
         end;
       CM_COPY_VIEW_LIVE:
         begin
           Base := CAPTION_COPY_VIEW_LIVE;
           ForceLive := True;
           IsCopy := True;
+          Action := paCopyViewLive;
         end;
       CM_COPY_VIEW_NATIVE:
         begin
           Base := CAPTION_COPY_VIEW_NATIVE;
           ForceLive := False;
           IsCopy := True;
+          Action := paCopyViewNative;
         end;
     else
       Continue;
@@ -1157,6 +1163,16 @@ begin
       PersistedLive := FSettings.SaveAtLiveResolution;
     MI.RadioItem := True;
     MI.Checked := ForceLive = PersistedLive;
+    {Mirror the first configured chord (THotkeyBindings allows several
+     per action; the first one is the canonical "primary") onto the menu
+     item so VCL renders it in the standard "Caption    Ctrl+Shift+L"
+     two-column layout. Unbound action -> ShortCut = 0 -> VCL hides the
+     suffix entirely.}
+    Chords := FSettings.Hotkeys.Get(Action);
+    if Length(Chords) > 0 then
+      MI.ShortCut := Chords[0].ToShortCut
+    else
+      MI.ShortCut := 0;
   end;
 end;
 
@@ -2077,6 +2093,16 @@ begin
         DispatchCommand(CM_SAVE_VIEW)
       else
         Result := False;
+    paSaveViewLive:
+      if CanExportFrames then
+        DispatchCommand(CM_SAVE_VIEW_LIVE)
+      else
+        Result := False;
+    paSaveViewNative:
+      if CanExportFrames then
+        DispatchCommand(CM_SAVE_VIEW_NATIVE)
+      else
+        Result := False;
     paSelectAllFrames:
       FFrameView.SelectAll;
     paCopyFrame:
@@ -2087,6 +2113,16 @@ begin
     paCopyView:
       if CanExportFrames then
         DispatchCommand(CM_COPY_VIEW)
+      else
+        Result := False;
+    paCopyViewLive:
+      if CanExportFrames then
+        DispatchCommand(CM_COPY_VIEW_LIVE)
+      else
+        Result := False;
+    paCopyViewNative:
+      if CanExportFrames then
+        DispatchCommand(CM_COPY_VIEW_NATIVE)
       else
         Result := False;
     paZoomIn:

@@ -27,10 +27,14 @@ All shortcuts below are defaults. Every row is user-configurable via the **Hotke
 | Ctrl+A           | Select all                                                                                        |
 | Ctrl+Click       | Toggle frame selection                                                                            |
 | Ctrl+S           | Save frame (the focused or right-clicked one)                                                     |
-| Ctrl+Shift+S     | Save view (combined image matching the current view mode: grid, smart, filmstrip, or scroll)      |
+| Ctrl+Shift+S     | Save view — honours the persisted *Save at view resolution* setting                               |
+| Ctrl+Shift+L     | Save view at view resolution (one-shot; ignores the setting for this action only)                 |
+| Ctrl+Shift+N     | Save view at native size (one-shot)                                                               |
 | Ctrl+Alt+Shift+S | Save frames (selected if any are selected, otherwise all loaded frames)                           |
 | Ctrl+C           | Copy frame to clipboard                                                                           |
-| Ctrl+Shift+C     | Copy view to clipboard                                                                            |
+| Ctrl+Shift+C     | Copy view — honours the persisted *Copy at view resolution* setting                               |
+| Ctrl+Alt+L       | Copy view at view resolution (one-shot)                                                           |
+| Ctrl+Alt+N       | Copy view at native size (one-shot)                                                               |
 | Enter            | Open the current file in the OS default player                                                    |
 | F11              | Toggle Lister maximize                                                                            |
 | Alt+Enter        | Toggle Lister full-screen (maximize without the window caption)                                   |

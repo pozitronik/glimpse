@@ -86,6 +86,13 @@ type
     [Test] procedure Defaults_NextFileHasTwoChords;
     [Test] procedure Defaults_PrevFrameHasBareAndCtrlLeft;
     [Test] procedure Defaults_NextFrameHasBareAndCtrlRight;
+    [Test] procedure Defaults_SaveViewLiveIsCtrlShiftL;
+    [Test] procedure Defaults_SaveViewNativeIsCtrlShiftN;
+    [Test] procedure Defaults_CopyViewLiveIsCtrlAltL;
+    [Test] procedure Defaults_CopyViewNativeIsCtrlAltN;
+    [Test] procedure Defaults_SaveCopyViewVariants_NoCrossActionConflict;
+    [Test] procedure ToShortCut_UnboundIsZero;
+    [Test] procedure ToShortCut_CtrlShiftL_RoundsThroughVcl;
     [Test] procedure Lookup_Defaults_Resolve;
     [Test] procedure Lookup_PrevFile_EveryDefaultChord_ResolvesSameAction;
     [Test] procedure Lookup_BareLeft_IsFrameNavNotFileNav;
@@ -118,7 +125,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Classes,
-  Winapi.Windows, Vcl.Controls,
+  Winapi.Windows, Vcl.Controls, Vcl.Menus,
   uHotkeys, uUnicodeIniFile;
 
 {TTestHotkeyChord}
@@ -655,6 +662,120 @@ begin
   try
     Assert.AreEqual<Integer>(2, Length(B.Get(paNextFrame)),
       'paNextFrame ships with bare Right and Ctrl+Right');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Defaults_SaveViewLiveIsCtrlShiftL;
+var
+  B: THotkeyBindings;
+  C: THotkeyChordArray;
+begin
+  B := THotkeyBindings.Create;
+  try
+    C := B.Get(paSaveViewLive);
+    Assert.AreEqual<Integer>(1, Length(C));
+    Assert.AreEqual<Integer>(Ord('L'), C[0].Key);
+    Assert.IsTrue(C[0].Modifiers = [ssCtrl, ssShift],
+      'Save side variants use the Shift modifier (Ctrl+Shift+L)');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Defaults_SaveViewNativeIsCtrlShiftN;
+var
+  B: THotkeyBindings;
+  C: THotkeyChordArray;
+begin
+  B := THotkeyBindings.Create;
+  try
+    C := B.Get(paSaveViewNative);
+    Assert.AreEqual<Integer>(1, Length(C));
+    Assert.AreEqual<Integer>(Ord('N'), C[0].Key);
+    Assert.IsTrue(C[0].Modifiers = [ssCtrl, ssShift]);
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Defaults_CopyViewLiveIsCtrlAltL;
+var
+  B: THotkeyBindings;
+  C: THotkeyChordArray;
+begin
+  B := THotkeyBindings.Create;
+  try
+    C := B.Get(paCopyViewLive);
+    Assert.AreEqual<Integer>(1, Length(C));
+    Assert.AreEqual<Integer>(Ord('L'), C[0].Key);
+    Assert.IsTrue(C[0].Modifiers = [ssCtrl, ssAlt],
+      'Copy side variants use the Alt modifier (Ctrl+Alt+L)');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.Defaults_CopyViewNativeIsCtrlAltN;
+var
+  B: THotkeyBindings;
+  C: THotkeyChordArray;
+begin
+  B := THotkeyBindings.Create;
+  try
+    C := B.Get(paCopyViewNative);
+    Assert.AreEqual<Integer>(1, Length(C));
+    Assert.AreEqual<Integer>(Ord('N'), C[0].Key);
+    Assert.IsTrue(C[0].Modifiers = [ssCtrl, ssAlt]);
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.ToShortCut_UnboundIsZero;
+var
+  C: THotkeyChord;
+begin
+  C := THotkeyChord.None;
+  Assert.AreEqual<Integer>(0, C.ToShortCut,
+    'Unbound chord must produce TShortCut 0 so TMenuItem.ShortCut shows nothing');
+end;
+
+procedure TTestHotkeyBindings.ToShortCut_CtrlShiftL_RoundsThroughVcl;
+var
+  C: THotkeyChord;
+  Decoded: Word;
+  DecodedShift: TShiftState;
+begin
+  C := THotkeyChord.Make(Ord('L'), [ssCtrl, ssShift]);
+  Vcl.Menus.ShortCutToKey(C.ToShortCut, Decoded, DecodedShift);
+  Assert.AreEqual<Integer>(Ord('L'), Decoded);
+  Assert.IsTrue(DecodedShift = [ssCtrl, ssShift],
+    'VCL ShortCutToKey must reproduce the original modifier set');
+end;
+
+procedure TTestHotkeyBindings.Defaults_SaveCopyViewVariants_NoCrossActionConflict;
+var
+  B: THotkeyBindings;
+  Variants: array of TPluginAction;
+  I: Integer;
+  Chord: THotkeyChord;
+begin
+  {Pin the rule that the four new variants are reachable via Lookup —
+   guards against a future default-binding edit that accidentally
+   collides one of the variants with another action's chord.}
+  Variants := [paSaveViewLive, paSaveViewNative, paCopyViewLive, paCopyViewNative];
+  B := THotkeyBindings.Create;
+  try
+    for I := 0 to High(Variants) do
+    begin
+      Chord := B.Get(Variants[I])[0];
+      Assert.AreEqual(Ord(Variants[I]),
+        Ord(B.Lookup(Chord.Key, Chord.Modifiers)),
+        Format('%s default chord must Lookup back to itself (no enum-earlier action shadowed it)',
+          [ActionIniKey(Variants[I])]));
+    end;
   finally
     B.Free;
   end;
