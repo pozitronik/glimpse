@@ -202,12 +202,13 @@ const
   MIN_STATUSBAR_FONT_SIZE = 6;
   MAX_STATUSBAR_FONT_SIZE = 24;
 
-  {Off by default: auto-width panels measure their representative sample
-   text once at template / font apply time and lock the width. Avoids
-   the layout shift that would happen if the bar re-measured live text
-   on every Refresh. Power users with stable terminal-style layouts can
-   opt in via the settings dialog.}
-  DEF_STATUSBAR_AUTO_WIDTH_LIVE = False;
+  {On by default: auto-width panels re-measure their live text on every
+   Refresh so widths track actual content (e.g. a resolution panel
+   shrinks for 640x480 and grows for 3840x2160 instead of always sizing
+   to the worst-case sample). The price is a small layout shift on each
+   update; users who want a static bar can flip this off in the
+   settings dialog and accept the always-worst-case widths.}
+  DEF_STATUSBAR_AUTO_WIDTH_LIVE = True;
 
 implementation
 

@@ -1805,7 +1805,7 @@ begin
   try
     S.Load;
     Assert.AreEqual(DEF_STATUSBAR_AUTO_WIDTH_LIVE, S.StatusBarAutoWidthLive,
-      'Off by default — preserves no-flicker layout out of the box');
+      'On by default — panel widths track live content rather than worst-case sample text');
   finally
     S.Free;
   end;
