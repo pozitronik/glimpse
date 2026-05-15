@@ -94,7 +94,11 @@ uses
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
   TestSettingsDlgUI in 'TestSettingsDlgUI.pas',
   TestSettingsGroups in 'TestSettingsGroups.pas',
-  TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas';
+  TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas',
+  uStatusBarTokens in '..\src\uStatusBarTokens.pas',
+  uStatusBarTemplate in '..\src\uStatusBarTemplate.pas',
+  TestStatusBarTokens in 'TestStatusBarTokens.pas',
+  TestStatusBarTemplate in 'TestStatusBarTemplate.pas';
 
 var
   Runner: ITestRunner;
