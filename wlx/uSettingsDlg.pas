@@ -117,11 +117,17 @@ type
     CbxBannerPosition: TComboBox;
     ChkSaveAtLiveResolution: TCheckBox;
     ChkCopyAtLiveResolution: TCheckBox;
-    ChkClipboardAsFileReference: TCheckBox;
     LblCombinedMaxSide: TLabel;
     EdtCombinedMaxSide: TEdit;
     UdCombinedMaxSide: TUpDown;
     LblCombinedMaxSideUnit: TLabel;
+    TshClipboard: TTabSheet;
+    LblClipboardFormatsHeader: TLabel;
+    ChkPublishAlphaAwareBitmap: TCheckBox;
+    ChkPublishCompressedPng: TCheckBox;
+    ChkPublishFlattenedBitmap: TCheckBox;
+    ChkPublishBitmapHandle: TCheckBox;
+    ChkClipboardAsFileReference: TCheckBox;
     TshCache: TTabSheet;
     ChkCacheEnabled: TCheckBox;
     BtnClearCache: TButton;
@@ -343,8 +349,16 @@ begin
   CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
   ChkSaveAtLiveResolution.Checked := ASettings.SaveAtLiveResolution;
   ChkCopyAtLiveResolution.Checked := ASettings.CopyAtLiveResolution;
-  ChkClipboardAsFileReference.Checked := ASettings.ClipboardAsFileReference;
   UdCombinedMaxSide.Position := ASettings.CombinedMaxSide;
+
+  {[Clipboard tab] — per-format publish toggles + the file-reference
+   override. Order matches the visual layout: alpha-aware first, then
+   PNG, then the legacy variants, then the override.}
+  ChkPublishAlphaAwareBitmap.Checked := ASettings.PublishAlphaAwareBitmap;
+  ChkPublishCompressedPng.Checked := ASettings.PublishCompressedPng;
+  ChkPublishFlattenedBitmap.Checked := ASettings.PublishFlattenedBitmap;
+  ChkPublishBitmapHandle.Checked := ASettings.PublishBitmapHandle;
+  ChkClipboardAsFileReference.Checked := ASettings.ClipboardAsFileReference;
 
   ChkCacheEnabled.Checked := ASettings.CacheEnabled;
   EdtCacheFolder.Text := ASettings.CacheFolder;
@@ -441,8 +455,14 @@ begin
   ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
   ASettings.SaveAtLiveResolution := ChkSaveAtLiveResolution.Checked;
   ASettings.CopyAtLiveResolution := ChkCopyAtLiveResolution.Checked;
-  ASettings.ClipboardAsFileReference := ChkClipboardAsFileReference.Checked;
   ASettings.CombinedMaxSide := UdCombinedMaxSide.Position;
+
+  {[Clipboard tab] — symmetric with SettingsToControls; same field order.}
+  ASettings.PublishAlphaAwareBitmap := ChkPublishAlphaAwareBitmap.Checked;
+  ASettings.PublishCompressedPng := ChkPublishCompressedPng.Checked;
+  ASettings.PublishFlattenedBitmap := ChkPublishFlattenedBitmap.Checked;
+  ASettings.PublishBitmapHandle := ChkPublishBitmapHandle.Checked;
+  ASettings.ClipboardAsFileReference := ChkClipboardAsFileReference.Checked;
 
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;
   ASettings.CacheFolder := EdtCacheFolder.Text;

@@ -1164,21 +1164,6 @@ object SettingsForm: TSettingsForm
         Caption = 'Copy at view resolution (uses native frame size when off)'
         TabOrder = 19
       end
-      object ChkClipboardAsFileReference: TCheckBox
-        Left = 12
-        Top = 419
-        Width = 424
-        Height = 17
-        Hint =
-          'Write the image to a temp PNG and publish the file path as ' +
-          'CF_HDROP instead of a bitmap. Lets very large copies succeed ' +
-          'on the 32-bit build by avoiding the second contiguous clipboard ' +
-          'buffer. Pastes into bitmap-only targets (MS Paint, plain text) ' +
-          'will not work while this is on.'
-        Anchors = [akLeft, akTop, akRight]
-        Caption = 'Copy to clipboard as a file reference'
-        TabOrder = 22
-      end
       object LblCombinedMaxSide: TLabel
         Left = 12
         Top = 393
@@ -1216,6 +1201,88 @@ object SettingsForm: TSettingsForm
         Width = 14
         Height = 15
         Caption = 'px'
+      end
+    end
+    object TshClipboard: TTabSheet
+      Caption = 'Clipboard'
+      ImageIndex = 8
+      DesignSize = (
+        452
+        450)
+      object LblClipboardFormatsHeader: TLabel
+        Left = 12
+        Top = 12
+        Width = 280
+        Height = 15
+        Caption = 'Publish these formats when copying to clipboard:'
+      end
+      object ChkPublishAlphaAwareBitmap: TCheckBox
+        Left = 12
+        Top = 36
+        Width = 424
+        Height = 17
+        Hint =
+          'Preserves transparency. Required by modern image editors ' +
+          '(Photoshop, GIMP, Krita, Paint.NET) and web browsers. ' +
+          'Costs roughly width*height*4 bytes per copy. (CF_DIBV5)'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Alpha-aware bitmap'
+        TabOrder = 0
+      end
+      object ChkPublishCompressedPng: TCheckBox
+        Left = 12
+        Top = 62
+        Width = 424
+        Height = 17
+        Hint =
+          'Preferred by modern web/chat apps (Slack web, Discord web, ' +
+          'GitHub, browsers). Carries true alpha at a fraction of the ' +
+          'raw-pixel memory cost. (registered "PNG" format)'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Compressed PNG'
+        TabOrder = 1
+      end
+      object ChkPublishFlattenedBitmap: TCheckBox
+        Left = 12
+        Top = 88
+        Width = 424
+        Height = 17
+        Hint =
+          'Opaque copy with transparency composited onto the background ' +
+          'colour. Required by Word, Outlook, classic Paint, and most ' +
+          'older Win32 apps that do not understand alpha. ' +
+          'Costs roughly width*height*3 bytes per copy. (CF_DIB)'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Flattened bitmap for legacy apps'
+        TabOrder = 2
+      end
+      object ChkPublishBitmapHandle: TCheckBox
+        Left = 12
+        Top = 114
+        Width = 424
+        Height = 17
+        Hint =
+          'Direct bitmap handle for older Win32 viewers that distrust ' +
+          'DIB synthesis. Most modern apps do not need it. ' +
+          'Costs roughly width*height*4 bytes per copy. (CF_BITMAP)'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'GDI bitmap handle'
+        TabOrder = 3
+      end
+      object ChkClipboardAsFileReference: TCheckBox
+        Left = 12
+        Top = 154
+        Width = 424
+        Height = 17
+        Hint =
+          'Write the image to a temp PNG and publish the file path as ' +
+          'CF_HDROP instead of a bitmap. Lets very large copies succeed ' +
+          'on the 32-bit build by avoiding the second contiguous clipboard ' +
+          'buffer. When on, all format toggles above are ignored. Pastes ' +
+          'into bitmap-only targets (MS Paint, plain text) will not work.'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Copy to clipboard as a file reference (overrides format toggles above)'
+        TabOrder = 4
       end
     end
     object TshCache: TTabSheet
