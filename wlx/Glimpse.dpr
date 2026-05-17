@@ -47,7 +47,8 @@ uses
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas',
-  uPlatformDetect in '..\src\uPlatformDetect.pas';
+  uPlatformDetect in '..\src\uPlatformDetect.pas',
+  uProgressModalForm in 'uProgressModalForm.pas';
 
 exports
   ListLoad,

@@ -295,6 +295,7 @@ implementation
 uses
   System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
+  uProgressModalForm,
   uPlatformDetect, uDefaults;
 
 type
@@ -675,23 +676,29 @@ begin
   FExtractCtrl.OnProgress := OnExtractionProgress;
 
   FExporter := TFrameExporter.Create(FFrameView, FSettings);
-  {Surface the file-reference copy path's PNG-encode wait through the
-   existing status-bar progress widget. Marquee style: indeterminate
-   work, no percent. ShowProgress brings the bar visible (forcing the
-   status bar visible too if hidden); HideProgress restores the
-   visibility the user configured.}
-  FExporter.OnAsyncWorkShow :=
-    procedure(const AText: string)
+  {Run the file-reference clipboard PNG encode inside a modal "please
+   wait" dialog parented to this form. The modal blocks UI re-entry,
+   navigation, and accidental re-clicks while the worker thread runs.
+   Cancellation detaches the thread (it cleans up after itself). See
+   uProgressModalForm for the thread-completion mechanism (PostMessage
+   to a value-captured HWND, no polling timer).}
+  FExporter.OnAsyncTaskRun :=
+    function(AThread: TThread; const AText: string): Boolean
     begin
+      {Surface the work on BOTH the in-form status-bar progress
+       widget AND the modal dialog: the status bar marquee gives a
+       visual cue that the lister itself is busy (the modal blocks
+       form input but doesn't paint the status bar), the modal
+       provides the Cancel button and the central indication.}
       FProgressBar.Style := pbstMarquee;
       FProgressBar.MarqueeInterval := 30;
       ShowProgress(AText);
-    end;
-  FExporter.OnAsyncWorkHide :=
-    procedure
-    begin
-      HideProgress;
-      FProgressBar.Style := pbstNormal;
+      try
+        Result := RunWithProgress(Self, AThread, AText);
+      finally
+        HideProgress;
+        FProgressBar.Style := pbstNormal;
+      end;
     end;
 
   FAnimTimer := TTimer.Create(Self);
