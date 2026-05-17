@@ -54,18 +54,6 @@ type
      invalidate a CF_HDROP entry the user has not pasted yet — the
      system's %TEMP% cleanup catches the file later.}
     FLastClipboardTempFile: string;
-    {Cancellation contract for the file-reference path: when the user
-     cancels, the encode cannot be interrupted (SaveBitmapToFile is
-     opaque). We park the still-running TFileWriteThread here so the
-     destructor can WaitFor + Free it on form close. Previously the
-     thread was detached via FreeOnTerminate := True, which leaked
-     the thread + its owned bitmap + the in-flight TPngImage tree
-     when the plugin DLL unloaded mid-encode.
-
-     Field is TObjectList to handle the "user cancels multiple times
-     in quick succession before earlier threads finished" case — each
-     cancel parks one more thread. Destructor walks the lot.}
-    FPendingCancelledThreads: TObject;  {TObjectList<TThread>, kept as TObject so the interface section need not import Generics.Collections}
     FOnAsyncTaskRun: TAsyncTaskRunner;
     {Opens the file dialog and returns the chosen path/format. The
      AInitialLiveRes value seeds the dialog: on modern Windows it is the
@@ -127,11 +115,6 @@ type
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
-    {Waits for any in-flight cancelled file-reference worker threads
-     and frees them so the plugin DLL doesn't unload while a TPngImage
-     encode is still running in the background — which used to leak
-     the whole encode tree.}
-    destructor Destroy; override;
     {Optional host-form hook that runs a worker thread inside a modal
      progress dialog. Wire to uProgressModalForm.RunWithProgress. Leave
      nil to fall back to synchronous, no-UI execution (tests / standalone).}
@@ -245,7 +228,7 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShlObj,
-  System.Types, System.Math, System.UITypes, System.IOUtils, System.Generics.Collections,
+  System.Types, System.Math, System.UITypes, System.IOUtils,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog,
@@ -329,26 +312,6 @@ begin
   inherited Create;
   FFrameView := AFrameView;
   FSettings := ASettings;
-  FPendingCancelledThreads := TObjectList<TThread>.Create({AOwnsObjects=}True);
-end;
-
-destructor TFrameExporter.Destroy;
-var
-  List: TObjectList<TThread>;
-  T: TThread;
-begin
-  List := TObjectList<TThread>(FPendingCancelledThreads);
-  if Assigned(List) then
-  begin
-    {Wait for each still-encoding cancelled worker. The encode runs
-     to natural completion (SaveBitmapToFile is opaque), then the
-     thread sees its FCancelled flag and deletes the file it wrote.
-     OwnsObjects=True frees the threads on List.Free.}
-    for T in List do
-      T.WaitFor;
-    List.Free;
-  end;
-  inherited;
 end;
 
 type
@@ -435,13 +398,24 @@ begin
 end;
 
 procedure TFileWriteThread.RequestCancel;
+var
+  ModuleName: array[0..MAX_PATH - 1] of Char;
 begin
-  {Just set the flag. The exporter parks the thread reference in
-   FPendingCancelledThreads and waits for it in its destructor — so
-   we keep manual lifetime control instead of FreeOnTerminate, which
-   would race the plugin DLL unload and leak the whole encode tree
-   if TC tore us down before SaveBitmapToFile returned.}
+  {Pin this DLL via an extra LoadLibrary refcount so the worker thread
+   can run to completion even if TC unloads the WLX plugin the instant
+   the user closes the Lister. Without the pin, TC's FreeLibrary would
+   unmap our code while the thread is still executing inside it (in
+   SaveBitmapToFile / TPngImage) — instant crash. The pin is never
+   released; the OS reclaims the DLL handle on TC exit. One pin per
+   cancelled-and-detached thread, only when the user actually cancels,
+   so the per-session cost is negligible.}
+  GetModuleFileName(HInstance, ModuleName, Length(ModuleName));
+  LoadLibrary(ModuleName);
   FCancelled := True;
+  {FreeOnTerminate hands the thread's lifetime to the thread itself:
+   when Execute returns, TThread.AfterTerminate frees us, our
+   destructor frees the owned bitmap. Main thread doesn't wait.}
+  FreeOnTerminate := True;
 end;
 
 procedure TFileWriteThread.SetCompletionCallback(ACallback: TProc);
@@ -508,13 +482,12 @@ begin
 
     if not TaskOk then
     begin
-      {User cancelled. Park the thread on FPendingCancelledThreads so
-       the destructor will WaitFor + Free it later — keeps manual
-       lifetime control and avoids the FreeOnTerminate-during-DLL-
-       unload leak. Caller treats this as a quiet no-op; clipboard
-       is not updated and no error MessageDlg fires.}
+      {User cancelled. RequestCancel pins the DLL and sets
+       FreeOnTerminate, so the thread runs to completion in the
+       background and self-frees safely even if TC unloads the
+       plugin a moment later. Null the local reference so the
+       finally block doesn't double-free.}
       Thread.RequestCancel;
-      TObjectList<TThread>(FPendingCancelledThreads).Add(Thread);
       Thread := nil;
       Exit(cprCancelled);
     end;
