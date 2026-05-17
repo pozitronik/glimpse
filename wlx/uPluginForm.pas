@@ -262,6 +262,11 @@ type
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure OnFormKeyPress(Sender: TObject; var Key: Char);
     function ExecuteHotkey(AAction: TPluginAction): Boolean;
+    {Common gate+dispatch shared by every Save/Copy hotkey branch in
+     ExecuteHotkey. Returns False (without dispatching) when extraction
+     is in flight so the caller falls through to TC's same-key shortcut
+     instead of acting on an unstable cell set.}
+    function TryExecuteExportCommand(ACommandTag: Integer): Boolean;
     procedure ForwardKeyToLister(AKey: Word; ASysKey: Boolean);
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
@@ -2037,6 +2042,13 @@ begin
   end;
 end;
 
+function TPluginForm.TryExecuteExportCommand(ACommandTag: Integer): Boolean;
+begin
+  Result := CanExportFrames;
+  if Result then
+    DispatchCommand(ACommandTag);
+end;
+
 function TPluginForm.ExecuteHotkey(AAction: TPluginAction): Boolean;
 begin
   Result := True;
@@ -2118,56 +2130,21 @@ begin
       ShuffleExtraction;
     {Save / copy hotkey actions dispatch through PickActionCell, which
      picks the selected cell first and falls back to the focused / first
-     cell. Each guards on CanExportFrames so a mid-extraction keystroke
+     cell. Each routes through TryExecuteExportCommand so the
+     CanExportFrames gate is centralised — a mid-extraction keystroke
      falls through (Result := False) instead of dispatching against an
-     unstable cell set — matches the toolbar / context-menu visual lock.}
-    paSaveFrame:
-      if CanExportFrames then
-        DispatchCommand(CM_SAVE_FRAME)
-      else
-        Result := False;
-    paSaveFrames:
-      if CanExportFrames then
-        DispatchCommand(CM_SAVE_FRAMES)
-      else
-        Result := False;
-    paSaveView:
-      if CanExportFrames then
-        DispatchCommand(CM_SAVE_VIEW)
-      else
-        Result := False;
-    paSaveViewLive:
-      if CanExportFrames then
-        DispatchCommand(CM_SAVE_VIEW_LIVE)
-      else
-        Result := False;
-    paSaveViewNative:
-      if CanExportFrames then
-        DispatchCommand(CM_SAVE_VIEW_NATIVE)
-      else
-        Result := False;
+     unstable cell set, matching the toolbar / context-menu visual lock.}
+    paSaveFrame:      Result := TryExecuteExportCommand(CM_SAVE_FRAME);
+    paSaveFrames:     Result := TryExecuteExportCommand(CM_SAVE_FRAMES);
+    paSaveView:       Result := TryExecuteExportCommand(CM_SAVE_VIEW);
+    paSaveViewLive:   Result := TryExecuteExportCommand(CM_SAVE_VIEW_LIVE);
+    paSaveViewNative: Result := TryExecuteExportCommand(CM_SAVE_VIEW_NATIVE);
     paSelectAllFrames:
       FFrameView.SelectAll;
-    paCopyFrame:
-      if CanExportFrames then
-        DispatchCommand(CM_COPY_FRAME)
-      else
-        Result := False;
-    paCopyView:
-      if CanExportFrames then
-        DispatchCommand(CM_COPY_VIEW)
-      else
-        Result := False;
-    paCopyViewLive:
-      if CanExportFrames then
-        DispatchCommand(CM_COPY_VIEW_LIVE)
-      else
-        Result := False;
-    paCopyViewNative:
-      if CanExportFrames then
-        DispatchCommand(CM_COPY_VIEW_NATIVE)
-      else
-        Result := False;
+    paCopyFrame:      Result := TryExecuteExportCommand(CM_COPY_FRAME);
+    paCopyView:       Result := TryExecuteExportCommand(CM_COPY_VIEW);
+    paCopyViewLive:   Result := TryExecuteExportCommand(CM_COPY_VIEW_LIVE);
+    paCopyViewNative: Result := TryExecuteExportCommand(CM_COPY_VIEW_NATIVE);
     paZoomIn:
       ZoomBy(ZOOM_IN_FACTOR);
     paZoomOut:
