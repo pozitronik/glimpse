@@ -107,6 +107,15 @@ type
      but no error to surface), cprFailed on bitmap save / clipboard
      publish failure (caller should MessageDlg).}
     function PublishBitmapAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
+    {Sibling of PublishBitmapAsFileReference for the in-memory clipboard
+     path (CF_DIBV5 + CF_DIB for pf32bit, CF_BITMAP for pf24bit via
+     uClipboardImage.CopyBitmapToClipboard). Runs inside the same modal
+     progress dialog so the lister stays responsive while large
+     HGLOBAL buffers are being allocated and populated. Same ownership
+     contract: takes ABitmap unconditionally, sets it to nil on entry.
+     Same tri-state result.}
+    function PublishBitmapToClipboardAsImage(var ABitmap: TBitmap;
+      ABackground: TColor): TClipboardPublishResult;
     {Shrinks ABmp in place when FSettings.CombinedMaxSide > 0 and the bitmap's
      longer side exceeds the cap. The original is freed and replaced with a
      downscaled copy. No-op when the cap is 0 (unlimited) or the bitmap
@@ -359,6 +368,36 @@ type
     procedure Execute; override;
   end;
 
+  {Sibling of TFileWriteThread for the in-memory clipboard path: hands
+   the bitmap to uClipboardImage.CopyBitmapToClipboard inside the modal
+   so the lister doesn't freeze while the (potentially huge) HGLOBAL is
+   allocated and populated. CopyBitmapToClipboard is opaque from the
+   outside the same way SaveBitmapToFile is, so cancel applies the
+   same trade-off: pin the DLL, detach, let the worker finish in the
+   background without freezing the close path.}
+  TClipboardWriteThread = class(TThread, IModalThreadCompletion)
+  private
+    FBmp: TBitmap;
+    FBackground: TColor;
+    FCancelled: Boolean;
+    FOnComplete: TProc;
+    procedure SetCompletionCallback(ACallback: TProc);
+    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+    function _AddRef: Integer; stdcall;
+    function _Release: Integer; stdcall;
+  public
+    Success: Boolean;
+    ErrorMsg: string;
+    constructor Create(ABmp: TBitmap; ABackground: TColor); reintroduce;
+    destructor Destroy; override;
+    {Same cancel contract as TFileWriteThread — sets flag, pins DLL,
+     sets FreeOnTerminate. Main thread MUST NOT touch the thread
+     reference after calling.}
+    procedure RequestCancel;
+  protected
+    procedure Execute; override;
+  end;
+
 constructor TFileWriteThread.Create(ABmp: TBitmap; const APath: string);
 begin
   inherited Create(True);
@@ -444,6 +483,70 @@ begin
   Result := -1;
 end;
 
+constructor TClipboardWriteThread.Create(ABmp: TBitmap; ABackground: TColor);
+begin
+  inherited Create(True);
+  FBmp := ABmp;
+  FBackground := ABackground;
+end;
+
+destructor TClipboardWriteThread.Destroy;
+begin
+  FBmp.Free;
+  inherited;
+end;
+
+procedure TClipboardWriteThread.Execute;
+begin
+  try
+    Success := uClipboardImage.CopyBitmapToClipboard(FBmp, FBackground);
+  except
+    on E: Exception do
+    begin
+      Success := False;
+      ErrorMsg := E.Message;
+    end;
+  end;
+  if Assigned(FOnComplete) then
+    FOnComplete;
+end;
+
+procedure TClipboardWriteThread.RequestCancel;
+var
+  ModuleName: array[0..MAX_PATH - 1] of Char;
+begin
+  {Mirror of TFileWriteThread.RequestCancel — see the long comment
+   there for the rationale (DLL pin + detach so closing the lister
+   right after cancel doesn't crash on unmapped code).}
+  GetModuleFileName(HInstance, ModuleName, Length(ModuleName));
+  LoadLibrary(ModuleName);
+  FCancelled := True;
+  FreeOnTerminate := True;
+end;
+
+procedure TClipboardWriteThread.SetCompletionCallback(ACallback: TProc);
+begin
+  FOnComplete := ACallback;
+end;
+
+function TClipboardWriteThread.QueryInterface(const IID: TGUID; out Obj): HResult;
+begin
+  if GetInterface(IID, Obj) then
+    Result := S_OK
+  else
+    Result := E_NOINTERFACE;
+end;
+
+function TClipboardWriteThread._AddRef: Integer;
+begin
+  Result := -1;
+end;
+
+function TClipboardWriteThread._Release: Integer;
+begin
+  Result := -1;
+end;
+
 function TFrameExporter.PublishBitmapAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
 var
   NewPath, OldPath: string;
@@ -509,6 +612,52 @@ begin
     FLastClipboardTempFile := NewPath;
     if (OldPath <> '') and (OldPath <> NewPath) then
       System.SysUtils.DeleteFile(OldPath);
+    Result := cprSuccess;
+  finally
+    if Assigned(Thread) then
+      Thread.Free;
+  end;
+end;
+
+function TFrameExporter.PublishBitmapToClipboardAsImage(var ABitmap: TBitmap;
+  ABackground: TColor): TClipboardPublishResult;
+var
+  TakenBmp: TBitmap;
+  Thread: TClipboardWriteThread;
+  TaskOk: Boolean;
+begin
+  Result := cprFailed;
+  {Same ownership-transfer + tri-state pattern as
+   PublishBitmapAsFileReference (see that function for the rationale).
+   The in-memory clipboard write happens off-thread inside the modal
+   progress dialog so the lister doesn't freeze while CF_DIBV5 +
+   CF_DIB HGLOBALs (each up to hundreds of MB for a 4K combined
+   image) are being allocated and populated.}
+  TakenBmp := ABitmap;
+  ABitmap := nil;
+  if TakenBmp = nil then
+    Exit;
+
+  Thread := TClipboardWriteThread.Create(TakenBmp, ABackground);
+  try
+    if Assigned(FOnAsyncTaskRun) then
+      TaskOk := FOnAsyncTaskRun(Thread, 'Copying image to clipboard...')
+    else
+    begin
+      Thread.Start;
+      Thread.WaitFor;
+      TaskOk := True;
+    end;
+
+    if not TaskOk then
+    begin
+      Thread.RequestCancel;
+      Thread := nil;
+      Exit(cprCancelled);
+    end;
+
+    if not Thread.Success then
+      Exit;
     Result := cprSuccess;
   finally
     if Assigned(Thread) then
@@ -1523,7 +1672,30 @@ begin
           end;
         end
         else
-          Clipboard.Assign(Source);
+        begin
+          {In-memory clipboard path. Same owned-vs-clone rule as the
+           file-reference branch above — PublishBitmapToClipboardAsImage
+           takes ownership of the bitmap, so an unowned PickSaveBitmap
+           result must be cloned first to keep the FFrameView cell
+           intact.}
+          if OwnsSource then
+          begin
+            if PublishBitmapToClipboardAsImage(Source, FSettings.Background) = cprFailed then
+              MessageDlg('Clipboard write failed - the frame is too large to copy.' + sLineBreak + sLineBreak + 'Use the 64-bit plugin variant, or enable "Copy to clipboard as a file reference" on the Save tab.', mtError, [mbOK], 0);
+            OwnsSource := False;
+          end
+          else
+          begin
+            Tmp := TBitmap.Create;
+            try
+              Tmp.Assign(Source);
+              if PublishBitmapToClipboardAsImage(Tmp, FSettings.Background) = cprFailed then
+                MessageDlg('Clipboard write failed - the frame is too large to copy.' + sLineBreak + sLineBreak + 'Use the 64-bit plugin variant, or enable "Copy to clipboard as a file reference" on the Save tab.', mtError, [mbOK], 0);
+            finally
+              Tmp.Free;
+            end;
+          end;
+        end;
       finally
         if OwnsSource then
         begin
@@ -1588,7 +1760,7 @@ begin
             if PublishBitmapAsFileReference(Bmp) = cprFailed then
               MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
           end
-          else if not CopyBitmapToClipboard(Bmp, FSettings.Background) then
+          else if PublishBitmapToClipboardAsImage(Bmp, FSettings.Background) = cprFailed then
             MessageDlg('Clipboard write failed - the combined image is too large to copy.' + sLineBreak + sLineBreak + 'Lower the Scale target in Settings, reduce the frame count, or use Save view to write the image to a file instead.', mtError, [mbOK], 0);
         finally
           Bmp.Free;
