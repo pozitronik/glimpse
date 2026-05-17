@@ -34,6 +34,12 @@ type
      Lifetime: the caller (TPluginForm) sets this before invoking a save
      method and clears it after, so the exporter never owns the memory.}
     FOverrideFrames: TArray<TBitmap>;
+    {Path of the temp PNG we most recently wrote for the CF_HDROP
+     "paste as file reference" toggle, or '' when nothing has been
+     written this session. Tracked so the next copy can delete the
+     previous file (at most one Glimpse clipboard temp exists at a
+     time) and so the destructor can sweep on form close.}
+    FLastClipboardTempFile: string;
     {Opens the file dialog and returns the chosen path/format. The
      AInitialLiveRes value seeds the dialog: on modern Windows it is the
      starting state of the inline 'Save at view resolution' check button
@@ -73,6 +79,11 @@ type
     function RenderSmartCombinedFromCells: TBitmap;
     function RenderCombinedFromCells: TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
+    {Saves ABitmap to a fresh %TEMP%\glimpse_clip_*.png and publishes
+     its path as CF_HDROP. Deletes the previous temp file if any.
+     Returns False on bitmap save / clipboard publish failure; the
+     caller surfaces the failure to the user.}
+    function PublishBitmapAsFileReference(ABitmap: TBitmap): Boolean;
     {Shrinks ABmp in place when FSettings.CombinedMaxSide > 0 and the bitmap's
      longer side exceeds the cap. The original is freed and replaced with a
      downscaled copy. No-op when the cap is 0 (unlimited) or the bitmap
@@ -81,6 +92,13 @@ type
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
+    {Sweeps the last CF_HDROP temp file on the way out so the user's
+     %TEMP% doesn't accumulate Glimpse PNGs across viewer lifetimes.
+     The path on the clipboard becomes a dangling reference after
+     this point — acceptable since most paste targets read the file
+     immediately, and TC closing the Lister means the user is done
+     with that copy.}
+    destructor Destroy; override;
     {Resolves which frame to act on: prefers AContextCellIndex, falls back
      to current frame index, then 0. Returns False if no loaded frame found.}
     function ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
@@ -190,10 +208,10 @@ implementation
 
 uses
   Winapi.Windows, Winapi.ShlObj,
-  System.Classes, System.Types, System.Math, System.UITypes,
+  System.Classes, System.Types, System.Math, System.UITypes, System.IOUtils,
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
-  uViewModeLayout, uBitmapResize, uPlatformDetect;
+  uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
@@ -273,6 +291,51 @@ begin
   inherited Create;
   FFrameView := AFrameView;
   FSettings := ASettings;
+end;
+
+destructor TFrameExporter.Destroy;
+begin
+  if FLastClipboardTempFile <> '' then
+    {Best-effort delete. Silently swallow failures — file may already
+     be gone, locked by a paste target still reading, or on a removable
+     drive that vanished. None warrants raising during shutdown.}
+    System.SysUtils.DeleteFile(FLastClipboardTempFile);
+  inherited;
+end;
+
+function TFrameExporter.PublishBitmapAsFileReference(ABitmap: TBitmap): Boolean;
+var
+  NewPath, OldPath: string;
+begin
+  Result := False;
+  if ABitmap = nil then
+    Exit;
+  {Fresh GUID-based name per call so concurrent TC lister windows don't
+   collide on a single fixed filename. The previous file (if any) is
+   deleted right after the new one is published so at most one Glimpse
+   clipboard temp lives in %TEMP% at a time.}
+  NewPath := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetTempPath) +
+    'glimpse_clip_' + TGuid.NewGuid.ToString + '.png';
+  try
+    SaveBitmapToFile(ABitmap, NewPath, sfPNG,
+      DEF_JPEG_QUALITY, DEF_PNG_COMPRESSION);
+  except
+    on E: Exception do
+    begin
+      DebugLog('FrameExport', Format('PublishBitmapAsFileReference: SaveBitmapToFile failed: %s', [E.Message]));
+      Exit;
+    end;
+  end;
+  if not PutFilePathOnClipboard(NewPath) then
+  begin
+    System.SysUtils.DeleteFile(NewPath);
+    Exit;
+  end;
+  OldPath := FLastClipboardTempFile;
+  FLastClipboardTempFile := NewPath;
+  if (OldPath <> '') and (OldPath <> NewPath) then
+    System.SysUtils.DeleteFile(OldPath);
+  Result := True;
 end;
 
 function TFrameExporter.ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
@@ -1231,19 +1294,37 @@ begin
    needed), so the gate is consistent across render and re-extract.}
   WriteAction := procedure
     var
-      Tmp: TBitmap;
+      Tmp, Source: TBitmap;
+      OwnsSource: Boolean;
     begin
+      {Pick the bitmap that becomes the clipboard payload. The
+       file-reference path needs the bitmap object to encode to PNG;
+       the legacy path hands it to VCL's Clipboard.Assign which
+       publishes CF_BITMAP. Resolution choice (live vs native) is the
+       same for both paths — temp-flipped to CopyAtLiveResolution
+       earlier so SaveAtLiveResolution reads as the copy-side intent.}
       if FSettings.SaveAtLiveResolution then
       begin
-        Tmp := RenderCellAtLiveSize(Idx);
-        try
-          Clipboard.Assign(Tmp);
-        finally
-          Tmp.Free;
-        end;
+        Source := RenderCellAtLiveSize(Idx);
+        OwnsSource := True;
       end
       else
-        Clipboard.Assign(PickSaveBitmap(Idx));
+      begin
+        Source := PickSaveBitmap(Idx);
+        OwnsSource := False;
+      end;
+      try
+        if FSettings.ClipboardAsFileReference then
+          PublishBitmapAsFileReference(Source)
+        else
+          Clipboard.Assign(Source);
+      finally
+        if OwnsSource then
+        begin
+          Tmp := Source;
+          Tmp.Free;
+        end;
+      end;
     end;
 
   PriorLiveRes := FSettings.SaveAtLiveResolution;
@@ -1296,7 +1377,12 @@ begin
            image instead of the broken paste they get from the OS's default
            CF_DIB synthesis. ABackground only matters when the rendered
            bitmap carries alpha; for opaque sources it is ignored.}
-          if not CopyBitmapToClipboard(Bmp, FSettings.Background) then
+          if FSettings.ClipboardAsFileReference then
+          begin
+            if not PublishBitmapAsFileReference(Bmp) then
+              MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
+          end
+          else if not CopyBitmapToClipboard(Bmp, FSettings.Background) then
             MessageDlg('Clipboard write failed - the combined image is too large to copy.' + sLineBreak + sLineBreak + 'Lower the Scale target in Settings, reduce the frame count, or use Save view to write the image to a file instead.', mtError, [mbOK], 0);
         finally
           Bmp.Free;

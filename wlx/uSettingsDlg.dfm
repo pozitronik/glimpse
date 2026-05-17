@@ -1164,6 +1164,21 @@ object SettingsForm: TSettingsForm
         Caption = 'Copy at view resolution (uses native frame size when off)'
         TabOrder = 19
       end
+      object ChkClipboardAsFileReference: TCheckBox
+        Left = 12
+        Top = 419
+        Width = 424
+        Height = 17
+        Hint =
+          'Write the image to a temp PNG and publish the file path as ' +
+          'CF_HDROP instead of a bitmap. Lets very large copies succeed ' +
+          'on the 32-bit build by avoiding the second contiguous clipboard ' +
+          'buffer. Pastes into bitmap-only targets (MS Paint, plain text) ' +
+          'will not work while this is on.'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Copy to clipboard as a file reference'
+        TabOrder = 22
+      end
       object LblCombinedMaxSide: TLabel
         Left = 12
         Top = 393

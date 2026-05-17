@@ -125,6 +125,10 @@ type
     [Test]
     procedure TestCopyAtLiveResolutionDoesNotMirrorSave;
     [Test]
+    procedure TestClipboardAsFileReferenceDefault;
+    [Test]
+    procedure TestClipboardAsFileReferenceRoundTrip;
+    [Test]
     procedure TestStatusBarTemplateDefault;
     [Test]
     procedure TestStatusBarTemplateRoundTrip;
@@ -1640,6 +1644,42 @@ begin
       'SaveAtLiveResolution must still load from [save]');
   finally
     S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardAsFileReferenceDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_CLIPBOARD_AS_FILE_REFERENCE, S.ClipboardAsFileReference,
+      'Off by default — legacy CF_BITMAP / CF_DIB path stays the default; users opt in for the OOM workaround');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardAsFileReferenceRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'clip_fileref.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.ClipboardAsFileReference := not DEF_CLIPBOARD_AS_FILE_REFERENCE;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_CLIPBOARD_AS_FILE_REFERENCE, S2.ClipboardAsFileReference);
+  finally
+    S2.Free;
   end;
 end;
 

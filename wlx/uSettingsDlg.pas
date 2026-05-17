@@ -117,6 +117,7 @@ type
     CbxBannerPosition: TComboBox;
     ChkSaveAtLiveResolution: TCheckBox;
     ChkCopyAtLiveResolution: TCheckBox;
+    ChkClipboardAsFileReference: TCheckBox;
     LblCombinedMaxSide: TLabel;
     EdtCombinedMaxSide: TEdit;
     UdCombinedMaxSide: TUpDown;
@@ -341,6 +342,7 @@ begin
   CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
   ChkSaveAtLiveResolution.Checked := ASettings.SaveAtLiveResolution;
   ChkCopyAtLiveResolution.Checked := ASettings.CopyAtLiveResolution;
+  ChkClipboardAsFileReference.Checked := ASettings.ClipboardAsFileReference;
   UdCombinedMaxSide.Position := ASettings.CombinedMaxSide;
 
   ChkCacheEnabled.Checked := ASettings.CacheEnabled;
@@ -438,6 +440,7 @@ begin
   ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
   ASettings.SaveAtLiveResolution := ChkSaveAtLiveResolution.Checked;
   ASettings.CopyAtLiveResolution := ChkCopyAtLiveResolution.Checked;
+  ASettings.ClipboardAsFileReference := ChkClipboardAsFileReference.Checked;
   ASettings.CombinedMaxSide := UdCombinedMaxSide.Position;
 
   ASettings.CacheEnabled := ChkCacheEnabled.Checked;

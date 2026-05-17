@@ -73,6 +73,18 @@ const
    drove both surfaces.}
   DEF_COPY_AT_LIVE_RESOLUTION = False;
 
+  {Off by default: Copy view / Copy frame publish the bitmap directly
+   to the clipboard as CF_BITMAP / CF_DIB. When on, the plugin writes
+   a temporary PNG to %TEMP% and publishes its path as CF_HDROP — paste
+   targets that accept dropped files (most image editors, Office,
+   browsers, chat apps) read the file from disk; the plugin never holds
+   a second copy of the bitmap in clipboard memory. Workaround for the
+   32-bit OOM scenario where a large combined image cannot fit a second
+   contiguous allocation alongside the rendered source. Pastes into
+   bitmap-only targets (MS Paint, plain text fields) will not work
+   while this toggle is on.}
+  DEF_CLIPBOARD_AS_FILE_REFERENCE = False;
+
   {Cap on the longer side (in pixels) of the rendered combined image
    produced by Save view / Copy view. After the combined image (with
    optional banner) is rendered, if its longer side exceeds this value,
