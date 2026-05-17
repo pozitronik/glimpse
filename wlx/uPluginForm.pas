@@ -143,6 +143,12 @@ type
      CreateStatusBar in some lifecycle paths).}
     procedure ApplyStatusBarSettings;
     procedure OnStatusBarDblClick(Sender: TObject);
+    {Single-click handler: when the cursor is over a panel whose backing
+     token is interactive (Save / Copy predicted-dimension), flip the
+     corresponding persisted *AtLiveResolution toggle, save settings,
+     and refresh the bar so the new prediction is visible immediately.
+     Non-interactive panels swallow the click silently.}
+    procedure OnStatusBarClick(Sender: TObject);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
     function CreateModePopup(AMode: TViewMode): TPopupMenu;
@@ -283,19 +289,29 @@ type
    past the last panel.}
   TStatusBarHintProvider = reference to function(APanelIndex: Integer): string;
 
+  {Callback the host form supplies so the status bar can ask "what kind
+   of token does the panel at APanelIndex render?" without coupling the
+   subclass to the renderer. Returns tkUnknown for unmapped indices,
+   which the cursor logic treats as "not interactive".}
+  TStatusBarPanelKindProvider = reference to function(APanelIndex: Integer): TStatusBarTokenKind;
+
   {TStatusBar specialisation that surfaces a per-panel hint instead of a
    single per-control Hint. Drives the hint mechanism via CMHintShow's
    CursorRect: setting CursorRect to the panel under the cursor makes the
    VCL re-issue CMHintShow when the cursor crosses into a different panel,
    which in turn lets us swap HintStr without the brittle
    "set Hint + CancelHint" dance that does not always re-pop on the same
-   control.}
+   control. Also intercepts WM_SETCURSOR to paint the hand cursor over
+   panels whose backing token kind is interactive (Save / Copy dim).}
   TGlimpseStatusBar = class(TStatusBar)
   private
     FOnGetPanelHint: TStatusBarHintProvider;
+    FOnQueryPanelKind: TStatusBarPanelKindProvider;
     procedure CMHintShow(var Msg: TCMHintShow); message CM_HINTSHOW;
+    procedure WMSetCursor(var Msg: TWMSetCursor); message WM_SETCURSOR;
   public
     property OnGetPanelHint: TStatusBarHintProvider read FOnGetPanelHint write FOnGetPanelHint;
+    property OnQueryPanelKind: TStatusBarPanelKindProvider read FOnQueryPanelKind write FOnQueryPanelKind;
   end;
 
 {Walks AStatusBar's panels left-to-right; returns the index of the panel
@@ -349,6 +365,36 @@ begin
     {Past the last panel: cursor rect is the trailing dead zone, so we
      stay quiet until the cursor enters a real panel.}
     Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, ClientWidth, Height);
+end;
+
+procedure TGlimpseStatusBar.WMSetCursor(var Msg: TWMSetCursor);
+var
+  Pt: TPoint;
+  PanelLeft, HitIdx: Integer;
+  Kind: TStatusBarTokenKind;
+begin
+  {Paint the hand cursor over panels whose backing token is interactive.
+   Only intercept hits on the bar's client area — child controls (the
+   embedded TProgressBar) keep their default cursor. We can't rely on
+   Cursor := crHandPoint at the control level because that would apply
+   the cursor uniformly across every panel.}
+  if (Msg.HitTest = HTCLIENT) and Assigned(FOnQueryPanelKind) then
+  begin
+    GetCursorPos(Pt);
+    Pt := ScreenToClient(Pt);
+    HitIdx := StatusBarPanelHitTest(Self, Pt.X, PanelLeft);
+    if HitIdx >= 0 then
+    begin
+      Kind := FOnQueryPanelKind(HitIdx);
+      if Kind in [tkSaveDimension, tkCopyDimension] then
+      begin
+        Winapi.Windows.SetCursor(LoadCursor(0, IDC_HAND));
+        Msg.Result := 1;
+        Exit;
+      end;
+    end;
+  end;
+  inherited;
 end;
 
 {Embedded toolbar glyph resources; see CreateToolbar for use. The .res is
@@ -1266,6 +1312,7 @@ begin
   FStatusBar.SimplePanel := False;
   FStatusBar.SizeGrip := False;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
+  FStatusBar.OnClick := OnStatusBarClick;
   {Per-panel hints come from CMHintShow inside TGlimpseStatusBar; the
    ShowHint flag still has to be on so the VCL routes hint messages to
    the control in the first place.}
@@ -1290,6 +1337,11 @@ begin
     function(APanelIndex: Integer): string
     begin
       Result := FStatusBarRenderer.HintForPanel(APanelIndex);
+    end;
+  Bar.OnQueryPanelKind :=
+    function(APanelIndex: Integer): TStatusBarTokenKind
+    begin
+      Result := FStatusBarRenderer.KindForPanel(APanelIndex);
     end;
 
   {FSettings is populated before CreateStatusBar (see SetParentAndLoad),
@@ -1458,6 +1510,35 @@ begin
   if HitIdx < 0 then
     HitIdx := FStatusBar.Panels.Count - 1;
   Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
+end;
+
+procedure TPluginForm.OnStatusBarClick(Sender: TObject);
+var
+  Pt: TPoint;
+  HitIdx, PanelLeft: Integer;
+  Kind: TStatusBarTokenKind;
+begin
+  if (FStatusBar.Panels.Count = 0) or (FStatusBarRenderer = nil) then
+    Exit;
+  Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
+  HitIdx := StatusBarPanelHitTest(FStatusBar, Pt.X, PanelLeft);
+  if HitIdx < 0 then
+    Exit;
+  Kind := FStatusBarRenderer.KindForPanel(HitIdx);
+  case Kind of
+    tkSaveDimension:
+      FSettings.SaveAtLiveResolution := not FSettings.SaveAtLiveResolution;
+    tkCopyDimension:
+      FSettings.CopyAtLiveResolution := not FSettings.CopyAtLiveResolution;
+  else
+    Exit;
+  end;
+  {Persist so a TC restart preserves the flip — same contract the
+   settings dialog has. UpdateStatusBar recomputes the predicted-size
+   panels against the new toggle so the visible text changes on the
+   next paint, giving the user immediate feedback.}
+  FSettings.Save;
+  UpdateStatusBar;
 end;
 
 function TPluginForm.ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;

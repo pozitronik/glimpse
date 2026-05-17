@@ -72,6 +72,14 @@ type
     [Test]
     procedure TestHintIndicesTrackSkippedPanels;
 
+    {Kind lookup (drives the click-to-toggle dispatch)}
+    [Test]
+    procedure TestKindForPanelReturnsTokenKind;
+    [Test]
+    procedure TestKindForOutOfRangeReturnsUnknown;
+    [Test]
+    procedure TestKindIndicesTrackSkippedPanels;
+
     {Font}
     [Test]
     procedure TestSetFontUpdatesStatusBarFont;
@@ -391,6 +399,60 @@ begin
     R.ApplyTemplate('%resolution%%fps%%duration%');
     Assert.AreEqual(StatusBarTokenHint(tkResolution), R.HintForPanel(0));
     Assert.AreEqual(StatusBarTokenHint(tkDuration), R.HintForPanel(1));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestKindForPanelReturnsTokenKind;
+var
+  R: TStatusBarRenderer;
+begin
+  R := MakeRenderer(ResolverConstant('x'));
+  try
+    R.ApplyTemplate('%save_dimension%%copy_dimension%');
+    Assert.AreEqual(Ord(tkSaveDimension), Ord(R.KindForPanel(0)));
+    Assert.AreEqual(Ord(tkCopyDimension), Ord(R.KindForPanel(1)));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestKindForOutOfRangeReturnsUnknown;
+var
+  R: TStatusBarRenderer;
+begin
+  R := MakeRenderer(ResolverConstant('x'));
+  try
+    R.ApplyTemplate('%resolution%');
+    Assert.AreEqual(Ord(tkUnknown), Ord(R.KindForPanel(-1)));
+    Assert.AreEqual(Ord(tkUnknown), Ord(R.KindForPanel(99)));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestKindIndicesTrackSkippedPanels;
+var
+  R: TStatusBarRenderer;
+begin
+  {Same parallel-to-live-Panels rule as HintForPanel: when fps is
+   skipped (empty + auto), KindForPanel(1) addresses duration. Pins
+   the contract that drives the click-to-toggle dispatch — if kinds
+   tracked SOURCE tokens instead of live panels, clicking on duration
+   would flip the wrong setting.}
+  R := MakeRenderer(
+    function(const AToken: TStatusBarToken): string
+    begin
+      if AToken.Kind = tkFps then
+        Result := ''
+      else
+        Result := 'present';
+    end);
+  try
+    R.ApplyTemplate('%save_dimension%%fps%%copy_dimension%');
+    Assert.AreEqual(Ord(tkSaveDimension), Ord(R.KindForPanel(0)));
+    Assert.AreEqual(Ord(tkCopyDimension), Ord(R.KindForPanel(1)));
   finally
     R.Free;
   end;

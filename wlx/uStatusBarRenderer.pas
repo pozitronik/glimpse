@@ -52,6 +52,11 @@ type
      lockstep with panel additions, so HintForPanel(I) always lines up
      with Panels[I] no matter how many tokens were skipped.}
     FPanelHints: TArray<string>;
+    {Parallel to the LIVE FStatusBar.Panels. Lets the host form ask
+     "what token does this panel render?" without re-parsing the
+     template — needed by the click-to-toggle handler on the dimension
+     panels and the WM_SETCURSOR hand-cursor handler.}
+    FPanelKinds: TArray<TStatusBarTokenKind>;
     FAutoWidthLive: Boolean;
     FFontName: string;
     FFontSize: Integer;
@@ -71,6 +76,11 @@ type
     {Returns the default tooltip for the panel currently at AIndex,
      or '' for out-of-range / unknown / unset entries.}
     function HintForPanel(AIndex: Integer): string;
+    {Returns the token kind backing the panel currently at AIndex.
+     tkUnknown for out-of-range (or for an unknown token whose RawText
+     was painted literally). Lets callers route interactive behaviour
+     by panel kind without touching the renderer's internals.}
+    function KindForPanel(AIndex: Integer): TStatusBarTokenKind;
     {Updates FStatusBar.Font to the given face + size, re-measures any
      cached auto widths, and rebuilds the panels so the new metrics
      take effect immediately.}
@@ -192,6 +202,7 @@ begin
   try
     FStatusBar.Panels.Clear;
     SetLength(FPanelHints, 0);
+    SetLength(FPanelKinds, 0);
     for I := 0 to High(FTokens) do
     begin
       Tok := FTokens[I];
@@ -221,6 +232,8 @@ begin
 
       SetLength(FPanelHints, Length(FPanelHints) + 1);
       FPanelHints[High(FPanelHints)] := StatusBarTokenHint(Tok.Kind);
+      SetLength(FPanelKinds, Length(FPanelKinds) + 1);
+      FPanelKinds[High(FPanelKinds)] := Tok.Kind;
     end;
   finally
     FStatusBar.Panels.EndUpdate;
@@ -232,6 +245,13 @@ begin
   if (AIndex < 0) or (AIndex >= Length(FPanelHints)) then
     Exit('');
   Result := FPanelHints[AIndex];
+end;
+
+function TStatusBarRenderer.KindForPanel(AIndex: Integer): TStatusBarTokenKind;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FPanelKinds)) then
+    Exit(tkUnknown);
+  Result := FPanelKinds[AIndex];
 end;
 
 end.
