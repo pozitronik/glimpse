@@ -27,6 +27,10 @@ type
     [Test] procedure TestSaveFormatExtensionPNG;
     [Test] procedure TestSaveFormatExtensionJPEG;
     [Test] procedure TestSavePNGAlphaRoundTrip;
+    [Test] procedure TestEncodeBitmapAsPngWritesNonEmptyStream;
+    [Test] procedure TestEncodeBitmapAsPngRoundTripsViaPngBytesToBitmap;
+    [Test] procedure TestEncodeBitmapAsPngPreservesAlpha;
+    [Test] procedure TestEncodeBitmapAsPngCompressionAffectsSize;
   end;
 
 implementation
@@ -402,6 +406,152 @@ begin
     end;
   finally
     Png.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestEncodeBitmapAsPngWritesNonEmptyStream;
+var
+  Bmp: TBitmap;
+  Stream: TMemoryStream;
+begin
+  Bmp := CreateTestBitmap(16, 12);
+  try
+    Stream := TMemoryStream.Create;
+    try
+      EncodeBitmapAsPng(Bmp, Stream, 6);
+      Assert.IsTrue(Stream.Size > 0, 'EncodeBitmapAsPng must write some bytes');
+      {PNG signature is the 8-byte sequence 89 50 4E 47 0D 0A 1A 0A.
+       Verify the first byte to catch a wholly-wrong output (e.g. JPEG).}
+      Stream.Position := 0;
+      Assert.AreEqual<Integer>($89, Integer(PByte(Stream.Memory)^),
+        'Stream must start with the PNG signature byte');
+    finally
+      Stream.Free;
+    end;
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestEncodeBitmapAsPngRoundTripsViaPngBytesToBitmap;
+var
+  Src, Dst: TBitmap;
+  Stream: TMemoryStream;
+  Data: TBytes;
+begin
+  Src := CreateTestBitmap(24, 18);
+  try
+    Stream := TMemoryStream.Create;
+    try
+      EncodeBitmapAsPng(Src, Stream, 6);
+      SetLength(Data, Stream.Size);
+      Move(Stream.Memory^, Data[0], Stream.Size);
+    finally
+      Stream.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+  Dst := PngBytesToBitmap(Data);
+  try
+    Assert.AreEqual(24, Dst.Width);
+    Assert.AreEqual(18, Dst.Height);
+  finally
+    Dst.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestEncodeBitmapAsPngPreservesAlpha;
+var
+  Src: TBitmap;
+  Stream: TMemoryStream;
+  Png: TPngImage;
+  X, Y: Integer;
+  RowSrc: PByte;
+  AlphaLine: PByteArray;
+  ExpectedAlpha: Byte;
+begin
+  {Mirror of TestSavePNGAlphaRoundTrip but exercising the new stream
+   entry point instead of the file one. Pins that the alpha-aware fast
+   path is still selected for pf32bit sources when writing to a stream.}
+  Src := TBitmap.Create;
+  try
+    Src.PixelFormat := pf32bit;
+    Src.AlphaFormat := afDefined;
+    Src.SetSize(6, 4);
+    for Y := 0 to Src.Height - 1 do
+    begin
+      RowSrc := PByte(Src.ScanLine[Y]);
+      for X := 0 to Src.Width - 1 do
+      begin
+        if Y < Src.Height div 2 then
+        begin
+          RowSrc^ := 0; Inc(RowSrc);     // B
+          RowSrc^ := 255; Inc(RowSrc);   // G
+          RowSrc^ := 0; Inc(RowSrc);     // R
+          RowSrc^ := 255; Inc(RowSrc);   // A
+        end
+        else
+        begin
+          RowSrc^ := 0; Inc(RowSrc);     // B
+          RowSrc^ := 0; Inc(RowSrc);     // G
+          RowSrc^ := 255; Inc(RowSrc);   // R
+          RowSrc^ := 0; Inc(RowSrc);     // A
+        end;
+      end;
+    end;
+
+    Stream := TMemoryStream.Create;
+    try
+      EncodeBitmapAsPng(Src, Stream, 6);
+      Stream.Position := 0;
+      Png := TPngImage.Create;
+      try
+        Png.LoadFromStream(Stream);
+        for Y := 0 to Png.Height - 1 do
+        begin
+          AlphaLine := Png.AlphaScanline[Y];
+          Assert.IsNotNull(AlphaLine,
+            Format('AlphaScanline must be non-nil (Y=%d)', [Y]));
+          if Y < Png.Height div 2 then
+            ExpectedAlpha := 255
+          else
+            ExpectedAlpha := 0;
+          for X := 0 to Png.Width - 1 do
+            Assert.AreEqual(Integer(ExpectedAlpha), Integer(AlphaLine[X]),
+              Format('Alpha mismatch at (%d,%d)', [X, Y]));
+        end;
+      finally
+        Png.Free;
+      end;
+    finally
+      Stream.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TTestBitmapSaver.TestEncodeBitmapAsPngCompressionAffectsSize;
+var
+  Bmp: TBitmap;
+  StreamLow, StreamHigh: TMemoryStream;
+begin
+  Bmp := CreateTestBitmap(80, 80);
+  try
+    StreamLow := TMemoryStream.Create;
+    StreamHigh := TMemoryStream.Create;
+    try
+      EncodeBitmapAsPng(Bmp, StreamLow, 0);
+      EncodeBitmapAsPng(Bmp, StreamHigh, 9);
+      Assert.IsTrue(StreamHigh.Size < StreamLow.Size,
+        'Compression level 9 must produce a smaller stream than level 0');
+    finally
+      StreamLow.Free;
+      StreamHigh.Free;
+    end;
+  finally
+    Bmp.Free;
   end;
 end;
 

@@ -5,13 +5,20 @@ unit uBitmapSaver;
 interface
 
 uses
-  System.SysUtils, Vcl.Graphics;
+  System.SysUtils, System.Classes, Vcl.Graphics;
 
 type
   TSaveFormat = (sfPNG, sfJPEG);
 
   {Returns the file extension for a save format, including the dot.}
 function SaveFormatExtension(AFormat: TSaveFormat): string;
+
+{Encodes a bitmap as PNG bytes into AStream starting at its current
+ position. Used by both the file-save path (SaveBitmapToFile) and the
+ clipboard publish path (TCompressedPngStrategy in uClipboardFormatStrategies).
+ Routes pf32bit sources through the alpha-aware encoder; other formats
+ go via Vcl's TPngImage.Assign. APngCompression: 0..9.}
+procedure EncodeBitmapAsPng(ABitmap: TBitmap; AStream: TStream; APngCompression: Integer);
 
 {Saves a bitmap to a file in the specified format.
  AJpegQuality: 1..100, APngCompression: 0..9.}
@@ -24,13 +31,14 @@ function PngBytesToBitmap(const AData: TBytes): TBitmap;
 implementation
 
 uses
-  System.Classes, Vcl.Imaging.pngimage, Vcl.Imaging.jpeg;
+  Vcl.Imaging.pngimage, Vcl.Imaging.jpeg;
 
-{Saves a pf32bit bitmap as a 32-bit PNG with explicit alpha. Vcl's
- TPngImage.Assign(TBitmap) is unreliable for alpha — depending on Delphi
- version it silently emits a 24-bit PNG or stamps alpha=255 over real
- alpha values. We sidestep that by building a COLOR_RGBALPHA PNG of
- known geometry and writing each scanline byte-for-byte.
+{Encodes a pf32bit bitmap as a 32-bit PNG with explicit alpha into
+ AStream. Vcl's TPngImage.Assign(TBitmap) is unreliable for alpha —
+ depending on Delphi version it silently emits a 24-bit PNG or stamps
+ alpha=255 over real alpha values. We sidestep that by building a
+ COLOR_RGBALPHA PNG of known geometry and writing each scanline
+ byte-for-byte.
 
  Implementation note: TPngImage stores COLOR_RGBALPHA at 8 bits per
  channel as a 24-bit BGR DIB scanline plus a separate AlphaScanline
@@ -40,7 +48,7 @@ uses
  line — no per-pixel TColor packing or property dispatch.
  TestSavePNGAlphaRoundTrip pins both the alpha and the colour ordering;
  a B/R swap regression there would scream "R<->B swap would land here".}
-procedure SaveAlphaBitmapAsPng(ABitmap: TBitmap; const APath: string; ACompressionLevel: Integer);
+procedure EncodeAlphaBitmapAsPng(ABitmap: TBitmap; AStream: TStream; ACompressionLevel: Integer);
 const
   COLOR_RGBALPHA = 6;
   BGR_BYTES_PER_PIXEL = 3;
@@ -68,7 +76,28 @@ begin
         Inc(Src);
       end;
     end;
-    Png.SaveToFile(APath);
+    Png.SaveToStream(AStream);
+  finally
+    Png.Free;
+  end;
+end;
+
+procedure EncodeBitmapAsPng(ABitmap: TBitmap; AStream: TStream; APngCompression: Integer);
+var
+  Png: TPngImage;
+begin
+  if ABitmap.PixelFormat = pf32bit then
+  begin
+    {Alpha-aware fast path: bypass TPngImage.Assign which is unreliable
+     for 32-bit sources.}
+    EncodeAlphaBitmapAsPng(ABitmap, AStream, APngCompression);
+    Exit;
+  end;
+  Png := TPngImage.Create;
+  try
+    Png.CompressionLevel := APngCompression;
+    Png.Assign(ABitmap);
+    Png.SaveToStream(AStream);
   finally
     Png.Free;
   end;
@@ -86,26 +115,17 @@ end;
 
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 var
-  Png: TPngImage;
+  Stream: TFileStream;
   Jpg: TJPEGImage;
 begin
   case AFormat of
     sfPNG:
       begin
-        if ABitmap.PixelFormat = pf32bit then
-        begin
-          {Alpha-aware fast path: bypass TPngImage.Assign which is
-           unreliable for 32-bit sources.}
-          SaveAlphaBitmapAsPng(ABitmap, APath, APngCompression);
-          Exit;
-        end;
-        Png := TPngImage.Create;
+        Stream := TFileStream.Create(APath, fmCreate);
         try
-          Png.CompressionLevel := APngCompression;
-          Png.Assign(ABitmap);
-          Png.SaveToFile(APath);
+          EncodeBitmapAsPng(ABitmap, Stream, APngCompression);
         finally
-          Png.Free;
+          Stream.Free;
         end;
       end;
     sfJPEG:
