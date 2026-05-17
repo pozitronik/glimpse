@@ -142,13 +142,21 @@ type
      is not yet constructed (defensive — settings can be loaded before
      CreateStatusBar in some lifecycle paths).}
     procedure ApplyStatusBarSettings;
-    procedure OnStatusBarDblClick(Sender: TObject);
-    {Single-click handler: when the cursor is over a panel whose backing
+    {Double-click handler: when the cursor is over a panel whose backing
      token is interactive (Save / Copy predicted-dimension), flip the
      corresponding persisted *AtLiveResolution toggle, save settings,
      and refresh the bar so the new prediction is visible immediately.
-     Non-interactive panels swallow the click silently.}
-    procedure OnStatusBarClick(Sender: TObject);
+     Non-interactive panels swallow the double-click silently. Single
+     clicks (without Ctrl) are NOT bound — they would race the flip in
+     the double-click sequence (OnClick fires before OnDblClick).}
+    procedure OnStatusBarDblClick(Sender: TObject);
+    {Mouse-up handler reserved for Ctrl+Click: copies the panel text
+     under the cursor to the clipboard. Inspecting Shift here (instead
+     of OnClick) gives access to the modifier state without a separate
+     GetKeyState round-trip; firing on MouseUp keeps the gesture cheap
+     and idempotent in the double-click case.}
+    procedure OnStatusBarMouseUp(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
     function CreateModePopup(AMode: TViewMode): TPopupMenu;
@@ -1312,7 +1320,7 @@ begin
   FStatusBar.SimplePanel := False;
   FStatusBar.SizeGrip := False;
   FStatusBar.OnDblClick := OnStatusBarDblClick;
-  FStatusBar.OnClick := OnStatusBarClick;
+  FStatusBar.OnMouseUp := OnStatusBarMouseUp;
   {Per-panel hints come from CMHintShow inside TGlimpseStatusBar; the
    ShowHint flag still has to be on so the VCL routes hint messages to
    the control in the first place.}
@@ -1501,21 +1509,6 @@ procedure TPluginForm.OnStatusBarDblClick(Sender: TObject);
 var
   Pt: TPoint;
   HitIdx, PanelLeft: Integer;
-begin
-  if FStatusBar.Panels.Count = 0 then
-    Exit;
-  Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
-  HitIdx := StatusBarPanelHitTest(FStatusBar, Pt.X, PanelLeft);
-  {Click past last panel: copy last panel.}
-  if HitIdx < 0 then
-    HitIdx := FStatusBar.Panels.Count - 1;
-  Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
-end;
-
-procedure TPluginForm.OnStatusBarClick(Sender: TObject);
-var
-  Pt: TPoint;
-  HitIdx, PanelLeft: Integer;
   Kind: TStatusBarTokenKind;
 begin
   if (FStatusBar.Panels.Count = 0) or (FStatusBarRenderer = nil) then
@@ -1539,6 +1532,25 @@ begin
    next paint, giving the user immediate feedback.}
   FSettings.Save;
   UpdateStatusBar;
+end;
+
+procedure TPluginForm.OnStatusBarMouseUp(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  HitIdx, PanelLeft: Integer;
+begin
+  {Only Ctrl+left-click copies. Other modifier combinations and right /
+   middle clicks fall through to default (no-op for status bar).}
+  if (Button <> mbLeft) or (Shift * [ssCtrl, ssShift, ssAlt] <> [ssCtrl]) then
+    Exit;
+  if FStatusBar.Panels.Count = 0 then
+    Exit;
+  HitIdx := StatusBarPanelHitTest(FStatusBar, X, PanelLeft);
+  {Click past last panel: copy last panel (matches pre-change behaviour
+   when double-click did the copying).}
+  if HitIdx < 0 then
+    HitIdx := FStatusBar.Panels.Count - 1;
+  Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
 end;
 
 function TPluginForm.ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;

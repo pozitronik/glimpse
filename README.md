@@ -146,7 +146,7 @@ When a token's data is unavailable:
 - `width=auto` panels collapse out of the bar (matches the legacy "no panel for missing data" behaviour).
 - Fixed `width=N` panels stay at their slot and show `?` so the layout doesn't shift unexpectedly.
 
-The `%save_dimension%` and `%copy_dimension%` panels are interactive: single-click flips the corresponding *Save at view resolution* / *Copy at view resolution* default (same setting the dropdown radio bullet tracks). The hand cursor on hover and the panel's tooltip surface the affordance. Double-click still copies the panel text to clipboard as before — note that on a clickable panel, double-click fires the single-click flip first, then copies the post-flip text.
+The `%save_dimension%` and `%copy_dimension%` panels are interactive: **double-click** flips the corresponding *Save at view resolution* / *Copy at view resolution* default (same setting the dropdown radio bullet tracks). The hand cursor on hover and the panel's tooltip surface the affordance. **Ctrl+Click** on any panel copies its text to the clipboard.
 
 The progress bar continues to live outside the template — its position relative to the panels is governed by the *Progress bar layout* setting.
 
