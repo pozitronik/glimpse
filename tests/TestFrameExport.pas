@@ -173,12 +173,35 @@ type
     [Test] procedure CopyAllToClipboard_EmptyView_NoException;
   end;
 
+  [TestFixture]
+  TTestRunBitmapWorkInModal = class
+  public
+    {RunBitmapWorkInModal is the shared scaffolding behind
+     PublishBitmapAsFileReference and PublishBitmapToClipboardAsImage:
+     it transfers bitmap ownership to a TBitmapWorkThread, runs it via
+     an optional TAsyncTaskRunner (host modal) or synchronously when nil,
+     and maps the thread's outcome to a tri-state TClipboardPublishResult.
+     The cancel path is exercised at integration level (manual TC test);
+     unit tests would either leak a DLL handle or race on FreeOnTerminate.}
+    [Test] procedure WorkSucceeds_ReturnsSuccess;
+    [Test] procedure WorkFails_ReturnsFailedWithOutcomePopulated;
+    [Test] procedure WorkRaises_ReturnsFailedWithErrorMsg;
+    [Test] procedure NilRunner_RunsSynchronouslyAndSucceeds;
+    [Test] procedure NilBitmap_ReturnsFailedWithoutCallingWork;
+    [Test] procedure BitmapOwnershipTransferred_ABitmapBecomesNil;
+    [Test] procedure OutcomePreClearedEvenWhenCallerPrePopulates;
+    [Test] procedure RunnerReceivesStatusText;
+    [Test] procedure PostWorkRunsAfterWorkProc;
+    [Test] procedure PostWorkRunsEvenOnWorkFailure;
+  end;
+
 implementation
 
 uses
-  System.SysUtils, System.Types, System.Math, System.IOUtils, System.UITypes,
+  System.SysUtils, System.Classes, System.Types, System.Math, System.IOUtils, System.UITypes,
   Vcl.Forms, Vcl.Controls, Vcl.Graphics,
-  uTypes, uBitmapSaver, uFrameView, uFrameOffsets, uSettings, uFrameExport, uCombinedImage;
+  uTypes, uBitmapSaver, uFrameView, uFrameOffsets, uSettings, uFrameExport, uCombinedImage,
+  uBitmapWorkThread;
 
 type
   { Test subclass that exposes protected render methods }
@@ -2382,6 +2405,220 @@ begin
   AssertPredictEqualsRender(vmSmartGrid, True, 6);
 end;
 
+{ TTestRunBitmapWorkInModal }
+
+function MakeWorkTestBitmap: Vcl.Graphics.TBitmap;
+begin
+  Result := Vcl.Graphics.TBitmap.Create;
+  Result.SetSize(4, 4);
+end;
+
+procedure TTestRunBitmapWorkInModal.WorkSucceeds_ReturnsSuccess;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  Res: TClipboardPublishResult;
+begin
+  Bmp := MakeWorkTestBitmap;
+  Res := RunBitmapWorkInModal(Bmp, '',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      AOut.Success := True;
+    end,
+    nil, nil, Outcome);
+  Assert.AreEqual(cprSuccess, Res);
+  Assert.IsTrue(Outcome.Success);
+end;
+
+procedure TTestRunBitmapWorkInModal.WorkFails_ReturnsFailedWithOutcomePopulated;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  Res: TClipboardPublishResult;
+begin
+  Bmp := MakeWorkTestBitmap;
+  Res := RunBitmapWorkInModal(Bmp, '',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      AOut.Success := False;
+      AOut.ErrorMsg := 'work declined';
+    end,
+    nil, nil, Outcome);
+  Assert.AreEqual(cprFailed, Res);
+  Assert.IsFalse(Outcome.Success);
+  Assert.AreEqual('work declined', Outcome.ErrorMsg);
+end;
+
+procedure TTestRunBitmapWorkInModal.WorkRaises_ReturnsFailedWithErrorMsg;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  Res: TClipboardPublishResult;
+begin
+  Bmp := MakeWorkTestBitmap;
+  Res := RunBitmapWorkInModal(Bmp, '',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      raise Exception.Create('mid-work crash');
+    end,
+    nil, nil, Outcome);
+  Assert.AreEqual(cprFailed, Res);
+  Assert.AreEqual('mid-work crash', Outcome.ErrorMsg);
+end;
+
+procedure TTestRunBitmapWorkInModal.NilRunner_RunsSynchronouslyAndSucceeds;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  Res: TClipboardPublishResult;
+  WorkRan: Boolean;
+begin
+  WorkRan := False;
+  Bmp := MakeWorkTestBitmap;
+  Res := RunBitmapWorkInModal(Bmp, 'ignored',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      WorkRan := True;
+      AOut.Success := True;
+    end,
+    nil,
+    nil,
+    Outcome);
+  Assert.AreEqual(cprSuccess, Res);
+  Assert.IsTrue(WorkRan, 'Work proc executed via the synchronous fallback');
+end;
+
+procedure TTestRunBitmapWorkInModal.NilBitmap_ReturnsFailedWithoutCallingWork;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  Res: TClipboardPublishResult;
+  WorkRan: Boolean;
+begin
+  WorkRan := False;
+  Bmp := nil;
+  Res := RunBitmapWorkInModal(Bmp, '',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      WorkRan := True;
+      AOut.Success := True;
+    end,
+    nil, nil, Outcome);
+  Assert.AreEqual(cprFailed, Res);
+  Assert.IsFalse(WorkRan, 'Work proc must not run when bitmap is nil');
+end;
+
+procedure TTestRunBitmapWorkInModal.BitmapOwnershipTransferred_ABitmapBecomesNil;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+begin
+  Bmp := MakeWorkTestBitmap;
+  RunBitmapWorkInModal(Bmp, '',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      AOut.Success := True;
+    end,
+    nil, nil, Outcome);
+  Assert.IsNull(Bmp, 'Caller-side var becomes nil — ownership moved into the thread');
+end;
+
+procedure TTestRunBitmapWorkInModal.OutcomePreClearedEvenWhenCallerPrePopulates;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+begin
+  {Caller may reuse the same Outcome variable across calls. The helper
+   must clear it on entry so a stale ErrorMsg from a previous call does
+   not bleed into a subsequent nil-bitmap early-exit.}
+  Outcome.Success := True;
+  Outcome.ErrorMsg := 'stale value';
+  Bmp := nil;
+  RunBitmapWorkInModal(Bmp, '', nil, nil, nil, Outcome);
+  Assert.IsFalse(Outcome.Success, 'Pre-cleared on entry');
+  Assert.AreEqual('', Outcome.ErrorMsg);
+end;
+
+procedure TTestRunBitmapWorkInModal.RunnerReceivesStatusText;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  CapturedText: string;
+begin
+  Bmp := MakeWorkTestBitmap;
+  CapturedText := '';
+  RunBitmapWorkInModal(Bmp, 'hello status',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      AOut.Success := True;
+    end,
+    nil,
+    function(AT: TThread; const AText: string): Boolean
+    begin
+      CapturedText := AText;
+      AT.Start;
+      AT.WaitFor;
+      Result := True;
+    end,
+    Outcome);
+  Assert.AreEqual('hello status', CapturedText);
+end;
+
+procedure TTestRunBitmapWorkInModal.PostWorkRunsAfterWorkProc;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  Order: TStringList;
+begin
+  Order := TStringList.Create;
+  try
+    Bmp := MakeWorkTestBitmap;
+    RunBitmapWorkInModal(Bmp, '',
+      procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+      begin
+        Order.Add('work');
+        AOut.Success := True;
+      end,
+      procedure(const AOut: uBitmapWorkThread.TBitmapWorkOutcome; ACancelled: Boolean)
+      begin
+        Order.Add('post');
+      end,
+      nil, Outcome);
+    Assert.AreEqual(2, Order.Count);
+    Assert.AreEqual('work', Order[0]);
+    Assert.AreEqual('post', Order[1]);
+  finally
+    Order.Free;
+  end;
+end;
+
+procedure TTestRunBitmapWorkInModal.PostWorkRunsEvenOnWorkFailure;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Outcome: uBitmapWorkThread.TBitmapWorkOutcome;
+  PostRan: Boolean;
+begin
+  {Mirrors the file-reference path: even when SaveBitmapToFile fails,
+   the post-work fires so any cleanup (delete partial file) can run.
+   The current file-reference post-work guards with AOut.Success — this
+   test does not assert that policy, only that the post-work hook is
+   invoked at all.}
+  PostRan := False;
+  Bmp := MakeWorkTestBitmap;
+  RunBitmapWorkInModal(Bmp, '',
+    procedure(AB: Vcl.Graphics.TBitmap; var AOut: uBitmapWorkThread.TBitmapWorkOutcome)
+    begin
+      AOut.Success := False;
+      AOut.ErrorMsg := 'declined';
+    end,
+    procedure(const AOut: uBitmapWorkThread.TBitmapWorkOutcome; ACancelled: Boolean)
+    begin
+      PostRan := True;
+    end,
+    nil, Outcome);
+  Assert.IsTrue(PostRan);
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
   TDUnitX.RegisterTestFixture(TTestFrameExportRender);
@@ -2393,5 +2630,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameExportSaveFramesToDir);
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
   TDUnitX.RegisterTestFixture(TTestPredictMatchesRender);
+  TDUnitX.RegisterTestFixture(TTestRunBitmapWorkInModal);
 
 end.
