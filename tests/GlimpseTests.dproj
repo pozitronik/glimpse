@@ -99,6 +99,7 @@
         <DCCReference Include="..\src\uClipboardImage.pas"/>
         <DCCReference Include="TestClipboardImage.pas"/>
         <DCCReference Include="..\src\uClipboardFormatStrategies.pas"/>
+        <DCCReference Include="TestClipboardFormatStrategies.pas"/>
         <DCCReference Include="..\wlx\uZoomController.pas"/>
         <DCCReference Include="TestZoomController.pas"/>
         <DCCReference Include="..\wlx\uViewModeLogic.pas"/>

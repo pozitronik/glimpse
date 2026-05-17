@@ -59,6 +59,17 @@ function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const ARunner: TAsyncTaskRunner;
   out AOutcome: TBitmapWorkOutcome): TClipboardPublishResult;
 
+{Composes the user-facing message dialog text shown when
+ PublishBitmapToClipboardAsImage returns cprFailed. AFailedFormat is the
+ strategy name supplied by CopyBitmapToClipboard (empty when failure was
+ not a per-strategy allocation, e.g. clipboard-open exhausted retries).
+ AIsCombinedView changes the remedy guidance: combined-view callers can
+ also lower the Scale target / reduce frame count, single-frame callers
+ cannot. Exposed in the interface section so tests can pin the message
+ text without needing the full WLX form harness.}
+function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
+  AIsCombinedView: Boolean): string;
+
 type
   {Handles save-to-file and copy-to-clipboard for video frames.}
   TFrameExporter = class
@@ -282,13 +293,6 @@ type
    implementation.}
   TBitmap = Vcl.Graphics.TBitmap;
 
-{Composes the user-facing message dialog text shown when
- PublishBitmapToClipboardAsImage returns cprFailed. AFailedFormat is the
- strategy name supplied by CopyBitmapToClipboard (empty when failure was
- not a per-strategy allocation — e.g. clipboard-open exhausted retries).
- AIsCombinedView changes the remedy guidance: combined-view callers can
- also lower the Scale target / reduce frame count, single-frame callers
- cannot.}
 function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
   AIsCombinedView: Boolean): string;
 const

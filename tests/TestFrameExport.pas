@@ -195,6 +195,26 @@ type
     [Test] procedure PostWorkRunsEvenOnWorkFailure;
   end;
 
+  {BuildClipboardCopyFailureMessage composes the user-facing MessageDlg
+   text after a failed PublishBitmapToClipboardAsImage call. Two axes:
+     1. Did a specific format's Allocate fail (AFailedFormat non-empty)
+        vs did the clipboard fail to open (AFailedFormat empty)?
+     2. Is the caller a combined-view operation (remedies include
+        "lower Scale target" and "reduce frame count") or a single-frame
+        operation (those remedies do not apply)?
+   The pure helper lives in the uFrameExport interface section so these
+   tests can exercise it without the WLX form harness.}
+  [TestFixture]
+  TTestBuildClipboardCopyFailureMessage = class
+  public
+    [Test] procedure EmptyFormat_ProducesClipboardOpenFailureMessage;
+    [Test] procedure EmptyFormat_IsCombinedViewIrrelevant;
+    [Test] procedure NamedFormat_IncludesFormatNameInOutput;
+    [Test] procedure FrameContext_RemedyDoesNotMentionScaleOrFrameCount;
+    [Test] procedure CombinedContext_RemedyMentionsScaleAndFrameCount;
+    [Test] procedure BothContexts_MentionClipboardTabAndFileReference;
+  end;
+
 implementation
 
 uses
@@ -2619,6 +2639,81 @@ begin
   Assert.IsTrue(PostRan);
 end;
 
+{ TTestBuildClipboardCopyFailureMessage }
+
+procedure TTestBuildClipboardCopyFailureMessage.EmptyFormat_ProducesClipboardOpenFailureMessage;
+var
+  S: string;
+begin
+  S := BuildClipboardCopyFailureMessage('', False);
+  Assert.Contains(S, 'could not open the system clipboard',
+    'Empty format name signals a clipboard-open failure; the message must say so');
+end;
+
+procedure TTestBuildClipboardCopyFailureMessage.EmptyFormat_IsCombinedViewIrrelevant;
+var
+  SFrame, SCombined: string;
+begin
+  {When the failure is at clipboard-open (no specific format), the
+   combined-view distinction does not apply — both contexts must yield
+   the same message.}
+  SFrame := BuildClipboardCopyFailureMessage('', False);
+  SCombined := BuildClipboardCopyFailureMessage('', True);
+  Assert.AreEqual(SFrame, SCombined,
+    'Clipboard-open failure message must not branch on view context');
+end;
+
+procedure TTestBuildClipboardCopyFailureMessage.NamedFormat_IncludesFormatNameInOutput;
+var
+  S: string;
+begin
+  {The whole point of the failing-format out-param is that the dialog
+   names the format the user should disable.}
+  S := BuildClipboardCopyFailureMessage('Alpha-aware bitmap', False);
+  Assert.Contains(S, 'Alpha-aware bitmap',
+    'Failing format name must appear in the dialog body');
+end;
+
+procedure TTestBuildClipboardCopyFailureMessage.FrameContext_RemedyDoesNotMentionScaleOrFrameCount;
+var
+  S: string;
+begin
+  {Single-frame paths cannot lower the Scale target or reduce frame
+   count — those remedies belong to combined-view operations only.}
+  S := BuildClipboardCopyFailureMessage('Compressed PNG', False);
+  Assert.IsFalse(S.Contains('Scale target'),
+    'Frame-context remedy must not suggest lowering Scale target');
+  Assert.IsFalse(S.Contains('frame count'),
+    'Frame-context remedy must not suggest reducing frame count');
+end;
+
+procedure TTestBuildClipboardCopyFailureMessage.CombinedContext_RemedyMentionsScaleAndFrameCount;
+var
+  S: string;
+begin
+  S := BuildClipboardCopyFailureMessage('Compressed PNG', True);
+  Assert.Contains(S, 'Scale target',
+    'Combined-context remedy must suggest lowering Scale target');
+  Assert.Contains(S, 'frame count',
+    'Combined-context remedy must suggest reducing frame count');
+end;
+
+procedure TTestBuildClipboardCopyFailureMessage.BothContexts_MentionClipboardTabAndFileReference;
+var
+  SFrame, SCombined: string;
+begin
+  {Both single-frame and combined-view remedies share the two universal
+   suggestions: disable the format on the Clipboard tab, or switch on
+   the file-reference override. Pin both for both contexts so a remedy
+   rewording does not accidentally drop one.}
+  SFrame := BuildClipboardCopyFailureMessage('GDI bitmap handle', False);
+  SCombined := BuildClipboardCopyFailureMessage('GDI bitmap handle', True);
+  Assert.Contains(SFrame, 'Clipboard tab');
+  Assert.Contains(SFrame, 'file reference');
+  Assert.Contains(SCombined, 'Clipboard tab');
+  Assert.Contains(SCombined, 'file reference');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestResolveFrameIndex);
   TDUnitX.RegisterTestFixture(TTestFrameExportRender);
@@ -2631,5 +2726,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
   TDUnitX.RegisterTestFixture(TTestPredictMatchesRender);
   TDUnitX.RegisterTestFixture(TTestRunBitmapWorkInModal);
+  TDUnitX.RegisterTestFixture(TTestBuildClipboardCopyFailureMessage);
 
 end.
