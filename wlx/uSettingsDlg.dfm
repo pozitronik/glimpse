@@ -737,7 +737,7 @@ object SettingsForm: TSettingsForm
         Left = 12
         Top = 268
         Width = 427
-        Height = 64
+        Height = 48
         Anchors = [akLeft, akTop, akRight]
         Color = clBtnFace
         ReadOnly = True
@@ -747,14 +747,14 @@ object SettingsForm: TSettingsForm
       end
       object LblStatusBarFont: TLabel
         Left = 12
-        Top = 342
+        Top = 326
         Width = 87
         Height = 15
         Caption = 'Status bar font:'
       end
       object EdtStatusBarFont: TEdit
         Left = 149
-        Top = 338
+        Top = 322
         Width = 259
         Height = 23
         TabStop = False
@@ -764,7 +764,7 @@ object SettingsForm: TSettingsForm
       end
       object BtnStatusBarFont: TButton
         Left = 414
-        Top = 338
+        Top = 322
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
@@ -772,9 +772,63 @@ object SettingsForm: TSettingsForm
         TabOrder = 23
         OnClick = BtnStatusBarFontClick
       end
+      object LblStatusBarHeight: TLabel
+        Left = 12
+        Top = 356
+        Width = 130
+        Height = 15
+        Caption = 'Status bar height (px):'
+      end
+      object EdtStatusBarHeight: TEdit
+        Left = 150
+        Top = 352
+        Width = 45
+        Height = 23
+        Hint =
+          '0 = auto (derived from the configured font). Non-zero overrides' +
+          ' to that pixel height; values below the font minimum are silently' +
+          ' bumped so text never clips.'
+        NumbersOnly = True
+        TabOrder = 24
+        Text = '0'
+      end
+      object UdStatusBarHeight: TUpDown
+        Left = 195
+        Top = 352
+        Width = 17
+        Height = 23
+        Associate = EdtStatusBarHeight
+        Max = 200
+        TabOrder = 25
+        Thousands = False
+      end
+      object LblStatusBarHeightApply: TLabel
+        Left = 226
+        Top = 356
+        Width = 47
+        Height = 15
+        Caption = 'Apply in:'
+      end
+      object CbxStatusBarHeightApply: TComboBox
+        Left = 280
+        Top = 352
+        Width = 159
+        Height = 23
+        Style = csDropDownList
+        Anchors = [akLeft, akTop, akRight]
+        Hint =
+          'In which window mode the explicit height takes effect. The other ' +
+          'mode falls back to the font-derived auto height regardless of ' +
+          'the px value above.'
+        TabOrder = 26
+        Items.Strings = (
+          'Lister only'
+          'Quick View only'
+          'Both')
+      end
       object ChkStatusBarAutoWidthLive: TCheckBox
         Left = 12
-        Top = 368
+        Top = 380
         Width = 350
         Height = 17
         Hint =
@@ -782,11 +836,11 @@ object SettingsForm: TSettingsForm
           'sample text and locked. When ON, widths re-measure on every ' +
           'refresh, tracking the live text but causing slight layout shift.'
         Caption = 'Recalculate auto-width panels on every update'
-        TabOrder = 24
+        TabOrder = 27
       end
       object ChkStatusBarStretchPanels: TCheckBox
         Left = 12
-        Top = 390
+        Top = 402
         Width = 350
         Height = 17
         Hint =
@@ -794,19 +848,19 @@ object SettingsForm: TSettingsForm
           'proportionally to their natural size. Forces the progress bar ' +
           'into Over panels mode since no slack remains for docking.'
         Caption = 'Stretch auto-width panels to fill the bar'
-        TabOrder = 25
+        TabOrder = 28
         OnClick = ChkStatusBarStretchPanelsClick
       end
       object LblProgressBarLayout: TLabel
         Left = 12
-        Top = 416
+        Top = 428
         Width = 116
         Height = 15
         Caption = 'Progress bar position:'
       end
       object CbxProgressBarLayout: TComboBox
         Left = 150
-        Top = 412
+        Top = 424
         Width = 105
         Height = 23
         Style = csDropDownList
@@ -815,7 +869,7 @@ object SettingsForm: TSettingsForm
           ' on narrow lister widths). Over panels: bar covers the panels f' +
           'ull-width while shown. Auto: picks based on lister width. ' +
           'Locked to Over panels while Stretch auto-width panels is on.'
-        TabOrder = 26
+        TabOrder = 29
         Items.Strings = (
           'After panels'
           'Over panels'

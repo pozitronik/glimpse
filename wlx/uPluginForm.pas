@@ -142,6 +142,12 @@ type
      is not yet constructed (defensive — settings can be loaded before
      CreateStatusBar in some lifecycle paths).}
     procedure ApplyStatusBarSettings;
+    {Resolves the pixel height for the status bar given the current
+     font's TextHeight, the persisted StatusBarHeight + apply-mode
+     settings, and the bar's CurrentPPI. Auto path returns
+     TextHeight + 6 px padding; explicit path scales the saved logical
+     value and silently bumps below-font values so text never clips.}
+    function ResolveStatusBarHeight(ATextHeight: Integer): Integer;
     {Double-click handler: when the cursor is over a panel whose backing
      token is interactive (Save / Copy predicted-dimension), flip the
      corresponding persisted *AtLiveResolution toggle, save settings,
@@ -1361,11 +1367,6 @@ begin
 end;
 
 procedure TPluginForm.ApplyStatusBarSettings;
-const
-  {Pixels of slack added above and below the rendered text so the panel
-   border doesn't kiss the glyphs and the bar still has the boxed look
-   the common control uses at the default Tahoma 9 height of 21 px.}
-  STATUSBAR_VPADDING = 6;
 var
   Bmp: TBitmap;
   TextH: Integer;
@@ -1377,9 +1378,14 @@ begin
   FStatusBarRenderer.SetStretchPanels(FSettings.StatusBarStretchPanels);
   FStatusBarRenderer.ApplyTemplate(FSettings.StatusBarTemplate);
 
-  {Resize the bar to fit the font. Bigger fonts otherwise clip top and
-   bottom inside the legacy 21 px slot. The progress bar fills
-   ClientHeight so it follows automatically once the bar grows.}
+  {Resize the bar. Auto path uses font-derived height (TextHeight + a
+   small padding), explicit path scales the user's logical pixel value
+   to the bar's CurrentPPI and silently bumps up to the font minimum
+   so text never clips. Apply-mode gate honours the lister/quickview
+   selection (sbhamBoth always applies; sbhamLister/QuickView skip the
+   override when running in the other window mode and fall back to
+   auto). Progress bar fills ClientHeight so it follows automatically
+   once the bar resizes.}
   Bmp := TBitmap.Create;
   try
     Bmp.Canvas.Font.Assign(FStatusBar.Font);
@@ -1389,8 +1395,40 @@ begin
   finally
     Bmp.Free;
   end;
-  FStatusBar.Height := TextH + STATUSBAR_VPADDING;
+  FStatusBar.Height := ResolveStatusBarHeight(TextH);
   RepositionProgressBar;
+end;
+
+function TPluginForm.ResolveStatusBarHeight(ATextHeight: Integer): Integer;
+const
+  STATUSBAR_VPADDING = 6;
+  STATUSBAR_FONT_MIN_PADDING = 2;
+var
+  Ppi, AutoHeight, ExplicitHeight, MinHeight: Integer;
+begin
+  AutoHeight := ATextHeight + STATUSBAR_VPADDING;
+  {Apply-mode gate: skip the explicit override outside the user's
+   chosen window mode. Returns auto height so the bar still grows
+   to fit a custom font even when the explicit pixel value doesn't
+   apply.}
+  if not ShouldApplyStatusBarHeight(FSettings.StatusBarHeightApplyMode, FQuickViewMode) then
+    Exit(AutoHeight);
+  if FSettings.StatusBarHeight <= 0 then
+    Exit(AutoHeight);
+  Ppi := FStatusBar.CurrentPPI;
+  if Ppi <= 0 then
+    Ppi := 96;
+  ExplicitHeight := MulDiv(FSettings.StatusBarHeight, Ppi, 96);
+  {Silent bump: an explicit value smaller than the font reach would
+   clip text, which is never what the user actually wants. Keep the
+   floor at TextHeight + 2 px (tight but uncllipped) rather than
+   matching the auto path's 6 px padding so the explicit setting can
+   still produce a thinner-than-auto bar when the font allows.}
+  MinHeight := ATextHeight + STATUSBAR_FONT_MIN_PADDING;
+  if ExplicitHeight < MinHeight then
+    Result := MinHeight
+  else
+    Result := ExplicitHeight;
 end;
 
 function ViewModeDisplayName(AMode: TViewMode): string;

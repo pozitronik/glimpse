@@ -22,6 +22,12 @@ type
     [Test] procedure BannerPositionOrdinals;
     [Test] procedure BannerPositionRange;
     [Test] procedure ProgressBarLayoutOrdinals;
+    [Test] procedure StatusBarHeightApplyModeOrdinals;
+    [Test] procedure StatusBarHeightApplyModeRoundTrip;
+    [Test] procedure StatusBarHeightApplyModeUnknownReturnsDefault;
+    [Test] procedure ShouldApplyStatusBarHeight_Both;
+    [Test] procedure ShouldApplyStatusBarHeight_ListerOnly;
+    [Test] procedure ShouldApplyStatusBarHeight_QuickViewOnly;
     [Test] procedure ExtractionOptionsValueSemantics;
     {Conversions for enums that round-trip through INI. Load-bearing
      because settings dialogs read/write these tokens verbatim.}
@@ -131,6 +137,59 @@ begin
   Assert.AreEqual(0, Ord(pblAfterPanels));
   Assert.AreEqual(1, Ord(pblOverPanels));
   Assert.AreEqual(2, Ord(pblAuto));
+end;
+
+procedure TTestTypes.StatusBarHeightApplyModeOrdinals;
+begin
+  {CbxStatusBarHeightApply.ItemIndex is cast straight to
+   TStatusBarHeightApplyMode in ControlsToSettings, so the combo's
+   item order MUST match these ordinals or the dialog silently
+   stores the wrong mode on every Apply.}
+  Assert.AreEqual(0, Ord(sbhamLister));
+  Assert.AreEqual(1, Ord(sbhamQuickView));
+  Assert.AreEqual(2, Ord(sbhamBoth));
+end;
+
+procedure TTestTypes.StatusBarHeightApplyModeRoundTrip;
+var
+  M: TStatusBarHeightApplyMode;
+begin
+  for M := Low(TStatusBarHeightApplyMode) to High(TStatusBarHeightApplyMode) do
+    Assert.AreEqual<Integer>(Ord(M),
+      Ord(StrToStatusBarHeightApplyMode(StatusBarHeightApplyModeToStr(M), sbhamBoth)),
+      'INI token must round-trip through StatusBarHeightApplyModeToStr / StrToStatusBarHeightApplyMode');
+end;
+
+procedure TTestTypes.StatusBarHeightApplyModeUnknownReturnsDefault;
+begin
+  Assert.AreEqual<Integer>(Ord(sbhamLister),
+    Ord(StrToStatusBarHeightApplyMode('nonsense', sbhamLister)));
+  Assert.AreEqual<Integer>(Ord(sbhamBoth),
+    Ord(StrToStatusBarHeightApplyMode('', sbhamBoth)));
+end;
+
+procedure TTestTypes.ShouldApplyStatusBarHeight_Both;
+begin
+  Assert.IsTrue(ShouldApplyStatusBarHeight(sbhamBoth, False),
+    'sbhamBoth must apply in Lister mode');
+  Assert.IsTrue(ShouldApplyStatusBarHeight(sbhamBoth, True),
+    'sbhamBoth must apply in Quick View mode');
+end;
+
+procedure TTestTypes.ShouldApplyStatusBarHeight_ListerOnly;
+begin
+  Assert.IsTrue(ShouldApplyStatusBarHeight(sbhamLister, False),
+    'sbhamLister applies in Lister mode');
+  Assert.IsFalse(ShouldApplyStatusBarHeight(sbhamLister, True),
+    'sbhamLister must NOT apply in Quick View — falls back to auto height');
+end;
+
+procedure TTestTypes.ShouldApplyStatusBarHeight_QuickViewOnly;
+begin
+  Assert.IsFalse(ShouldApplyStatusBarHeight(sbhamQuickView, False),
+    'sbhamQuickView must NOT apply in Lister mode');
+  Assert.IsTrue(ShouldApplyStatusBarHeight(sbhamQuickView, True),
+    'sbhamQuickView applies in Quick View mode');
 end;
 
 procedure TTestTypes.TimestampCornerToStr_AllValues;

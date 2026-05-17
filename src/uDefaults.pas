@@ -217,6 +217,22 @@ const
    layout (there is no slack left to dock the bar against).}
   DEF_STATUSBAR_STRETCH_PANELS = False;
 
+  {0 = auto: bar height is derived from the configured font (font's
+   TextHeight + a small padding). Non-zero overrides the auto value
+   with that pixel count, clamped to MAX. Logical pixels: the form
+   scales via MulDiv against the bar's CurrentPPI so values stay
+   consistent across DPI changes. When the explicit value is smaller
+   than what the font needs, ApplyStatusBarSettings silently bumps it
+   to the font minimum so text never clips.}
+  DEF_STATUSBAR_HEIGHT = 0;
+  MIN_STATUSBAR_HEIGHT = 0;
+  MAX_STATUSBAR_HEIGHT = 200;
+
+  {Default sbhamBoth (custom height applies in both Lister and Quick
+   View windows). Users who only want the override in one mode can
+   restrict it via the settings dialog combo.}
+  DEF_STATUSBAR_HEIGHT_APPLY_MODE = sbhamBoth;
+
 implementation
 
 end.

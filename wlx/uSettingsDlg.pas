@@ -82,6 +82,11 @@ type
     BtnStatusBarFont: TButton;
     ChkStatusBarAutoWidthLive: TCheckBox;
     ChkStatusBarStretchPanels: TCheckBox;
+    LblStatusBarHeight: TLabel;
+    EdtStatusBarHeight: TEdit;
+    UdStatusBarHeight: TUpDown;
+    LblStatusBarHeightApply: TLabel;
+    CbxStatusBarHeightApply: TComboBox;
     TshSave: TTabSheet;
     LblSaveFormat: TLabel;
     CbxSaveFormat: TComboBox;
@@ -317,6 +322,8 @@ begin
   UpdateStatusBarFontDisplay;
   ChkStatusBarAutoWidthLive.Checked := ASettings.StatusBarAutoWidthLive;
   ChkStatusBarStretchPanels.Checked := ASettings.StatusBarStretchPanels;
+  UdStatusBarHeight.Position := ASettings.StatusBarHeight;
+  CbxStatusBarHeightApply.ItemIndex := Ord(ASettings.StatusBarHeightApplyMode);
   UpdateStretchLockState;
 
   CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
@@ -414,6 +421,8 @@ begin
   ASettings.StatusBarFontSize := FStatusBarFontSize;
   ASettings.StatusBarAutoWidthLive := ChkStatusBarAutoWidthLive.Checked;
   ASettings.StatusBarStretchPanels := ChkStatusBarStretchPanels.Checked;
+  ASettings.StatusBarHeight := UdStatusBarHeight.Position;
+  ASettings.StatusBarHeightApplyMode := TStatusBarHeightApplyMode(CbxStatusBarHeightApply.ItemIndex);
 
   ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
   ASettings.JpegQuality := UdJpegQuality.Position;

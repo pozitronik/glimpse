@@ -149,6 +149,16 @@ type
     [Test]
     procedure TestStatusBarStretchPanelsRoundTrip;
     [Test]
+    procedure TestStatusBarHeightDefault;
+    [Test]
+    procedure TestStatusBarHeightRoundTrip;
+    [Test]
+    procedure TestStatusBarHeightClampedHigh;
+    [Test]
+    procedure TestStatusBarHeightApplyModeDefault;
+    [Test]
+    procedure TestStatusBarHeightApplyModeRoundTrip;
+    [Test]
     procedure TestStatusBarMissingSectionGetsAllDefaults;
     [Test]
     procedure TestCombinedMaxSideDefault;
@@ -1868,6 +1878,101 @@ begin
   try
     S2.Load;
     Assert.AreEqual(not DEF_STATUSBAR_STRETCH_PANELS, S2.StatusBarStretchPanels);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_HEIGHT, S.StatusBarHeight,
+      '0 = auto by default; ApplyStatusBarSettings derives height from the font');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_height.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarHeight := 32;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(32, S2.StatusBarHeight);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightClampedHigh;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_height_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'Height', 9999);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_STATUSBAR_HEIGHT, S.StatusBarHeight);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightApplyModeDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual<Integer>(Ord(DEF_STATUSBAR_HEIGHT_APPLY_MODE),
+      Ord(S.StatusBarHeightApplyMode),
+      'Default sbhamBoth applies the explicit height in both Lister and Quick View');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightApplyModeRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_height_apply.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarHeightApplyMode := sbhamQuickView;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual<Integer>(Ord(sbhamQuickView), Ord(S2.StatusBarHeightApplyMode));
   finally
     S2.Free;
   end;

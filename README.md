@@ -99,6 +99,8 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 | Progress bar layout                           | Auto          | Where the extraction progress bar sits in the status bar.                                                                     |
 | Status bar template                           | (see below)   | Token string controlling which panels appear in the status bar and in what order                                              |
 | Status bar font                               | Tahoma, 9pt   | Font face and size for the status bar; the bar's height adapts to the metrics                                                 |
+| Status bar height (px)                        | 0 (auto)      | Overrides the font-derived height with an explicit pixel count (logical pixels, scaled to monitor DPI). Values below the font minimum are silently bumped so text never clips. 0 = auto |
+| Apply in (height)                             | Both          | In which window mode the explicit height takes effect: *Lister only*, *Quick View only*, or *Both*. The other mode falls back to auto height regardless of the px value |
 | Recalculate auto-width panels on every update | On            | When on, auto-width panels re-measure to live text on every refresh; when off, they size once to a worst-case sample and lock |
 
 ##### Status bar template

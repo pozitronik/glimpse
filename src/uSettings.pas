@@ -74,6 +74,8 @@ type
     FStatusBarFontSize: Integer;
     FStatusBarAutoWidthLive: Boolean;
     FStatusBarStretchPanels: Boolean;
+    FStatusBarHeight: Integer;
+    FStatusBarHeightApplyMode: TStatusBarHeightApplyMode;
     {[debug]}
     FDebugLogEnabled: Boolean;
 
@@ -205,6 +207,8 @@ type
     property StatusBarFontSize: Integer read FStatusBarFontSize write FStatusBarFontSize;
     property StatusBarAutoWidthLive: Boolean read FStatusBarAutoWidthLive write FStatusBarAutoWidthLive;
     property StatusBarStretchPanels: Boolean read FStatusBarStretchPanels write FStatusBarStretchPanels;
+    property StatusBarHeight: Integer read FStatusBarHeight write FStatusBarHeight;
+    property StatusBarHeightApplyMode: TStatusBarHeightApplyMode read FStatusBarHeightApplyMode write FStatusBarHeightApplyMode;
 
     {[hotkeys] — the binding table owns itself; callers mutate it via its
      own Get/Put/ResetToDefaults API rather than through scalar properties.}
@@ -347,6 +351,8 @@ begin
   FStatusBarFontSize := DEF_STATUSBAR_FONT_SIZE;
   FStatusBarAutoWidthLive := DEF_STATUSBAR_AUTO_WIDTH_LIVE;
   FStatusBarStretchPanels := DEF_STATUSBAR_STRETCH_PANELS;
+  FStatusBarHeight := DEF_STATUSBAR_HEIGHT;
+  FStatusBarHeightApplyMode := DEF_STATUSBAR_HEIGHT_APPLY_MODE;
   FDebugLogEnabled := DEF_DEBUG_LOG_ENABLED;
   {FHotkeys may be nil when ResetDefaults is called from the constructor
    before the hotkey table is allocated (the ctor creates it just above,
@@ -446,6 +452,12 @@ begin
       MIN_STATUSBAR_FONT_SIZE, MAX_STATUSBAR_FONT_SIZE);
     FStatusBarAutoWidthLive := Ini.ReadBool('statusbar', 'AutoWidthLive', DEF_STATUSBAR_AUTO_WIDTH_LIVE);
     FStatusBarStretchPanels := Ini.ReadBool('statusbar', 'StretchPanels', DEF_STATUSBAR_STRETCH_PANELS);
+    FStatusBarHeight := EnsureRange(
+      Ini.ReadInteger('statusbar', 'Height', DEF_STATUSBAR_HEIGHT),
+      MIN_STATUSBAR_HEIGHT, MAX_STATUSBAR_HEIGHT);
+    FStatusBarHeightApplyMode := StrToStatusBarHeightApplyMode(
+      Ini.ReadString('statusbar', 'HeightApplyMode', ''),
+      DEF_STATUSBAR_HEIGHT_APPLY_MODE);
 
     FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
@@ -518,6 +530,9 @@ begin
     Ini.WriteInteger('statusbar', 'FontSize', FStatusBarFontSize);
     Ini.WriteBool('statusbar', 'AutoWidthLive', FStatusBarAutoWidthLive);
     Ini.WriteBool('statusbar', 'StretchPanels', FStatusBarStretchPanels);
+    Ini.WriteInteger('statusbar', 'Height', FStatusBarHeight);
+    Ini.WriteString('statusbar', 'HeightApplyMode',
+      StatusBarHeightApplyModeToStr(FStatusBarHeightApplyMode));
 
     Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
     {TUnicodeIniFile buffers writes in memory; UpdateFile flushes to disk.

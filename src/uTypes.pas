@@ -24,6 +24,19 @@ type
    the lister is wide enough to fit both, otherwise OverPanels.}
   TProgressBarLayout = (pblAfterPanels, pblOverPanels, pblAuto);
 
+  {Window-mode gate for the configurable StatusBarHeight setting. When
+   the user has an explicit height, this enum decides in which window
+   modes the override actually applies. Quick View opens the same form
+   in a restricted child window (WS_CHILD), so a per-mode toggle lets
+   users keep e.g. a chunky lister bar while Quick View keeps the
+   font-derived default.
+
+   Order is load-bearing: TPluginSettings.StatusBarHeightApplyMode is
+   stored as a token string via StatusBarHeightApplyModeToStr; the
+   settings dialog combo's ItemIndex matches Ord(enum) so reordering
+   would silently pick the wrong mode on the next dialog open.}
+  TStatusBarHeightApplyMode = (sbhamLister, sbhamQuickView, sbhamBoth);
+
   {Bundles extraction parameters that travel together through the
    extraction pipeline (controller -> worker -> extractor).}
   TExtractionOptions = record
@@ -48,6 +61,15 @@ function StrToBannerPosition(const AValue: string; ADefault: TBannerPosition): T
 function BannerPositionToStr(APosition: TBannerPosition): string;
 function StrToProgressBarLayout(const AValue: string; ADefault: TProgressBarLayout): TProgressBarLayout;
 function ProgressBarLayoutToStr(ALayout: TProgressBarLayout): string;
+function StrToStatusBarHeightApplyMode(const AValue: string; ADefault: TStatusBarHeightApplyMode): TStatusBarHeightApplyMode;
+function StatusBarHeightApplyModeToStr(AMode: TStatusBarHeightApplyMode): string;
+
+{Returns True iff a custom StatusBarHeight value should be applied for
+ a window currently running in AIsQuickView mode (False = normal Lister
+ child of TC's main lister window). Pure decision function with no VCL
+ dependency so it stays testable; the form passes its own FQuickViewMode.}
+function ShouldApplyStatusBarHeight(AMode: TStatusBarHeightApplyMode;
+  AIsQuickView: Boolean): Boolean;
 
 implementation
 
@@ -129,6 +151,40 @@ begin
       Result := 'over';
     pblAuto:
       Result := 'auto';
+  end;
+end;
+
+function StrToStatusBarHeightApplyMode(const AValue: string;
+  ADefault: TStatusBarHeightApplyMode): TStatusBarHeightApplyMode;
+begin
+  if SameText(AValue, 'lister') then
+    Result := sbhamLister
+  else if SameText(AValue, 'quickview') then
+    Result := sbhamQuickView
+  else if SameText(AValue, 'both') then
+    Result := sbhamBoth
+  else
+    Result := ADefault;
+end;
+
+function StatusBarHeightApplyModeToStr(AMode: TStatusBarHeightApplyMode): string;
+begin
+  case AMode of
+    sbhamLister:    Result := 'lister';
+    sbhamQuickView: Result := 'quickview';
+    sbhamBoth:      Result := 'both';
+  end;
+end;
+
+function ShouldApplyStatusBarHeight(AMode: TStatusBarHeightApplyMode;
+  AIsQuickView: Boolean): Boolean;
+begin
+  case AMode of
+    sbhamBoth:      Result := True;
+    sbhamLister:    Result := not AIsQuickView;
+    sbhamQuickView: Result := AIsQuickView;
+  else
+    Result := True;
   end;
 end;
 
