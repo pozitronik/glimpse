@@ -85,23 +85,23 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 
 #### Appearance
 
-| Setting                                       | Default       | Description                                                                                                                   |
-|-----------------------------------------------|---------------|-------------------------------------------------------------------------------------------------------------------------------|
-| Background                                    | Dark grey     | Background color behind the frame grid                                                                                        |
-| Timecode bg                                   | Dark grey     | Background color of the timecode overlay on each frame                                                                        |
-| Timecode opacity                              | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)                                                |
-| Timestamp font                                | Segoe UI, 8pt | Font face and size for timecode labels on frames                                                                              |
-| Cell gap (px)                                 | 0             | Spacing in pixels between frame cells in the viewer (0-20)                                                                    |
-| Border (px)                                   | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200)                                              |
-| Timestamp corner                              | Bottom left   | Corner of each cell where the timecode label is drawn                                                                         |
-| Show toolbar                                  | On            | Display the toolbar at the top of the lister window (F4 to toggle)                                                            |
-| Show status bar                               | On            | Display the status bar at the bottom of the lister window (F3 to toggle)                                                      |
-| Progress bar layout                           | Auto          | Where the extraction progress bar sits in the status bar.                                                                     |
-| Status bar template                           | (see below)   | Token string controlling which panels appear in the status bar and in what order                                              |
-| Status bar font                               | Tahoma, 9pt   | Font face and size for the status bar; the bar's height adapts to the metrics                                                 |
+| Setting                                       | Default       | Description                                                                                                                                                                             |
+|-----------------------------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Background                                    | Dark grey     | Background color behind the frame grid                                                                                                                                                  |
+| Timecode bg                                   | Dark grey     | Background color of the timecode overlay on each frame                                                                                                                                  |
+| Timecode opacity                              | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)                                                                                                          |
+| Timestamp font                                | Segoe UI, 8pt | Font face and size for timecode labels on frames                                                                                                                                        |
+| Cell gap (px)                                 | 0             | Spacing in pixels between frame cells in the viewer (0-20)                                                                                                                              |
+| Border (px)                                   | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200)                                                                                                        |
+| Timestamp corner                              | Bottom left   | Corner of each cell where the timecode label is drawn                                                                                                                                   |
+| Show toolbar                                  | On            | Display the toolbar at the top of the lister window (F4 to toggle)                                                                                                                      |
+| Show status bar                               | On            | Display the status bar at the bottom of the lister window (F3 to toggle)                                                                                                                |
+| Progress bar layout                           | Auto          | Where the extraction progress bar sits in the status bar.                                                                                                                               |
+| Status bar template                           | (see below)   | Token string controlling which panels appear in the status bar and in what order                                                                                                        |
+| Status bar font                               | Tahoma, 9pt   | Font face and size for the status bar; the bar's height adapts to the metrics                                                                                                           |
 | Status bar height (px)                        | 0 (auto)      | Overrides the font-derived height with an explicit pixel count (logical pixels, scaled to monitor DPI). Values below the font minimum are silently bumped so text never clips. 0 = auto |
-| Apply in (height)                             | Both          | In which window mode the explicit height takes effect: *Lister only*, *Quick View only*, or *Both*. The other mode falls back to auto height regardless of the px value |
-| Recalculate auto-width panels on every update | On            | When on, auto-width panels re-measure to live text on every refresh; when off, they size once to a worst-case sample and lock |
+| Apply in (height)                             | Both          | In which window mode the explicit height takes effect: *Lister only*, *Quick View only*, or *Both*. The other mode falls back to auto height regardless of the px value                 |
+| Recalculate auto-width panels on every update | On            | When on, auto-width panels re-measure to live text on every refresh; when off, they size once to a worst-case sample and lock                                                           |
 
 ##### Status bar template
 
@@ -166,11 +166,24 @@ The progress bar continues to live outside the template — its position relativ
 | Include file info banner              | Off     | Adds a header with video file name, resolution, and duration to Save view exports                                                                                                                       |
 | Save at view resolution               | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses native frame resolution. Also available as a checkbox in the file save dialog (Vista+).                            |
 | Max combined side (px)                | 0       | Cap on the longer side of the rendered Save view / Copy view image. The combined image (with optional banner) is shrunk proportionally if its longer side exceeds this many pixels. 0 disables the cap. |
-| Copy to clipboard as a file reference | Off     | Writes the image to a temp PNG in `%TEMP%` and publishes its path as `CF_HDROP` instead of a bitmap.                                                                                                    |
 
 The toolbar **Save view** button is a split button: clicking it honors the *Save at view resolution* setting, while its dropdown arrow exposes one-shot **Save view at view resolution...** and **Save view at native size...** items that override the setting for that single action without persisting. On legacy Windows (XP / Server 2003) the dropdown is reached via right-click on the same button (the system dropdown arrow is unavailable there); right-click also works on Vista+ as an alternate access path.
 
 The toolbar **Copy view** button works the same way: a split button whose dropdown exposes one-shot **Copy view at view resolution** and **Copy view at native size** items. The native-size variant re-extracts at native resolution before publishing to the clipboard, so the clipboard receives true native-resolution pixels rather than the viewport-scaled live cells. The default Copy view click honors the same persisted *Save at view resolution* setting that Save view uses (the setting governs both surfaces).
+
+#### Clipboard
+
+Controls which Win32 clipboard formats *Copy frame* / *Copy view* publish for `pf32bit` sources (combined view, plus single frames whenever they carry alpha). The `pf24bit` single-frame path uses VCL's `Clipboard.Assign` and ignores these toggles. Each enabled format is allocated before any clipboard operation begins; if any one of them runs out of contiguous memory the whole copy aborts and the error dialog names the failing format.
+
+| Setting                               | Default | Description                                                                                                                                                                                                |
+|---------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Alpha-aware bitmap                    | On      | Preserves transparency. Costs roughly width*height*4 bytes per copy. Published as `CF_DIBV5`.                                                                                                              |
+| Compressed PNG                        | On      | Carries true alpha at a fraction of the raw-pixel memory cost. Published under the system-registered `"PNG"` clipboard format. Compression level follows the *PNG compression* setting under *Save*.       |
+| Flattened bitmap for legacy apps      | On      | Opaque copy with transparency composited onto the background colour. Used as a fallback by paste targets that do not understand alpha. Costs roughly width*height*3 bytes per copy. Published as `CF_DIB`. |
+| GDI bitmap handle                     | On      | Direct bitmap handle for paste targets that distrust DIB synthesis. Costs roughly width*height*4 bytes per copy. Published as `CF_BITMAP`.                                                                 |
+| Copy to clipboard as a file reference | Off     | Writes the image to a temp PNG in `%TEMP%` and publishes its path as `CF_HDROP` instead of a bitmap. When on, the four format toggles above are ignored.                                                   |
+
+Disabling individual format toggles reduces the per-copy memory allocation. When the four format toggles are all enabled the publish order is `CF_DIBV5` -> `"PNG"` -> `CF_DIB` -> `CF_BITMAP`; paste targets that enumerate formats receive them in that priority. Disabling a format only affects what *this* plugin offers — paste targets that accept multiple formats automatically pick whichever is still present.
 
 #### Cache
 
