@@ -807,6 +807,18 @@ object SettingsForm: TSettingsForm
         Caption = 'Recalculate auto-width panels on every update'
         TabOrder = 25
       end
+      object ChkStatusBarStretchPanels: TCheckBox
+        Left = 12
+        Top = 418
+        Width = 350
+        Height = 17
+        Hint =
+          'Distribute remaining bar width across the auto-width panels ' +
+          'proportionally to their natural size. Forces the progress bar ' +
+          'into Over panels mode since no slack remains for docking.'
+        Caption = 'Stretch auto-width panels to fill the bar'
+        TabOrder = 26
+      end
     end
     object TshSave: TTabSheet
       Caption = 'Save'

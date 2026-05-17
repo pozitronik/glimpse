@@ -209,6 +209,14 @@ const
    settings dialog and accept the always-worst-case widths.}
   DEF_STATUSBAR_AUTO_WIDTH_LIVE = True;
 
+  {Off by default: auto-width panels keep their measured natural widths
+   and any slack stays on the right (filled by the progress bar when
+   visible). When on, the renderer distributes the slack across the
+   auto-width panels proportionally to their natural widths, justifying
+   them across the full bar width. Implies progress-bar Over panels
+   layout (there is no slack left to dock the bar against).}
+  DEF_STATUSBAR_STRETCH_PANELS = False;
+
 implementation
 
 end.

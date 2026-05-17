@@ -83,6 +83,22 @@ type
     {Font}
     [Test]
     procedure TestSetFontUpdatesStatusBarFont;
+
+    {Stretch (panels fill ClientWidth)}
+    [Test]
+    procedure TestStretchOffLeavesNaturalWidths;
+    [Test]
+    procedure TestStretchDistributesSlackAcrossAutoPanels;
+    [Test]
+    procedure TestStretchExactlyFillsClientWidth;
+    [Test]
+    procedure TestStretchSkipsFixedWidthPanels;
+    [Test]
+    procedure TestStretchNoOpWhenNoAutoPanels;
+    [Test]
+    procedure TestStretchNoOpWhenNoSlack;
+    [Test]
+    procedure TestStretchSingleAutoPanelTakesAllSlack;
   end;
 
 implementation
@@ -468,6 +484,147 @@ begin
     R.SetFont('Courier New', 12);
     Assert.AreEqual('Courier New', FStatusBar.Font.Name);
     Assert.AreEqual<Integer>(12, FStatusBar.Font.Size);
+  finally
+    R.Free;
+  end;
+end;
+
+function SumPanelWidths(AStatusBar: TStatusBar): Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to AStatusBar.Panels.Count - 1 do
+    Inc(Result, AStatusBar.Panels[I].Width);
+end;
+
+procedure TTestStatusBarRenderer.TestStretchOffLeavesNaturalWidths;
+var
+  R: TStatusBarRenderer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Width := 800;
+    R.ApplyTemplate('%resolution%%fps%');
+    Assert.IsTrue(SumPanelWidths(FStatusBar) < FStatusBar.ClientWidth,
+      'Without stretch, the sum of natural widths must leave slack on the right');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchDistributesSlackAcrossAutoPanels;
+var
+  R: TStatusBarRenderer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Width := 800;
+    R.SetStretchPanels(True);
+    R.ApplyTemplate('%resolution%%fps%');
+    Assert.AreEqual<Integer>(FStatusBar.ClientWidth, SumPanelWidths(FStatusBar),
+      'With stretch on, panels must exactly cover ClientWidth');
+    Assert.IsTrue(FStatusBar.Panels[0].Width > 0);
+    Assert.IsTrue(FStatusBar.Panels[1].Width > 0);
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchExactlyFillsClientWidth;
+var
+  R: TStatusBarRenderer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Width := 800;
+    R.SetStretchPanels(True);
+    R.ApplyTemplate('%resolution%%fps%%duration%');
+    Assert.AreEqual<Integer>(FStatusBar.ClientWidth, SumPanelWidths(FStatusBar),
+      'MulDiv rounding leftover must be absorbed by the last auto panel');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchSkipsFixedWidthPanels;
+var
+  R: TStatusBarRenderer;
+  FixedBefore, FixedAfter: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    {Capture the fixed panel's width without stretch first, then enable
+     stretch — the fixed panel's width must be identical in both cases.}
+    FStatusBar.Width := 800;
+    R.ApplyTemplate('%resolution width=100%%fps%');
+    FixedBefore := FStatusBar.Panels[0].Width;
+
+    R.SetStretchPanels(True);
+    FixedAfter := FStatusBar.Panels[0].Width;
+    Assert.AreEqual<Integer>(FixedBefore, FixedAfter,
+      'Fixed-width panel must not receive any stretch share');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchNoOpWhenNoAutoPanels;
+var
+  R: TStatusBarRenderer;
+  W0, W1: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Width := 800;
+    R.ApplyTemplate('%resolution width=100%%fps width=120%');
+    W0 := FStatusBar.Panels[0].Width;
+    W1 := FStatusBar.Panels[1].Width;
+
+    R.SetStretchPanels(True);
+    Assert.AreEqual<Integer>(W0, FStatusBar.Panels[0].Width);
+    Assert.AreEqual<Integer>(W1, FStatusBar.Panels[1].Width);
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchNoOpWhenNoSlack;
+var
+  R: TStatusBarRenderer;
+  BeforeWidth: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    {Tiny bar with one wide fixed panel: natural width exceeds
+     ClientWidth so stretch has nothing to redistribute. Panel must
+     keep its natural (overflowing) width — no negative stretch.}
+    FStatusBar.Width := 50;
+    R.ApplyTemplate('%resolution width=200%');
+    BeforeWidth := FStatusBar.Panels[0].Width;
+
+    R.SetStretchPanels(True);
+    Assert.AreEqual<Integer>(BeforeWidth, FStatusBar.Panels[0].Width,
+      'Overflow case must be a no-op rather than producing negative or zero widths');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchSingleAutoPanelTakesAllSlack;
+var
+  R: TStatusBarRenderer;
+  FixedWidth: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Width := 800;
+    R.SetStretchPanels(True);
+    R.ApplyTemplate('%resolution width=100%%fps%');
+    FixedWidth := FStatusBar.Panels[0].Width;
+    Assert.AreEqual<Integer>(FStatusBar.ClientWidth - FixedWidth,
+      FStatusBar.Panels[1].Width,
+      'The lone auto panel must absorb all the remaining slack');
   finally
     R.Free;
   end;

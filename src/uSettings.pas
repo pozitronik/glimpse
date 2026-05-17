@@ -73,6 +73,7 @@ type
     FStatusBarFontName: string;
     FStatusBarFontSize: Integer;
     FStatusBarAutoWidthLive: Boolean;
+    FStatusBarStretchPanels: Boolean;
     {[debug]}
     FDebugLogEnabled: Boolean;
 
@@ -203,6 +204,7 @@ type
     property StatusBarFontName: string read FStatusBarFontName write FStatusBarFontName;
     property StatusBarFontSize: Integer read FStatusBarFontSize write FStatusBarFontSize;
     property StatusBarAutoWidthLive: Boolean read FStatusBarAutoWidthLive write FStatusBarAutoWidthLive;
+    property StatusBarStretchPanels: Boolean read FStatusBarStretchPanels write FStatusBarStretchPanels;
 
     {[hotkeys] — the binding table owns itself; callers mutate it via its
      own Get/Put/ResetToDefaults API rather than through scalar properties.}
@@ -344,6 +346,7 @@ begin
   FStatusBarFontName := DEF_STATUSBAR_FONT_NAME;
   FStatusBarFontSize := DEF_STATUSBAR_FONT_SIZE;
   FStatusBarAutoWidthLive := DEF_STATUSBAR_AUTO_WIDTH_LIVE;
+  FStatusBarStretchPanels := DEF_STATUSBAR_STRETCH_PANELS;
   FDebugLogEnabled := DEF_DEBUG_LOG_ENABLED;
   {FHotkeys may be nil when ResetDefaults is called from the constructor
    before the hotkey table is allocated (the ctor creates it just above,
@@ -442,6 +445,7 @@ begin
       Ini.ReadInteger('statusbar', 'FontSize', DEF_STATUSBAR_FONT_SIZE),
       MIN_STATUSBAR_FONT_SIZE, MAX_STATUSBAR_FONT_SIZE);
     FStatusBarAutoWidthLive := Ini.ReadBool('statusbar', 'AutoWidthLive', DEF_STATUSBAR_AUTO_WIDTH_LIVE);
+    FStatusBarStretchPanels := Ini.ReadBool('statusbar', 'StretchPanels', DEF_STATUSBAR_STRETCH_PANELS);
 
     FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
   finally
@@ -513,6 +517,7 @@ begin
     Ini.WriteString('statusbar', 'FontName', FStatusBarFontName);
     Ini.WriteInteger('statusbar', 'FontSize', FStatusBarFontSize);
     Ini.WriteBool('statusbar', 'AutoWidthLive', FStatusBarAutoWidthLive);
+    Ini.WriteBool('statusbar', 'StretchPanels', FStatusBarStretchPanels);
 
     Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
     {TUnicodeIniFile buffers writes in memory; UpdateFile flushes to disk.

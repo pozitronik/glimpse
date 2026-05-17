@@ -145,6 +145,10 @@ type
     [Test]
     procedure TestStatusBarAutoWidthLiveRoundTrip;
     [Test]
+    procedure TestStatusBarStretchPanelsDefault;
+    [Test]
+    procedure TestStatusBarStretchPanelsRoundTrip;
+    [Test]
     procedure TestStatusBarMissingSectionGetsAllDefaults;
     [Test]
     procedure TestCombinedMaxSideDefault;
@@ -1828,6 +1832,42 @@ begin
   try
     S2.Load;
     Assert.AreEqual(not DEF_STATUSBAR_AUTO_WIDTH_LIVE, S2.StatusBarAutoWidthLive);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarStretchPanelsDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_STRETCH_PANELS, S.StatusBarStretchPanels,
+      'Off by default — natural widths leave slack on the right for the progress bar to dock against');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarStretchPanelsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_stretch.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarStretchPanels := not DEF_STATUSBAR_STRETCH_PANELS;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_STATUSBAR_STRETCH_PANELS, S2.StatusBarStretchPanels);
   finally
     S2.Free;
   end;

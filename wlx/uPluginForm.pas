@@ -1374,6 +1374,7 @@ begin
     Exit;
   FStatusBarRenderer.SetFont(FSettings.StatusBarFontName, FSettings.StatusBarFontSize);
   FStatusBarRenderer.SetAutoWidthLive(FSettings.StatusBarAutoWidthLive);
+  FStatusBarRenderer.SetStretchPanels(FSettings.StatusBarStretchPanels);
   FStatusBarRenderer.ApplyTemplate(FSettings.StatusBarTemplate);
 
   {Resize the bar to fit the font. Bigger fonts otherwise clip top and
@@ -2008,8 +2009,17 @@ begin
   {Resolve the user's policy. Auto picks AfterPanels when the lister is
    wide enough to fit the panels and at least one progress bar minimum
    width plus margins; otherwise it switches to OverPanels so the bar
-   stays on screen.}
-  Layout := FSettings.ProgressBarLayout;
+   stays on screen.
+
+   Stretch-panels mode is a layout decision that fills the bar
+   horizontally — there is no trailing slack left to dock the progress
+   bar against, so the user's ProgressBarLayout is silently overridden
+   to OverPanels. The settings stay technically independent so a flip
+   of StretchPanels off restores whatever the user had.}
+  if FSettings.StatusBarStretchPanels then
+    Layout := pblOverPanels
+  else
+    Layout := FSettings.ProgressBarLayout;
   if Layout = pblAuto then
   begin
     if FStatusBar.ClientWidth >= PanelsRight + PROGRESSBAR_MIN_W + 2 * Margin then
