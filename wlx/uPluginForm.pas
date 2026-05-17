@@ -675,6 +675,24 @@ begin
   FExtractCtrl.OnProgress := OnExtractionProgress;
 
   FExporter := TFrameExporter.Create(FFrameView, FSettings);
+  {Surface the file-reference copy path's PNG-encode wait through the
+   existing status-bar progress widget. Marquee style: indeterminate
+   work, no percent. ShowProgress brings the bar visible (forcing the
+   status bar visible too if hidden); HideProgress restores the
+   visibility the user configured.}
+  FExporter.OnAsyncWorkShow :=
+    procedure(const AText: string)
+    begin
+      FProgressBar.Style := pbstMarquee;
+      FProgressBar.MarqueeInterval := 30;
+      ShowProgress(AText);
+    end;
+  FExporter.OnAsyncWorkHide :=
+    procedure
+    begin
+      HideProgress;
+      FProgressBar.Style := pbstNormal;
+    end;
 
   FAnimTimer := TTimer.Create(Self);
   FAnimTimer.Interval := ANIM_INTERVAL_MS;

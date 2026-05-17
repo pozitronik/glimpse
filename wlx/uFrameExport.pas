@@ -19,6 +19,13 @@ type
    the re-extract path entirely (the save then uses live cells only).}
   TReExtractAction = reference to procedure(const AIndices: TArray<Integer>; AAction: TProc);
 
+  {Optional "show indeterminate progress" hook the host form supplies so
+   the exporter can surface long-running work (currently the CF_HDROP
+   PNG encode) without leaving the lister visually frozen. The matching
+   hide hook is a plain TProc. Both nil by default; exporter degrades
+   to synchronous, no-feedback execution.}
+  TAsyncWorkShowAction = reference to procedure(const AText: string);
+
   {Handles save-to-file and copy-to-clipboard for video frames.}
   TFrameExporter = class
   strict private
@@ -38,8 +45,19 @@ type
      "paste as file reference" toggle, or '' when nothing has been
      written this session. Tracked so the next copy can delete the
      previous file (at most one Glimpse clipboard temp exists at a
-     time) and so the destructor can sweep on form close.}
+     time). NOT deleted on destructor: closing the Lister must not
+     invalidate a CF_HDROP entry the user has not pasted yet — the
+     system's %TEMP% cleanup catches the file later.}
     FLastClipboardTempFile: string;
+    {Re-entry guard for the file-reference copy path. The pump loop
+     inside PublishBitmapAsFileReference processes messages, which
+     means a second Copy view click could otherwise re-enter the
+     method while the worker thread for the first call is still
+     encoding. Bail with False on re-entry so the second click is a
+     visible no-op rather than a corrupted state.}
+    FAsyncBusy: Boolean;
+    FOnAsyncWorkShow: TAsyncWorkShowAction;
+    FOnAsyncWorkHide: TProc;
     {Opens the file dialog and returns the chosen path/format. The
      AInitialLiveRes value seeds the dialog: on modern Windows it is the
      starting state of the inline 'Save at view resolution' check button
@@ -92,13 +110,12 @@ type
     procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
-    {Sweeps the last CF_HDROP temp file on the way out so the user's
-     %TEMP% doesn't accumulate Glimpse PNGs across viewer lifetimes.
-     The path on the clipboard becomes a dangling reference after
-     this point — acceptable since most paste targets read the file
-     immediately, and TC closing the Lister means the user is done
-     with that copy.}
-    destructor Destroy; override;
+    {Optional host-form hooks driving the indeterminate progress bar
+     while the file-reference copy path is encoding. Wire to ShowProgress
+     / HideProgress with FProgressBar.Style := pbstMarquee before the
+     show. Leave nil to fall back to synchronous, no-feedback execution.}
+    property OnAsyncWorkShow: TAsyncWorkShowAction read FOnAsyncWorkShow write FOnAsyncWorkShow;
+    property OnAsyncWorkHide: TProc read FOnAsyncWorkHide write FOnAsyncWorkHide;
     {Resolves which frame to act on: prefers AContextCellIndex, falls back
      to current frame index, then 0. Returns False if no loaded frame found.}
     function ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
@@ -209,7 +226,7 @@ implementation
 uses
   Winapi.Windows, Winapi.ShlObj,
   System.Classes, System.Types, System.Math, System.UITypes, System.IOUtils,
-  Vcl.Clipbrd, Vcl.Dialogs,
+  Vcl.Clipbrd, Vcl.Dialogs, Vcl.Forms,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog;
 
@@ -293,49 +310,102 @@ begin
   FSettings := ASettings;
 end;
 
-destructor TFrameExporter.Destroy;
+type
+  {Lives on the heap for the duration of one PublishBitmapAsFileReference
+   call. The encode runs here off the main thread so the lister stays
+   responsive (and the marquee progress bar keeps animating) while the
+   user is waiting on a multi-second PNG write. Captured fields are
+   read-only from the thread's POV; the main thread waits on Finished
+   before touching them.}
+  TFileWriteThread = class(TThread)
+  public
+    Bmp: TBitmap;
+    Path: string;
+    SaveOk: Boolean;
+    ErrorMsg: string;
+  protected
+    procedure Execute; override;
+  end;
+
+procedure TFileWriteThread.Execute;
 begin
-  if FLastClipboardTempFile <> '' then
-    {Best-effort delete. Silently swallow failures — file may already
-     be gone, locked by a paste target still reading, or on a removable
-     drive that vanished. None warrants raising during shutdown.}
-    System.SysUtils.DeleteFile(FLastClipboardTempFile);
-  inherited;
+  try
+    SaveBitmapToFile(Bmp, Path, sfPNG, DEF_JPEG_QUALITY, DEF_PNG_COMPRESSION);
+    SaveOk := True;
+  except
+    on E: Exception do
+    begin
+      SaveOk := False;
+      ErrorMsg := E.Message;
+    end;
+  end;
 end;
 
 function TFrameExporter.PublishBitmapAsFileReference(ABitmap: TBitmap): Boolean;
 var
   NewPath, OldPath: string;
+  Thread: TFileWriteThread;
 begin
   Result := False;
   if ABitmap = nil then
     Exit;
-  {Fresh GUID-based name per call so concurrent TC lister windows don't
-   collide on a single fixed filename. The previous file (if any) is
-   deleted right after the new one is published so at most one Glimpse
-   clipboard temp lives in %TEMP% at a time.}
-  NewPath := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetTempPath) +
-    'glimpse_clip_' + TGuid.NewGuid.ToString + '.png';
+  {Re-entry guard: the pump loop below processes messages, which could
+   otherwise route a second Copy click into a recursive call while the
+   first thread is still encoding. Bail visibly on re-entry.}
+  if FAsyncBusy then
+    Exit;
+  FAsyncBusy := True;
   try
-    SaveBitmapToFile(ABitmap, NewPath, sfPNG,
-      DEF_JPEG_QUALITY, DEF_PNG_COMPRESSION);
-  except
-    on E: Exception do
+    {Fresh GUID-based name per call so concurrent TC lister windows
+     don't collide on a single fixed filename. The previous file (if
+     any) is deleted right after the new one is published so at most
+     one Glimpse clipboard temp lives in %TEMP% at a time.}
+    NewPath := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetTempPath) +
+      'glimpse_clip_' + TGuid.NewGuid.ToString + '.png';
+
+    Thread := TFileWriteThread.Create(True);
+    try
+      Thread.FreeOnTerminate := False;
+      Thread.Bmp := ABitmap;
+      Thread.Path := NewPath;
+      if Assigned(FOnAsyncWorkShow) then
+        FOnAsyncWorkShow('Writing clipboard image...');
+      try
+        Thread.Start;
+        {Pump messages so the marquee progress bar animates and the
+         lister stays paintable while the worker thread encodes. The
+         tiny Sleep keeps the loop from burning a core.}
+        while not Thread.Finished do
+        begin
+          Application.ProcessMessages;
+          Sleep(15);
+        end;
+      finally
+        if Assigned(FOnAsyncWorkHide) then
+          FOnAsyncWorkHide;
+      end;
+      if not Thread.SaveOk then
+      begin
+        DebugLog('FrameExport', Format('PublishBitmapAsFileReference: SaveBitmapToFile failed: %s', [Thread.ErrorMsg]));
+        Exit;
+      end;
+    finally
+      Thread.Free;
+    end;
+
+    if not PutFilePathOnClipboard(NewPath) then
     begin
-      DebugLog('FrameExport', Format('PublishBitmapAsFileReference: SaveBitmapToFile failed: %s', [E.Message]));
+      System.SysUtils.DeleteFile(NewPath);
       Exit;
     end;
+    OldPath := FLastClipboardTempFile;
+    FLastClipboardTempFile := NewPath;
+    if (OldPath <> '') and (OldPath <> NewPath) then
+      System.SysUtils.DeleteFile(OldPath);
+    Result := True;
+  finally
+    FAsyncBusy := False;
   end;
-  if not PutFilePathOnClipboard(NewPath) then
-  begin
-    System.SysUtils.DeleteFile(NewPath);
-    Exit;
-  end;
-  OldPath := FLastClipboardTempFile;
-  FLastClipboardTempFile := NewPath;
-  if (OldPath <> '') and (OldPath <> NewPath) then
-    System.SysUtils.DeleteFile(OldPath);
-  Result := True;
 end;
 
 function TFrameExporter.ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
@@ -1315,7 +1385,10 @@ begin
       end;
       try
         if FSettings.ClipboardAsFileReference then
-          PublishBitmapAsFileReference(Source)
+        begin
+          if not PublishBitmapAsFileReference(Source) then
+            MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
+        end
         else
           Clipboard.Assign(Source);
       finally
