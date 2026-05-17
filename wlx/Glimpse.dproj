@@ -86,6 +86,7 @@
         <DCCReference Include="..\src\uFrameFileNames.pas"/>
         <DCCReference Include="..\src\uBitmapSaver.pas"/>
         <DCCReference Include="..\src\uClipboardImage.pas"/>
+        <DCCReference Include="..\src\uClipboardFormatStrategies.pas"/>
         <DCCReference Include="uZoomController.pas"/>
         <DCCReference Include="uViewModeLogic.pas"/>
         <DCCReference Include="..\src\uExtractionPlanner.pas"/>

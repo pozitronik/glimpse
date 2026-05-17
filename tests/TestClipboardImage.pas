@@ -32,8 +32,25 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Types, Winapi.Windows, Winapi.ShlObj, Vcl.Graphics, Vcl.Clipbrd,
-  uClipboardImage;
+  System.SysUtils, System.Types, System.UITypes, Winapi.Windows, Winapi.ShlObj, Vcl.Graphics, Vcl.Clipbrd,
+  uClipboardImage, uClipboardFormatStrategies, uSettingsGroups;
+
+{Test-only helper: builds the default all-formats strategy array and
+ delegates to CopyBitmapToClipboard with the new 4-arg signature. Lets
+ the format-fidelity tests below keep their original 1- and 2-arg call
+ shape — the orchestration contract is what they care about, not the
+ strategy-assembly mechanics.}
+function CopyAllFormats(ABmp: Vcl.Graphics.TBitmap;
+  ABackground: TColor = TColor($000000)): Boolean;
+var
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  Err: string;
+begin
+  Settings := TClipboardFormatsGroup.Defaults;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Result := CopyBitmapToClipboard(ABmp, ABackground, Strategies, Err);
+end;
 
 {The console DUnitX runner has no message pump, so OpenClipboard can fail
  transiently right after the helper closed it. Same retry idiom the helper
@@ -76,7 +93,7 @@ end;
 
 procedure TTestClipboardImage.CopyBitmap_NilSource_ReturnsFalse;
 begin
-  Assert.IsFalse(CopyBitmapToClipboard(nil),
+  Assert.IsFalse(CopyAllFormats(nil),
     'Nil source must yield False without touching the clipboard');
 end;
 
@@ -93,7 +110,7 @@ begin
     Bmp.SetSize(8, 4);
     Bmp.Canvas.Brush.Color := clRed;
     Bmp.Canvas.FillRect(Rect(0, 0, 8, 4));
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp));
+    Assert.IsTrue(CopyAllFormats(Bmp));
   finally
     Bmp.Free;
   end;
@@ -115,7 +132,7 @@ begin
   try
     Bmp.SetSize(4, 4);
     FillPf32Bit(Bmp, 0, 200, 0, 128); {green, alpha=128}
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp));
+    Assert.IsTrue(CopyAllFormats(Bmp));
   finally
     Bmp.Free;
   end;
@@ -161,7 +178,7 @@ begin
   try
     Bmp.SetSize(4, 4);
     FillPf32Bit(Bmp, 255, 0, 0, 200); {pure blue, alpha=200}
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp));
+    Assert.IsTrue(CopyAllFormats(Bmp));
   finally
     Bmp.Free;
   end;
@@ -202,7 +219,7 @@ begin
   try
     Bmp.SetSize(4, 4);
     FillPf32Bit(Bmp, 255, 0, 0, 128);
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack));
+    Assert.IsTrue(CopyAllFormats(Bmp, clBlack));
   finally
     Bmp.Free;
   end;
@@ -243,7 +260,7 @@ begin
   try
     Bmp.SetSize(4, 4);
     FillPf32Bit(Bmp, 255, 0, 0, 128);
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clRed));
+    Assert.IsTrue(CopyAllFormats(Bmp, clRed));
   finally
     Bmp.Free;
   end;
@@ -313,7 +330,7 @@ begin
     FillPf32Bit(Bmp, 0, 0, 0, 255); {start opaque black}
     SetPf32Pixel(Bmp, 0, 0, 200, 0, 0, 255); {top-left pixel: B=200}
     SetPf32Pixel(Bmp, 0, 3, 50, 0, 0, 255);  {bottom-left pixel: B=50}
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack));
+    Assert.IsTrue(CopyAllFormats(Bmp, clBlack));
   finally
     Bmp.Free;
   end;
@@ -359,7 +376,7 @@ begin
   try
     Bmp.SetSize(4, 4);
     FillPf32Bit(Bmp, 255, 0, 0, 200);
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack));
+    Assert.IsTrue(CopyAllFormats(Bmp, clBlack));
   finally
     Bmp.Free;
   end;

@@ -137,14 +137,17 @@ type
      publish failure (caller should MessageDlg).}
     function PublishBitmapAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
     {Sibling of PublishBitmapAsFileReference for the in-memory clipboard
-     path (CF_DIBV5 + CF_DIB for pf32bit, CF_BITMAP for pf24bit via
-     uClipboardImage.CopyBitmapToClipboard). Runs inside the same modal
-     progress dialog so the lister stays responsive while large
-     HGLOBAL buffers are being allocated and populated. Same ownership
-     contract: takes ABitmap unconditionally, sets it to nil on entry.
-     Same tri-state result.}
+     path. Builds the per-format strategy array from
+     FSettings.ClipboardFormats and feeds it to
+     uClipboardImage.CopyBitmapToClipboard. Runs inside the same modal
+     progress dialog so the lister stays responsive while large HGLOBAL
+     buffers are being allocated and populated. Same ownership contract:
+     takes ABitmap unconditionally, sets it to nil on entry. Same
+     tri-state result. On cprFailed AErrorMsg names the failing strategy
+     (when allocation failed) or is empty when the failure was at the
+     clipboard-open stage; callers compose a richer MessageDlg from it.}
     function PublishBitmapToClipboardAsImage(var ABitmap: TBitmap;
-      ABackground: TColor): TClipboardPublishResult;
+      ABackground: TColor; out AErrorMsg: string): TClipboardPublishResult;
     {Shrinks ABmp in place when FSettings.CombinedMaxSide > 0 and the bitmap's
      longer side exceeds the cap. The original is freed and replaced with a
      downscaled copy. No-op when the cap is 0 (unlimited) or the bitmap
@@ -268,7 +271,7 @@ uses
   Winapi.Windows, Winapi.ShlObj,
   System.Types, System.Math, System.UITypes, System.IOUtils,
   Vcl.Clipbrd, Vcl.Dialogs,
-  uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
+  uClipboardImage, uClipboardFormatStrategies, uSettingsGroups, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog,
   uProgressModalForm;
 
@@ -278,6 +281,42 @@ type
    which would otherwise shadow Vcl.Graphics.TBitmap throughout this
    implementation.}
   TBitmap = Vcl.Graphics.TBitmap;
+
+{Composes the user-facing message dialog text shown when
+ PublishBitmapToClipboardAsImage returns cprFailed. AFailedFormat is the
+ strategy name supplied by CopyBitmapToClipboard (empty when failure was
+ not a per-strategy allocation — e.g. clipboard-open exhausted retries).
+ AIsCombinedView changes the remedy guidance: combined-view callers can
+ also lower the Scale target / reduce frame count, single-frame callers
+ cannot.}
+function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
+  AIsCombinedView: Boolean): string;
+const
+  REMEDY_COMBINED = 'Disable it on the Clipboard tab in Settings, ' +
+    'enable "Copy to clipboard as a file reference", lower the Scale target, ' +
+    'or reduce the frame count.';
+  REMEDY_FRAME = 'Disable it on the Clipboard tab in Settings, ' +
+    'or enable "Copy to clipboard as a file reference".';
+var
+  Remedy: string;
+begin
+  if AFailedFormat = '' then
+  begin
+    {Failure was at the clipboard-open stage (system clipboard locked by
+     another process); format name does not apply.}
+    Exit('Clipboard write failed - could not open the system clipboard.' +
+      sLineBreak + sLineBreak +
+      'Try closing other clipboard-using apps and retry.');
+  end;
+  if AIsCombinedView then
+    Remedy := REMEDY_COMBINED
+  else
+    Remedy := REMEDY_FRAME;
+  Result := Format('Clipboard write failed: could not allocate memory for [%s].' +
+    sLineBreak + sLineBreak +
+    'The image is too large to copy with this format enabled. ' + Remedy,
+    [AFailedFormat]);
+end;
 
 function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const AStatusText: string;
@@ -469,22 +508,40 @@ begin
 end;
 
 function TFrameExporter.PublishBitmapToClipboardAsImage(var ABitmap: TBitmap;
-  ABackground: TColor): TClipboardPublishResult;
+  ABackground: TColor; out AErrorMsg: string): TClipboardPublishResult;
 var
   Outcome: TBitmapWorkOutcome;
+  FormatSettings: TClipboardFormatsGroup;
+  PngCompression: Integer;
 begin
-  {No success-path tail: CopyBitmapToClipboard publishes inline, so the
-   helper's return is the final answer. Outcome is captured to satisfy
-   the helper's signature but the caller does not log on failure here —
-   the surfaced MessageDlg at the dispatch site is sufficient.}
+  AErrorMsg := '';
+  {Capture the settings snapshot by value before crossing into the
+   worker thread; the anonymous method below will reference these locals.
+   Reading FSettings directly inside the worker would also work today
+   (the values are immutable for the duration of the call) but the local
+   snapshot makes the lifetime contract explicit.}
+  FormatSettings := FSettings.ClipboardFormats;
+  PngCompression := FSettings.PngCompression;
   Result := RunBitmapWorkInModal(ABitmap, 'Copying image to clipboard...',
     procedure(ABmp: TBitmap; var AOut: TBitmapWorkOutcome)
+    var
+      Strategies: TArray<IClipboardFormatStrategy>;
+      FailedFormat: string;
     begin
-      AOut.Success := uClipboardImage.CopyBitmapToClipboard(ABmp, ABackground);
+      Strategies := BuildClipboardFormatStrategies(FormatSettings, PngCompression);
+      AOut.Success := uClipboardImage.CopyBitmapToClipboard(ABmp, ABackground,
+        Strategies, FailedFormat);
+      {Carry the failed-format name back to the main thread via the
+       existing ErrorMsg channel; empty when success or when failure was
+       not a per-strategy allocation (clipboard open exhausted retries).}
+      if not AOut.Success then
+        AOut.ErrorMsg := FailedFormat;
     end,
     nil,
     FOnAsyncTaskRun,
     Outcome);
+  if Result = cprFailed then
+    AErrorMsg := Outcome.ErrorMsg;
 end;
 
 function TFrameExporter.ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
@@ -1445,6 +1502,7 @@ begin
     var
       Tmp, Source: TBitmap;
       OwnsSource: Boolean;
+      ErrMsg: string;
     begin
       {Pick the bitmap that becomes the clipboard payload. The
        file-reference path needs the bitmap object to encode to PNG;
@@ -1502,8 +1560,8 @@ begin
            intact.}
           if OwnsSource then
           begin
-            if PublishBitmapToClipboardAsImage(Source, FSettings.Background) = cprFailed then
-              MessageDlg('Clipboard write failed - the frame is too large to copy.' + sLineBreak + sLineBreak + 'Use the 64-bit plugin variant, or enable "Copy to clipboard as a file reference" on the Save tab.', mtError, [mbOK], 0);
+            if PublishBitmapToClipboardAsImage(Source, FSettings.Background, ErrMsg) = cprFailed then
+              MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
             OwnsSource := False;
           end
           else
@@ -1511,8 +1569,8 @@ begin
             Tmp := TBitmap.Create;
             try
               Tmp.Assign(Source);
-              if PublishBitmapToClipboardAsImage(Tmp, FSettings.Background) = cprFailed then
-                MessageDlg('Clipboard write failed - the frame is too large to copy.' + sLineBreak + sLineBreak + 'Use the 64-bit plugin variant, or enable "Copy to clipboard as a file reference" on the Save tab.', mtError, [mbOK], 0);
+              if PublishBitmapToClipboardAsImage(Tmp, FSettings.Background, ErrMsg) = cprFailed then
+                MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
             finally
               Tmp.Free;
             end;
@@ -1561,6 +1619,7 @@ begin
   WriteAction := procedure
     var
       Bmp: TBitmap;
+      ErrMsg: string;
     begin
       {Same OOM-safety wrapper as SaveView, plus a check for the silent
        failure path inside CopyBitmapToClipboard: when GlobalAlloc returns
@@ -1571,19 +1630,20 @@ begin
         Bmp := RenderWithBanner(RenderCombinedFromCells);
         try
           ApplyCombinedSizeCap(Bmp);
-          {Publishes CF_DIBV5 (alpha-aware) and CF_DIB (alpha pre-composited
-           onto FSettings.Background) side-by-side, so modern paste targets
+          {Publishes the strategy array assembled from FSettings.ClipboardFormats
+           (DIBV5 + PNG + DIB + BITMAP by default), so modern paste targets
            keep the transparent gaps and legacy targets see a working opaque
            image instead of the broken paste they get from the OS's default
-           CF_DIB synthesis. ABackground only matters when the rendered
-           bitmap carries alpha; for opaque sources it is ignored.}
+           CF_DIB synthesis. FSettings.Background is the colour transparent
+           pixels are flattened against for legacy-bitmap variants; the
+           alpha-aware variants ignore it.}
           if FSettings.ClipboardAsFileReference then
           begin
             if PublishBitmapAsFileReference(Bmp) = cprFailed then
               MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
           end
-          else if PublishBitmapToClipboardAsImage(Bmp, FSettings.Background) = cprFailed then
-            MessageDlg('Clipboard write failed - the combined image is too large to copy.' + sLineBreak + sLineBreak + 'Lower the Scale target in Settings, reduce the frame count, or use Save view to write the image to a file instead.', mtError, [mbOK], 0);
+          else if PublishBitmapToClipboardAsImage(Bmp, FSettings.Background, ErrMsg) = cprFailed then
+            MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, True), mtError, [mbOK], 0);
         finally
           Bmp.Free;
         end;

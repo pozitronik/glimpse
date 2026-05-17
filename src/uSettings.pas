@@ -183,6 +183,11 @@ type
     property PublishFlattenedBitmap: Boolean read FClipboardFormats.PublishFlattenedBitmap write FClipboardFormats.PublishFlattenedBitmap;
     property PublishBitmapHandle: Boolean read FClipboardFormats.PublishBitmapHandle write FClipboardFormats.PublishBitmapHandle;
     property PublishCompressedPng: Boolean read FClipboardFormats.PublishCompressedPng write FClipboardFormats.PublishCompressedPng;
+    {Read-only access to the whole group record — used by the clipboard
+     publish path (uFrameExport -> BuildClipboardFormatStrategies) so the
+     worker thread captures a value-typed snapshot instead of four
+     individual booleans.}
+    property ClipboardFormats: TClipboardFormatsGroup read FClipboardFormats;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;

@@ -1,29 +1,34 @@
-﻿{Clipboard publisher for alpha-aware bitmaps.
+{Clipboard publisher for bitmap images.
 
- For pf32bit sources we publish two formats side-by-side:
- - CF_DIBV5 carries the full ARGB pixels for paste targets that honour
- alpha (Paint.NET, GIMP, Krita, Affinity Photo, modern browsers).
- - CF_DIB carries an opaque copy with alpha already composited onto the
- caller-provided background colour, so legacy targets (Paint, Word,
- older imaging tools) that only understand CF_DIB receive a
- ready-to-paste image instead of Windows' default alpha-strip
- synthesis (which renders semi-transparent pixels as broken/black in
- many such targets).
-
- An app that prioritises CF_DIB over CF_DIBV5 still loses the alpha
- channel — this is unavoidable, but those apps would not have honoured
- CF_DIBV5 in the first place, so they get a working composited paste
- instead of a broken one.
+ For pf32bit sources CopyBitmapToClipboard orchestrates over a caller-
+ supplied array of IClipboardFormatStrategy implementations (see
+ uClipboardFormatStrategies). Each strategy owns one Win32 clipboard
+ format end-to-end (allocation, publication, cleanup). The orchestrator
+ here:
+   1. Allocates every strategy's payload in publish order.
+   2. Aborts (reverse-order Discard of previously allocated strategies,
+      returns False, names the failing format in AFailedFormatName) if
+      any allocation fails — every enabled format must succeed or the
+      whole copy fails loudly. No silent skipping.
+   3. Opens the clipboard once, EmptyClipboard, then walks the array
+      again calling Publish on each. Per-format Publish failures are
+      logged but do not abort the cycle so other formats still publish.
 
  For pf24bit sources we route through Vcl.Clipbrd.Clipboard.Assign,
  which yields CF_BITMAP / CF_DIB the standard way; alpha never applies
- to that path.}
+ to that path and the strategy toggles do not gate it (24-bit single
+ frames are tiny and not the memory bottleneck).
+
+ The CF_HDROP "paste as file reference" path (BuildDropFilesHandle /
+ PutFilePathOnClipboard) is unrelated to the bitmap-format strategies
+ and lives here as a general clipboard helper.}
 unit uClipboardImage;
 
 interface
 
 uses
-  System.SysUtils, System.UITypes, Vcl.Graphics;
+  System.SysUtils, System.UITypes, Vcl.Graphics,
+  uClipboardFormatStrategies;
 
 type
   {Action that opens the clipboard. Defaults to Vcl.Clipbrd.Clipboard.Open
@@ -31,20 +36,32 @@ type
    exercised without owning the global clipboard.}
   TClipboardOpenAction = reference to procedure;
 
-  {Pushes ABitmap to the system clipboard.
+  {Publishes ABitmap to the system clipboard via the supplied strategy
+   array (see uClipboardFormatStrategies.BuildClipboardFormatStrategies).
 
-   When ABitmap is pf32bit the helper publishes both CF_DIBV5 (full
-   alpha) and CF_DIB (alpha composited onto ABackground) so paste works
-   in both modern and legacy targets. ABackground is the colour
-   semi-transparent pixels are flattened against; for our use it should
-   match the configured background of the rendered combined image so the
-   opaque copy looks identical to a BackgroundAlpha=255 render.
+   pf32bit sources go through the orchestrator over AStrategies.
+   pf24bit sources are routed to Vcl.Clipbrd.Clipboard.Assign and
+   AStrategies is ignored — 24-bit single frames are too small to
+   benefit from per-format gating.
 
-   When ABitmap is not pf32bit the call falls through to
-   Vcl.Clipbrd.Clipboard.Assign and ABackground is ignored.
+   When AStrategies is empty (all toggles off), returns True without
+   touching the clipboard — per the agreed UX, the user has explicitly
+   disabled every format so we do nothing rather than fail.
 
-   Returns True on success.}
-function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap; ABackground: TColor = TColor($000000)): Boolean;
+   Returns True when at least one strategy successfully published
+   (or the pf24bit path completed, or the array was empty). Returns
+   False when any enabled strategy's Allocate failed; AFailedFormatName
+   names the failing strategy so the caller can surface an actionable
+   error. On non-allocation failure (clipboard open exhausted retries
+   etc.) Result is False and AFailedFormatName is left empty.
+
+   ABackground is the colour semi-transparent pixels are flattened
+   against for formats that need a flat opaque copy (CF_DIB, CF_BITMAP);
+   strategies that carry true alpha (CF_DIBV5, PNG) ignore it.}
+function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap;
+  ABackground: TColor;
+  const AStrategies: TArray<IClipboardFormatStrategy>;
+  out AFailedFormatName: string): Boolean;
 
 {Retries the clipboard open up to 20 times with 10 ms sleeps when it
  surfaces an EClipboardException, returning True on the first successful
@@ -82,14 +99,6 @@ begin
   DebugLog('Clipboard', AMsg);
 end;
 
-const
-  {Win32 constants not always exported by Winapi.Windows under that name.
-   LCS_sRGB is the 4-char-code 'sRGB' in big-endian; LCS_GM_GRAPHICS is
-   the GamutMatching graphics rendering intent — both standard for screen
-   bitmaps.}
-  LCS_sRGB = $73524742;
-  LCS_GM_GRAPHICS = 2;
-
 function TryClipboardOpenWithRetry(const AOpenAction: TClipboardOpenAction): Boolean;
 var
   I: Integer;
@@ -124,291 +133,74 @@ begin
     end);
 end;
 
-{Builds an HGLOBAL holding a CF_DIBV5 buffer (BITMAPV5HEADER + ARGB
- pixels) for ASrc. Returns 0 on allocation failure. The system takes
- ownership when the handle is passed to SetClipboardData; on any other
- path the caller must GlobalFree the result.}
-function BuildAlphaDIBV5(ASrc: Vcl.Graphics.TBitmap): HGLOBAL;
+function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap;
+  ABackground: TColor;
+  const AStrategies: TArray<IClipboardFormatStrategy>;
+  out AFailedFormatName: string): Boolean;
 var
-  HeaderSize, RowBytes, ImageBytes, TotalBytes, Y: Integer;
-  Header: PBitmapV5Header;
-  PixelDest, ScanSrc: PByte;
-begin
-  HeaderSize := SizeOf(TBitmapV5Header);
-  RowBytes := ASrc.Width * 4;
-  ImageBytes := RowBytes * ASrc.Height;
-  TotalBytes := HeaderSize + ImageBytes;
-
-  Result := GlobalAlloc(GMEM_MOVEABLE, TotalBytes);
-  if Result = 0 then
-  begin
-    Log(Format('BuildAlphaDIBV5: GlobalAlloc(%d bytes) failed for %dx%d (lastError=%d)', [TotalBytes, ASrc.Width, ASrc.Height, GetLastError]));
-    Exit;
-  end;
-
-  Header := PBitmapV5Header(GlobalLock(Result));
-  if Header = nil then
-  begin
-    Log(Format('BuildAlphaDIBV5: GlobalLock failed for %d-byte block (lastError=%d)', [TotalBytes, GetLastError]));
-    GlobalFree(Result);
-    Result := 0;
-    Exit;
-  end;
-
-  try
-    FillChar(Header^, HeaderSize, 0);
-    Header^.bV5Size := HeaderSize;
-    Header^.bV5Width := ASrc.Width;
-    {Negative height = top-down DIB; scanline 0 of the source maps to
-     the first row of pixel data right after the header.}
-    Header^.bV5Height := -ASrc.Height;
-    Header^.bV5Planes := 1;
-    Header^.bV5BitCount := 32;
-    Header^.bV5Compression := BI_BITFIELDS;
-    Header^.bV5SizeImage := ImageBytes;
-    Header^.bV5RedMask := $00FF0000;
-    Header^.bV5GreenMask := $0000FF00;
-    Header^.bV5BlueMask := $000000FF;
-    Header^.bV5AlphaMask := $FF000000;
-    Header^.bV5CSType := LCS_sRGB;
-    Header^.bV5Intent := LCS_GM_GRAPHICS;
-
-    PixelDest := PByte(Header);
-    Inc(PixelDest, HeaderSize);
-    for Y := 0 to ASrc.Height - 1 do
-    begin
-      ScanSrc := PByte(ASrc.ScanLine[Y]);
-      Move(ScanSrc^, PixelDest^, RowBytes);
-      Inc(PixelDest, RowBytes);
-    end;
-  finally
-    GlobalUnlock(Result);
-  end;
-end;
-
-{Builds an HGLOBAL holding a CF_DIB buffer (BITMAPINFOHEADER + 24-bit
- BGR pixels) for ASrc, with alpha pre-composited onto ABackground using
- the straight-alpha formula  out = src*A + bg*(255-A)  per channel.
- Returns 0 on allocation failure. Same ownership rules as the V5 path.
-
- The DIB is laid out bottom-up (positive biHeight): row 0 of the pixel
- buffer is the bottom row of the image. This is the historical CF_DIB
- convention; legacy / conservative consumers (older Win32 image
- viewers like Imagine) sometimes refuse top-down CF_DIB or render it
- flipped. Modern consumers handle both, so bottom-up is the safe
- default for the legacy-fallback format.}
-function BuildFlatDIB(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): HGLOBAL;
-var
-  HeaderSize, RowBytesPadded, ImageBytes, TotalBytes, X, Y: Integer;
-  Header: PBitmapInfoHeader;
-  RowStart, PixelDest, ScanSrc: PByte;
-  BgR, BgG, BgB, SrcB, SrcG, SrcR, SrcA: Byte;
-  W, H: Integer;
-begin
-  W := ASrc.Width;
-  H := ASrc.Height;
-  HeaderSize := SizeOf(TBitmapInfoHeader);
-  {pf24bit DIB rows are padded to a 4-byte boundary.}
-  RowBytesPadded := ((W * 3 + 3) div 4) * 4;
-  ImageBytes := RowBytesPadded * H;
-  TotalBytes := HeaderSize + ImageBytes;
-
-  Result := GlobalAlloc(GMEM_MOVEABLE, TotalBytes);
-  if Result = 0 then
-  begin
-    Log(Format('BuildFlatDIB: GlobalAlloc(%d bytes) failed for %dx%d (lastError=%d)', [TotalBytes, W, H, GetLastError]));
-    Exit;
-  end;
-
-  Header := PBitmapInfoHeader(GlobalLock(Result));
-  if Header = nil then
-  begin
-    Log(Format('BuildFlatDIB: GlobalLock failed for %d-byte block (lastError=%d)', [TotalBytes, GetLastError]));
-    GlobalFree(Result);
-    Result := 0;
-    Exit;
-  end;
-
-  try
-    BgR := GetRValue(Cardinal(ABackground));
-    BgG := GetGValue(Cardinal(ABackground));
-    BgB := GetBValue(Cardinal(ABackground));
-
-    FillChar(Header^, HeaderSize, 0);
-    Header^.biSize := HeaderSize;
-    Header^.biWidth := W;
-    Header^.biHeight := H; {bottom-up — see header comment}
-    Header^.biPlanes := 1;
-    Header^.biBitCount := 24;
-    Header^.biCompression := BI_RGB;
-    Header^.biSizeImage := ImageBytes;
-
-    for Y := 0 to H - 1 do
-    begin
-      RowStart := PByte(Header);
-      Inc(RowStart, HeaderSize + Y * RowBytesPadded);
-      PixelDest := RowStart;
-      {Bottom-up DIB: dest row Y maps to source row (H-1-Y).}
-      ScanSrc := PByte(ASrc.ScanLine[H - 1 - Y]);
-      for X := 0 to W - 1 do
-      begin
-        SrcB := ScanSrc^;
-        Inc(ScanSrc);
-        SrcG := ScanSrc^;
-        Inc(ScanSrc);
-        SrcR := ScanSrc^;
-        Inc(ScanSrc);
-        SrcA := ScanSrc^;
-        Inc(ScanSrc);
-        {out = (src*A + bg*(255-A) + 127) div 255 — rounded straight-alpha
-         composite. For our specific bitmaps the gap pixels carry RGB
-         equal to ABackground, so the result there reduces to bg
-         regardless of A; frame pixels (A=255) reduce to src. This makes
-         the flattened image visually identical to a BackgroundAlpha=255
-         render of the same content.}
-        PixelDest^ := Byte((SrcB * SrcA + BgB * (255 - SrcA) + 127) div 255);
-        Inc(PixelDest);
-        PixelDest^ := Byte((SrcG * SrcA + BgG * (255 - SrcA) + 127) div 255);
-        Inc(PixelDest);
-        PixelDest^ := Byte((SrcR * SrcA + BgR * (255 - SrcA) + 127) div 255);
-        Inc(PixelDest);
-      end;
-      {Padding bytes (if any) are left uninitialised; CF_DIB consumers
-       only read the first W*3 bytes of each row.}
-    end;
-  finally
-    GlobalUnlock(Result);
-  end;
-end;
-
-{Creates a Windows HBITMAP from the pixel data inside ABitmap, with
- alpha composited onto ABackground (same compositing as BuildFlatDIB).
- Returns 0 on failure. The clipboard takes ownership when the handle
- is passed to SetClipboardData; on any other path the caller must
- DeleteObject the result.
-
- Published as CF_BITMAP alongside CF_DIBV5/CF_DIB so paste targets that
- distrust Windows-synthesised handles (some older Win32 image viewers)
- see a real device-dependent bitmap directly.}
-function BuildFlatHBITMAP(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): HBITMAP;
-var
-  Mem: HGLOBAL;
-  Header: PBitmapInfoHeader;
-  PixelBits: PByte;
-  ScreenDC: HDC;
-begin
-  Result := 0;
-  Mem := BuildFlatDIB(ASrc, ABackground);
-  if Mem = 0 then
-    Exit; {BuildFlatDIB already logged the failure detail}
-
-  Header := PBitmapInfoHeader(GlobalLock(Mem));
-  if Header = nil then
-  begin
-    Log(Format('BuildFlatHBITMAP: GlobalLock failed (lastError=%d)', [GetLastError]));
-    GlobalFree(Mem);
-    Exit;
-  end;
-
-  try
-    PixelBits := PByte(Header);
-    Inc(PixelBits, Header^.biSize);
-    ScreenDC := GetDC(0);
-    if ScreenDC <> 0 then
-      try
-        Result := CreateDIBitmap(ScreenDC, Header^, CBM_INIT, PixelBits, PBitmapInfo(Header)^, DIB_RGB_COLORS);
-        if Result = 0 then
-          Log(Format('BuildFlatHBITMAP: CreateDIBitmap failed for %dx%d (lastError=%d)', [ASrc.Width, ASrc.Height, GetLastError]));
-      finally
-        ReleaseDC(0, ScreenDC);
-      end;
-  finally
-    GlobalUnlock(Mem);
-    {The DIB buffer was a temporary input to CreateDIBitmap; the HBITMAP
-     it produced owns its own pixel storage. Always free the source.}
-    GlobalFree(Mem);
-  end;
-end;
-
-function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap; ABackground: TColor = TColor($000000)): Boolean;
-var
-  MemV5, MemFlat: HGLOBAL;
-  HbmFlat: HBITMAP;
+  I, J: Integer;
 begin
   Result := False;
+  AFailedFormatName := '';
   if ABitmap = nil then
     Exit;
 
   if ABitmap.PixelFormat <> pf32bit then
   begin
     {Existing 24-bit path: Vcl.Clipbrd writes CF_BITMAP / CF_DIB, which
-     legacy paste targets understand. Alpha never applies here.}
+     legacy paste targets understand. Alpha never applies here and the
+     per-format toggles do not gate this path — 24-bit single frames are
+     tiny and never the memory bottleneck. Intentional asymmetry with
+     the pf32bit branch below.}
     Clipboard.Assign(ABitmap);
     Result := True;
     Exit;
   end;
 
-  Log(Format('CopyBitmapToClipboard: %dx%d pf32bit', [ABitmap.Width, ABitmap.Height]));
-
-  MemV5 := BuildAlphaDIBV5(ABitmap);
-  if MemV5 = 0 then
-    Exit; {BuildAlphaDIBV5 already logged}
-
-  MemFlat := BuildFlatDIB(ABitmap, ABackground);
-  if MemFlat = 0 then
+  if Length(AStrategies) = 0 then
   begin
-    {BuildFlatDIB already logged; we now also note that we cannot publish
-     anything because the side-by-side contract requires both formats.}
-    Log('CopyBitmapToClipboard: aborting publish - CF_DIB allocation failed after CF_DIBV5 succeeded');
-    GlobalFree(MemV5);
+    {Every per-format toggle is off. Per the agreed UX, silently
+     succeed rather than fail — the user explicitly opted out of
+     publishing anything.}
+    Log('CopyBitmapToClipboard: empty strategy array, skipping publish');
+    Result := True;
     Exit;
   end;
 
-  {The HBITMAP is built up-front so we can publish it as CF_BITMAP
-   alongside the DIB formats. CreateDIBitmap can fail in low-resource
-   conditions; if it does we silently skip the CF_BITMAP publish and
-   rely on the OS to synthesise one from CF_DIB on demand.}
-  HbmFlat := BuildFlatHBITMAP(ABitmap, ABackground);
+  Log(Format('CopyBitmapToClipboard: %dx%d pf32bit, %d strategies',
+    [ABitmap.Width, ABitmap.Height, Length(AStrategies)]));
 
-  {Route through Vcl.Clipbrd.Clipboard.Open/Close so the clipboard owner
-   is VCL's persistent hidden HWND. OpenClipboard(0) with a null owner
-   window leaves the clipboard ownerless after EmptyClipboard, which
-   makes SetClipboardData unreliable in some host processes (e.g. TC's
-   Lister). Same pump as the working pf24bit Clipboard.Assign path.}
+  {Allocate phase. Every enabled format must allocate successfully or
+   we abort the whole copy. Reverse-order Discard mirrors RAII so the
+   most-recently-allocated payload is freed first, which is the easier
+   order for future readers to reason about.}
+  for I := 0 to High(AStrategies) do
+    if not AStrategies[I].Allocate(ABitmap, ABackground) then
+    begin
+      AFailedFormatName := AStrategies[I].Name;
+      Log(Format('CopyBitmapToClipboard: aborting publish - %s allocation failed',
+        [AFailedFormatName]));
+      for J := I - 1 downto 0 do
+        AStrategies[J].Discard;
+      Exit;
+    end;
+
+  {Publish phase. The clipboard is opened once and EmptyClipboard
+   clears any prior contents before we walk the strategies. Per-format
+   Publish failures are logged inside the strategy and do not abort the
+   cycle — getting some formats on the clipboard is strictly better
+   than getting none.}
   if not TryClipboardOpenWithRetry then
   begin
     Log('CopyBitmapToClipboard: TryClipboardOpenWithRetry exhausted retries');
-    GlobalFree(MemV5);
-    GlobalFree(MemFlat);
-    if HbmFlat <> 0 then
-      DeleteObject(HbmFlat);
+    for J := High(AStrategies) downto 0 do
+      AStrategies[J].Discard;
     Exit;
   end;
   try
     EmptyClipboard;
-    if SetClipboardData(CF_DIBV5, MemV5) = 0 then
-    begin
-      Log(Format('CopyBitmapToClipboard: SetClipboardData(CF_DIBV5) failed (lastError=%d)', [GetLastError]));
-      GlobalFree(MemV5);
-      GlobalFree(MemFlat);
-      if HbmFlat <> 0 then
-        DeleteObject(HbmFlat);
-      Exit;
-    end;
-    {SetClipboardData transferred ownership of MemV5 to the system.}
-    if SetClipboardData(CF_DIB, MemFlat) = 0 then
-    begin
-      {CF_DIBV5 is already on the clipboard; failing to add the legacy
-       sibling just means legacy paste will fall back to whatever the
-       OS synthesises. Keep going so we still try CF_BITMAP.}
-      Log(Format('CopyBitmapToClipboard: SetClipboardData(CF_DIB) failed (lastError=%d), continuing with CF_DIBV5 only', [GetLastError]));
-      GlobalFree(MemFlat);
-    end;
-    if (HbmFlat <> 0) and (SetClipboardData(CF_BITMAP, HbmFlat) = 0) then
-    begin
-      Log(Format('CopyBitmapToClipboard: SetClipboardData(CF_BITMAP) failed (lastError=%d)', [GetLastError]));
-      DeleteObject(HbmFlat);
-    end;
+    for I := 0 to High(AStrategies) do
+      AStrategies[I].Publish;
     Result := True;
   finally
     Clipboard.Close;

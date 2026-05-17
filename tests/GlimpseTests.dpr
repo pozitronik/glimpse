@@ -37,6 +37,7 @@ uses
   TestBitmapSaver in 'TestBitmapSaver.pas',
   uClipboardImage in '..\src\uClipboardImage.pas',
   TestClipboardImage in 'TestClipboardImage.pas',
+  uClipboardFormatStrategies in '..\src\uClipboardFormatStrategies.pas',
   uZoomController in '..\wlx\uZoomController.pas',
   TestZoomController in 'TestZoomController.pas',
   uViewModeLogic in '..\wlx\uViewModeLogic.pas',
