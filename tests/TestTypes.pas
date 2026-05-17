@@ -21,6 +21,7 @@ type
     [Test] procedure TimestampCornerRange;
     [Test] procedure BannerPositionOrdinals;
     [Test] procedure BannerPositionRange;
+    [Test] procedure ProgressBarLayoutOrdinals;
     [Test] procedure ExtractionOptionsValueSemantics;
     {Conversions for enums that round-trip through INI. Load-bearing
      because settings dialogs read/write these tokens verbatim.}
@@ -117,6 +118,19 @@ procedure TTestTypes.BannerPositionRange;
 begin
   Assert.AreEqual(bpTop, Low(TBannerPosition));
   Assert.AreEqual(bpBottom, High(TBannerPosition));
+end;
+
+procedure TTestTypes.ProgressBarLayoutOrdinals;
+begin
+  {Used as raw int indices by CbxProgressBarLayout in the settings
+   dialog and as Ord values cast through TProgressBarLayout in
+   ControlsToSettings. The stretch-panels lock pins ItemIndex := 1 to
+   force the Over Panels selection; if this enum is ever reordered,
+   the dialog would silently pick the wrong layout. Pin the order
+   here so the reorder fails loudly instead.}
+  Assert.AreEqual(0, Ord(pblAfterPanels));
+  Assert.AreEqual(1, Ord(pblOverPanels));
+  Assert.AreEqual(2, Ord(pblAuto));
 end;
 
 procedure TTestTypes.TimestampCornerToStr_AllValues;

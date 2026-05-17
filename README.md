@@ -148,6 +148,8 @@ When a token's data is unavailable:
 
 The `%save_dimension%` and `%copy_dimension%` panels are interactive: **double-click** flips the corresponding *Save at view resolution* / *Copy at view resolution* default (same setting the dropdown radio bullet tracks). The hand cursor on hover and the panel's tooltip surface the affordance. **Ctrl+Click** on any panel copies its text to the clipboard.
 
+The **Stretch auto-width panels to fill the bar** setting (Appearance tab, off by default) makes the renderer distribute any remaining bar width across the auto-width panels proportionally to their natural widths — useful when you want a justified bar with no trailing gap. Fixed `width=N` panels keep their widths.
+
 The progress bar continues to live outside the template — its position relative to the panels is governed by the *Progress bar layout* setting.
 
 #### Save

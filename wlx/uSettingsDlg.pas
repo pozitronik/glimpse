@@ -176,6 +176,7 @@ type
     procedure BtnTimestampFontClick(Sender: TObject);
     procedure BtnBannerFontClick(Sender: TObject);
     procedure BtnStatusBarFontClick(Sender: TObject);
+    procedure ChkStatusBarStretchPanelsClick(Sender: TObject);
     procedure CbxSaveFormatChange(Sender: TObject);
     procedure BtnSaveFolderClick(Sender: TObject);
     procedure ChkMaxWorkersAutoClick(Sender: TObject);
@@ -229,6 +230,13 @@ type
     procedure UpdateBannerFontDisplay;
     procedure UpdateStatusBarFontDisplay;
     procedure PopulateStatusBarLegend;
+    {Enforces the rule that stretch panels mode implies progress-bar
+     Over panels: when the stretch checkbox is on, the progress bar
+     combo is forced to "Over panels" and disabled (the runtime will
+     override anyway, surface the override in the UI so the user
+     understands what they will get). When stretch is off, the combo
+     re-enables with whatever value it currently holds.}
+    procedure UpdateStretchLockState;
     procedure BrowseFolder(AEdit: TEdit);
     procedure PopulateHotkeyList;
     procedure RefreshHotkeyRow(AAction: uHotkeys.TPluginAction);
@@ -309,6 +317,7 @@ begin
   UpdateStatusBarFontDisplay;
   ChkStatusBarAutoWidthLive.Checked := ASettings.StatusBarAutoWidthLive;
   ChkStatusBarStretchPanels.Checked := ASettings.StatusBarStretchPanels;
+  UpdateStretchLockState;
 
   CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
   UdJpegQuality.Position := ASettings.JpegQuality;
@@ -488,6 +497,25 @@ end;
 procedure TSettingsForm.BtnStatusBarFontClick(Sender: TObject);
 begin
   PickStatusBarFont;
+end;
+
+procedure TSettingsForm.UpdateStretchLockState;
+begin
+  if ChkStatusBarStretchPanels.Checked then
+  begin
+    {Ord(pblOverPanels) — index 1 in CbxProgressBarLayout. Hardcoded to
+     avoid pulling uTypes into a place that already has enough imports;
+     test pinned in TestProgressBarLayoutIndexIsStable below.}
+    CbxProgressBarLayout.ItemIndex := 1;
+    CbxProgressBarLayout.Enabled := False;
+  end
+  else
+    CbxProgressBarLayout.Enabled := True;
+end;
+
+procedure TSettingsForm.ChkStatusBarStretchPanelsClick(Sender: TObject);
+begin
+  UpdateStretchLockState;
 end;
 
 procedure TSettingsForm.PopulateStatusBarLegend;

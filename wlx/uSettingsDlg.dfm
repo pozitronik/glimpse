@@ -714,39 +714,16 @@ object SettingsForm: TSettingsForm
         Caption = 'Show status bar (F3 to toggle)'
         TabOrder = 18
       end
-      object LblProgressBarLayout: TLabel
-        Left = 12
-        Top = 224
-        Width = 116
-        Height = 15
-        Caption = 'Progress bar position:'
-      end
-      object CbxProgressBarLayout: TComboBox
-        Left = 150
-        Top = 220
-        Width = 105
-        Height = 23
-        Style = csDropDownList
-        Hint =
-          'After panels: bar sits to the right of the info panels (clipped' +
-          ' on narrow lister widths). Over panels: bar covers the panels f' +
-          'ull-width while shown. Auto: picks based on lister width.'
-        TabOrder = 20
-        Items.Strings = (
-          'After panels'
-          'Over panels'
-          'Auto')
-      end
       object LblStatusBarTemplate: TLabel
         Left = 12
-        Top = 252
+        Top = 224
         Width = 108
         Height = 15
         Caption = 'Status bar template:'
       end
       object EdtStatusBarTemplate: TEdit
         Left = 12
-        Top = 270
+        Top = 242
         Width = 427
         Height = 23
         Anchors = [akLeft, akTop, akRight]
@@ -754,50 +731,50 @@ object SettingsForm: TSettingsForm
           'Tokens enclosed in %...% in the order they should appear. Each ' +
           'token becomes one panel. Optional attributes: width=auto|N, ' +
           'align=left|right|center. Empty resets to default.'
-        TabOrder = 21
+        TabOrder = 20
       end
       object MemStatusBarLegend: TMemo
         Left = 12
-        Top = 296
+        Top = 268
         Width = 427
         Height = 64
         Anchors = [akLeft, akTop, akRight]
         Color = clBtnFace
         ReadOnly = True
         ScrollBars = ssVertical
-        TabOrder = 22
+        TabOrder = 21
         TabStop = False
       end
       object LblStatusBarFont: TLabel
         Left = 12
-        Top = 370
+        Top = 342
         Width = 87
         Height = 15
         Caption = 'Status bar font:'
       end
       object EdtStatusBarFont: TEdit
         Left = 149
-        Top = 366
+        Top = 338
         Width = 259
         Height = 23
         TabStop = False
         Anchors = [akLeft, akTop, akRight]
         ReadOnly = True
-        TabOrder = 23
+        TabOrder = 22
       end
       object BtnStatusBarFont: TButton
         Left = 414
-        Top = 366
+        Top = 338
         Width = 25
         Height = 23
         Anchors = [akTop, akRight]
         Caption = '...'
-        TabOrder = 24
+        TabOrder = 23
         OnClick = BtnStatusBarFontClick
       end
       object ChkStatusBarAutoWidthLive: TCheckBox
         Left = 12
-        Top = 396
+        Top = 368
         Width = 350
         Height = 17
         Hint =
@@ -805,11 +782,11 @@ object SettingsForm: TSettingsForm
           'sample text and locked. When ON, widths re-measure on every ' +
           'refresh, tracking the live text but causing slight layout shift.'
         Caption = 'Recalculate auto-width panels on every update'
-        TabOrder = 25
+        TabOrder = 24
       end
       object ChkStatusBarStretchPanels: TCheckBox
         Left = 12
-        Top = 418
+        Top = 390
         Width = 350
         Height = 17
         Hint =
@@ -817,7 +794,32 @@ object SettingsForm: TSettingsForm
           'proportionally to their natural size. Forces the progress bar ' +
           'into Over panels mode since no slack remains for docking.'
         Caption = 'Stretch auto-width panels to fill the bar'
+        TabOrder = 25
+        OnClick = ChkStatusBarStretchPanelsClick
+      end
+      object LblProgressBarLayout: TLabel
+        Left = 12
+        Top = 416
+        Width = 116
+        Height = 15
+        Caption = 'Progress bar position:'
+      end
+      object CbxProgressBarLayout: TComboBox
+        Left = 150
+        Top = 412
+        Width = 105
+        Height = 23
+        Style = csDropDownList
+        Hint =
+          'After panels: bar sits to the right of the info panels (clipped' +
+          ' on narrow lister widths). Over panels: bar covers the panels f' +
+          'ull-width while shown. Auto: picks based on lister width. ' +
+          'Locked to Over panels while Stretch auto-width panels is on.'
         TabOrder = 26
+        Items.Strings = (
+          'After panels'
+          'Over panels'
+          'Auto')
       end
     end
     object TshSave: TTabSheet
