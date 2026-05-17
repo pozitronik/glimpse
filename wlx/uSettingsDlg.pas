@@ -172,11 +172,12 @@ type
     TrkRandomPercent: TTrackBar;
     ChkCacheRandomFrames: TCheckBox;
     LblRandomPercentValue: TLabel;
-    procedure PnlBackgroundClick(Sender: TObject);
-    procedure PnlTCBackClick(Sender: TObject);
-    procedure PnlTCTextColorClick(Sender: TObject);
-    procedure PnlBannerBackgroundClick(Sender: TObject);
-    procedure PnlBannerTextColorClick(Sender: TObject);
+    {Unified click handler for every colour-swatch panel and its
+     companion "..." open-dialog button. Sender identifies the surface:
+     a TPanel acts on itself, a TButton looks up its sibling panel via
+     the BtnXxx/PnlXxx naming convention (see DeriveColorPanelNameForButton).
+     Wired to ten DFM entries (5 panels + 5 buttons).}
+    procedure OnColorSwatchClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
     procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
@@ -559,29 +560,22 @@ begin
   UpdateBannerFontDisplay;
 end;
 
-procedure TSettingsForm.PnlBackgroundClick(Sender: TObject);
+procedure TSettingsForm.OnColorSwatchClick(Sender: TObject);
+var
+  PanelName: string;
+  Comp: TComponent;
 begin
-  PickColor(PnlBackground);
-end;
-
-procedure TSettingsForm.PnlTCBackClick(Sender: TObject);
-begin
-  PickColor(PnlTCBack);
-end;
-
-procedure TSettingsForm.PnlTCTextColorClick(Sender: TObject);
-begin
-  PickColor(PnlTCTextColor);
-end;
-
-procedure TSettingsForm.PnlBannerBackgroundClick(Sender: TObject);
-begin
-  PickColor(PnlBannerBackground);
-end;
-
-procedure TSettingsForm.PnlBannerTextColorClick(Sender: TObject);
-begin
-  PickColor(PnlBannerTextColor);
+  if Sender is TPanel then
+    PickColor(TPanel(Sender))
+  else if Sender is TButton then
+  begin
+    PanelName := DeriveColorPanelNameForButton(TButton(Sender).Name);
+    if PanelName = '' then
+      Exit;
+    Comp := FindComponent(PanelName);
+    if Comp is TPanel then
+      PickColor(TPanel(Comp));
+  end;
 end;
 
 procedure TSettingsForm.ChkShowBannerClick(Sender: TObject);

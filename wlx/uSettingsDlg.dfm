@@ -522,7 +522,7 @@ object SettingsForm: TSettingsForm
         BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 0
-        OnClick = PnlBackgroundClick
+        OnClick = OnColorSwatchClick
       end
       object BtnBackground: TButton
         Left = 234
@@ -531,7 +531,7 @@ object SettingsForm: TSettingsForm
         Height = 23
         Caption = '...'
         TabOrder = 1
-        OnClick = PnlBackgroundClick
+        OnClick = OnColorSwatchClick
       end
       object EdtCellGap: TEdit
         Left = 150
@@ -606,7 +606,7 @@ object SettingsForm: TSettingsForm
         BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 8
-        OnClick = PnlTCBackClick
+        OnClick = OnColorSwatchClick
       end
       object BtnTCBack: TButton
         Left = 234
@@ -615,7 +615,7 @@ object SettingsForm: TSettingsForm
         Height = 23
         Caption = '...'
         TabOrder = 9
-        OnClick = PnlTCBackClick
+        OnClick = OnColorSwatchClick
       end
       object EdtTCAlpha: TEdit
         Left = 377
@@ -645,7 +645,7 @@ object SettingsForm: TSettingsForm
         BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 12
-        OnClick = PnlTCTextColorClick
+        OnClick = OnColorSwatchClick
       end
       object BtnTCTextColor: TButton
         Left = 234
@@ -654,7 +654,7 @@ object SettingsForm: TSettingsForm
         Height = 23
         Caption = '...'
         TabOrder = 13
-        OnClick = PnlTCTextColorClick
+        OnClick = OnColorSwatchClick
       end
       object EdtTCTextAlpha: TEdit
         Left = 377
@@ -1066,7 +1066,7 @@ object SettingsForm: TSettingsForm
         BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 10
-        OnClick = PnlBannerBackgroundClick
+        OnClick = OnColorSwatchClick
       end
       object BtnBannerBackground: TButton
         Left = 214
@@ -1075,7 +1075,7 @@ object SettingsForm: TSettingsForm
         Height = 23
         Caption = '...'
         TabOrder = 11
-        OnClick = PnlBannerBackgroundClick
+        OnClick = OnColorSwatchClick
       end
       object PnlBannerTextColor: TPanel
         Left = 130
@@ -1086,7 +1086,7 @@ object SettingsForm: TSettingsForm
         BevelOuter = bvLowered
         ParentBackground = False
         TabOrder = 12
-        OnClick = PnlBannerTextColorClick
+        OnClick = OnColorSwatchClick
       end
       object BtnBannerTextColor: TButton
         Left = 214
@@ -1095,7 +1095,7 @@ object SettingsForm: TSettingsForm
         Height = 23
         Caption = '...'
         TabOrder = 13
-        OnClick = PnlBannerTextColorClick
+        OnClick = OnColorSwatchClick
       end
       object EdtBannerFont: TEdit
         Left = 130

@@ -75,10 +75,23 @@ function EncodeMaxWorkersControls(AAutoChecked: Boolean; AUdPosition: Integer): 
  helper is needed here.}
 function DecodeMaxThreadsControl(AMaxThreads: Integer): Integer;
 
+{Maps the "..." colour-picker button's component name to the name of its
+ sibling colour-swatch panel. The DFM uses a stable convention:
+ BtnXxx is paired with PnlXxx (e.g. BtnBackground <-> PnlBackground).
+
+ Used by the unified click handler that serves both the panel itself
+ and its open-dialog button; when Sender is the button, the handler
+ looks up the panel by this derived name via FindComponent.
+
+ Returns an empty string when AButtonName does not start with 'Btn',
+ signalling "this Sender does not follow the convention" so the caller
+ can no-op safely.}
+function DeriveColorPanelNameForButton(const AButtonName: string): string;
+
 implementation
 
 uses
-  System.SysUtils,
+  System.SysUtils, System.StrUtils,
   uDefaults;
 
 function MaxThreadsAutoLabel(AOnePerFrame: Boolean; AThreadsPos, ACpuCount: Integer): string;
@@ -190,6 +203,15 @@ begin
     Result := AMaxThreads
   else
     Result := 0;
+end;
+
+function DeriveColorPanelNameForButton(const AButtonName: string): string;
+const
+  PREFIX = 'Btn';
+begin
+  if not StartsText(PREFIX, AButtonName) then
+    Exit('');
+  Result := 'Pnl' + Copy(AButtonName, Length(PREFIX) + 1, MaxInt);
 end;
 
 end.

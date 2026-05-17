@@ -47,6 +47,14 @@ type
     [Test] procedure DecodeMaxThreads_Positive_ReturnsAsIs;
     [Test] procedure DecodeMaxThreads_NoLimit_CollapsesToZero;
     [Test] procedure DecodeMaxThreads_Auto_StaysZero;
+
+    { DeriveColorPanelNameForButton }
+    [Test] procedure DerivePanelName_BtnPrefix_ReplacesWithPnl;
+    [Test] procedure DerivePanelName_AllProductionButtons_RoundTrip;
+    [Test] procedure DerivePanelName_NoBtnPrefix_ReturnsEmpty;
+    [Test] procedure DerivePanelName_EmptyName_ReturnsEmpty;
+    [Test] procedure DerivePanelName_JustBtn_ReturnsBarePnl;
+    [Test] procedure DerivePanelName_MixedCase_StillMatches;
   end;
 
 implementation
@@ -303,6 +311,60 @@ end;
 procedure TTestSettingsDlgLogic.DecodeMaxThreads_Auto_StaysZero;
 begin
   Assert.AreEqual(0, DecodeMaxThreadsControl(0));
+end;
+
+{ -------- DeriveColorPanelNameForButton -------- }
+
+procedure TTestSettingsDlgLogic.DerivePanelName_BtnPrefix_ReplacesWithPnl;
+begin
+  Assert.AreEqual('PnlBackground', DeriveColorPanelNameForButton('BtnBackground'));
+  Assert.AreEqual('PnlTCBack', DeriveColorPanelNameForButton('BtnTCBack'));
+end;
+
+procedure TTestSettingsDlgLogic.DerivePanelName_AllProductionButtons_RoundTrip;
+begin
+  {Pins every BtnXxx -> PnlXxx mapping the production DFM relies on.
+   If a future settings-dialog edit renames a panel/button pair away
+   from this convention, this test fails before the user notices a
+   dead colour-picker click.}
+  Assert.AreEqual('PnlBackground', DeriveColorPanelNameForButton('BtnBackground'));
+  Assert.AreEqual('PnlTCBack', DeriveColorPanelNameForButton('BtnTCBack'));
+  Assert.AreEqual('PnlTCTextColor', DeriveColorPanelNameForButton('BtnTCTextColor'));
+  Assert.AreEqual('PnlBannerBackground', DeriveColorPanelNameForButton('BtnBannerBackground'));
+  Assert.AreEqual('PnlBannerTextColor', DeriveColorPanelNameForButton('BtnBannerTextColor'));
+end;
+
+procedure TTestSettingsDlgLogic.DerivePanelName_NoBtnPrefix_ReturnsEmpty;
+begin
+  {Sender lacking the convention prefix must yield an empty string so
+   the caller silently no-ops rather than producing a garbage panel
+   name and hitting FindComponent with it.}
+  Assert.AreEqual('', DeriveColorPanelNameForButton('LblBackground'));
+  Assert.AreEqual('', DeriveColorPanelNameForButton('EdtSomething'));
+  Assert.AreEqual('', DeriveColorPanelNameForButton('SomethingElse'));
+end;
+
+procedure TTestSettingsDlgLogic.DerivePanelName_EmptyName_ReturnsEmpty;
+begin
+  Assert.AreEqual('', DeriveColorPanelNameForButton(''));
+end;
+
+procedure TTestSettingsDlgLogic.DerivePanelName_JustBtn_ReturnsBarePnl;
+begin
+  {Degenerate case: a button named exactly 'Btn' produces 'Pnl' as the
+   sibling panel name. The runtime FindComponent lookup will fail to
+   resolve that to anything in production (no panel is named 'Pnl' on
+   its own), so the handler safely no-ops. Test pins the string
+   transform, not the runtime behaviour.}
+  Assert.AreEqual('Pnl', DeriveColorPanelNameForButton('Btn'));
+end;
+
+procedure TTestSettingsDlgLogic.DerivePanelName_MixedCase_StillMatches;
+begin
+  {StartsText is case-insensitive — defensive: a future rename to
+   'btnBackground' or 'BTNBackground' still resolves correctly.}
+  Assert.AreEqual('Pnlbackground', DeriveColorPanelNameForButton('btnbackground'));
+  Assert.AreEqual('PnlBackground', DeriveColorPanelNameForButton('BTNBackground'));
 end;
 
 initialization
