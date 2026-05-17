@@ -20,6 +20,16 @@ type
     Hint: string;
   end;
 
+  {Pairs the base caption with its command tag for the Save/Copy view
+   dropdown variants. The toolbar dropdown (via uPluginForm) and the
+   hamburger overflow (via PopulateHamburgerMenu) both walk arrays of
+   these so a future third variant lands in both surfaces from a single
+   const-array edit.}
+  TViewVariantItem = record
+    Caption: string;
+    Tag: Integer;
+  end;
+
 const
   {Command tags shared by toolbar buttons, context menu, and keyboard handler}
   CM_SAVE_FRAME = 1;
@@ -92,6 +102,19 @@ const
     (Caption: 'Refresh'; Tag: CM_REFRESH; Hint: 'Re-extract frames at the current settings. Click the arrow for Shuffle.'),
     (Caption: 'Settings'; Tag: CM_SETTINGS; Hint: 'Open the plugin settings dialog.'));
 
+  {Save view dropdown items: explicit "use these dimensions" choices
+   that bypass the persisted SaveAtLiveResolution setting for one
+   action. Order matches the on-screen menu order.}
+  SAVE_VIEW_VARIANTS: array[0..1] of TViewVariantItem = (
+    (Caption: CAPTION_SAVE_VIEW_LIVE;   Tag: CM_SAVE_VIEW_LIVE),
+    (Caption: CAPTION_SAVE_VIEW_NATIVE; Tag: CM_SAVE_VIEW_NATIVE));
+
+  {Copy view dropdown items: same shape as SAVE_VIEW_VARIANTS but for
+   the in-memory copy path (no dialog follows).}
+  COPY_VIEW_VARIANTS: array[0..1] of TViewVariantItem = (
+    (Caption: CAPTION_COPY_VIEW_LIVE;   Tag: CM_COPY_VIEW_LIVE),
+    (Caption: CAPTION_COPY_VIEW_NATIVE; Tag: CM_COPY_VIEW_NATIVE));
+
   {Element indices within the ordered collapsible element array.
    Order: mode buttons, timecodes toggle, action buttons (left to right).}
   ELEM_TIMECODE_INDEX = Ord(High(TViewMode)) + 1; {5}
@@ -122,6 +145,14 @@ type
   {Clears AMenu and rebuilds it with only the hidden elements.
    Event handlers are attached to the created menu items.}
 procedure PopulateHamburgerMenu(AMenu: TPopupMenu; const AState: THamburgerMenuState; AOnModeClick, AOnZoomClick, AOnTimecodeClick, AOnActionClick: TNotifyEvent);
+
+{Builds a fresh popup menu populated with the supplied view-variant
+ items. The same OnClick handler fires for every item; the source-of-
+ truth Tag tells the handler which variant was picked. AOnPopup runs
+ when the menu pops up (typically to refresh the resolution suffix on
+ each caption). Returns a TPopupMenu owned by AOwner — the caller does
+ not Free it directly.}
+function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantItem; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
 
 implementation
 
@@ -297,6 +328,23 @@ begin
       MI.Enabled := AState.HasFrames;
       AMenu.Items.Add(MI);
     end;
+  end;
+end;
+
+function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantItem; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
+var
+  I: Integer;
+  MI: TMenuItem;
+begin
+  Result := TPopupMenu.Create(AOwner);
+  Result.OnPopup := AOnPopup;
+  for I := 0 to High(AItems) do
+  begin
+    MI := TMenuItem.Create(Result);
+    MI.Caption := AItems[I].Caption;
+    MI.Tag := AItems[I].Tag;
+    MI.OnClick := AOnClick;
+    Result.Items.Add(MI);
   end;
 end;
 

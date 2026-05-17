@@ -1140,50 +1140,24 @@ begin
 end;
 
 function TPluginForm.CreateSaveViewPopup: TPopupMenu;
-var
-  MI: TMenuItem;
 begin
   {Two explicit-resolution Save view variants. Their job is mainly to
    give legacy Windows users a way to pick the resolution at all (the
    modern file dialog's checkbox is unavailable on XP), but they also
    work as a faster path on modern Windows: one click chooses the
-   resolution and opens the dialog with that as the seed.}
-  Result := TPopupMenu.Create(Self);
-  Result.OnPopup := OnViewDropdownPopup;
-
-  MI := TMenuItem.Create(Result);
-  MI.Caption := CAPTION_SAVE_VIEW_LIVE;
-  MI.Tag := CM_SAVE_VIEW_LIVE;
-  MI.OnClick := OnContextMenuClick;
-  Result.Items.Add(MI);
-
-  MI := TMenuItem.Create(Result);
-  MI.Caption := CAPTION_SAVE_VIEW_NATIVE;
-  MI.Tag := CM_SAVE_VIEW_NATIVE;
-  MI.OnClick := OnContextMenuClick;
-  Result.Items.Add(MI);
+   resolution and opens the dialog with that as the seed. The item set
+   lives in uToolbarLayout.SAVE_VIEW_VARIANTS so the hamburger overflow
+   and the resolution-suffix updater stay in lockstep with this menu.}
+  Result := BuildViewVariantsMenu(Self, SAVE_VIEW_VARIANTS,
+    OnViewDropdownPopup, OnContextMenuClick);
 end;
 
 function TPluginForm.CreateCopyViewPopup: TPopupMenu;
-var
-  MI: TMenuItem;
 begin
-  {Mirror of CreateSaveViewPopup. No dialog follows so the captions
+  {Mirror of CreateSaveViewPopup. No dialog follows so the COPY captions
    omit the trailing ellipsis - the action commits immediately.}
-  Result := TPopupMenu.Create(Self);
-  Result.OnPopup := OnViewDropdownPopup;
-
-  MI := TMenuItem.Create(Result);
-  MI.Caption := CAPTION_COPY_VIEW_LIVE;
-  MI.Tag := CM_COPY_VIEW_LIVE;
-  MI.OnClick := OnContextMenuClick;
-  Result.Items.Add(MI);
-
-  MI := TMenuItem.Create(Result);
-  MI.Caption := CAPTION_COPY_VIEW_NATIVE;
-  MI.Tag := CM_COPY_VIEW_NATIVE;
-  MI.OnClick := OnContextMenuClick;
-  Result.Items.Add(MI);
+  Result := BuildViewVariantsMenu(Self, COPY_VIEW_VARIANTS,
+    OnViewDropdownPopup, OnContextMenuClick);
 end;
 
 procedure TPluginForm.UpdateResolutionMenuLabels(AMenu: TPopupMenu);

@@ -37,12 +37,19 @@ type
     [Test] procedure Menu_NoSeparator_WhenOnlyActions;
     [Test] procedure Menu_ShuffleAppearsRightAfterRefresh;
     [Test] procedure Menu_ShuffleDisabled_WhenNoFrames;
+    { BuildViewVariantsMenu + SAVE_VIEW_VARIANTS / COPY_VIEW_VARIANTS }
+    [Test] procedure ViewVariants_SaveItemsMatchConstArray;
+    [Test] procedure ViewVariants_CopyItemsMatchConstArray;
+    [Test] procedure ViewVariants_OnPopupWiredOnPopup;
+    [Test] procedure ViewVariants_OnClickWiredOnEveryItem;
+    [Test] procedure ViewVariants_EmptyArrayProducesEmptyMenu;
+    [Test] procedure ViewVariants_MenuOwnedByCaller;
   end;
 
 implementation
 
 uses
-  System.SysUtils, Vcl.Menus, uTypes, uToolbarLayout;
+  System.SysUtils, System.Classes, Vcl.Menus, uTypes, uToolbarLayout;
 
 const
   { Simulated element right edges (13 elements, left to right) }
@@ -535,6 +542,145 @@ begin
   finally
     Menu.Free;
   end;
+end;
+
+{ BuildViewVariantsMenu tests }
+
+type
+  {Tiny stub object: tests need a TNotifyEvent that is method-of-object.
+   The handler is intentionally empty — we only care that the menu wires
+   the same TMethod (Data + Code pair) onto each item.}
+  TStubHandlers = class
+    procedure OnPopup(Sender: TObject);
+    procedure OnClick(Sender: TObject);
+  end;
+
+procedure TStubHandlers.OnPopup(Sender: TObject);
+begin
+end;
+
+procedure TStubHandlers.OnClick(Sender: TObject);
+begin
+end;
+
+procedure TTestToolbarLayout.ViewVariants_SaveItemsMatchConstArray;
+var
+  Owner: TComponent;
+  Menu: TPopupMenu;
+begin
+  {Pins the SAVE_VIEW_VARIANTS table itself: the two captions and tags
+   the user sees in the dropdown are exactly those in the constant. If
+   a future edit drops a variant or reorders them, this test fails
+   before the user notices the missing menu entry.}
+  Owner := TComponent.Create(nil);
+  try
+    Menu := BuildViewVariantsMenu(Owner, SAVE_VIEW_VARIANTS, nil, nil);
+    Assert.AreEqual(2, Menu.Items.Count);
+    Assert.AreEqual(CAPTION_SAVE_VIEW_LIVE, Menu.Items[0].Caption);
+    Assert.AreEqual(CM_SAVE_VIEW_LIVE, Integer(Menu.Items[0].Tag));
+    Assert.AreEqual(CAPTION_SAVE_VIEW_NATIVE, Menu.Items[1].Caption);
+    Assert.AreEqual(CM_SAVE_VIEW_NATIVE, Integer(Menu.Items[1].Tag));
+  finally
+    Owner.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.ViewVariants_CopyItemsMatchConstArray;
+var
+  Owner: TComponent;
+  Menu: TPopupMenu;
+begin
+  Owner := TComponent.Create(nil);
+  try
+    Menu := BuildViewVariantsMenu(Owner, COPY_VIEW_VARIANTS, nil, nil);
+    Assert.AreEqual(2, Menu.Items.Count);
+    Assert.AreEqual(CAPTION_COPY_VIEW_LIVE, Menu.Items[0].Caption);
+    Assert.AreEqual(CM_COPY_VIEW_LIVE, Integer(Menu.Items[0].Tag));
+    Assert.AreEqual(CAPTION_COPY_VIEW_NATIVE, Menu.Items[1].Caption);
+    Assert.AreEqual(CM_COPY_VIEW_NATIVE, Integer(Menu.Items[1].Tag));
+  finally
+    Owner.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.ViewVariants_OnPopupWiredOnPopup;
+var
+  Owner: TComponent;
+  Menu: TPopupMenu;
+  Stub: TStubHandlers;
+begin
+  Owner := TComponent.Create(nil);
+  Stub := TStubHandlers.Create;
+  try
+    Menu := BuildViewVariantsMenu(Owner, SAVE_VIEW_VARIANTS,
+      Stub.OnPopup, nil);
+    Assert.IsTrue(Assigned(Menu.OnPopup),
+      'OnPopup handler must be wired to the menu itself');
+    Assert.AreEqual(NativeUInt(TMethod(Menu.OnPopup).Data), NativeUInt(Stub));
+  finally
+    Stub.Free;
+    Owner.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.ViewVariants_OnClickWiredOnEveryItem;
+var
+  Owner: TComponent;
+  Menu: TPopupMenu;
+  Stub: TStubHandlers;
+  I: Integer;
+begin
+  {Each menu item must carry the same OnClick handler so the dispatch
+   site reads the Tag and routes to the right command.}
+  Owner := TComponent.Create(nil);
+  Stub := TStubHandlers.Create;
+  try
+    Menu := BuildViewVariantsMenu(Owner, SAVE_VIEW_VARIANTS,
+      nil, Stub.OnClick);
+    for I := 0 to Menu.Items.Count - 1 do
+    begin
+      Assert.IsTrue(Assigned(Menu.Items[I].OnClick),
+        Format('Item %d OnClick missing', [I]));
+      Assert.AreEqual(NativeUInt(TMethod(Menu.Items[I].OnClick).Data),
+        NativeUInt(Stub));
+    end;
+  finally
+    Stub.Free;
+    Owner.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.ViewVariants_EmptyArrayProducesEmptyMenu;
+var
+  Owner: TComponent;
+  Menu: TPopupMenu;
+  Empty: array of TViewVariantItem;
+begin
+  {Defensive: zero-length input must yield a valid empty menu, not AV.}
+  Owner := TComponent.Create(nil);
+  try
+    SetLength(Empty, 0);
+    Menu := BuildViewVariantsMenu(Owner, Empty, nil, nil);
+    Assert.AreEqual(0, Menu.Items.Count);
+  finally
+    Owner.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.ViewVariants_MenuOwnedByCaller;
+var
+  Owner: TComponent;
+  Menu: TPopupMenu;
+begin
+  {Ownership contract: AOwner owns the menu, so freeing AOwner cascades
+   into freeing the menu. The leak detector at process shutdown would
+   complain if the menu outlived its declared owner.}
+  Owner := TComponent.Create(nil);
+  Menu := BuildViewVariantsMenu(Owner, SAVE_VIEW_VARIANTS, nil, nil);
+  Assert.AreEqual(NativeUInt(Owner), NativeUInt(Menu.Owner),
+    'Menu.Owner must point to the supplied owner');
+  Owner.Free;
+  Assert.Pass('Owner.Free cascaded into Menu without leak');
 end;
 
 initialization
