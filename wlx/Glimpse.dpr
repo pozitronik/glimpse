@@ -48,7 +48,8 @@ uses
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas',
   uPlatformDetect in '..\src\uPlatformDetect.pas',
-  uProgressModalForm in 'uProgressModalForm.pas';
+  uProgressModalForm in 'uProgressModalForm.pas',
+  uBitmapWorkThread in 'uBitmapWorkThread.pas';
 
 exports
   ListLoad,

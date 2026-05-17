@@ -105,6 +105,7 @@
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
         <DCCReference Include="..\src\uSettingsDlgUI.pas"/>
         <DCCReference Include="uProgressModalForm.pas"/>
+        <DCCReference Include="uBitmapWorkThread.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

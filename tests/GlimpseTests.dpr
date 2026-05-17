@@ -103,7 +103,10 @@ uses
   TestStatusBarTemplate in 'TestStatusBarTemplate.pas',
   TestStatusBarFormatters in 'TestStatusBarFormatters.pas',
   TestStatusBarRenderer in 'TestStatusBarRenderer.pas',
-  TestPlatformDetect in 'TestPlatformDetect.pas';
+  TestPlatformDetect in 'TestPlatformDetect.pas',
+  uProgressModalForm in '..\wlx\uProgressModalForm.pas',
+  uBitmapWorkThread in '..\wlx\uBitmapWorkThread.pas',
+  TestBitmapWorkThread in 'TestBitmapWorkThread.pas';
 
 var
   Runner: ITestRunner;

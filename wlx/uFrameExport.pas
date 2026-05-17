@@ -241,7 +241,7 @@ uses
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog,
-  uProgressModalForm;
+  uProgressModalForm, uBitmapWorkThread;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
@@ -323,234 +323,10 @@ begin
   FSettings := ASettings;
 end;
 
-type
-  {Background encoder for the file-reference clipboard copy path. Owns
-   the bitmap from construction; destructor frees it. SaveBitmapToFile
-   cannot be interrupted partway, so RequestCancel marks the operation
-   as cancelled and arranges deletion of the file Execute will write,
-   then lets Execute run to natural completion. Main thread treats
-   cancel as "throw away the result" — it never waits for the encode
-   to finish.}
-  TFileWriteThread = class(TThread, IModalThreadCompletion)
-  private
-    FBmp: TBitmap;
-    FPath: string;
-    {Set by RequestCancel on the main thread, checked by Execute on
-     the worker thread after the encode completes. Boolean writes are
-     atomic on word-aligned storage so no critical section is needed.}
-    FCancelled: Boolean;
-    {Invoked from the worker thread context at the very end of Execute,
-     after SaveBitmapToFile returns and any cancel-driven cleanup. The
-     uProgressModalForm RunWithProgress helper wires this to a
-     PostMessage that closes the modal dialog; tests and standalone
-     callers leave it nil and use Thread.WaitFor instead.}
-    FOnComplete: TProc;
-    procedure SetCompletionCallback(ACallback: TProc);
-    {Non-refcounted IInterface implementation. The thread's lifetime is
-     managed explicitly by the caller (Free or FreeOnTerminate), not by
-     reference counting on interface variables.}
-    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
-    function _AddRef: Integer; stdcall;
-    function _Release: Integer; stdcall;
-  public
-    SaveOk: Boolean;
-    ErrorMsg: string;
-    {Takes ownership of ABmp. Destructor frees it whether or not
-     Execute ran.}
-    constructor Create(ABmp: TBitmap; const APath: string); reintroduce;
-    destructor Destroy; override;
-    {Marks the operation cancelled and arranges the thread to self-
-     destruct after Execute finishes. After calling, the main thread
-     MUST NOT touch the thread reference — it will be freed
-     asynchronously.}
-    procedure RequestCancel;
-  protected
-    procedure Execute; override;
-  end;
-
-  {Sibling of TFileWriteThread for the in-memory clipboard path: hands
-   the bitmap to uClipboardImage.CopyBitmapToClipboard inside the modal
-   so the lister doesn't freeze while the (potentially huge) HGLOBAL is
-   allocated and populated. CopyBitmapToClipboard is opaque from the
-   outside the same way SaveBitmapToFile is, so cancel applies the
-   same trade-off: pin the DLL, detach, let the worker finish in the
-   background without freezing the close path.}
-  TClipboardWriteThread = class(TThread, IModalThreadCompletion)
-  private
-    FBmp: TBitmap;
-    FBackground: TColor;
-    FCancelled: Boolean;
-    FOnComplete: TProc;
-    procedure SetCompletionCallback(ACallback: TProc);
-    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
-    function _AddRef: Integer; stdcall;
-    function _Release: Integer; stdcall;
-  public
-    Success: Boolean;
-    ErrorMsg: string;
-    constructor Create(ABmp: TBitmap; ABackground: TColor); reintroduce;
-    destructor Destroy; override;
-    {Same cancel contract as TFileWriteThread — sets flag, pins DLL,
-     sets FreeOnTerminate. Main thread MUST NOT touch the thread
-     reference after calling.}
-    procedure RequestCancel;
-  protected
-    procedure Execute; override;
-  end;
-
-constructor TFileWriteThread.Create(ABmp: TBitmap; const APath: string);
-begin
-  inherited Create(True);
-  FBmp := ABmp;
-  FPath := APath;
-end;
-
-destructor TFileWriteThread.Destroy;
-begin
-  FBmp.Free;
-  inherited;
-end;
-
-procedure TFileWriteThread.Execute;
-begin
-  try
-    SaveBitmapToFile(FBmp, FPath, sfPNG, DEF_JPEG_QUALITY, DEF_PNG_COMPRESSION);
-    SaveOk := True;
-    if FCancelled then
-      {User cancelled while we were encoding. The file is on disk but
-       nobody will ever paste it — delete now so the temp folder stays
-       tidy. SysUtils.DeleteFile silently no-ops if something else
-       already removed the file.}
-      System.SysUtils.DeleteFile(FPath);
-  except
-    on E: Exception do
-    begin
-      SaveOk := False;
-      ErrorMsg := E.Message;
-    end;
-  end;
-  if Assigned(FOnComplete) then
-    {Runs on worker thread. The callback (set by RunWithProgress) is a
-     PostMessage to the modal's HWND — PostMessage is thread-safe and
-     the message routes back to the main thread's message loop.}
-    FOnComplete;
-end;
-
-procedure TFileWriteThread.RequestCancel;
-var
-  ModuleName: array[0..MAX_PATH - 1] of Char;
-begin
-  {Pin this DLL via an extra LoadLibrary refcount so the worker thread
-   can run to completion even if TC unloads the WLX plugin the instant
-   the user closes the Lister. Without the pin, TC's FreeLibrary would
-   unmap our code while the thread is still executing inside it (in
-   SaveBitmapToFile / TPngImage) — instant crash. The pin is never
-   released; the OS reclaims the DLL handle on TC exit. One pin per
-   cancelled-and-detached thread, only when the user actually cancels,
-   so the per-session cost is negligible.}
-  GetModuleFileName(HInstance, ModuleName, Length(ModuleName));
-  LoadLibrary(ModuleName);
-  FCancelled := True;
-  {FreeOnTerminate hands the thread's lifetime to the thread itself:
-   when Execute returns, TThread.AfterTerminate frees us, our
-   destructor frees the owned bitmap. Main thread doesn't wait.}
-  FreeOnTerminate := True;
-end;
-
-procedure TFileWriteThread.SetCompletionCallback(ACallback: TProc);
-begin
-  FOnComplete := ACallback;
-end;
-
-function TFileWriteThread.QueryInterface(const IID: TGUID; out Obj): HResult;
-begin
-  if GetInterface(IID, Obj) then
-    Result := S_OK
-  else
-    Result := E_NOINTERFACE;
-end;
-
-function TFileWriteThread._AddRef: Integer;
-begin
-  {No-op ref counting — TObject convention, matches TInterfacedObject's
-   contract for explicitly-managed lifetime objects. Returns -1 to
-   signal "ref counting disabled" to debug tools.}
-  Result := -1;
-end;
-
-function TFileWriteThread._Release: Integer;
-begin
-  Result := -1;
-end;
-
-constructor TClipboardWriteThread.Create(ABmp: TBitmap; ABackground: TColor);
-begin
-  inherited Create(True);
-  FBmp := ABmp;
-  FBackground := ABackground;
-end;
-
-destructor TClipboardWriteThread.Destroy;
-begin
-  FBmp.Free;
-  inherited;
-end;
-
-procedure TClipboardWriteThread.Execute;
-begin
-  try
-    Success := uClipboardImage.CopyBitmapToClipboard(FBmp, FBackground);
-  except
-    on E: Exception do
-    begin
-      Success := False;
-      ErrorMsg := E.Message;
-    end;
-  end;
-  if Assigned(FOnComplete) then
-    FOnComplete;
-end;
-
-procedure TClipboardWriteThread.RequestCancel;
-var
-  ModuleName: array[0..MAX_PATH - 1] of Char;
-begin
-  {Mirror of TFileWriteThread.RequestCancel — see the long comment
-   there for the rationale (DLL pin + detach so closing the lister
-   right after cancel doesn't crash on unmapped code).}
-  GetModuleFileName(HInstance, ModuleName, Length(ModuleName));
-  LoadLibrary(ModuleName);
-  FCancelled := True;
-  FreeOnTerminate := True;
-end;
-
-procedure TClipboardWriteThread.SetCompletionCallback(ACallback: TProc);
-begin
-  FOnComplete := ACallback;
-end;
-
-function TClipboardWriteThread.QueryInterface(const IID: TGUID; out Obj): HResult;
-begin
-  if GetInterface(IID, Obj) then
-    Result := S_OK
-  else
-    Result := E_NOINTERFACE;
-end;
-
-function TClipboardWriteThread._AddRef: Integer;
-begin
-  Result := -1;
-end;
-
-function TClipboardWriteThread._Release: Integer;
-begin
-  Result := -1;
-end;
-
 function TFrameExporter.PublishBitmapAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
 var
   NewPath, OldPath: string;
-  Thread: TFileWriteThread;
+  Thread: TBitmapWorkThread;
   TakenBmp: TBitmap;
   TaskOk: Boolean;
 begin
@@ -570,7 +346,21 @@ begin
    at most one Glimpse clipboard temp lives in %TEMP% at a time.}
   NewPath := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetTempPath) +
     'glimpse_clip_' + TGuid.NewGuid.ToString + '.png';
-  Thread := TFileWriteThread.Create(TakenBmp, NewPath);
+  Thread := TBitmapWorkThread.Create(TakenBmp,
+    procedure(ABmp: TBitmap; var AOutcome: TBitmapWorkOutcome)
+    begin
+      SaveBitmapToFile(ABmp, NewPath, sfPNG, DEF_JPEG_QUALITY, DEF_PNG_COMPRESSION);
+      AOutcome.Success := True;
+    end,
+    procedure(const AOutcome: TBitmapWorkOutcome; ACancelled: Boolean)
+    begin
+      {User cancelled while we were encoding. The file is on disk but
+       nobody will ever paste it — delete now so the temp folder stays
+       tidy. SysUtils.DeleteFile silently no-ops if something else
+       already removed the file.}
+      if AOutcome.Success and ACancelled then
+        System.SysUtils.DeleteFile(NewPath);
+    end);
   try
     if Assigned(FOnAsyncTaskRun) then
       TaskOk := FOnAsyncTaskRun(Thread, 'Writing clipboard image...')
@@ -595,11 +385,11 @@ begin
       Exit(cprCancelled);
     end;
 
-    if not Thread.SaveOk then
+    if not Thread.Outcome.Success then
     begin
       DebugLog('FrameExport',
         Format('PublishBitmapAsFileReference: SaveBitmapToFile failed: %s',
-          [Thread.ErrorMsg]));
+          [Thread.Outcome.ErrorMsg]));
       Exit;
     end;
 
@@ -623,7 +413,7 @@ function TFrameExporter.PublishBitmapToClipboardAsImage(var ABitmap: TBitmap;
   ABackground: TColor): TClipboardPublishResult;
 var
   TakenBmp: TBitmap;
-  Thread: TClipboardWriteThread;
+  Thread: TBitmapWorkThread;
   TaskOk: Boolean;
 begin
   Result := cprFailed;
@@ -638,7 +428,11 @@ begin
   if TakenBmp = nil then
     Exit;
 
-  Thread := TClipboardWriteThread.Create(TakenBmp, ABackground);
+  Thread := TBitmapWorkThread.Create(TakenBmp,
+    procedure(ABmp: TBitmap; var AOutcome: TBitmapWorkOutcome)
+    begin
+      AOutcome.Success := uClipboardImage.CopyBitmapToClipboard(ABmp, ABackground);
+    end);
   try
     if Assigned(FOnAsyncTaskRun) then
       TaskOk := FOnAsyncTaskRun(Thread, 'Copying image to clipboard...')
@@ -656,7 +450,7 @@ begin
       Exit(cprCancelled);
     end;
 
-    if not Thread.Success then
+    if not Thread.Outcome.Success then
       Exit;
     Result := cprSuccess;
   finally

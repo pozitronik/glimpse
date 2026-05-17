@@ -125,6 +125,9 @@
         <DCCReference Include="TestStatusBarFormatters.pas"/>
         <DCCReference Include="TestStatusBarRenderer.pas"/>
         <DCCReference Include="TestPlatformDetect.pas"/>
+        <DCCReference Include="..\wlx\uProgressModalForm.pas"/>
+        <DCCReference Include="..\wlx\uBitmapWorkThread.pas"/>
+        <DCCReference Include="TestBitmapWorkThread.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
