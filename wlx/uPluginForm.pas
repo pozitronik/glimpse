@@ -1446,7 +1446,7 @@ begin
   ExplicitHeight := MulDiv(FSettings.StatusBarHeight, Ppi, 96);
   {Silent bump: an explicit value smaller than the font reach would
    clip text, which is never what the user actually wants. Keep the
-   floor at TextHeight + 2 px (tight but uncllipped) rather than
+   floor at TextHeight + 2 px (tight but unclipped) rather than
    matching the auto path's 6 px padding so the explicit setting can
    still produce a thinner-than-auto bar when the font allows.}
   MinHeight := ATextHeight + STATUSBAR_FONT_MIN_PADDING;
