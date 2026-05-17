@@ -184,6 +184,7 @@ type
      the BtnXxx/PnlXxx naming convention (see DeriveColorPanelNameForButton).
      Wired to ten DFM entries (5 panels + 5 buttons).}
     procedure OnColorSwatchClick(Sender: TObject);
+    procedure ChkClipboardAsFileReferenceClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
     procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
@@ -229,6 +230,12 @@ type
     procedure UpdateMaxWorkersControls;
     procedure UpdateSaveFormatControls;
     procedure UpdateBannerControls;
+    {Greys out the four per-format publish checkboxes (and their group
+     header label) when ChkClipboardAsFileReference is checked, since
+     the file-reference path overrides the format toggles. Wired both
+     to the override toggle's OnClick and called from SettingsToControls
+     after loading so the initial state matches the persisted value.}
+    procedure UpdateClipboardFormatControlsEnabled;
     procedure UpdateCacheControls;
     procedure UpdateScaledExtractionControls;
     procedure UpdateThumbnailControls;
@@ -382,6 +389,7 @@ begin
   UpdateBannerControls;
   UpdateCacheControls;
   UpdateThumbnailControls;
+  UpdateClipboardFormatControlsEnabled;
   UpdateFFmpegInfo;
   UpdateCacheFolderInfo;
   UpdateCacheSizeInfo;
@@ -601,6 +609,11 @@ end;
 procedure TSettingsForm.ChkShowBannerClick(Sender: TObject);
 begin
   UpdateBannerControls;
+end;
+
+procedure TSettingsForm.ChkClipboardAsFileReferenceClick(Sender: TObject);
+begin
+  UpdateClipboardFormatControlsEnabled;
 end;
 
 procedure TSettingsForm.BrowseFolder(AEdit: TEdit);
@@ -924,6 +937,22 @@ begin
   ChkBannerAutoSize.Enabled := Enabled;
   LblBannerPosition.Enabled := Enabled;
   CbxBannerPosition.Enabled := Enabled;
+end;
+
+procedure TSettingsForm.UpdateClipboardFormatControlsEnabled;
+var
+  Enabled: Boolean;
+begin
+  {File-reference path bypasses the strategy orchestrator entirely, so
+   the four per-format toggles have no effect while the override is on.
+   Grey them out (and the group header label) so the override is
+   visible to the user without reading the hint text.}
+  Enabled := not ChkClipboardAsFileReference.Checked;
+  LblClipboardFormatsHeader.Enabled := Enabled;
+  ChkPublishAlphaAwareBitmap.Enabled := Enabled;
+  ChkPublishCompressedPng.Enabled := Enabled;
+  ChkPublishFlattenedBitmap.Enabled := Enabled;
+  ChkPublishBitmapHandle.Enabled := Enabled;
 end;
 
 procedure TSettingsForm.UpdateCacheControls;

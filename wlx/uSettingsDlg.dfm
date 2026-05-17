@@ -1222,9 +1222,8 @@ object SettingsForm: TSettingsForm
         Width = 424
         Height = 17
         Hint =
-          'Preserves transparency. Required by modern image editors ' +
-          '(Photoshop, GIMP, Krita, Paint.NET) and web browsers. ' +
-          'Costs roughly width*height*4 bytes per copy. (CF_DIBV5)'
+          'Preserves transparency. Used by modern image editors and web ' +
+          'browsers. Costs roughly width*height*4 bytes per copy. (CF_DIBV5)'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Alpha-aware bitmap'
         TabOrder = 0
@@ -1235,9 +1234,9 @@ object SettingsForm: TSettingsForm
         Width = 424
         Height = 17
         Hint =
-          'Preferred by modern web/chat apps (Slack web, Discord web, ' +
-          'GitHub, browsers). Carries true alpha at a fraction of the ' +
-          'raw-pixel memory cost. (registered "PNG" format)'
+          'Carries true alpha at a fraction of the raw-pixel memory ' +
+          'cost. Used by many modern web and chat apps. ' +
+          '(registered "PNG" format)'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Compressed PNG'
         TabOrder = 1
@@ -1249,9 +1248,9 @@ object SettingsForm: TSettingsForm
         Height = 17
         Hint =
           'Opaque copy with transparency composited onto the background ' +
-          'colour. Required by Word, Outlook, classic Paint, and most ' +
-          'older Win32 apps that do not understand alpha. ' +
-          'Costs roughly width*height*3 bytes per copy. (CF_DIB)'
+          'colour. Used as a fallback by paste targets that do not ' +
+          'understand alpha. Costs roughly width*height*3 bytes per ' +
+          'copy. (CF_DIB)'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Flattened bitmap for legacy apps'
         TabOrder = 2
@@ -1262,9 +1261,9 @@ object SettingsForm: TSettingsForm
         Width = 424
         Height = 17
         Hint =
-          'Direct bitmap handle for older Win32 viewers that distrust ' +
-          'DIB synthesis. Most modern apps do not need it. ' +
-          'Costs roughly width*height*4 bytes per copy. (CF_BITMAP)'
+          'Direct bitmap handle for paste targets that distrust DIB ' +
+          'synthesis. Most modern apps do not need it. Costs roughly ' +
+          'width*height*4 bytes per copy. (CF_BITMAP)'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'GDI bitmap handle'
         TabOrder = 3
@@ -1276,13 +1275,13 @@ object SettingsForm: TSettingsForm
         Height = 17
         Hint =
           'Write the image to a temp PNG and publish the file path as ' +
-          'CF_HDROP instead of a bitmap. Lets very large copies succeed ' +
-          'on the 32-bit build by avoiding the second contiguous clipboard ' +
-          'buffer. When on, all format toggles above are ignored. Pastes ' +
-          'into bitmap-only targets (MS Paint, plain text) will not work.'
+          'CF_HDROP instead of a bitmap. When on, all format toggles ' +
+          'above are ignored. Will not work with paste targets that ' +
+          'accept only bitmap data.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Copy to clipboard as a file reference (overrides format toggles above)'
         TabOrder = 4
+        OnClick = ChkClipboardAsFileReferenceClick
       end
     end
     object TshCache: TTabSheet
