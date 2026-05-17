@@ -85,6 +85,19 @@ const
    while this toggle is on.}
   DEF_CLIPBOARD_AS_FILE_REFERENCE = False;
 
+  {Clipboard publish-format toggles for the pf32bit path in
+   uClipboardImage.CopyBitmapToClipboard. Each toggle gates a single Win32
+   clipboard format. All four default to True so out-of-the-box behaviour
+   matches the historical "publish CF_DIBV5 + CF_DIB + CF_BITMAP" trio
+   plus the new compressed-PNG format that web/chat targets prefer.
+   Memory-constrained users can disable the heaviest formats individually
+   via the Clipboard tab in Settings; see TClipboardFormatsGroup in
+   uSettingsGroups for the field-to-format mapping.}
+  DEF_PUBLISH_ALPHA_AWARE_BITMAP = True; {CF_DIBV5}
+  DEF_PUBLISH_FLATTENED_BITMAP = True; {CF_DIB}
+  DEF_PUBLISH_BITMAP_HANDLE = True; {CF_BITMAP}
+  DEF_PUBLISH_COMPRESSED_PNG = True; {registered "PNG" format}
+
   {Cap on the longer side (in pixels) of the rendered combined image
    produced by Save view / Copy view. After the combined image (with
    optional banner) is rendered, if its longer side exceeds this value,

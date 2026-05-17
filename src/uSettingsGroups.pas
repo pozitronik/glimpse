@@ -66,6 +66,24 @@ type
     procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
   end;
 
+  {Clipboard publish-format group — four toggles controlling which Win32
+   clipboard formats CopyBitmapToClipboard publishes for the pf32bit
+   combined-image path in uClipboardImage. WLX-only today (WCX has no
+   clipboard copy feature); lives alongside the shared groups for the
+   common record/Defaults/LoadFrom/SaveTo pattern. Each toggle gates one
+   format; the orchestrator skips both allocation and publish for a
+   disabled format. All four True out of the box (see uDefaults).}
+  TClipboardFormatsGroup = record
+    PublishAlphaAwareBitmap: Boolean; {CF_DIBV5}
+    PublishFlattenedBitmap: Boolean;  {CF_DIB}
+    PublishBitmapHandle: Boolean;     {CF_BITMAP}
+    PublishCompressedPng: Boolean;    {registered "PNG" format}
+
+    class function Defaults: TClipboardFormatsGroup; static;
+    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+  end;
+
   {Timestamp overlay group — eight fields shared between WLX and WCX,
    modulo the show-toggle key name. WLX uses 'ShowTimecode' under [view],
    WCX uses 'ShowTimestamp' under [combined]. The caller passes the
@@ -179,6 +197,32 @@ begin
   AIni.WriteInteger(ASection, 'BannerFontSize', FontSize);
   AIni.WriteBool(ASection, 'BannerFontAutoSize', AutoSize);
   AIni.WriteString(ASection, 'BannerPosition', BannerPositionToStr(Position));
+end;
+
+{TClipboardFormatsGroup}
+
+class function TClipboardFormatsGroup.Defaults: TClipboardFormatsGroup;
+begin
+  Result.PublishAlphaAwareBitmap := DEF_PUBLISH_ALPHA_AWARE_BITMAP;
+  Result.PublishFlattenedBitmap := DEF_PUBLISH_FLATTENED_BITMAP;
+  Result.PublishBitmapHandle := DEF_PUBLISH_BITMAP_HANDLE;
+  Result.PublishCompressedPng := DEF_PUBLISH_COMPRESSED_PNG;
+end;
+
+procedure TClipboardFormatsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+begin
+  PublishAlphaAwareBitmap := AIni.ReadBool(ASection, 'PublishAlphaAwareBitmap', PublishAlphaAwareBitmap);
+  PublishFlattenedBitmap := AIni.ReadBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
+  PublishBitmapHandle := AIni.ReadBool(ASection, 'PublishBitmapHandle', PublishBitmapHandle);
+  PublishCompressedPng := AIni.ReadBool(ASection, 'PublishCompressedPng', PublishCompressedPng);
+end;
+
+procedure TClipboardFormatsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+begin
+  AIni.WriteBool(ASection, 'PublishAlphaAwareBitmap', PublishAlphaAwareBitmap);
+  AIni.WriteBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
+  AIni.WriteBool(ASection, 'PublishBitmapHandle', PublishBitmapHandle);
+  AIni.WriteBool(ASection, 'PublishCompressedPng', PublishCompressedPng);
 end;
 
 {TTimestampSettingsGroup}

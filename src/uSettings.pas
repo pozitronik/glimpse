@@ -46,6 +46,9 @@ type
     FSaveAtLiveResolution: Boolean;
     FCopyAtLiveResolution: Boolean;
     FClipboardAsFileReference: Boolean;
+    {[copy] — per-format publish toggles for the pf32bit clipboard path.
+     See TClipboardFormatsGroup for the format-to-field mapping.}
+    FClipboardFormats: TClipboardFormatsGroup;
     FCombinedMaxSide: Integer;
     {[save] — banner group shared with WCX}
     FBanner: TBannerSettingsGroup;
@@ -174,6 +177,12 @@ type
     property SaveAtLiveResolution: Boolean read FSaveAtLiveResolution write FSaveAtLiveResolution;
     property CopyAtLiveResolution: Boolean read FCopyAtLiveResolution write FCopyAtLiveResolution;
     property ClipboardAsFileReference: Boolean read FClipboardAsFileReference write FClipboardAsFileReference;
+    {[copy] — per-format clipboard publish toggles, delegated to
+     FClipboardFormats so adding another format only touches the group.}
+    property PublishAlphaAwareBitmap: Boolean read FClipboardFormats.PublishAlphaAwareBitmap write FClipboardFormats.PublishAlphaAwareBitmap;
+    property PublishFlattenedBitmap: Boolean read FClipboardFormats.PublishFlattenedBitmap write FClipboardFormats.PublishFlattenedBitmap;
+    property PublishBitmapHandle: Boolean read FClipboardFormats.PublishBitmapHandle write FClipboardFormats.PublishBitmapHandle;
+    property PublishCompressedPng: Boolean read FClipboardFormats.PublishCompressedPng write FClipboardFormats.PublishCompressedPng;
     property CombinedMaxSide: Integer read FCombinedMaxSide write FCombinedMaxSide;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
@@ -335,6 +344,7 @@ begin
   FSaveAtLiveResolution := DEF_SAVE_AT_LIVE_RESOLUTION;
   FCopyAtLiveResolution := DEF_COPY_AT_LIVE_RESOLUTION;
   FClipboardAsFileReference := DEF_CLIPBOARD_AS_FILE_REFERENCE;
+  FClipboardFormats := TClipboardFormatsGroup.Defaults;
   FCombinedMaxSide := DEF_COMBINED_MAX_SIDE;
   FBanner := TBannerSettingsGroup.Defaults;
   FBanner.Show := DEF_SHOW_BANNER;
@@ -424,6 +434,7 @@ begin
      get the default for the new key, save settings stay untouched.}
     FCopyAtLiveResolution := Ini.ReadBool('copy', 'AtLiveResolution', DEF_COPY_AT_LIVE_RESOLUTION);
     FClipboardAsFileReference := Ini.ReadBool('copy', 'AsFileReference', DEF_CLIPBOARD_AS_FILE_REFERENCE);
+    FClipboardFormats.LoadFrom(Ini, 'copy');
 
     FCacheEnabled := Ini.ReadBool('cache', 'Enabled', DEF_CACHE_ENABLED);
     FCacheFolder := Ini.ReadString('cache', 'Folder', DEF_CACHE_FOLDER);
@@ -514,6 +525,7 @@ begin
 
     Ini.WriteBool('copy', 'AtLiveResolution', FCopyAtLiveResolution);
     Ini.WriteBool('copy', 'AsFileReference', FClipboardAsFileReference);
+    FClipboardFormats.SaveTo(Ini, 'copy');
 
     Ini.WriteBool('cache', 'Enabled', FCacheEnabled);
     Ini.WriteString('cache', 'Folder', FCacheFolder);

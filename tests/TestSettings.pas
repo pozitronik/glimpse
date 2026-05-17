@@ -129,6 +129,10 @@ type
     [Test]
     procedure TestClipboardAsFileReferenceRoundTrip;
     [Test]
+    procedure TestClipboardFormatsDefaults;
+    [Test]
+    procedure TestClipboardFormatsRoundTrip;
+    [Test]
     procedure TestStatusBarTemplateDefault;
     [Test]
     procedure TestStatusBarTemplateRoundTrip;
@@ -1678,6 +1682,56 @@ begin
   try
     S2.Load;
     Assert.AreEqual(not DEF_CLIPBOARD_AS_FILE_REFERENCE, S2.ClipboardAsFileReference);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardFormatsDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    {All four publish toggles default True so out-of-the-box behaviour
+     matches the historical CF_DIBV5+CF_DIB+CF_BITMAP trio plus the new
+     PNG format. Memory-constrained users opt out via the Clipboard tab.}
+    Assert.IsTrue(S.PublishAlphaAwareBitmap, 'PublishAlphaAwareBitmap default');
+    Assert.IsTrue(S.PublishFlattenedBitmap, 'PublishFlattenedBitmap default');
+    Assert.IsTrue(S.PublishBitmapHandle, 'PublishBitmapHandle default');
+    Assert.IsTrue(S.PublishCompressedPng, 'PublishCompressedPng default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardFormatsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'clip_formats.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    {Flip every toggle to the opposite of its default so a missing-key
+     fallback during Load would produce a different value than a correct
+     read does — the assertions below would then fail loudly.}
+    S1.PublishAlphaAwareBitmap := not DEF_PUBLISH_ALPHA_AWARE_BITMAP;
+    S1.PublishFlattenedBitmap := not DEF_PUBLISH_FLATTENED_BITMAP;
+    S1.PublishBitmapHandle := not DEF_PUBLISH_BITMAP_HANDLE;
+    S1.PublishCompressedPng := not DEF_PUBLISH_COMPRESSED_PNG;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_PUBLISH_ALPHA_AWARE_BITMAP, S2.PublishAlphaAwareBitmap);
+    Assert.AreEqual(not DEF_PUBLISH_FLATTENED_BITMAP, S2.PublishFlattenedBitmap);
+    Assert.AreEqual(not DEF_PUBLISH_BITMAP_HANDLE, S2.PublishBitmapHandle);
+    Assert.AreEqual(not DEF_PUBLISH_COMPRESSED_PNG, S2.PublishCompressedPng);
   finally
     S2.Free;
   end;
