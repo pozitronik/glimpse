@@ -37,6 +37,12 @@ type
    would silently pick the wrong mode on the next dialog open.}
   TStatusBarHeightApplyMode = (sbhamLister, sbhamQuickView, sbhamBoth);
 
+  {Result of ResolveProgressBarBounds: bounds the host should pass
+   straight to SetBounds for the progress bar inside the status bar.}
+  TProgressBarBounds = record
+    Left, Top, Width, Height: Integer;
+  end;
+
   {Bundles extraction parameters that travel together through the
    extraction pipeline (controller -> worker -> extractor).}
   TExtractionOptions = record
@@ -71,10 +77,50 @@ function StatusBarHeightApplyModeToStr(AMode: TStatusBarHeightApplyMode): string
 function ShouldApplyStatusBarHeight(AMode: TStatusBarHeightApplyMode;
   AIsQuickView: Boolean): Boolean;
 
+{Resolves the final pixel height of the status bar from the four inputs
+ that drive the policy. Pure: no VCL access, callable from tests.
+
+ - ATextHeightPx: GDI height of the configured font (ascender+descender,
+   typically measured against 'Hg').
+ - ASettingPx: the user's logical setting in 96-DPI pixels. <=0 means
+   "auto" (always falls back to font-derived height).
+ - AApplyMode + AIsQuickView: gate that lets the user restrict the
+   custom height to one window mode; outside that mode this routine
+   silently falls back to auto.
+ - APpi: the panel's effective DPI for MulDiv scaling. <=0 normalises
+   to 96 so callers can safely pass 0 when CurrentPPI isn't available.
+
+ The auto height adds STATUSBAR_VPADDING (6 px) above the font reach so
+ text breathes. An explicit setting smaller than the font reach silently
+ bumps to font height + STATUSBAR_FONT_MIN_PADDING (2 px) — anything
+ less would clip text, which is never what the user actually wants.
+ The 2-vs-6 px asymmetry is deliberate: explicit mode can produce a
+ tighter bar than auto when the font allows.}
+function ResolveStatusBarHeightPixels(ATextHeightPx, ASettingPx: Integer;
+  AApplyMode: TStatusBarHeightApplyMode; AIsQuickView: Boolean;
+  APpi: Integer): Integer;
+
+{Resolves the position + dimensions of the progress bar inside the
+ status bar. Pure: no VCL touch.
+
+ Layout policy:
+ - AStretchPanelsOn forces pblOverPanels regardless of ARequestedLayout
+   (a stretched-panels bar has no trailing slack to dock against).
+ - pblAuto picks pblAfterPanels when ClientWidth has room for both the
+   panels and AMinWidth + two margins; otherwise pblOverPanels.
+ - pblAfterPanels positions the bar to the right of the panels; if the
+   available width is below AMinWidth, the width is clamped up (the bar
+   will visually overlap the rightmost panel, intentional fallback).
+ - pblOverPanels paints the bar across the full client width minus
+   two margins on each side, vertically inset by AMargin top and bottom.}
+function ResolveProgressBarBounds(AClientWidth, AClientHeight, APanelsRight: Integer;
+  AStretchPanelsOn: Boolean; ARequestedLayout: TProgressBarLayout;
+  AMinWidth, AMargin: Integer): TProgressBarBounds;
+
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils, Winapi.Windows;
 
 function StrToTimestampCorner(const AValue: string; ADefault: TTimestampCorner): TTimestampCorner;
 begin
@@ -186,6 +232,65 @@ begin
   else
     Result := True;
   end;
+end;
+
+function ResolveStatusBarHeightPixels(ATextHeightPx, ASettingPx: Integer;
+  AApplyMode: TStatusBarHeightApplyMode; AIsQuickView: Boolean;
+  APpi: Integer): Integer;
+const
+  STATUSBAR_VPADDING = 6;
+  STATUSBAR_FONT_MIN_PADDING = 2;
+var
+  AutoHeight, Ppi, ExplicitHeight, MinHeight: Integer;
+begin
+  AutoHeight := ATextHeightPx + STATUSBAR_VPADDING;
+  if not ShouldApplyStatusBarHeight(AApplyMode, AIsQuickView) then
+    Exit(AutoHeight);
+  if ASettingPx <= 0 then
+    Exit(AutoHeight);
+  Ppi := APpi;
+  if Ppi <= 0 then
+    Ppi := 96;
+  ExplicitHeight := MulDiv(ASettingPx, Ppi, 96);
+  MinHeight := ATextHeightPx + STATUSBAR_FONT_MIN_PADDING;
+  if ExplicitHeight < MinHeight then
+    Result := MinHeight
+  else
+    Result := ExplicitHeight;
+end;
+
+function ResolveProgressBarBounds(AClientWidth, AClientHeight, APanelsRight: Integer;
+  AStretchPanelsOn: Boolean; ARequestedLayout: TProgressBarLayout;
+  AMinWidth, AMargin: Integer): TProgressBarBounds;
+var
+  Layout: TProgressBarLayout;
+begin
+  if AStretchPanelsOn then
+    Layout := pblOverPanels
+  else
+    Layout := ARequestedLayout;
+  if Layout = pblAuto then
+  begin
+    if AClientWidth >= APanelsRight + AMinWidth + 2 * AMargin then
+      Layout := pblAfterPanels
+    else
+      Layout := pblOverPanels;
+  end;
+
+  case Layout of
+    pblAfterPanels:
+      begin
+        Result.Left := APanelsRight + AMargin;
+        Result.Width := AClientWidth - APanelsRight - 2 * AMargin;
+        if Result.Width < AMinWidth then
+          Result.Width := AMinWidth;
+      end;
+    else
+      Result.Left := AMargin;
+      Result.Width := AClientWidth - 2 * AMargin;
+  end;
+  Result.Top := AMargin;
+  Result.Height := AClientHeight - 2 * AMargin;
 end;
 
 end.

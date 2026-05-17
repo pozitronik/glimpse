@@ -28,6 +28,20 @@ type
     [Test] procedure ShouldApplyStatusBarHeight_Both;
     [Test] procedure ShouldApplyStatusBarHeight_ListerOnly;
     [Test] procedure ShouldApplyStatusBarHeight_QuickViewOnly;
+    [Test] procedure ResolveStatusBarHeight_AutoWhenSettingZero;
+    [Test] procedure ResolveStatusBarHeight_AutoWhenSettingNegative;
+    [Test] procedure ResolveStatusBarHeight_AutoWhenApplyModeGateFails;
+    [Test] procedure ResolveStatusBarHeight_ExplicitScaledByPpi;
+    [Test] procedure ResolveStatusBarHeight_BumpsWhenBelowFontMinimum;
+    [Test] procedure ResolveStatusBarHeight_ZeroPpiTreatedAs96;
+    [Test] procedure ResolveStatusBarHeight_NegativePpiTreatedAs96;
+    [Test] procedure ResolveStatusBarHeight_ExplicitSmallerThanAuto_AllowedWhenAboveMin;
+    [Test] procedure ResolveProgressBarBounds_Auto_WidePicksAfterPanels;
+    [Test] procedure ResolveProgressBarBounds_Auto_NarrowPicksOverPanels;
+    [Test] procedure ResolveProgressBarBounds_StretchPanels_ForcesOverPanels;
+    [Test] procedure ResolveProgressBarBounds_AfterPanels_ClampsWidthToMin;
+    [Test] procedure ResolveProgressBarBounds_OverPanels_SpansFullClientMinusMargins;
+    [Test] procedure ResolveProgressBarBounds_TopAndHeightAlwaysSetFromMargin;
     [Test] procedure ExtractionOptionsValueSemantics;
     {Conversions for enums that round-trip through INI. Load-bearing
      because settings dialogs read/write these tokens verbatim.}
@@ -190,6 +204,141 @@ begin
     'sbhamQuickView must NOT apply in Lister mode');
   Assert.IsTrue(ShouldApplyStatusBarHeight(sbhamQuickView, True),
     'sbhamQuickView applies in Quick View mode');
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_AutoWhenSettingZero;
+begin
+  {Auto path: AutoHeight = TextHeight + 6 px padding. Setting=0 is the
+   user's "auto" choice; even an applicable apply-mode + valid PPI must
+   resolve to auto here.}
+  Assert.AreEqual(20, ResolveStatusBarHeightPixels(14, 0, sbhamBoth, False, 96));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_AutoWhenSettingNegative;
+begin
+  {Negative values are protected by the same "<= 0" guard as zero.
+   Defensive: the UI's TUpDown clamps to >= 0 but a corrupt INI could
+   slip a negative through.}
+  Assert.AreEqual(20, ResolveStatusBarHeightPixels(14, -10, sbhamBoth, False, 96));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_AutoWhenApplyModeGateFails;
+begin
+  {sbhamLister + AIsQuickView=True -> gate closed -> always auto,
+   regardless of how aggressive the user's explicit setting is.}
+  Assert.AreEqual(20, ResolveStatusBarHeightPixels(14, 40, sbhamLister, True, 96));
+  Assert.AreEqual(20, ResolveStatusBarHeightPixels(14, 40, sbhamQuickView, False, 96));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_ExplicitScaledByPpi;
+begin
+  {Setting=24 at 96 DPI -> 24 px. At 192 DPI -> 48 px. MulDiv applies.}
+  Assert.AreEqual(24, ResolveStatusBarHeightPixels(14, 24, sbhamBoth, False, 96));
+  Assert.AreEqual(48, ResolveStatusBarHeightPixels(14, 24, sbhamBoth, False, 192));
+  {144 DPI -> 36 px.}
+  Assert.AreEqual(36, ResolveStatusBarHeightPixels(14, 24, sbhamBoth, False, 144));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_BumpsWhenBelowFontMinimum;
+begin
+  {Font reach 14 px + 2 px min padding = 16 px floor. Setting=10 at
+   96 DPI scales to 10 px which is below the floor -> bumps to 16.}
+  Assert.AreEqual(16, ResolveStatusBarHeightPixels(14, 10, sbhamBoth, False, 96));
+  {Setting=16 lands exactly on the floor and passes through unchanged.}
+  Assert.AreEqual(16, ResolveStatusBarHeightPixels(14, 16, sbhamBoth, False, 96));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_ZeroPpiTreatedAs96;
+begin
+  {CurrentPPI returns 0 in some pre-paint states. Helper must normalise
+   to 96 rather than dividing by zero or returning nonsense.}
+  Assert.AreEqual(24, ResolveStatusBarHeightPixels(14, 24, sbhamBoth, False, 0));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_NegativePpiTreatedAs96;
+begin
+  {Defensive: any negative PPI value also normalises to 96.}
+  Assert.AreEqual(24, ResolveStatusBarHeightPixels(14, 24, sbhamBoth, False, -1));
+end;
+
+procedure TTestTypes.ResolveStatusBarHeight_ExplicitSmallerThanAuto_AllowedWhenAboveMin;
+begin
+  {Pinning the 2-vs-6 px asymmetry. Auto = TextHeight + 6 = 20.
+   Setting=17 explicit > MinHeight (16) so it passes through, producing
+   a bar tighter than auto. This is the intended escape hatch for users
+   who want a compact bar with a known-fitting font.}
+  Assert.AreEqual(17, ResolveStatusBarHeightPixels(14, 17, sbhamBoth, False, 96));
+end;
+
+procedure TTestTypes.ResolveProgressBarBounds_Auto_WidePicksAfterPanels;
+var
+  B: TProgressBarBounds;
+begin
+  {Client 200, panels 100, min 40, margin 1. 200 >= 100 + 40 + 2 = 142,
+   so auto -> AfterPanels. Left = 101, Width = 200 - 100 - 2 = 98.}
+  B := ResolveProgressBarBounds(200, 20, 100, False, pblAuto, 40, 1);
+  Assert.AreEqual(101, B.Left);
+  Assert.AreEqual(98, B.Width);
+end;
+
+procedure TTestTypes.ResolveProgressBarBounds_Auto_NarrowPicksOverPanels;
+var
+  B: TProgressBarBounds;
+begin
+  {Client 120, panels 100, min 40, margin 1. 120 < 100 + 40 + 2 = 142,
+   so auto -> OverPanels. Left = margin = 1, Width = 120 - 2 = 118.}
+  B := ResolveProgressBarBounds(120, 20, 100, False, pblAuto, 40, 1);
+  Assert.AreEqual(1, B.Left);
+  Assert.AreEqual(118, B.Width);
+end;
+
+procedure TTestTypes.ResolveProgressBarBounds_StretchPanels_ForcesOverPanels;
+var
+  B: TProgressBarBounds;
+begin
+  {Even with an explicit AfterPanels request, stretch mode wins because
+   the stretched panels leave no trailing slack. Output mirrors the
+   OverPanels path: full-width minus margins.}
+  B := ResolveProgressBarBounds(200, 20, 100, True, pblAfterPanels, 40, 1);
+  Assert.AreEqual(1, B.Left);
+  Assert.AreEqual(198, B.Width);
+end;
+
+procedure TTestTypes.ResolveProgressBarBounds_AfterPanels_ClampsWidthToMin;
+var
+  B: TProgressBarBounds;
+begin
+  {Client 150, panels 140, min 40, margin 1. AfterPanels gives
+   Width = 150 - 140 - 2 = 8, which is below the min — clamp to 40.
+   The bar will visually overlap the rightmost panel; intentional
+   fallback to keep the bar usable in tight layouts.}
+  B := ResolveProgressBarBounds(150, 20, 140, False, pblAfterPanels, 40, 1);
+  Assert.AreEqual(141, B.Left);
+  Assert.AreEqual(40, B.Width);
+end;
+
+procedure TTestTypes.ResolveProgressBarBounds_OverPanels_SpansFullClientMinusMargins;
+var
+  B: TProgressBarBounds;
+begin
+  B := ResolveProgressBarBounds(300, 20, 250, False, pblOverPanels, 40, 1);
+  Assert.AreEqual(1, B.Left);
+  Assert.AreEqual(298, B.Width);
+end;
+
+procedure TTestTypes.ResolveProgressBarBounds_TopAndHeightAlwaysSetFromMargin;
+var
+  B: TProgressBarBounds;
+begin
+  {Top is always the margin; Height is the client height minus 2 margins.
+   Independent of layout policy.}
+  B := ResolveProgressBarBounds(200, 20, 100, False, pblAuto, 40, 1);
+  Assert.AreEqual(1, B.Top);
+  Assert.AreEqual(18, B.Height);
+  {Different margin propagates everywhere.}
+  B := ResolveProgressBarBounds(200, 30, 100, False, pblOverPanels, 40, 3);
+  Assert.AreEqual(3, B.Top);
+  Assert.AreEqual(24, B.Height);
 end;
 
 procedure TTestTypes.TimestampCornerToStr_AllValues;

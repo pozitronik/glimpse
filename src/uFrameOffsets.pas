@@ -60,6 +60,17 @@ function FormatTimecodeForFilename(ASeconds: Double): string;
  Returns '?' for non-positive values.}
 function FormatDurationHMS(ASeconds: Double): string;
 
+{Formats a millisecond elapsed time for the status-bar load-time panel.
+ Output scales with magnitude:
+   under 1 minute  -> 'S.mmm s'      (e.g. '5.123 s')
+   under 1 hour    -> 'M:SS.mmm'     (e.g. '12:34.567')
+   1 hour or more  -> 'H:MM:SS'      (milliseconds dropped because the
+                                      column gets too wide otherwise)
+ Pure: no I/O, no globals; callable from any thread. Cardinal input
+ mirrors GetTickCount's return type and accepts the full ~49.7-day
+ range without overflow.}
+function FormatLoadTimeMs(AElapsedMs: Cardinal): string;
+
 implementation
 
 uses
@@ -185,6 +196,22 @@ begin
     Result := Format('%d:%.2d:%.2d', [H, M, S])
   else
     Result := Format('%d:%.2d', [M, S]);
+end;
+
+function FormatLoadTimeMs(AElapsedMs: Cardinal): string;
+var
+  H, M, S, Ms: Integer;
+begin
+  H := AElapsedMs div 3600000;
+  M := (AElapsedMs mod 3600000) div 60000;
+  S := (AElapsedMs mod 60000) div 1000;
+  Ms := AElapsedMs mod 1000;
+  if H > 0 then
+    Result := Format('%d:%.2d:%.2d', [H, M, S])
+  else if M > 0 then
+    Result := Format('%d:%.2d.%.3d', [M, S, Ms])
+  else
+    Result := Format('%d.%.3d s', [S, Ms]);
 end;
 
 end.

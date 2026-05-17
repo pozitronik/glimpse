@@ -1425,35 +1425,16 @@ begin
 end;
 
 function TPluginForm.ResolveStatusBarHeight(ATextHeight: Integer): Integer;
-const
-  STATUSBAR_VPADDING = 6;
-  STATUSBAR_FONT_MIN_PADDING = 2;
-var
-  Ppi, AutoHeight, ExplicitHeight, MinHeight: Integer;
 begin
-  AutoHeight := ATextHeight + STATUSBAR_VPADDING;
-  {Apply-mode gate: skip the explicit override outside the user's
-   chosen window mode. Returns auto height so the bar still grows
-   to fit a custom font even when the explicit pixel value doesn't
-   apply.}
-  if not ShouldApplyStatusBarHeight(FSettings.StatusBarHeightApplyMode, FQuickViewMode) then
-    Exit(AutoHeight);
-  if FSettings.StatusBarHeight <= 0 then
-    Exit(AutoHeight);
-  Ppi := FStatusBar.CurrentPPI;
-  if Ppi <= 0 then
-    Ppi := 96;
-  ExplicitHeight := MulDiv(FSettings.StatusBarHeight, Ppi, 96);
-  {Silent bump: an explicit value smaller than the font reach would
-   clip text, which is never what the user actually wants. Keep the
-   floor at TextHeight + 2 px (tight but unclipped) rather than
-   matching the auto path's 6 px padding so the explicit setting can
-   still produce a thinner-than-auto bar when the font allows.}
-  MinHeight := ATextHeight + STATUSBAR_FONT_MIN_PADDING;
-  if ExplicitHeight < MinHeight then
-    Result := MinHeight
-  else
-    Result := ExplicitHeight;
+  {VCL-bound wrapper: hands the form state to the pure resolver in
+   uTypes so the policy stays unit-testable. FStatusBar.CurrentPPI
+   returns 0 in some pre-paint states; the pure helper normalises
+   that to 96.}
+  Result := ResolveStatusBarHeightPixels(ATextHeight,
+    FSettings.StatusBarHeight,
+    FSettings.StatusBarHeightApplyMode,
+    FQuickViewMode,
+    FStatusBar.CurrentPPI);
 end;
 
 function ViewModeDisplayName(AMode: TViewMode): string;
@@ -2026,27 +2007,16 @@ end;
 procedure TPluginForm.FinalizeLoadTime;
 var
   ElapsedMs: Cardinal;
-  H, M, S, Ms: Integer;
 begin
   if FLoadStartTick = 0 then
     Exit;
   if FLoadTimeStr <> '' then
     Exit; {already finalized}
 
-  {Cast guards correct unsigned wraparound; GetTickCount avoids the Vista+ GetTickCount64 dependency that crashes on XP via delay-load}
+  {Cast guards correct unsigned wraparound; GetTickCount avoids the Vista+
+   GetTickCount64 dependency that crashes on XP via delay-load.}
   ElapsedMs := Cardinal(GetTickCount - FLoadStartTick);
-  H := ElapsedMs div 3600000;
-  M := (ElapsedMs mod 3600000) div 60000;
-  S := (ElapsedMs mod 60000) div 1000;
-  Ms := ElapsedMs mod 1000;
-
-  if H > 0 then
-    FLoadTimeStr := Format('%d:%.2d:%.2d', [H, M, S])
-  else if M > 0 then
-    FLoadTimeStr := Format('%d:%.2d.%.3d', [M, S, Ms])
-  else
-    FLoadTimeStr := Format('%d.%.3d s', [S, Ms]);
-
+  FLoadTimeStr := FormatLoadTimeMs(ElapsedMs);
   UpdateStatusBar;
 end;
 
@@ -2055,13 +2025,13 @@ const
   {Tiny inset so the bar doesn't touch the status bar's borders.}
   Margin = 1;
 var
-  Layout: TProgressBarLayout;
-  Left, Width, PanelsRight, I: Integer;
+  PanelsRight, I: Integer;
+  Bounds: TProgressBarBounds;
 begin
   if not FProgressVisible then
     Exit;
 
-  {Right edge of the last panel - the boundary the AfterPanels layout
+  {Right edge of the last panel — the boundary the AfterPanels layout
    needs to clear. Computed from the live panel widths so adding or
    removing an SBP_*_W panel in UpdateStatusBar requires no separate
    bookkeeping here.}
@@ -2069,46 +2039,10 @@ begin
   for I := 0 to FStatusBar.Panels.Count - 1 do
     Inc(PanelsRight, FStatusBar.Panels[I].Width);
 
-  {Resolve the user's policy. Auto picks AfterPanels when the lister is
-   wide enough to fit the panels and at least one progress bar minimum
-   width plus margins; otherwise it switches to OverPanels so the bar
-   stays on screen.
-
-   Stretch-panels mode is a layout decision that fills the bar
-   horizontally — there is no trailing slack left to dock the progress
-   bar against, so the user's ProgressBarLayout is silently overridden
-   to OverPanels. The settings stay technically independent so a flip
-   of StretchPanels off restores whatever the user had.}
-  if FSettings.StatusBarStretchPanels then
-    Layout := pblOverPanels
-  else
-    Layout := FSettings.ProgressBarLayout;
-  if Layout = pblAuto then
-  begin
-    if FStatusBar.ClientWidth >= PanelsRight + PROGRESSBAR_MIN_W + 2 * Margin then
-      Layout := pblAfterPanels
-    else
-      Layout := pblOverPanels;
-  end;
-
-  case Layout of
-    pblAfterPanels:
-      begin
-        Left := PanelsRight + Margin;
-        Width := FStatusBar.ClientWidth - PanelsRight - 2 * Margin;
-        if Width < PROGRESSBAR_MIN_W then
-          Width := PROGRESSBAR_MIN_W;
-      end;
-    else  {pblOverPanels: cover the panels for the duration of the extraction.
-           HideProgress restores them when the bar hides.}
-      Left := Margin;
-      Width := FStatusBar.ClientWidth - 2 * Margin;
-  end;
-
-  {Bar height fills the status bar (less the tiny margins top and bottom).
-   The previous fixed PROGRESSBAR_H of 14 inside a 21-px status bar left
-   ~3 px of panel text peeking under the bar in OverPanels mode.}
-  FProgressBar.SetBounds(Left, Margin, Width, FStatusBar.ClientHeight - 2 * Margin);
+  Bounds := ResolveProgressBarBounds(FStatusBar.ClientWidth, FStatusBar.ClientHeight,
+    PanelsRight, FSettings.StatusBarStretchPanels, FSettings.ProgressBarLayout,
+    PROGRESSBAR_MIN_W, Margin);
+  FProgressBar.SetBounds(Bounds.Left, Bounds.Top, Bounds.Width, Bounds.Height);
 end;
 
 procedure TPluginForm.UpdateProgress;

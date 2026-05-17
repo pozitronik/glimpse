@@ -113,6 +113,25 @@ type
     procedure TestBuildFrameOffsets_RandomTrue_MatchesRandom;
   end;
 
+  [TestFixture]
+  TTestFormatLoadTimeMs = class
+  public
+    {FormatLoadTimeMs scales its output by magnitude: 'S.mmm s' under a
+     minute, 'M:SS.mmm' under an hour, 'H:MM:SS' from one hour up (ms
+     dropped). Tests pin each band and the boundary transitions so a
+     future readability tweak surfaces immediately.}
+    [Test] procedure ZeroMs_ZeroDotZeroSeconds;
+    [Test] procedure SubSecondShowsMs;
+    [Test] procedure ExactlyOneSecond;
+    [Test] procedure JustUnderOneMinute_StaysInSecondsBand;
+    [Test] procedure ExactlyOneMinute_SwitchesToMinutesBand;
+    [Test] procedure MidMinute_MinutesBand;
+    [Test] procedure JustUnderOneHour_StaysInMinutesBand;
+    [Test] procedure ExactlyOneHour_SwitchesToHoursBandAndDropsMs;
+    [Test] procedure MultiHour_HoursBand;
+    [Test] procedure NearMaxCardinal_DoesNotOverflow;
+  end;
+
 implementation
 
 uses
@@ -666,7 +685,75 @@ begin
     Assert.AreEqual(A[I].TimeOffset, B[I].TimeOffset, 1e-12);
 end;
 
+{ FormatLoadTimeMs tests }
+
+procedure TTestFormatLoadTimeMs.ZeroMs_ZeroDotZeroSeconds;
+begin
+  Assert.AreEqual('0.000 s', FormatLoadTimeMs(0));
+end;
+
+procedure TTestFormatLoadTimeMs.SubSecondShowsMs;
+begin
+  Assert.AreEqual('0.500 s', FormatLoadTimeMs(500));
+  Assert.AreEqual('0.123 s', FormatLoadTimeMs(123));
+end;
+
+procedure TTestFormatLoadTimeMs.ExactlyOneSecond;
+begin
+  Assert.AreEqual('1.000 s', FormatLoadTimeMs(1000));
+end;
+
+procedure TTestFormatLoadTimeMs.JustUnderOneMinute_StaysInSecondsBand;
+begin
+  {59999 ms = 59 s 999 ms, still under the minute boundary.}
+  Assert.AreEqual('59.999 s', FormatLoadTimeMs(59999));
+end;
+
+procedure TTestFormatLoadTimeMs.ExactlyOneMinute_SwitchesToMinutesBand;
+begin
+  Assert.AreEqual('1:00.000', FormatLoadTimeMs(60000));
+end;
+
+procedure TTestFormatLoadTimeMs.MidMinute_MinutesBand;
+begin
+  {90500 ms = 1 min 30.500 s.}
+  Assert.AreEqual('1:30.500', FormatLoadTimeMs(90500));
+end;
+
+procedure TTestFormatLoadTimeMs.JustUnderOneHour_StaysInMinutesBand;
+begin
+  {3599999 ms = 59 min 59.999 s, last value before the hour boundary.}
+  Assert.AreEqual('59:59.999', FormatLoadTimeMs(3599999));
+end;
+
+procedure TTestFormatLoadTimeMs.ExactlyOneHour_SwitchesToHoursBandAndDropsMs;
+begin
+  {Hour band intentionally drops the millisecond component — the panel
+   gets too wide otherwise. Pins that design choice.}
+  Assert.AreEqual('1:00:00', FormatLoadTimeMs(3600000));
+end;
+
+procedure TTestFormatLoadTimeMs.MultiHour_HoursBand;
+begin
+  {3661000 ms = 1h 1m 1s exactly. Drops ms even when it's zero — the
+   format is purely band-driven.}
+  Assert.AreEqual('1:01:01', FormatLoadTimeMs(3661000));
+  {Two-digit hours stay padded only on minutes/seconds; hours uses %d.}
+  Assert.AreEqual('10:00:00', FormatLoadTimeMs(36000000));
+end;
+
+procedure TTestFormatLoadTimeMs.NearMaxCardinal_DoesNotOverflow;
+var
+  Output: string;
+begin
+  {GetTickCount returns Cardinal and can hit ~4.29e9 before wrap.
+   Verifying the formatter handles the upper end without exception.}
+  Output := FormatLoadTimeMs(High(Cardinal));
+  Assert.IsTrue(Output <> '', 'Formatter returns non-empty string at Cardinal max');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestFrameOffsets);
+  TDUnitX.RegisterTestFixture(TTestFormatLoadTimeMs);
 
 end.
