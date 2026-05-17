@@ -2349,8 +2349,8 @@ begin
   {Configurable hotkeys. ExecuteHotkey returns False when the action's
    contextual guards say "not applicable right now" (e.g. paPrevFrame when
    not in single-view mode, or paOpenInPlayer with no file), in which case
-   the key falls through to the edit-focus fallback below rather than being
-   silently swallowed — matching pre-refactor behaviour.}
+   the key falls through to the Lister forward below — letting TC's own
+   built-in shortcut on the same key fire as a fallback.}
   Action := FSettings.Hotkeys.Lookup(Key, Shift);
   if (Action <> paNone) and ExecuteHotkey(Action) then
     Key := 0;
@@ -2358,7 +2358,8 @@ begin
   {Post-dispatch edit-focus fallback: any keystroke that the edit wasn't
    allowed to handle above AND wasn't consumed by a hotkey is mopped up
    here. Enter is allowed to commit the value; everything else reclaims
-   form focus so TC's subclass sees subsequent keystrokes.}
+   form focus so TC's subclass sees subsequent keystrokes. Runs before
+   the Lister forward so editing keys never leak out to TC.}
   if (Key <> 0) and (GetFocus = FEditFrameCount.Handle) then
     case Key of
       VK_SHIFT, VK_CONTROL, VK_MENU:
@@ -2372,6 +2373,20 @@ begin
         Winapi.Windows.SetFocus(Handle);
         Key := 0;
     end;
+
+  {Anything still unconsumed gets handed back to TC's Lister window.
+   FormSubclassProc claims every key off TC's wndproc so the plugin's
+   binding dispatcher always sees keys first; without this forward TC's
+   built-in shortcuts (N/P navigation, F2 reload, Backspace to parent,
+   letter-key mode toggles, etc.) would be permanently dead while the
+   plugin is the active view — fatal in Quick View, which has no window
+   menu fallback. Alt+letter forwards as a SysKey so TC's menu mnemonics
+   still resolve correctly in regular Lister mode.}
+  if Key <> 0 then
+  begin
+    ForwardKeyToLister(Key, ssAlt in Shift);
+    Key := 0;
+  end;
 
   if Key = 0 then
     FKeyConsumed := True;
