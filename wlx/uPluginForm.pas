@@ -1164,10 +1164,8 @@ procedure TPluginForm.UpdateResolutionMenuLabels(AMenu: TPopupMenu);
 var
   I: Integer;
   MI: TMenuItem;
-  Base: string;
-  ForceLive, IsCopy: Boolean;
+  Def: TViewVariantDef;
   PersistedLive: Boolean;
-  Action: TPluginAction;
   Chords: THotkeyChordArray;
 begin
   if AMenu = nil then
@@ -1175,59 +1173,30 @@ begin
   for I := 0 to AMenu.Items.Count - 1 do
   begin
     MI := AMenu.Items[I];
-    IsCopy := False;
-    case MI.Tag of
-      CM_SAVE_VIEW_LIVE:
-        begin
-          Base := CAPTION_SAVE_VIEW_LIVE;
-          ForceLive := True;
-          Action := paSaveViewLive;
-        end;
-      CM_SAVE_VIEW_NATIVE:
-        begin
-          Base := CAPTION_SAVE_VIEW_NATIVE;
-          ForceLive := False;
-          Action := paSaveViewNative;
-        end;
-      CM_COPY_VIEW_LIVE:
-        begin
-          Base := CAPTION_COPY_VIEW_LIVE;
-          ForceLive := True;
-          IsCopy := True;
-          Action := paCopyViewLive;
-        end;
-      CM_COPY_VIEW_NATIVE:
-        begin
-          Base := CAPTION_COPY_VIEW_NATIVE;
-          ForceLive := False;
-          IsCopy := True;
-          Action := paCopyViewNative;
-        end;
-    else
+    if not FindViewVariantByTag(MI.Tag, Def) then
       Continue;
-    end;
     if FExporter <> nil then
-      MI.Caption := Base + FExporter.FormatPredictedSize(ForceLive)
+      MI.Caption := Def.Caption + FExporter.FormatPredictedSize(Def.ForceLive)
     else
-      MI.Caption := Base;
+      MI.Caption := Def.Caption;
     {Mark the item that matches the persisted setting for the corresponding
      surface as the current default with a radio bullet. Save items track
-     SaveAtLiveResolution, copy items track CopyAtLiveResolution - the two
+     SaveAtLiveResolution, copy items track CopyAtLiveResolution — the two
      settings can diverge so the bullets must too. RadioItem groups
      Live/Native into a mutually-exclusive pair so only one bullet shows
      per pair.}
-    if IsCopy then
+    if Def.IsCopy then
       PersistedLive := FSettings.CopyAtLiveResolution
     else
       PersistedLive := FSettings.SaveAtLiveResolution;
     MI.RadioItem := True;
-    MI.Checked := ForceLive = PersistedLive;
+    MI.Checked := Def.ForceLive = PersistedLive;
     {Mirror the first configured chord (THotkeyBindings allows several
      per action; the first one is the canonical "primary") onto the menu
      item so VCL renders it in the standard "Caption    Ctrl+Shift+L"
      two-column layout. Unbound action -> ShortCut = 0 -> VCL hides the
      suffix entirely.}
-    Chords := FSettings.Hotkeys.Get(Action);
+    Chords := FSettings.Hotkeys.Get(Def.Action);
     if Length(Chords) > 0 then
       MI.ShortCut := Chords[0].ToShortCut
     else

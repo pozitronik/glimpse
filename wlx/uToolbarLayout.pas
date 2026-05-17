@@ -5,7 +5,7 @@ unit uToolbarLayout;
 interface
 
 uses
-  System.Classes, Vcl.Menus, uTypes;
+  System.Classes, Vcl.Menus, uTypes, uHotkeys;
 
 type
   TToolbarLayoutResult = record
@@ -20,14 +20,28 @@ type
     Hint: string;
   end;
 
-  {Pairs the base caption with its command tag for the Save/Copy view
-   dropdown variants. The toolbar dropdown (via uPluginForm) and the
-   hamburger overflow (via PopulateHamburgerMenu) both walk arrays of
-   these so a future third variant lands in both surfaces from a single
-   const-array edit.}
-  TViewVariantItem = record
+  {Full description of a Save/Copy view dropdown variant. The toolbar
+   dropdown (via uPluginForm) and the hamburger overflow (via
+   PopulateHamburgerMenu) build their items from arrays of these so a
+   future third variant lands in both surfaces from a single
+   const-array edit. The richer fields (ForceLive, IsCopy, Action)
+   drive UpdateResolutionMenuLabels' radio-bullet, predicted-size
+   suffix, and hotkey-chord lookup; BuildViewVariantsMenu only reads
+   Caption + Tag and ignores the rest.}
+  TViewVariantDef = record
     Caption: string;
     Tag: Integer;
+    {True for the "at view resolution" variant, False for the "at native
+     size" variant. Used to seed FormatPredictedSize and to match
+     against the persisted SaveAtLiveResolution / CopyAtLiveResolution
+     setting for the radio-bullet display.}
+    ForceLive: Boolean;
+    {True for Copy items (track CopyAtLiveResolution), False for Save
+     items (track SaveAtLiveResolution).}
+    IsCopy: Boolean;
+    {The hotkey action this menu item corresponds to. Used to mirror
+     the user's configured chord onto the menu item's ShortCut field.}
+    Action: TPluginAction;
   end;
 
 const
@@ -105,15 +119,19 @@ const
   {Save view dropdown items: explicit "use these dimensions" choices
    that bypass the persisted SaveAtLiveResolution setting for one
    action. Order matches the on-screen menu order.}
-  SAVE_VIEW_VARIANTS: array[0..1] of TViewVariantItem = (
-    (Caption: CAPTION_SAVE_VIEW_LIVE;   Tag: CM_SAVE_VIEW_LIVE),
-    (Caption: CAPTION_SAVE_VIEW_NATIVE; Tag: CM_SAVE_VIEW_NATIVE));
+  SAVE_VIEW_VARIANTS: array[0..1] of TViewVariantDef = (
+    (Caption: CAPTION_SAVE_VIEW_LIVE;   Tag: CM_SAVE_VIEW_LIVE;
+     ForceLive: True;  IsCopy: False; Action: paSaveViewLive),
+    (Caption: CAPTION_SAVE_VIEW_NATIVE; Tag: CM_SAVE_VIEW_NATIVE;
+     ForceLive: False; IsCopy: False; Action: paSaveViewNative));
 
   {Copy view dropdown items: same shape as SAVE_VIEW_VARIANTS but for
    the in-memory copy path (no dialog follows).}
-  COPY_VIEW_VARIANTS: array[0..1] of TViewVariantItem = (
-    (Caption: CAPTION_COPY_VIEW_LIVE;   Tag: CM_COPY_VIEW_LIVE),
-    (Caption: CAPTION_COPY_VIEW_NATIVE; Tag: CM_COPY_VIEW_NATIVE));
+  COPY_VIEW_VARIANTS: array[0..1] of TViewVariantDef = (
+    (Caption: CAPTION_COPY_VIEW_LIVE;   Tag: CM_COPY_VIEW_LIVE;
+     ForceLive: True;  IsCopy: True;  Action: paCopyViewLive),
+    (Caption: CAPTION_COPY_VIEW_NATIVE; Tag: CM_COPY_VIEW_NATIVE;
+     ForceLive: False; IsCopy: True;  Action: paCopyViewNative));
 
   {Element indices within the ordered collapsible element array.
    Order: mode buttons, timecodes toggle, action buttons (left to right).}
@@ -151,8 +169,15 @@ procedure PopulateHamburgerMenu(AMenu: TPopupMenu; const AState: THamburgerMenuS
  truth Tag tells the handler which variant was picked. AOnPopup runs
  when the menu pops up (typically to refresh the resolution suffix on
  each caption). Returns a TPopupMenu owned by AOwner — the caller does
- not Free it directly.}
-function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantItem; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
+ not Free it directly. Reads only AItems[I].Caption and AItems[I].Tag.}
+function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantDef; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
+
+{Looks up the view-variant definition matching ATag in the union of
+ SAVE_VIEW_VARIANTS + COPY_VIEW_VARIANTS. Returns False (with ADef
+ untouched on failed paths) when ATag is not a known view-variant
+ command tag — used by UpdateResolutionMenuLabels to skip menu items
+ that do not correspond to one of the four resolution variants.}
+function FindViewVariantByTag(ATag: Integer; out ADef: TViewVariantDef): Boolean;
 
 implementation
 
@@ -331,7 +356,7 @@ begin
   end;
 end;
 
-function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantItem; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
+function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantDef; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
 var
   I: Integer;
   MI: TMenuItem;
@@ -346,6 +371,25 @@ begin
     MI.OnClick := AOnClick;
     Result.Items.Add(MI);
   end;
+end;
+
+function FindViewVariantByTag(ATag: Integer; out ADef: TViewVariantDef): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to High(SAVE_VIEW_VARIANTS) do
+    if SAVE_VIEW_VARIANTS[I].Tag = ATag then
+    begin
+      ADef := SAVE_VIEW_VARIANTS[I];
+      Exit(True);
+    end;
+  for I := 0 to High(COPY_VIEW_VARIANTS) do
+    if COPY_VIEW_VARIANTS[I].Tag = ATag then
+    begin
+      ADef := COPY_VIEW_VARIANTS[I];
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 end.

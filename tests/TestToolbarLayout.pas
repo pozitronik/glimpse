@@ -44,12 +44,29 @@ type
     [Test] procedure ViewVariants_OnClickWiredOnEveryItem;
     [Test] procedure ViewVariants_EmptyArrayProducesEmptyMenu;
     [Test] procedure ViewVariants_MenuOwnedByCaller;
+    {Rich-field pinning for the const tables that drive
+     UpdateResolutionMenuLabels' radio bullets and hotkey-chord mirror.
+     ForceLive must alternate Live/Native within each pair; IsCopy must
+     stay False for save and True for copy; Action must map to the
+     matching pa* enum so the chord lookup finds the user's binding.}
+    [Test] procedure ViewVariants_SaveItems_ForceLiveAlternates;
+    [Test] procedure ViewVariants_CopyItems_ForceLiveAlternates;
+    [Test] procedure ViewVariants_SaveItems_IsCopyAllFalse;
+    [Test] procedure ViewVariants_CopyItems_IsCopyAllTrue;
+    [Test] procedure ViewVariants_ActionsMapToCorrectEnumValues;
+    { FindViewVariantByTag }
+    [Test] procedure FindViewVariant_SaveLive_Found;
+    [Test] procedure FindViewVariant_SaveNative_Found;
+    [Test] procedure FindViewVariant_CopyLive_Found;
+    [Test] procedure FindViewVariant_CopyNative_Found;
+    [Test] procedure FindViewVariant_UnknownTag_ReturnsFalse;
+    [Test] procedure FindViewVariant_NonViewVariantTag_ReturnsFalse;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Classes, Vcl.Menus, uTypes, uToolbarLayout;
+  System.SysUtils, System.Classes, Vcl.Menus, uTypes, uToolbarLayout, uHotkeys;
 
 const
   { Simulated element right edges (13 elements, left to right) }
@@ -654,7 +671,7 @@ procedure TTestToolbarLayout.ViewVariants_EmptyArrayProducesEmptyMenu;
 var
   Owner: TComponent;
   Menu: TPopupMenu;
-  Empty: array of TViewVariantItem;
+  Empty: array of TViewVariantDef;
 begin
   {Defensive: zero-length input must yield a valid empty menu, not AV.}
   Owner := TComponent.Create(nil);
@@ -681,6 +698,113 @@ begin
     'Menu.Owner must point to the supplied owner');
   Owner.Free;
   Assert.Pass('Owner.Free cascaded into Menu without leak');
+end;
+
+procedure TTestToolbarLayout.ViewVariants_SaveItems_ForceLiveAlternates;
+begin
+  Assert.IsTrue(SAVE_VIEW_VARIANTS[0].ForceLive, 'First save item is the Live variant');
+  Assert.IsFalse(SAVE_VIEW_VARIANTS[1].ForceLive, 'Second save item is the Native variant');
+end;
+
+procedure TTestToolbarLayout.ViewVariants_CopyItems_ForceLiveAlternates;
+begin
+  Assert.IsTrue(COPY_VIEW_VARIANTS[0].ForceLive, 'First copy item is the Live variant');
+  Assert.IsFalse(COPY_VIEW_VARIANTS[1].ForceLive, 'Second copy item is the Native variant');
+end;
+
+procedure TTestToolbarLayout.ViewVariants_SaveItems_IsCopyAllFalse;
+var
+  I: Integer;
+begin
+  for I := 0 to High(SAVE_VIEW_VARIANTS) do
+    Assert.IsFalse(SAVE_VIEW_VARIANTS[I].IsCopy,
+      Format('Save item %d must have IsCopy=False', [I]));
+end;
+
+procedure TTestToolbarLayout.ViewVariants_CopyItems_IsCopyAllTrue;
+var
+  I: Integer;
+begin
+  for I := 0 to High(COPY_VIEW_VARIANTS) do
+    Assert.IsTrue(COPY_VIEW_VARIANTS[I].IsCopy,
+      Format('Copy item %d must have IsCopy=True', [I]));
+end;
+
+procedure TTestToolbarLayout.ViewVariants_ActionsMapToCorrectEnumValues;
+begin
+  {The hotkey-chord mirror in UpdateResolutionMenuLabels relies on
+   each variant's Action pointing to the matching paXxx enum so the
+   user's binding shows up next to the right menu item. A future
+   reordering of the pa* enum or a mis-paired const value would
+   silently break the chord display; this test pins the link.}
+  Assert.AreEqual(Ord(paSaveViewLive),   Ord(SAVE_VIEW_VARIANTS[0].Action));
+  Assert.AreEqual(Ord(paSaveViewNative), Ord(SAVE_VIEW_VARIANTS[1].Action));
+  Assert.AreEqual(Ord(paCopyViewLive),   Ord(COPY_VIEW_VARIANTS[0].Action));
+  Assert.AreEqual(Ord(paCopyViewNative), Ord(COPY_VIEW_VARIANTS[1].Action));
+end;
+
+procedure TTestToolbarLayout.FindViewVariant_SaveLive_Found;
+var
+  Def: TViewVariantDef;
+begin
+  Assert.IsTrue(FindViewVariantByTag(CM_SAVE_VIEW_LIVE, Def));
+  Assert.IsTrue(Def.ForceLive);
+  Assert.IsFalse(Def.IsCopy);
+  Assert.AreEqual(Ord(paSaveViewLive), Ord(Def.Action));
+end;
+
+procedure TTestToolbarLayout.FindViewVariant_SaveNative_Found;
+var
+  Def: TViewVariantDef;
+begin
+  Assert.IsTrue(FindViewVariantByTag(CM_SAVE_VIEW_NATIVE, Def));
+  Assert.IsFalse(Def.ForceLive);
+  Assert.IsFalse(Def.IsCopy);
+  Assert.AreEqual(Ord(paSaveViewNative), Ord(Def.Action));
+end;
+
+procedure TTestToolbarLayout.FindViewVariant_CopyLive_Found;
+var
+  Def: TViewVariantDef;
+begin
+  Assert.IsTrue(FindViewVariantByTag(CM_COPY_VIEW_LIVE, Def));
+  Assert.IsTrue(Def.ForceLive);
+  Assert.IsTrue(Def.IsCopy);
+  Assert.AreEqual(Ord(paCopyViewLive), Ord(Def.Action));
+end;
+
+procedure TTestToolbarLayout.FindViewVariant_CopyNative_Found;
+var
+  Def: TViewVariantDef;
+begin
+  Assert.IsTrue(FindViewVariantByTag(CM_COPY_VIEW_NATIVE, Def));
+  Assert.IsFalse(Def.ForceLive);
+  Assert.IsTrue(Def.IsCopy);
+  Assert.AreEqual(Ord(paCopyViewNative), Ord(Def.Action));
+end;
+
+procedure TTestToolbarLayout.FindViewVariant_UnknownTag_ReturnsFalse;
+var
+  Def: TViewVariantDef;
+begin
+  {Tag well outside any used command range. The caller (the
+   UpdateResolutionMenuLabels loop) uses False to Continue past items
+   that are not one of the four resolution variants — defensive
+   handling for menus that mix variant items with other tags.}
+  Assert.IsFalse(FindViewVariantByTag(99999, Def));
+end;
+
+procedure TTestToolbarLayout.FindViewVariant_NonViewVariantTag_ReturnsFalse;
+var
+  Def: TViewVariantDef;
+begin
+  {Tags that exist in the system but are not view variants (e.g.
+   CM_SAVE_FRAME, CM_REFRESH) must also be rejected — the menus
+   sometimes carry both kinds.}
+  Assert.IsFalse(FindViewVariantByTag(CM_SAVE_FRAME, Def));
+  Assert.IsFalse(FindViewVariantByTag(CM_REFRESH, Def));
+  Assert.IsFalse(FindViewVariantByTag(CM_SAVE_VIEW, Def),
+    'CM_SAVE_VIEW (the persisted-setting variant) is intentionally NOT in the table');
 end;
 
 initialization
