@@ -54,6 +54,8 @@ type
     [Test] procedure ViewVariants_SaveItems_IsCopyAllFalse;
     [Test] procedure ViewVariants_CopyItems_IsCopyAllTrue;
     [Test] procedure ViewVariants_ActionsMapToCorrectEnumValues;
+    { MODE_GLYPH_INDEX const-array pinning }
+    [Test] procedure ModeGlyphIndex_AllValuesMatchExpected;
     { FindViewVariantByTag }
     [Test] procedure FindViewVariant_SaveLive_Found;
     [Test] procedure FindViewVariant_SaveNative_Found;
@@ -741,6 +743,21 @@ begin
   Assert.AreEqual(Ord(paSaveViewNative), Ord(SAVE_VIEW_VARIANTS[1].Action));
   Assert.AreEqual(Ord(paCopyViewLive),   Ord(COPY_VIEW_VARIANTS[0].Action));
   Assert.AreEqual(Ord(paCopyViewNative), Ord(COPY_VIEW_VARIANTS[1].Action));
+end;
+
+procedure TTestToolbarLayout.ModeGlyphIndex_AllValuesMatchExpected;
+begin
+  {Pins the per-mode glyph index table. CreateToolbar reads this to set
+   the mode button's ImageIndex; OnHamburgerMenuPopup reads it to set
+   the corresponding menu item's image. Both call sites used to hardcode
+   the same vmScroll/vmFilmstrip mapping with literal constants — this
+   array is the single source of truth, and the test pins each slot so
+   accidentally swapping the two scroll modes' icons would fail loudly.}
+  Assert.AreEqual(-1, MODE_GLYPH_INDEX[vmSmartGrid]);
+  Assert.AreEqual(-1, MODE_GLYPH_INDEX[vmGrid]);
+  Assert.AreEqual(IDX_ICON_ARROW_W, MODE_GLYPH_INDEX[vmScroll]);
+  Assert.AreEqual(IDX_ICON_ARROW_H, MODE_GLYPH_INDEX[vmFilmstrip]);
+  Assert.AreEqual(-1, MODE_GLYPH_INDEX[vmSingle]);
 end;
 
 procedure TTestToolbarLayout.FindViewVariant_SaveLive_Found;

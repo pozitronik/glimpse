@@ -82,9 +82,28 @@ const
   CAPTION_COPY_VIEW_LIVE = 'Copy view at view resolution';
   CAPTION_COPY_VIEW_NATIVE = 'Copy view at native size';
 
+  {Indices into the toolbar image list (FToolbarImages in uPluginForm).
+   The list is loaded by uPluginForm.CreateToolbar from three icon
+   resources; the slot order is intentional and shared by both the
+   toolbar buttons and the hamburger overflow menu.}
+  IDX_ICON_HAMBURGER = 0;
+  IDX_ICON_ARROW_W = 1; {Vertical arrow for vmScroll}
+  IDX_ICON_ARROW_H = 2; {Horizontal arrow for vmFilmstrip}
+
   {Toolbar buttons differentiate the two scroll modes via icons (see
    uPluginForm.CreateToolbar); both modes share the textual caption.}
   MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Scroll', 'Single');
+
+  {Per-mode glyph index in FToolbarImages. -1 means "no glyph". Used by
+   CreateToolbar to set the mode button image and by OnHamburgerMenuPopup
+   to set the corresponding menu item image. Previously these mappings
+   were duplicated literal assignments in both call sites.}
+  MODE_GLYPH_INDEX: array [TViewMode] of Integer = (
+    {vmSmartGrid}-1,
+    {vmGrid}-1,
+    {vmScroll}IDX_ICON_ARROW_W,
+    {vmFilmstrip}IDX_ICON_ARROW_H,
+    {vmSingle}-1);
 
   {Tooltip text per view mode. Disambiguates the two modes that share the
    "Scroll" caption (vmScroll = vertical, vmFilmstrip = horizontal).}

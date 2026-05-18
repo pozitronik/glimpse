@@ -486,13 +486,6 @@ begin
 end;
 
 const
-  {Toolbar icon list slots; loaded in CreateToolbar in this order and
-   referenced from OnHamburgerMenuPopup as well, so the indices live at
-   unit scope instead of inside CreateToolbar's local const block.}
-  IDX_ICON_HAMBURGER = 0;
-  IDX_ICON_ARROW_W = 1; {Vertical arrow for vmScroll}
-  IDX_ICON_ARROW_H = 2; {Horizontal arrow for vmFilmstrip}
-
   {Deferred self-subclass: installed after TC subclasses us so we fire first}
   FORM_SUBCLASS_ID = 2;
   WM_DEFERRED_INIT = WM_USER + 102; {Triggers self-subclass installation}
@@ -846,18 +839,13 @@ begin
     FModeButtons[VM].TabOrder := TabIdx;
     FModeButtons[VM].OnClick := OnModeButtonClick;
 
-    if VM = vmScroll then
+    if MODE_GLYPH_INDEX[VM] >= 0 then
     begin
       FModeButtons[VM].Images := FToolbarImages;
-      FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_W;
+      FModeButtons[VM].ImageIndex := MODE_GLYPH_INDEX[VM];
       {Qualified — TIconArrangement (Vcl.ComCtrls) also defines iaRight.
        Icon sits to the right of the caption, matching the original ↕/↔
        glyph position.}
-      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
-    end else if VM = vmFilmstrip then
-    begin
-      FModeButtons[VM].Images := FToolbarImages;
-      FModeButtons[VM].ImageIndex := IDX_ICON_ARROW_H;
       FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end;
 
@@ -1055,10 +1043,8 @@ begin
   begin
     State.ModeZooms[VM] := FSettings.ModeZoom[VM];
     State.ModeHasSubmenu[VM] := FModePopups[VM] <> nil;
-    State.ModeImageIndex[VM] := -1;
+    State.ModeImageIndex[VM] := MODE_GLYPH_INDEX[VM];
   end;
-  State.ModeImageIndex[vmScroll] := IDX_ICON_ARROW_W;
-  State.ModeImageIndex[vmFilmstrip] := IDX_ICON_ARROW_H;
 
   PopulateHamburgerMenu(FHamburgerMenu, State, OnHamburgerModeClick, OnHamburgerZoomClick, OnTimecodeButtonClick, OnHamburgerActionClick);
   UpdateResolutionMenuLabels(FHamburgerMenu);
