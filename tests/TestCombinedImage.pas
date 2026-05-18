@@ -164,7 +164,7 @@ implementation
 uses
   Winapi.Windows,
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
-  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uDefaults;
+  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uRenderDefaults, uDefaults;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for

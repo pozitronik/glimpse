@@ -44,6 +44,7 @@ uses
   uExtractionController in 'uExtractionController.pas',
   uSaveResolutionExtractor in 'uSaveResolutionExtractor.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
+  uRenderDefaults in '..\src\uRenderDefaults.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',

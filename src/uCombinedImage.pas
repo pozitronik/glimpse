@@ -81,10 +81,6 @@ function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
  Reads file size from disk; all other fields come from AVideoInfo.}
 function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
 
-{Returns the historical defaults (dark bg, light text, Segoe UI, auto size, top).
- Useful for tests and as a fallback when a caller has no configured style.}
-function DefaultBannerStyle: TBannerStyle;
-
 {Attaches a solid-color info banner above or below an existing bitmap.
  @param ASrc Source bitmap (not freed; caller still owns it)
  @param ALines Text lines to display (empty array = no banner, returns copy of ASrc)
@@ -132,10 +128,6 @@ procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect; co
  don't have to repeat that gating themselves.}
 procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect; ATimeOffset: Double; const AStyle: TTimestampStyle);
 
-{Returns the historical defaults for the grid layout (auto columns, no gap,
- no border, black background). Callers override individual fields as needed.}
-function DefaultCombinedGridStyle: TCombinedGridStyle;
-
 {Builds a TRGBQuad from AGrid.Background + AGrid.BackgroundAlpha. Surfaced
  in the interface so test code can construct the same gap/border colour
  the production lift wrappers use.}
@@ -155,11 +147,6 @@ function GridBackgroundQuad(const AGrid: TCombinedGridStyle): TRGBQuad;
 
  Caller owns the returned bitmap.}
 function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad; const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
-
-{Returns the historical defaults for the timestamp overlay (hidden, bottom-left,
- Consolas 9pt, black legacy-shadow background, white text). Callers override
- individual fields as needed.}
-function DefaultTimestampStyle: TTimestampStyle;
 
 {Renders all frames into a single grid image.
  @param AFrames Array of frame bitmaps (nil entries are skipped)
@@ -407,16 +394,6 @@ begin
       Exit(Size);
   end;
   Result := BANNER_FONT_MIN;
-end;
-
-function DefaultBannerStyle: TBannerStyle;
-begin
-  Result.Background := DEF_BANNER_BACKGROUND;
-  Result.TextColor := DEF_BANNER_TEXT_COLOR;
-  Result.FontName := DEF_BANNER_FONT_NAME;
-  Result.FontSize := DEF_BANNER_FONT_SIZE;
-  Result.AutoSize := DEF_BANNER_FONT_AUTO_SIZE;
-  Result.Position := DEF_BANNER_POSITION;
 end;
 
 {Forces every pixel in the banner band to alpha=255 so the GDI banner
@@ -801,15 +778,6 @@ begin
     DrawLegacyTimecodeOverlay(ACanvas, ACellRect, Tc, AStyle);
 end;
 
-function DefaultCombinedGridStyle: TCombinedGridStyle;
-begin
-  Result.Columns := 0;
-  Result.CellGap := 0;
-  Result.Border := DEF_COMBINED_BORDER;
-  Result.Background := clBlack;
-  Result.BackgroundAlpha := DEF_BACKGROUND_ALPHA;
-end;
-
 {Rect-driven alpha-aware lift core. Allocates a pf32bit bitmap matching
  ASource, fills it with ABg (gap/border colour + alpha), then re-stamps
  each cell rect with the source RGB at alpha=255. Used by both the
@@ -909,19 +877,6 @@ begin
     Rects[I].Bottom := FrameY + ACellH;
   end;
   Result := LiftToAlphaAwareCore(ASource, GridBackgroundQuad(AGrid), AFrames, Rects);
-end;
-
-function DefaultTimestampStyle: TTimestampStyle;
-begin
-  Result.Show := False;
-  Result.Corner := DEF_TIMESTAMP_CORNER;
-  Result.FontName := 'Consolas';
-  Result.FontSize := 9;
-  Result.FontStyles := [fsBold];
-  Result.BackColor := DEF_TC_BACK_COLOR;
-  Result.BackAlpha := 0;
-  Result.TextColor := DEF_TIMESTAMP_TEXT_COLOR;
-  Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
 end;
 
 function ResolveCombinedGridCols(AFrameCount, ARequestedCols: Integer): Integer;

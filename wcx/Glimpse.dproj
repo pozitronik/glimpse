@@ -76,6 +76,7 @@
         <DCCReference Include="..\src\uDefaults.pas"/>
         <DCCReference Include="..\src\uFrameExtractor.pas"/>
         <DCCReference Include="..\src\uCombinedImage.pas"/>
+        <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uHotkeys.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>

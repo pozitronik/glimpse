@@ -85,6 +85,7 @@ uses
   uUnicodeIniFile in '..\src\uUnicodeIniFile.pas',
   TestUnicodeIniFile in 'TestUnicodeIniFile.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
+  uRenderDefaults in '..\src\uRenderDefaults.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',
