@@ -29,19 +29,20 @@ type
     [Test] procedure Caps_FlagsArePowersOfTwo;
     [Test] procedure ErrorCodes_UniqueValues;
     {Concurrency: TC may dispatch OpenArchive / ConfigurePacker on different
-     threads. The cache mutator must serialise via GCacheLock so two threads
-     cannot interleave directory deletion and field assignments.}
+     threads. TWcxFrameCache.Invalidate must serialise via the instance
+     lock so two threads cannot interleave directory deletion and field
+     assignments.}
     [Test] procedure InvalidateFrameCache_Concurrent_DoesNotCrash;
     {Regression: when DoOpenArchive's body raises after PreExtractFrames has
-     populated GCachedVideoFile and GCachedTempDir, the except branch must
-     invalidate the cache. Without that, a subsequent OpenArchive on the
-     same file finds a stale cache hit and returns paths into a partial /
-     deleted directory. The seed helper mimics what PreExtractFrames leaves
-     behind; InvalidateFrameCache (called from the except block) wipes it.}
+     populated the cache, the except branch must invalidate it. Without
+     that, a subsequent OpenArchive on the same file finds a stale cache
+     hit and returns paths into a partial / deleted directory. The seed
+     helper mimics what PreExtractFrames leaves behind; Invalidate
+     (called from the except block) wipes it.}
     [Test] procedure InvalidateFrameCache_AfterSeed_ResetsAllFieldsAndDeletesTempDir;
     {Regression: when the temp directory contained a file held by a sharing-
      violating handle (antivirus, another process), TDirectory.Delete raised
-     and the exception escaped InvalidateFrameCache. The procedure runs from
+     and the exception escaped Invalidate. The procedure runs from
      finalization, so an unhandled exception there could crash the host on
      DLL unload. The fix swallows the delete failure and still resets every
      field, leaving a (best-effort) clean state.}
@@ -72,7 +73,7 @@ implementation
 
 uses
   Winapi.Windows, System.SysUtils, System.IOUtils, System.Classes, System.SyncObjs,
-  uWcxAPI, uWcxExports;
+  uWcxAPI, uWcxExports, uWcxFrameCache;
 
 { THeaderDataExW }
 
@@ -242,7 +243,7 @@ begin
   FStart.WaitFor(INFINITE);
   try
     for I := 1 to FIterations do
-      InvalidateFrameCache;
+      TWcxFrameCache.Instance.Invalidate;
   except
     on E: Exception do
       FException := E.ClassName + ': ' + E.Message;
@@ -260,10 +261,11 @@ var
   I: Integer;
   FailureMsg: string;
 begin
-  {Manual-reset start gate so all threads charge into InvalidateFrameCache
-   simultaneously, maximising the chance of contention. Without GCacheLock,
-   the directory-delete and field-clear sequence races; with the lock,
-   every iteration is atomic and the unit must survive the storm cleanly.}
+  {Manual-reset start gate so all threads charge into TWcxFrameCache.Invalidate
+   simultaneously, maximising the chance of contention. Without the
+   instance lock, the directory-delete and field-clear sequence races;
+   with the lock, every iteration is atomic and the cache must survive
+   the storm cleanly.}
   StartGate := TEvent.Create(nil, True, False, '');
   try
     for I := 0 to THREAD_COUNT - 1 do
@@ -295,26 +297,26 @@ begin
   TempDir := TPath.Combine(TPath.GetTempPath, 'wcx_seed_' + TGuid.NewGuid.ToString);
   TDirectory.CreateDirectory(TempDir);
   try
-    {Mimic PreExtractFrames partial population: globals point to a real
-     temp directory holding (in production) some half-written frames.}
-    WcxTest_SeedCacheState('C:\fake_video.mp4', TempDir);
-    Assert.AreEqual('C:\fake_video.mp4', WcxTest_CachedVideoFile,
+    {Mimic PreExtractFrames partial population: cache fields point to a
+     real temp directory holding (in production) some half-written frames.}
+    TWcxFrameCache.Instance.SeedForTesting('C:\fake_video.mp4', TempDir);
+    Assert.AreEqual('C:\fake_video.mp4', TWcxFrameCache.Instance.CachedVideoFile,
       'Sanity: seed populated the video-file slot');
-    Assert.AreEqual(TempDir, WcxTest_CachedTempDir,
+    Assert.AreEqual(TempDir, TWcxFrameCache.Instance.CachedTempDir,
       'Sanity: seed populated the temp-dir slot');
     Assert.IsTrue(TDirectory.Exists(TempDir));
 
     {This is what DoOpenArchive's except branch now does. Both fields must
      end up empty and the temp directory must be deleted, otherwise a
      subsequent OpenArchive on the same video would erroneously reuse it.}
-    InvalidateFrameCache;
+    TWcxFrameCache.Instance.Invalidate;
 
-    Assert.AreEqual('', WcxTest_CachedVideoFile,
+    Assert.AreEqual('', TWcxFrameCache.Instance.CachedVideoFile,
       'Video-file slot must be empty after invalidation');
-    Assert.AreEqual('', WcxTest_CachedTempDir,
+    Assert.AreEqual('', TWcxFrameCache.Instance.CachedTempDir,
       'Temp-dir slot must be empty after invalidation');
     Assert.IsFalse(TDirectory.Exists(TempDir),
-      'Temp directory must be deleted by InvalidateFrameCache');
+      'Temp directory must be deleted by Invalidate');
   finally
     if TDirectory.Exists(TempDir) then
       TDirectory.Delete(TempDir, True);
@@ -329,31 +331,31 @@ begin
    TDirectory.Delete raises mid-flight (locked file, antivirus, missing
    permission, race-removed directory, etc.). Because the production
    primitive is hard to make fail deterministically across Delphi RTL
-   versions, the unit exposes a test-only injection point. The test
+   versions, the cache exposes a test-only injection point. The test
    binds a thrower in place of TDirectory.Delete and asserts:
-   1. InvalidateFrameCache does not propagate the exception (finalization-
-      safe, the original bug).
+   1. Invalidate does not propagate the exception (finalization-safe,
+      the original bug).
    2. Every cache field is still cleared even though the deletion failed.}
   TempDir := TPath.Combine(TPath.GetTempPath, 'wcx_inject_' + TGuid.NewGuid.ToString);
   TDirectory.CreateDirectory(TempDir);
   try
-    WcxTest_SeedCacheState('C:\fake.mp4', TempDir);
-    WcxTest_SetDeleteDirectoryProc(
+    TWcxFrameCache.Instance.SeedForTesting('C:\fake.mp4', TempDir);
+    TWcxFrameCache.Instance.SetDeleteDirectoryProc(
       procedure(const APath: string)
       begin
         raise EInOutError.Create('simulated delete failure');
       end);
     try
       Assert.WillNotRaise(
-        procedure begin InvalidateFrameCache; end,
+        procedure begin TWcxFrameCache.Instance.Invalidate; end,
         nil,
-        'InvalidateFrameCache must not propagate delete failures');
+        'Invalidate must not propagate delete failures');
 
-      Assert.AreEqual('', WcxTest_CachedVideoFile,
+      Assert.AreEqual('', TWcxFrameCache.Instance.CachedVideoFile,
         'Field reset must run even when delete failed');
-      Assert.AreEqual('', WcxTest_CachedTempDir);
+      Assert.AreEqual('', TWcxFrameCache.Instance.CachedTempDir);
     finally
-      WcxTest_ResetDeleteDirectoryProc;
+      TWcxFrameCache.Instance.ResetDeleteDirectoryProc;
     end;
   finally
     if TDirectory.Exists(TempDir) then

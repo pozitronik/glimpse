@@ -79,6 +79,7 @@
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
         <DCCReference Include="..\src\uVideoProbing.pas"/>
+        <DCCReference Include="uWcxFrameCache.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uHotkeys.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>

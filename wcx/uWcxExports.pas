@@ -40,31 +40,6 @@ function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar; Flags: Inte
 {Shows configuration dialog}
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 
-{Drops the module-level pre-extraction cache. Public so the settings dialog
- callback and the concurrency stress test can both invoke it; in-process
- callers must not assume it returns synchronously without the cache lock.}
-procedure InvalidateFrameCache;
-
-{Test-only seed and inspection of the module-level cache state. PRODUCTION
- CODE MUST NOT CALL THESE. They exist so a regression test for the
- DoOpenArchive exception-cleanup path can mimic the partial state that
- PreExtractFrames populates before raising, then assert InvalidateFrameCache
- wipes it.}
-procedure WcxTest_SeedCacheState(const AVideoFile, ATempDir: string);
-function WcxTest_CachedVideoFile: string;
-function WcxTest_CachedTempDir: string;
-
-type
-  TWcxDeleteDirectoryProc = reference to procedure(const APath: string);
-
-  {Test-only injection point for the directory-delete primitive used by
-   InvalidateFrameCache. Defaults to TDirectory.Delete(_, True). Tests
-   swap in a thrower to drive the exception path that the production
-   try/except must swallow without crashing the host on DLL unload.
-   PRODUCTION CODE MUST NOT CALL THESE.}
-procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
-procedure WcxTest_ResetDeleteDirectoryProc;
-
 {Clamps a 64-bit file size into the 32-bit signed range used by the WCX
  ANSI ReadHeader (THeaderData.UnpSize is Integer). Negative input is
  promoted to zero (defensive; sizes from disk are non-negative); values
@@ -90,12 +65,13 @@ function ExceptionToWcxError(E: Exception): Integer;
 implementation
 
 uses
-  System.AnsiStrings, System.Classes, System.IOUtils, System.SyncObjs,
+  System.AnsiStrings, System.Classes, System.IOUtils,
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
   uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize,
-  uWcxPresets, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor;
+  uWcxPresets, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor,
+  uWcxFrameCache;
 
 type
   {State for one open archive (video file)}
@@ -132,22 +108,6 @@ type
 
 var
   GIniPath: string;
-  {Serialises every read and write of the module-level frame cache below.
-   TC may dispatch OpenArchive / ConfigurePacker / finalization on different
-   threads; without the lock two threads could both enter PreExtractFrames,
-   one would InvalidateFrameCache while the other was writing into the same
-   GCachedTempDir, corrupting state and leaking temp files.}
-  GCacheLock: TCriticalSection;
-  {Module-level cache for pre-extracted frames (survives across OpenArchive calls).
-   All access goes through GCacheLock.}
-  GCachedVideoFile: string;
-  GCachedTempDir: string;
-  GCachedTempPaths: TArray<string>;
-  GCachedEntrySizes: TArray<Int64>;
-  {Indirection for the recursive directory deletion. Production points
-   at DefaultDeleteDirectory; tests rebind via WcxTest_SetDeleteDirectoryProc
-   to drive the exception-swallowing path of InvalidateFrameCacheLocked.}
-  GDeleteDirectoryProc: TWcxDeleteDirectoryProc;
 
 procedure WcxLog(const AMsg: string);
 begin
@@ -167,11 +127,6 @@ begin
   Result.UseKeyframes := ASettings.UseKeyframes;
   Result.RespectAnamorphic := ASettings.RespectAnamorphic;
   Result.MaxSide := AMaxSide;
-end;
-
-procedure DefaultDeleteDirectory(const APath: string);
-begin
-  TDirectory.Delete(APath, True);
 end;
 
 function ClampSizeForAnsiHeader(AValue: Int64): Integer;
@@ -201,109 +156,6 @@ begin
   else
     Result := ExceptionClassToWcxError(E.ClassType);
 end;
-
-{Cache mutator that assumes GCacheLock is already held. Used by
- PreExtractFrames which acquires the lock for its full body and then
- needs to discard a stale cache without re-entering. External callers go
- through InvalidateFrameCache.
- The directory delete is wrapped in try/except: this routine runs from
- the unit's finalization (and from any failure path during DLL unload),
- and an unhandled exception there can crash the host process. The field
- reset must run regardless so the globals are not left dangling against
- a directory that may or may not exist.}
-procedure InvalidateFrameCacheLocked;
-begin
-  if (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
-    try
-      GDeleteDirectoryProc(GCachedTempDir);
-    except
-      on E: Exception do
-        WcxLog(Format('InvalidateFrameCache: delete failed for %s: %s: %s', [GCachedTempDir, E.ClassName, E.Message]));
-    end;
-  GCachedVideoFile := '';
-  GCachedTempDir := '';
-  GCachedTempPaths := nil;
-  GCachedEntrySizes := nil;
-end;
-
-{Runs AProc with GCacheLock held. Five short cache-access blocks below
- use it to collapse the identical Enter/try/finally/Leave wrapper to one
- line. Not used for PreExtractFrames because its body needs Exit from
- the enclosing function on a cache-hit, which an anonymous method
- cannot do (Exit from a TProc returns from the closure, not the outer).
- Interim helper — when step 40 (C11) lifts the cache state into a
- TWcxFrameCache class, the lock becomes a class invariant and this
- helper is no longer needed.}
-procedure WithCacheLock(const AProc: TProc);
-begin
-  GCacheLock.Enter;
-  try
-    AProc();
-  finally
-    GCacheLock.Leave;
-  end;
-end;
-
-procedure InvalidateFrameCache;
-begin
-  WithCacheLock(
-    procedure
-    begin
-      InvalidateFrameCacheLocked;
-    end);
-end;
-
-procedure WcxTest_SeedCacheState(const AVideoFile, ATempDir: string);
-begin
-  WithCacheLock(
-    procedure
-    begin
-      GCachedVideoFile := AVideoFile;
-      GCachedTempDir := ATempDir;
-    end);
-end;
-
-function WcxTest_CachedVideoFile: string;
-var
-  Captured: string;
-begin
-  WithCacheLock(
-    procedure
-    begin
-      Captured := GCachedVideoFile;
-    end);
-  Result := Captured;
-end;
-
-function WcxTest_CachedTempDir: string;
-var
-  Captured: string;
-begin
-  WithCacheLock(
-    procedure
-    begin
-      Captured := GCachedTempDir;
-    end);
-  Result := Captured;
-end;
-
-procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
-begin
-  WithCacheLock(
-    procedure
-    begin
-      if Assigned(AProc) then
-        GDeleteDirectoryProc := AProc
-      else
-        GDeleteDirectoryProc := DefaultDeleteDirectory;
-    end);
-end;
-
-procedure WcxTest_ResetDeleteDirectoryProc;
-begin
-  WcxTest_SetDeleteDirectoryProc(nil);
-end;
-
 
 function GetEntryCount(H: TArchiveHandle): Integer;
 begin
@@ -383,7 +235,8 @@ end;
  The combined slot is the one immediately after the frames — when frames
  are also being shown the combined image lands at index Length(Offsets);
  when frames are off it lands at index 0.}
-procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor);
+procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
+  const ASession: TWcxCacheExtractionSession);
 var
   Combined: TBitmap;
   TempPath: string;
@@ -393,21 +246,21 @@ begin
   if Combined = nil then
     Exit;
   try
-    TempPath := TPath.Combine(GCachedTempDir, GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
+    TempPath := TPath.Combine(ASession.CachedTempDir, GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
     SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
     if H.Settings.ShowFrames then
       Slot := Length(H.Offsets)
     else
       Slot := 0;
-    GCachedTempPaths[Slot] := TempPath;
-    GCachedEntrySizes[Slot] := TFile.GetSize(TempPath);
+    ASession.RecordSlot(Slot, TempPath, TFile.GetSize(TempPath));
   finally
     Combined.Free;
   end;
 end;
 
 {Extracts individual frames and saves each to cache}
-procedure ExtractSeparateToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor);
+procedure ExtractSeparateToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
+  const ASession: TWcxCacheExtractionSession);
 var
   Bmp: TBitmap;
   TempPath: string;
@@ -421,70 +274,59 @@ begin
     if Bmp = nil then
       Continue;
     try
-      TempPath := TPath.Combine(GCachedTempDir, GenerateFrameFileName(H.FileName, I, H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
+      TempPath := TPath.Combine(ASession.CachedTempDir, GenerateFrameFileName(H.FileName, I, H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
       SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
-      GCachedTempPaths[I] := TempPath;
-      GCachedEntrySizes[I] := TFile.GetSize(TempPath);
+      ASession.RecordSlot(I, TempPath, TFile.GetSize(TempPath));
     finally
       Bmp.Free;
     end;
   end;
 end;
 
-{Pre-extracts all frames to a module-level temp cache, or reuses
- an existing cache if the same video was already extracted.
- The whole body runs under GCacheLock so a concurrent OpenArchive on a
- second thread cannot race on the temp-dir creation or invalidation.
- The helpers ExtractCombinedToCache / ExtractSeparateToCache touch the
- globals directly and rely on this caller holding the lock.}
+{Pre-extracts all frames to the module's TWcxFrameCache, or reuses an
+ existing cache entry if the same video was already extracted.
+ The session held by BeginExtractionSession owns the cache lock for its
+ lifetime — a concurrent OpenArchive on a second thread blocks here
+ until this pass finishes, which is intentional: two threads on the
+ same video must not both proceed past the cache-hit check.
+ Security caveat: the temp directory inherits the parent (user temp)
+ ACL, so other processes running as the same user can read the
+ extracted frames. Same exposure as ffmpeg's own temp output and as the
+ WLX frame cache. Tightening would require an explicit per-directory
+ ACL via SetSecurityInfo. Acceptable for a single-user TC session;
+ revisit if multi-user or sandboxed contexts ever become a use case.}
 procedure PreExtractFrames(H: TArchiveHandle);
 var
+  Session: TWcxCacheExtractionSession;
   Extractor: IFrameExtractor;
   EntryCount: Integer;
+  TempDir: string;
 begin
-  GCacheLock.Enter;
+  Session := TWcxFrameCache.Instance.BeginExtractionSession;
   try
-    {Reuse cached extraction if available for the same video}
-    if (GCachedVideoFile = H.FileName) and (GCachedTempDir <> '') and TDirectory.Exists(GCachedTempDir) then
+    if Session.TryHit(H.FileName, H.TempPaths, H.EntrySizes) then
     begin
-      H.TempPaths := GCachedTempPaths;
-      H.EntrySizes := GCachedEntrySizes;
       WcxLog(Format('PreExtract: cache hit for %s', [H.FileName]));
       Exit;
     end;
 
-    {Different video or no cache: invalidate old cache and extract fresh.
-     Security caveat: the temp directory inherits the parent (user temp)
-     ACL, so other processes running as the same user can read the
-     extracted frames. This is the same exposure as ffmpeg's own temp
-     output and matches the WLX frame cache; tightening would require an
-     explicit per-directory ACL via SetSecurityInfo. Acceptable for a
-     single-user TC session; revisit if multi-user or sandboxed contexts
-     ever become a use case.}
-    InvalidateFrameCacheLocked;
-    GCachedTempDir := TPath.Combine(TPath.GetTempPath, 'glimpse_wcx_' + TPath.GetGUIDFileName(False));
-    TDirectory.CreateDirectory(GCachedTempDir);
-    GCachedVideoFile := H.FileName;
-
-    Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
     {Cache arrays size to legacy entries only; preset entries do not
      pre-extract (they run on demand during ProcessFile).}
     EntryCount := LegacyEntryCount(H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined);
-    SetLength(GCachedTempPaths, EntryCount);
-    SetLength(GCachedEntrySizes, EntryCount);
+    TempDir := Session.PrepareFresh(H.FileName, EntryCount);
 
+    Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
     {Each enabled mode populates its own cache slots. Both can run in
      the same pass when the user has both Show* bits on.}
     if H.Settings.ShowFrames then
-      ExtractSeparateToCache(H, Extractor);
+      ExtractSeparateToCache(H, Extractor, Session);
     if H.Settings.ShowCombined then
-      ExtractCombinedToCache(H, Extractor);
+      ExtractCombinedToCache(H, Extractor, Session);
 
-    H.TempPaths := GCachedTempPaths;
-    H.EntrySizes := GCachedEntrySizes;
-    WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, GCachedTempDir]));
+    Session.PublishTo(H.TempPaths, H.EntrySizes);
+    WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, TempDir]));
   finally
-    GCacheLock.Leave;
+    Session.Free;
   end;
 end;
 
@@ -570,7 +412,7 @@ begin
      reset, a subsequent OpenArchive on the same video file would treat the
      partial directory as a cache hit and serve garbage entries (or trip
      over missing temp files mid-extraction).}
-    InvalidateFrameCache;
+    TWcxFrameCache.Instance.Invalidate;
     AOpenResult := E_BAD_ARCHIVE;
   end;
 end;
@@ -1035,15 +877,15 @@ begin
     if ShowWcxSettingsDialog(Parent, Settings,
       procedure
       begin
-        InvalidateFrameCache;
+        TWcxFrameCache.Instance.Invalidate;
       end) then
     begin
       {ShowWcxSettingsDialog returns True only when TrySaveAll succeeded,
        which already called TWcxSettings.Save AND invoked the apply
-       callback (InvalidateFrameCache above). Keeping the InvalidateFrameCache
-       here is belt-and-braces in case the dialog's contract changes;
-       the previous duplicate Settings.Save was removed.}
-      InvalidateFrameCache;
+       callback (Invalidate above). Keeping the Invalidate here is
+       belt-and-braces in case the dialog's contract changes; the
+       previous duplicate Settings.Save was removed.}
+      TWcxFrameCache.Instance.Invalidate;
     end;
   finally
     Settings.Free;
@@ -1051,9 +893,6 @@ begin
 end;
 
 initialization
-
-GCacheLock := TCriticalSection.Create;
-GDeleteDirectoryProc := DefaultDeleteDirectory;
 
 {Fallback: INI next to the DLL, in case SetDefaultParams is not called
  before ConfigurePacker or OpenArchive}
@@ -1073,7 +912,6 @@ Randomize;
 
 finalization
 
-InvalidateFrameCache;
-GCacheLock.Free;
+TWcxFrameCache.ReleaseInstance;
 
 end.
