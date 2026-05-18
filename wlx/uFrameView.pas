@@ -108,6 +108,19 @@ type
     property BackColor: TColor read FBackColor write SetBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
     property ZoomFactor: Double read FZoomFactor write FZoomFactor;
+    {Named transaction boundary for "the zoom factor is changing." Body
+     is currently just `FZoomFactor := ANewFactor;` — a thin wrapper
+     intended to grow with later refactors (validation, animation, undo
+     hooks). Replaces the direct property write so a debugger break-on
+     "zoom transition" has a single landing site.
+
+     Deliberately does NOT call RecalcSize. Callers always pair the
+     zoom write with form-side UpdateFrameViewSize (which adjusts
+     scrollbox visibility, column count, viewport, and then calls
+     RecalcSize itself). Calling RecalcSize here would cause an extra
+     paint cycle before UpdateFrameViewSize's scrollbox-visibility
+     adjustment settled — a visible flicker.}
+    procedure ApplyZoom(ANewFactor: Double);
     {Convenience accessor: the timecode toggle button and settings write-back
      only care about the visible/hidden flag, so it gets a narrow property;
      the rest of the overlay configuration flows through TimestampStyle.}
@@ -720,6 +733,11 @@ procedure TFrameView.AdvanceAnimation;
 begin
   FAnimStep := (FAnimStep + 1) mod ANIM_STEP_COUNT;
   Invalidate;
+end;
+
+procedure TFrameView.ApplyZoom(ANewFactor: Double);
+begin
+  FZoomFactor := ANewFactor;
 end;
 
 procedure TFrameView.RecalcSize;

@@ -1570,7 +1570,7 @@ end;
 
 procedure TPluginForm.ActivateMode(AMode: TViewMode);
 begin
-  FFrameView.ZoomFactor := 1.0;
+  FFrameView.ApplyZoom(1.0);
   FFrameView.ViewMode := AMode;
   {Mode change might have altered the effective per-frame viewport
    (grid<->single), so kick the debounce timer; the actual refresh only
@@ -1618,7 +1618,7 @@ begin
   SendMessage(FScrollBox.Handle, WM_SETREDRAW, wParam(False), 0);
   FUpdatingLayout := True;
   try
-    FFrameView.ZoomFactor := NewF;
+    FFrameView.ApplyZoom(NewF);
     UpdateFrameViewSize;
     FScrollBox.HorzScrollBar.Position := DenormalizeViewportCenter(NormX, FFrameView.Width, FScrollBox.ClientWidth);
     FScrollBox.VertScrollBar.Position := DenormalizeViewportCenter(NormY, FFrameView.Height, FScrollBox.ClientHeight);
@@ -1633,7 +1633,7 @@ procedure TPluginForm.ResetZoom;
 begin
   if SameValue(FFrameView.ZoomFactor, 1.0, ZOOM_EPSILON) then
     Exit;
-  FFrameView.ZoomFactor := 1.0;
+  FFrameView.ApplyZoom(1.0);
   UpdateFrameViewSize;
 end;
 
@@ -1671,7 +1671,7 @@ begin
   if FFrameView.ZoomMode = NewZM then
     Exit;
 
-  FFrameView.ZoomFactor := 1.0;
+  FFrameView.ApplyZoom(1.0);
   FFrameView.ZoomMode := NewZM;
   UpdateFrameViewSize;
   SyncZoomMenuChecks(FFrameView.ViewMode, NewZM);

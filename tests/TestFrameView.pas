@@ -197,6 +197,13 @@ type
     [Test] procedure TestSingleZoomedRecalcSize;
     [Test] procedure TestGridZoomPreservesOnResize;
     [Test] procedure TestGridVerticalCentering;
+    {ApplyZoom is the named transaction wrapper for the ZoomFactor
+     write (step 60). Body is currently one line — sets FZoomFactor —
+     and deliberately does NOT call RecalcSize. The test pins both
+     properties: the write happens, and Self.Width is unchanged until
+     the caller triggers a separate layout pass.}
+    [Test] procedure TestApplyZoomSetsZoomFactor;
+    [Test] procedure TestApplyZoomDoesNotImmediatelyResize;
   end;
 
 implementation
@@ -2945,6 +2952,47 @@ begin
     Assert.IsTrue(R.Height >= 1, 'Zero native in actual mode must clamp to at least 1');
   finally
     FreeTestFrameView(V);
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestApplyZoomSetsZoomFactor;
+var
+  V: TFrameView;
+begin
+  V := TFrameView.Create(nil);
+  try
+    V.ApplyZoom(2.5);
+    Assert.AreEqual(Double(2.5), V.ZoomFactor, 0.001,
+      'ApplyZoom must write the new factor into ZoomFactor');
+    V.ApplyZoom(1.0);
+    Assert.AreEqual(Double(1.0), V.ZoomFactor, 0.001,
+      'Subsequent ApplyZoom calls overwrite the prior factor');
+  finally
+    V.Free;
+  end;
+end;
+
+procedure TTestFrameViewZoom.TestApplyZoomDoesNotImmediatelyResize;
+var
+  V: TFrameView;
+  WidthBefore: Integer;
+begin
+  {ApplyZoom deliberately does NOT call RecalcSize — that's the
+   caller's job via the form-level UpdateFrameViewSize. Calling
+   RecalcSize inside ApplyZoom would cause an extra paint cycle
+   before scrollbox visibility settles (visible flicker). Pin the
+   no-immediate-resize promise so a future "convenience" addition
+   doesn't reintroduce the regression.}
+  V := TFrameView.Create(nil);
+  try
+    V.Width := 200;
+    V.Height := 100;
+    WidthBefore := V.Width;
+    V.ApplyZoom(2.5);
+    Assert.AreEqual<Integer>(WidthBefore, V.Width,
+      'ApplyZoom must not resize the control; RecalcSize is the caller''s responsibility');
+  finally
+    V.Free;
   end;
 end;
 
