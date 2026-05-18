@@ -166,12 +166,9 @@ begin
 end;
 
 function TPresetEditorModel.Validate(out AInvalidIndex: Integer; out AReason: string): Boolean;
-const
-  CForbiddenExt = '\/:*?"<>| ' + #9;
 var
   I: Integer;
   P: TWcxPreset;
-  C: Char;
   NameReason: string;
 begin
   AInvalidIndex := -1;
@@ -193,19 +190,11 @@ begin
       Exit(False);
     end;
 
-    if P.OutputExt.Trim = '' then
+    if not ValidateOutputExt(P.OutputExt, AReason) then
     begin
       AInvalidIndex := I;
-      AReason := 'OutputExt is required';
       Exit(False);
     end;
-    for C in P.OutputExt do
-      if Pos(C, CForbiddenExt) > 0 then
-      begin
-        AInvalidIndex := I;
-        AReason := Format('OutputExt contains an invalid character: "%s"', [C]);
-        Exit(False);
-      end;
 
     if not ValidateOutputName(P.OutputName, NameReason) then
     begin

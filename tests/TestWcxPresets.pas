@@ -110,6 +110,11 @@ type
     [Test] procedure TestLoadPresetsAcceptsVirtualPath;
     [Test] procedure TestLoadPresetsRejectsTraversal;
     [Test] procedure TestBuildOutputFileNameNormalisesBackslash;
+    { ValidateOutputExt — shared single source of truth }
+    [Test] procedure TestValidateOutputExtAcceptsPlainExt;
+    [Test] procedure TestValidateOutputExtRejectsEmptyWithReason;
+    [Test] procedure TestValidateOutputExtRejectsForbiddenCharWithReason;
+    [Test] procedure TestValidateOutputExtRejectsSpaceWithReason;
   end;
 
 implementation
@@ -1049,6 +1054,44 @@ begin
   P.OutputName := 'audio/%basename%';
   Assert.AreEqual('audio\Movie.mp3',
     BuildOutputFileName(P, 'C:\v\Movie.mkv'));
+end;
+
+{ ValidateOutputExt — shared single source of truth }
+
+procedure TTestWcxPresets.TestValidateOutputExtAcceptsPlainExt;
+var
+  Reason: string;
+begin
+  Assert.IsTrue(ValidateOutputExt('mp3', Reason));
+  Assert.AreEqual('', Reason);
+end;
+
+procedure TTestWcxPresets.TestValidateOutputExtRejectsEmptyWithReason;
+var
+  Reason: string;
+begin
+  Assert.IsFalse(ValidateOutputExt('', Reason));
+  Assert.AreEqual('OutputExt is required', Reason);
+end;
+
+procedure TTestWcxPresets.TestValidateOutputExtRejectsForbiddenCharWithReason;
+var
+  Reason: string;
+begin
+  {Slash is in the forbidden set; first hit produces the named-character
+   reason the editor surfaces to the user.}
+  Assert.IsFalse(ValidateOutputExt('mp3/', Reason));
+  Assert.AreEqual('OutputExt contains an invalid character: "/"', Reason);
+end;
+
+procedure TTestWcxPresets.TestValidateOutputExtRejectsSpaceWithReason;
+var
+  Reason: string;
+begin
+  {Spaces are illegal in extensions — the forbidden set includes ' ' and
+   tab. Empty-after-trim path is exercised by TestValidateOutputExtRejectsEmpty.}
+  Assert.IsFalse(ValidateOutputExt('mp 3', Reason));
+  Assert.AreEqual('OutputExt contains an invalid character: " "', Reason);
 end;
 
 end.

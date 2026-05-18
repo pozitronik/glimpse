@@ -125,6 +125,15 @@ function NormalizeOutputName(const ATemplate: string): string;
  internally so users may type either form.}
 function ValidateOutputName(const ATemplate: string; out AReason: string): Boolean;
 
+{Validates an output-extension string (no leading dot, no spaces, no
+ Windows path separators or wildcards). Empty or whitespace-only is
+ rejected with "OutputExt is required". The first forbidden character
+ surfaces as "OutputExt contains an invalid character: '<C>'". Used by
+ NormalizeOutputExt internally (which discards the reason) and by
+ TPresetEditorModel.Validate (which surfaces it to the editor user).
+ The single source of truth for the forbidden-character set.}
+function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
+
 {Returns the full path to the presets file expected to live next to the
  WCX settings INI. Pure path manipulation; does not touch the disk.
  Returns '' when the settings path is empty so callers downstream can
@@ -285,24 +294,43 @@ begin
   end;
 end;
 
-function NormalizeOutputExt(const ARaw: string; out ANormalized: string): Boolean;
 const
-  CForbiddenChars = '\/:*?"<>| ' + #9;
+  {Single source of truth for "characters that cannot appear in an output
+   extension". Used by ValidateOutputExt; NormalizeOutputExt and the
+   editor model both go through ValidateOutputExt so neither needs to
+   know this set directly.}
+  CForbiddenExtChars = '\/:*?"<>| ' + #9;
+
+function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
 var
-  S: string;
   C: Char;
+begin
+  AReason := '';
+  if ARaw.Trim = '' then
+  begin
+    AReason := 'OutputExt is required';
+    Exit(False);
+  end;
+  for C in ARaw do
+    if Pos(C, CForbiddenExtChars) > 0 then
+    begin
+      AReason := Format('OutputExt contains an invalid character: "%s"', [C]);
+      Exit(False);
+    end;
+  Result := True;
+end;
+
+function NormalizeOutputExt(const ARaw: string; out ANormalized: string): Boolean;
+var
+  S, Reason: string;
 begin
   ANormalized := '';
   S := ARaw.Trim;
   if (Length(S) > 0) and (S[1] = '.') then
     S := Copy(S, 2, Length(S) - 1);
-  if S = '' then
-    Exit(False);
-  for C in S do
-    if Pos(C, CForbiddenChars) > 0 then
-      Exit(False);
-  ANormalized := S;
-  Result := True;
+  Result := ValidateOutputExt(S, Reason);
+  if Result then
+    ANormalized := S;
 end;
 
 function NormalizeOutputName(const ATemplate: string): string;
