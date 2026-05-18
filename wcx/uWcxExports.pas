@@ -226,58 +226,77 @@ begin
   GCachedEntrySizes := nil;
 end;
 
-procedure InvalidateFrameCache;
+{Runs AProc with GCacheLock held. Five short cache-access blocks below
+ use it to collapse the identical Enter/try/finally/Leave wrapper to one
+ line. Not used for PreExtractFrames because its body needs Exit from
+ the enclosing function on a cache-hit, which an anonymous method
+ cannot do (Exit from a TProc returns from the closure, not the outer).
+ Interim helper — when step 40 (C11) lifts the cache state into a
+ TWcxFrameCache class, the lock becomes a class invariant and this
+ helper is no longer needed.}
+procedure WithCacheLock(const AProc: TProc);
 begin
   GCacheLock.Enter;
   try
-    InvalidateFrameCacheLocked;
+    AProc();
   finally
     GCacheLock.Leave;
   end;
+end;
+
+procedure InvalidateFrameCache;
+begin
+  WithCacheLock(
+    procedure
+    begin
+      InvalidateFrameCacheLocked;
+    end);
 end;
 
 procedure WcxTest_SeedCacheState(const AVideoFile, ATempDir: string);
 begin
-  GCacheLock.Enter;
-  try
-    GCachedVideoFile := AVideoFile;
-    GCachedTempDir := ATempDir;
-  finally
-    GCacheLock.Leave;
-  end;
+  WithCacheLock(
+    procedure
+    begin
+      GCachedVideoFile := AVideoFile;
+      GCachedTempDir := ATempDir;
+    end);
 end;
 
 function WcxTest_CachedVideoFile: string;
+var
+  Captured: string;
 begin
-  GCacheLock.Enter;
-  try
-    Result := GCachedVideoFile;
-  finally
-    GCacheLock.Leave;
-  end;
+  WithCacheLock(
+    procedure
+    begin
+      Captured := GCachedVideoFile;
+    end);
+  Result := Captured;
 end;
 
 function WcxTest_CachedTempDir: string;
+var
+  Captured: string;
 begin
-  GCacheLock.Enter;
-  try
-    Result := GCachedTempDir;
-  finally
-    GCacheLock.Leave;
-  end;
+  WithCacheLock(
+    procedure
+    begin
+      Captured := GCachedTempDir;
+    end);
+  Result := Captured;
 end;
 
 procedure WcxTest_SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
 begin
-  GCacheLock.Enter;
-  try
-    if Assigned(AProc) then
-      GDeleteDirectoryProc := AProc
-    else
-      GDeleteDirectoryProc := DefaultDeleteDirectory;
-  finally
-    GCacheLock.Leave;
-  end;
+  WithCacheLock(
+    procedure
+    begin
+      if Assigned(AProc) then
+        GDeleteDirectoryProc := AProc
+      else
+        GDeleteDirectoryProc := DefaultDeleteDirectory;
+    end);
 end;
 
 procedure WcxTest_ResetDeleteDirectoryProc;
