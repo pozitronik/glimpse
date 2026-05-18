@@ -161,7 +161,7 @@ begin
     Delta := 0;
   if Delta > MaxInt then
     Delta := MaxInt;
-  ClampedDelta := Integer(Delta);`
+  ClampedDelta := Integer(Delta);
   Inc(FReportedBytes, ClampedDelta);
 
   if InvokeCallback(ClampedDelta) = 0 then

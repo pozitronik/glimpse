@@ -2234,11 +2234,26 @@ end;
 
 procedure TPluginForm.WMSetFocus(var Message: TWMSetFocus);
 begin
-  {Do NOT call inherited. VCL's default WMSetFocus redirects focus to
-   ActiveControl (a child). TC subclasses this window to catch N/P and
-   other Lister hotkeys; that subclass only sees WM_KEYDOWN when THIS
-   window has Win32 focus, not a child. Skipping inherited keeps focus
-   on the form handle so TC's hotkey interception works.}
+  {Two competing constraints:
+
+   - TC subclasses THIS window to catch N/P and other Lister hotkeys;
+     that subclass only sees WM_KEYDOWN while THIS HWND holds Win32
+     focus. If VCL's inherited WMSetFocus redirects focus to a child
+     (which it does when ActiveControl is set), TC's hotkey
+     interception silently stops working.
+
+   - The earlier fix was to skip inherited entirely. That blocked the
+     focus redirect but also suppressed every other side effect VCL's
+     focus machinery runs at this point: CM_FOCUSCHANGED broadcast,
+     OnActivate, accessibility hooks, IME activation. Skipping
+     inherited is an LSP violation — any listener attached through
+     normal VCL channels is silently broken.
+
+   Clearing ActiveControl removes the redirect target; inherited then
+   runs the rest of its work with focus correctly staying on the form
+   HWND. Both constraints are honoured.}
+  ActiveControl := nil;
+  inherited;
 end;
 
 procedure TPluginForm.ShowError(const AMessage: string);
