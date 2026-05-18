@@ -289,7 +289,7 @@ implementation
 
 uses
   System.IOUtils, System.Math,
-  uDefaults, uFFmpegExe, uCache, uProbeCache, uBitmapSaver, uPathExpand,
+  uDefaults, uFFmpegExe, uFFmpegCmdLine, uCache, uProbeCache, uBitmapSaver, uPathExpand,
   uSettingsDlgLogic, uSettingsDlgUI, uPluginMessages, uCaptureShortcutDlg,
   uStatusBarTokens;
 

@@ -48,6 +48,8 @@ uses
   uFrameSelectionPolicy in '..\src\application\uFrameSelectionPolicy.pas',
   uVideoInfo in '..\src\uVideoInfo.pas',
   uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
+  uFFmpegProbeParser in '..\src\infrastructure\uFFmpegProbeParser.pas',
+  uFFmpegCmdLine in '..\src\infrastructure\uFFmpegCmdLine.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in 'uHotkeysVcl.pas',

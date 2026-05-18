@@ -105,6 +105,8 @@
         <DCCReference Include="..\src\application\uFrameSelectionPolicy.pas"/>
         <DCCReference Include="..\src\uVideoInfo.pas"/>
         <DCCReference Include="..\src\infrastructure\uLineSplitter.pas"/>
+        <DCCReference Include="..\src\infrastructure\uFFmpegProbeParser.pas"/>
+        <DCCReference Include="..\src\infrastructure\uFFmpegCmdLine.pas"/>
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
         <DCCReference Include="uHotkeysVcl.pas"/>

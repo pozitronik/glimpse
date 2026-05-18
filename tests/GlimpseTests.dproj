@@ -82,6 +82,8 @@
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>
         <DCCReference Include="TestFFmpegExe.pas"/>
+        <DCCReference Include="TestFFmpegProbeParser.pas"/>
+        <DCCReference Include="TestFFmpegCmdLine.pas"/>
         <DCCReference Include="..\wlx\uFrameView.pas"/>
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
         <DCCReference Include="..\wlx\uPluginForm.pas"/>

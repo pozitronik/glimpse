@@ -242,7 +242,7 @@ implementation
 
 uses
   System.Math,
-  uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic,
+  uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegCmdLine, uFFmpegLocator, uSettingsDlgLogic,
   uSettingsDlgUI, uPluginMessages, uDefaults, uTypes,
   uWcxPresets;
 

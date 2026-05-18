@@ -39,6 +39,8 @@ uses
   uWcxProgressCallback in 'uWcxProgressCallback.pas',
   uVideoInfo in '..\src\uVideoInfo.pas',
   uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
+  uFFmpegProbeParser in '..\src\infrastructure\uFFmpegProbeParser.pas',
+  uFFmpegCmdLine in '..\src\infrastructure\uFFmpegCmdLine.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
