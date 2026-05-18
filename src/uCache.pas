@@ -344,27 +344,44 @@ function TFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
 var
   Key: string;
   Data: TBytes;
+  PngSize: Integer;
+  Loaded: Boolean;
+  ReadFailed: Boolean;
+  ExceptionMsg: string;
+  BmpW, BmpH, BmpPf: Integer;
+  BmpEmpty: Boolean;
 begin
   Result := nil;
   Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes);
   if Key = '' then
     Exit;
+  PngSize := 0;
+  Loaded := False;
+  ReadFailed := False;
+  ExceptionMsg := '';
+  BmpW := 0; BmpH := 0; BmpPf := 0; BmpEmpty := True;
   FLock.Enter;
   try
     try
       Data := FStorage.Read(Key);
-      if Length(Data) = 0 then
+      PngSize := Length(Data);
+      if PngSize > 0 then
       begin
-        DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]));
-        Exit;
+        Result := PngBytesToBitmap(Data);
+        if Result <> nil then
+        begin
+          Loaded := True;
+          BmpW := Result.Width;
+          BmpH := Result.Height;
+          BmpEmpty := Result.Empty;
+          BmpPf := Ord(Result.PixelFormat);
+        end;
       end;
-      DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));
-      Result := PngBytesToBitmap(Data);
-      DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d', [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));
     except
       on E: Exception do
       begin
-        DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
+        ReadFailed := True;
+        ExceptionMsg := Format('%s: %s', [E.ClassName, E.Message]);
         FreeAndNil(Result);
       end;
     end;
@@ -373,32 +390,61 @@ begin
   finally
     FLock.Leave;
   end;
+  {Observations were captured inside the critical section; emit log
+   lines after the lock is released so concurrent workers are not
+   serialised on the DebugLog file-open/append/close round-trip.}
+  if ReadFailed then
+    DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s', [Key, ExceptionMsg]))
+  else if PngSize = 0 then
+    DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]))
+  else
+  begin
+    DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, PngSize]));
+    if Loaded then
+      DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d', [BmpW, BmpH, BoolToStr(BmpEmpty, True), BmpPf]));
+  end;
 end;
 
 procedure TFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
 var
   Key: string;
   Data: TBytes;
+  PngSize: Integer;
+  WriteFailed: Boolean;
+  ExceptionMsg: string;
 begin
   if ABitmap = nil then
     Exit;
   Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes);
   if Key = '' then
     Exit;
+  {Pre-lock log: bitmap dimensions are caller-owned and stable for the
+   duration of the call, so emitting before acquiring the lock costs
+   nothing.}
   DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
+  PngSize := 0;
+  WriteFailed := False;
+  ExceptionMsg := '';
   FLock.Enter;
   try
     try
       Data := EncodeBitmapToPngBytes(ABitmap);
-      DebugLog('Cache', Format('  encoded pngSize=%d', [Length(Data)]));
+      PngSize := Length(Data);
       FStorage.Write(Key, Data);
     except
       on E: Exception do
-        DebugLog('Cache', Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
+      begin
+        WriteFailed := True;
+        ExceptionMsg := Format('%s: %s', [E.ClassName, E.Message]);
+      end;
     end;
   finally
     FLock.Leave;
   end;
+  if WriteFailed then
+    DebugLog('Cache', Format('Put EXCEPTION key=%s %s', [Key, ExceptionMsg]))
+  else
+    DebugLog('Cache', Format('  encoded pngSize=%d', [PngSize]));
 end;
 
 procedure TFrameCache.Clear;

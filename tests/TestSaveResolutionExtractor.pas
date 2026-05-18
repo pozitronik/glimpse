@@ -575,25 +575,31 @@ begin
       TMockExtractor(Ext).SetCanned(Ctx.Offsets[0].TimeOffset, Canned);
 
       First := Sub.ExtractAtTarget(Ctx, 1920, [0]);
-      Assert.IsNotNull(First[0], 'First extraction (cache miss) must produce a bitmap');
-      FirstPtr := NativeUInt(First[0]);
-      FirstW := First[0].Width;
-      FirstH := First[0].Height;
-      First[0].Free;
-      First[0] := nil;
-
-      Second := Sub.ExtractAtTarget(Ctx, 1920, [0]);
       try
-        Assert.IsNotNull(Second[0], 'Second extraction (cache hit) must produce a bitmap');
-        SecondPtr := NativeUInt(Second[0]);
-        Assert.AreNotEqual(FirstPtr, SecondPtr,
-          'Cache must return a fresh bitmap, not the freed reference');
-        Assert.AreEqual(FirstW, Second[0].Width);
-        Assert.AreEqual(FirstH, Second[0].Height);
-        Assert.AreEqual(1, TMockExtractor(Ext).CallCount,
-          'Second call must hit cache; extractor stays at 1 call');
+        Assert.IsNotNull(First[0], 'First extraction (cache miss) must produce a bitmap');
+        FirstPtr := NativeUInt(First[0]);
+        FirstW := First[0].Width;
+        FirstH := First[0].Height;
+        {Keep First[0] alive across the second extraction so a heap-slot
+         reuse by Delphi's allocator cannot mask a sharing bug. The
+         contract under test is "cache returns separate TBitmap instances
+         per call"; comparing two simultaneously-live pointers is the
+         only way to assert that without depending on allocator behavior.}
+        Second := Sub.ExtractAtTarget(Ctx, 1920, [0]);
+        try
+          Assert.IsNotNull(Second[0], 'Second extraction (cache hit) must produce a bitmap');
+          SecondPtr := NativeUInt(Second[0]);
+          Assert.AreNotEqual(FirstPtr, SecondPtr,
+            'Cache must return a fresh bitmap instance, not share the one already in caller hands');
+          Assert.AreEqual(FirstW, Second[0].Width);
+          Assert.AreEqual(FirstH, Second[0].Height);
+          Assert.AreEqual(1, TMockExtractor(Ext).CallCount,
+            'Second call must hit cache; extractor stays at 1 call');
+        finally
+          Second[0].Free;
+        end;
       finally
-        Second[0].Free;
+        First[0].Free;
       end;
     finally
       Sub.Free;
