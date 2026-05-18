@@ -47,6 +47,7 @@ uses
   uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
   uFrameSelectionPolicy in '..\src\application\uFrameSelectionPolicy.pas',
   uVideoInfo in '..\src\uVideoInfo.pas',
+  uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in 'uHotkeysVcl.pas',

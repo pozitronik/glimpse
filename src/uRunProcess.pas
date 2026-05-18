@@ -28,85 +28,8 @@ function RunProcess(const ACommandLine: string; AOnStdOutLine: TProc<string>; ou
 implementation
 
 uses
-  System.Classes;
-
-{Decodes a line as UTF-8 with replacement so embedded invalid sequences
- do not raise. The streaming overload uses this once per dispatched line.}
-function DecodeLine(const ABytes: TBytes; AStart, ALength: Integer): string;
-var
-  Enc: TEncoding;
-begin
-  if ALength <= 0 then
-    Exit('');
-  Enc := TUTF8Encoding.Create(CP_UTF8, 0, 0);
-  try
-    Result := Enc.GetString(ABytes, AStart, ALength);
-  finally
-    Enc.Free;
-  end;
-end;
-
-{Maintains a rolling partial-line buffer across pipe reads.
- Feed appends bytes and dispatches every complete line (terminated by #10,
- trailing #13 stripped). Flush dispatches any non-empty tail without a
- terminator. Both swallow empty lines so progress noise lines like a
- trailing blank don't reach the callback.}
-type
-  TLineSplitter = record
-    Partial: TBytes;
-    procedure Feed(const ABuffer; ABytesRead: Integer; const AOnLine: TProc<string>);
-    procedure Flush(const AOnLine: TProc<string>);
-  end;
-
-procedure TLineSplitter.Feed(const ABuffer; ABytesRead: Integer; const AOnLine: TProc<string>);
-var
-  Combined: TBytes;
-  PrevLen, I, LineStart, LineLen: Integer;
-begin
-  if ABytesRead <= 0 then
-    Exit;
-  PrevLen := Length(Partial);
-  SetLength(Combined, PrevLen + ABytesRead);
-  if PrevLen > 0 then
-    Move(Partial[0], Combined[0], PrevLen);
-  Move(ABuffer, Combined[PrevLen], ABytesRead);
-  Partial := nil;
-
-  LineStart := 0;
-  for I := 0 to High(Combined) do
-  begin
-    if Combined[I] = $0A then
-    begin
-      LineLen := I - LineStart;
-      {Strip the trailing #13 if present so callers see a clean line.}
-      if (LineLen > 0) and (Combined[I - 1] = $0D) then
-        Dec(LineLen);
-      if LineLen > 0 then
-        AOnLine(DecodeLine(Combined, LineStart, LineLen));
-      LineStart := I + 1;
-    end;
-  end;
-
-  {Anything past the last #10 is the new partial line; carries forward
-   to the next Feed.}
-  if LineStart <= High(Combined) then
-  begin
-    SetLength(Partial, Length(Combined) - LineStart);
-    Move(Combined[LineStart], Partial[0], Length(Partial));
-  end;
-end;
-
-procedure TLineSplitter.Flush(const AOnLine: TProc<string>);
-var
-  TailLen: Integer;
-begin
-  TailLen := Length(Partial);
-  if (TailLen > 0) and (Partial[TailLen - 1] = $0D) then
-    Dec(TailLen);
-  if TailLen > 0 then
-    AOnLine(DecodeLine(Partial, 0, TailLen));
-  Partial := nil;
-end;
+  System.Classes,
+  uLineSplitter;
 
 function ReadPipeToEnd(APipe: THandle): TBytes;
 var

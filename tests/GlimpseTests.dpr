@@ -90,6 +90,8 @@ uses
   TestFrameSelectionPolicy in 'TestFrameSelectionPolicy.pas',
   uVideoInfo in '..\src\uVideoInfo.pas',
   TestVideoInfo in 'TestVideoInfo.pas',
+  uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
+  TestLineSplitter in 'TestLineSplitter.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',
