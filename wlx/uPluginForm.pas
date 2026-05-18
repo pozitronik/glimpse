@@ -13,10 +13,81 @@ uses
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
-  uSaveResolutionExtractor,
+  uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
 
 type
+  {Forward declaration: TPluginCommandHandlers needs to reference the
+   form via constructor parameter, and the form needs to hold one as a
+   field. Resolved in the class declaration below.}
+  TPluginForm = class;
+
+  {Owns one named method per CM_* command in the dispatch table.
+   Lives in the same unit as TPluginForm so the named handlers can
+   reach the form's private collaborators (FExporter, FFrameView,
+   FSettings, FFileName) via Delphi same-unit access.
+
+   Constructed once by TPluginForm.CreateForPlugin and held alongside
+   FCommandTable. The handlers and the table together form the data
+   side of the command dispatch — DispatchCommand /
+   UpdateToolbarButtons / OnContextMenuPopup / ExecuteHotkey all read
+   the table instead of running their own CM_* case ladders.
+
+   Per-invocation context (the right-click cell index for Copy frame)
+   is threaded through FNextContextCellIndex: DispatchCommand calls
+   SetContextCellIndex before invoking the executor, the executor
+   reads the field. This keeps the executor closures parameterless so
+   the TCommandDescriptor.Executor type stays a bare TProc.}
+  TPluginCommandHandlers = class
+  strict private
+    FForm: TPluginForm;
+    {Per-invocation cell index supplied by DispatchCommand before each
+     Executor call. -1 means "no context cell" (toolbar button, hotkey,
+     TC lc_Copy) and only Copy frame consults it; every other handler
+     ignores it. Reset by SetContextCellIndex; the field exists so the
+     executor closures can stay parameterless.}
+    FNextContextCellIndex: Integer;
+    {Wraps FForm.WithReExtract in a TReExtractAction reference. Built
+     fresh per handler call rather than cached so it captures the
+     current FForm Self only (no aliasing concerns) and stays trivially
+     cheap. Used by every Save/Copy handler.}
+    function MakeReExtract: TReExtractAction;
+  public
+    constructor Create(AForm: TPluginForm);
+    procedure SetContextCellIndex(AValue: Integer);
+    {Named handlers — one per command in the table. Each performs the
+     same work that the corresponding CM_* case branch in the original
+     DispatchCommand did, reading FForm's collaborators directly.
+     Same-unit access keeps the data flow obvious at the call sites.}
+    procedure SaveFrame;
+    procedure SaveFrames;
+    procedure SaveView;
+    procedure SaveViewLive;
+    procedure SaveViewNative;
+    procedure CopyFrame;
+    procedure CopyView;
+    procedure CopyViewLive;
+    procedure CopyViewNative;
+    procedure SelectAll;
+    procedure DeselectAll;
+    procedure Refresh;
+    procedure Shuffle;
+    procedure Settings;
+    {Materialises the dispatch table by pairing each CM_* tag with its
+     matching TPluginAction enum (for hotkey lookup), its enable policy
+     (consulted by DispatchCommand / UpdateToolbarButtons /
+     OnContextMenuPopup before firing), and a closure that forwards to
+     the named handler on this instance. The table is built once and
+     held by TPluginForm.FCommandTable for the form's lifetime.
+
+     Built programmatically (SetLength + index-assign) rather than via
+     a const-aggregate array literal because nested anonymous-method
+     fields inside `(Tag: ...; Executor: procedure begin ... end)`
+     rows hit a Delphi const-aggregate limit (same surprise that bit
+     campaign step 77). The longer form is uglier but reliable.}
+    function BuildTable: TCommandTable;
+  end;
+
   {Plugin form created as a child of TC's Lister window.}
   TPluginForm = class(TForm)
   private
@@ -118,6 +189,13 @@ type
      trigger the side-effects (cache recreate, re-extract) that apply to the
      delta, not to the full original-to-current diff}
     FSettingsSnap: TSettingsSnapshot;
+    {Command dispatch infrastructure: handlers + the table that pairs
+     each CM_* tag with its enable policy + executor. Built once in
+     CreateForPlugin, walked on every DispatchCommand /
+     UpdateToolbarButtons / OnContextMenuPopup / hotkey dispatch.
+     Replaces four parallel CM_* case ladders with one data table.}
+    FCommandHandlers: TPluginCommandHandlers;
+    FCommandTable: TCommandTable;
 
     procedure CreateToolbar;
     procedure LayoutToolbar;
@@ -268,11 +346,21 @@ type
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure OnFormKeyPress(Sender: TObject; var Key: Char);
     function ExecuteHotkey(AAction: TPluginAction): Boolean;
-    {Common gate+dispatch shared by every Save/Copy hotkey branch in
-     ExecuteHotkey. Returns False (without dispatching) when extraction
-     is in flight so the caller falls through to TC's same-key shortcut
-     instead of acting on an unstable cell set.}
-    function TryExecuteExportCommand(ACommandTag: Integer): Boolean;
+    {Single source of truth for "is this command's gate satisfied right
+     now?". DispatchCommand, UpdateToolbarButtons, and OnContextMenuPopup
+     all consult it so a policy change (e.g. moving Refresh from
+     epRequiresLoadedCell to epAlways) only needs editing one descriptor
+     row instead of three parallel case statements.}
+    function PolicyAllows(APolicy: TCommandEnabledPolicy): Boolean;
+    {Hotkey-side counterpart to DispatchCommand: looks up ATag, checks
+     PolicyAllows, dispatches if allowed, returns whether the gate let
+     it through. ExecuteHotkey returns this value so a blocked-gate
+     keystroke falls through to TC's same-key shortcut (e.g. mid-extract
+     Ctrl+S lets TC do its own Save instead of silently no-op'ing).
+     Menu / button entry points use DispatchCommand instead, which
+     simply skips when the gate is closed — they have no fall-through
+     semantic to preserve.}
+    function TryDispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1): Boolean;
     procedure ForwardKeyToLister(AKey: Word; ASysKey: Boolean);
     procedure WMFrameReady(var Message: TMessage); message WM_FRAME_READY;
     procedure WMExtractionDone(var Message: TMessage); message WM_EXTRACTION_DONE;
@@ -587,6 +675,213 @@ begin
     ZoomBy(ZOOM_OUT_FACTOR);
 end;
 
+{ TPluginCommandHandlers }
+
+constructor TPluginCommandHandlers.Create(AForm: TPluginForm);
+begin
+  inherited Create;
+  FForm := AForm;
+  FNextContextCellIndex := -1;
+end;
+
+procedure TPluginCommandHandlers.SetContextCellIndex(AValue: Integer);
+begin
+  FNextContextCellIndex := AValue;
+end;
+
+function TPluginCommandHandlers.MakeReExtract: TReExtractAction;
+var
+  Form: TPluginForm;
+begin
+  {Local alias captured by the anonymous method, so the closure holds
+   the form reference by value instead of indirectly via Self (which
+   would re-resolve through the handler instance on every invocation).}
+  Form := FForm;
+  Result := procedure(const AIndices: TArray<Integer>; AAction: TProc)
+    begin
+      Form.WithReExtract(AIndices, AAction);
+    end;
+end;
+
+procedure TPluginCommandHandlers.SaveFrame;
+var
+  ResolvedIdx: Integer;
+begin
+  {Same selection-first picking the original CM_SAVE_FRAME branch did:
+   PickActionCell consults the selection / focused cell / first cell in
+   that order. -1 (no context cell) lets every entry path share the
+   policy — only Copy frame forwards a context cell. Resolved once and
+   passed straight through to SaveFrame so any subsequent state change
+   while the dialog is open doesn't disagree with what was promised.}
+  ResolvedIdx := FForm.FExporter.PickActionCell(-1);
+  if ResolvedIdx >= 0 then
+    FForm.FExporter.SaveFrame(FForm.FFileName, ResolvedIdx, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.SaveFrames;
+begin
+  FForm.FExporter.SaveFrames(FForm.FFileName, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.SaveView;
+begin
+  {Default Save view: seed the dialog with the persisted setting.}
+  FForm.FExporter.SaveView(FForm.FFileName, FForm.FSettings.SaveAtLiveResolution, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.SaveViewLive;
+begin
+  {Explicit "view resolution" variant from the Save view dropdown.}
+  FForm.FExporter.SaveView(FForm.FFileName, True, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.SaveViewNative;
+begin
+  {Explicit "native size" variant from the Save view dropdown.}
+  FForm.FExporter.SaveView(FForm.FFileName, False, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.CopyFrame;
+var
+  ResolvedIdx: Integer;
+begin
+  {Only Copy frame forwards FNextContextCellIndex to PickActionCell.
+   The right-click context menu wires its captured cursor cell through
+   SetContextCellIndex so a no-selection user gets the cell they
+   clicked on; when a selection exists, PickActionCell's step 1 takes
+   precedence and Copy frame acts on the first selected cell regardless
+   of where the right-click landed (matches Save frame from the same
+   menu and matches TC's "right-click anywhere acts on the selection"
+   convention). The toolbar button, configurable hotkey, and TC lc_Copy
+   all leave FNextContextCellIndex at -1 and so never reach the
+   context-cell branch — selection-first behaves identically there.
+
+   The re-extract gate lives inside CopyFrame (it temp-flips
+   SaveAtLiveResolution := CopyAtLiveResolution and decides from
+   there), so the dispatch just hands over the callback rather than
+   wrapping the call in WithReExtract upfront. Mirrors the CopyView /
+   SaveView pattern.}
+  ResolvedIdx := FForm.FExporter.PickActionCell(FNextContextCellIndex);
+  if ResolvedIdx >= 0 then
+    FForm.FExporter.CopyFrame(ResolvedIdx, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.CopyView;
+begin
+  {Default Copy view: honour the persisted CopyAtLiveResolution
+   (separate setting from the save side since 1.1.3.4).}
+  FForm.FExporter.CopyView(FForm.FSettings.CopyAtLiveResolution, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.CopyViewLive;
+begin
+  {Explicit "view resolution" variant from the Copy view dropdown.}
+  FForm.FExporter.CopyView(True, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.CopyViewNative;
+begin
+  {Explicit "native size" variant from the Copy view dropdown.}
+  FForm.FExporter.CopyView(False, MakeReExtract());
+end;
+
+procedure TPluginCommandHandlers.SelectAll;
+begin
+  FForm.FFrameView.SelectAll;
+end;
+
+procedure TPluginCommandHandlers.DeselectAll;
+begin
+  FForm.FFrameView.DeselectAll;
+end;
+
+procedure TPluginCommandHandlers.Refresh;
+begin
+  FForm.RefreshExtraction;
+end;
+
+procedure TPluginCommandHandlers.Shuffle;
+begin
+  FForm.ShuffleExtraction;
+end;
+
+procedure TPluginCommandHandlers.Settings;
+begin
+  FForm.ShowSettings;
+end;
+
+function TPluginCommandHandlers.BuildTable: TCommandTable;
+var
+  H: TPluginCommandHandlers;
+begin
+  {Local alias so the executor closures capture H (the typed handler
+   reference) rather than via Self (which would round-trip through
+   the captured closure environment on every invocation).}
+  H := Self;
+  SetLength(Result, 14);
+  Result[0].Tag := CM_SAVE_FRAME;
+  Result[0].ActionEnum := paSaveFrame;
+  Result[0].EnabledPolicy := epRequiresExtract;
+  Result[0].Executor := procedure begin H.SaveFrame end;
+  Result[1].Tag := CM_SAVE_FRAMES;
+  Result[1].ActionEnum := paSaveFrames;
+  Result[1].EnabledPolicy := epRequiresExtract;
+  Result[1].Executor := procedure begin H.SaveFrames end;
+  Result[2].Tag := CM_SAVE_VIEW;
+  Result[2].ActionEnum := paSaveView;
+  Result[2].EnabledPolicy := epRequiresExtract;
+  Result[2].Executor := procedure begin H.SaveView end;
+  Result[3].Tag := CM_SAVE_VIEW_LIVE;
+  Result[3].ActionEnum := paSaveViewLive;
+  Result[3].EnabledPolicy := epRequiresExtract;
+  Result[3].Executor := procedure begin H.SaveViewLive end;
+  Result[4].Tag := CM_SAVE_VIEW_NATIVE;
+  Result[4].ActionEnum := paSaveViewNative;
+  Result[4].EnabledPolicy := epRequiresExtract;
+  Result[4].Executor := procedure begin H.SaveViewNative end;
+  Result[5].Tag := CM_COPY_FRAME;
+  Result[5].ActionEnum := paCopyFrame;
+  Result[5].EnabledPolicy := epRequiresExtract;
+  Result[5].Executor := procedure begin H.CopyFrame end;
+  Result[6].Tag := CM_COPY_VIEW;
+  Result[6].ActionEnum := paCopyView;
+  Result[6].EnabledPolicy := epRequiresExtract;
+  Result[6].Executor := procedure begin H.CopyView end;
+  Result[7].Tag := CM_COPY_VIEW_LIVE;
+  Result[7].ActionEnum := paCopyViewLive;
+  Result[7].EnabledPolicy := epRequiresExtract;
+  Result[7].Executor := procedure begin H.CopyViewLive end;
+  Result[8].Tag := CM_COPY_VIEW_NATIVE;
+  Result[8].ActionEnum := paCopyViewNative;
+  Result[8].EnabledPolicy := epRequiresExtract;
+  Result[8].Executor := procedure begin H.CopyViewNative end;
+  Result[9].Tag := CM_SELECT_ALL;
+  Result[9].ActionEnum := paSelectAllFrames;
+  Result[9].EnabledPolicy := epRequiresLoadedCell;
+  Result[9].Executor := procedure begin H.SelectAll end;
+  Result[10].Tag := CM_DESELECT_ALL;
+  {DeselectAll has no configurable hotkey today — paNone is the sentinel
+   and FindCommandByAction filters it so ExecuteHotkey can never reach
+   here through an unbound keystroke.}
+  Result[10].ActionEnum := paNone;
+  Result[10].EnabledPolicy := epRequiresSelection;
+  Result[10].Executor := procedure begin H.DeselectAll end;
+  Result[11].Tag := CM_REFRESH;
+  Result[11].ActionEnum := paRefreshExtraction;
+  Result[11].EnabledPolicy := epRequiresLoadedCell;
+  Result[11].Executor := procedure begin H.Refresh end;
+  Result[12].Tag := CM_SHUFFLE;
+  Result[12].ActionEnum := paShuffleExtraction;
+  Result[12].EnabledPolicy := epAlways;
+  Result[12].Executor := procedure begin H.Shuffle end;
+  Result[13].Tag := CM_SETTINGS;
+  Result[13].ActionEnum := paSettings;
+  Result[13].EnabledPolicy := epAlways;
+  Result[13].Executor := procedure begin H.Settings end;
+end;
+
+{ TPluginForm }
+
 constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
 var
   R: TRect;
@@ -710,11 +1005,28 @@ begin
   FViewportRefreshTimer.OnTimer := OnViewportRefreshTimer;
   FViewportRefreshTimer.Enabled := False;
 
+  {Build the command dispatch table after every collaborator the
+   handlers read from (FExporter, FFrameView, FSettings, FFileName)
+   has been constructed. The handlers capture FForm = Self, so the
+   closures inside FCommandTable indirectly hold those collaborators
+   through Self — that's fine because the form outlives the table by
+   construction.}
+  FCommandHandlers := TPluginCommandHandlers.Create(Self);
+  FCommandTable := FCommandHandlers.BuildTable;
+
   LoadFile(AFileName);
 end;
 
 destructor TPluginForm.Destroy;
 begin
+  {Release the table's executor closures BEFORE freeing the handler
+   instance they captured. Each closure holds a reference to
+   FCommandHandlers via the H local in BuildTable; nilling the table
+   drops that reference so the FreeAndNil below is the last owner.
+   Without this ordering the closures would outlive their captured
+   Self briefly during finalization.}
+  FCommandTable := nil;
+  FreeAndNil(FCommandHandlers);
   if HandleAllocated then
     RemoveWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID);
   if FParentWnd <> 0 then
@@ -2002,19 +2314,52 @@ begin
   end;
 end;
 
-function TPluginForm.TryExecuteExportCommand(ACommandTag: Integer): Boolean;
+function TPluginForm.PolicyAllows(APolicy: TCommandEnabledPolicy): Boolean;
 begin
-  Result := CanExportFrames;
-  if Result then
-    DispatchCommand(ACommandTag);
+  {Mirrors the gate logic that used to live inline in DispatchCommand /
+   UpdateToolbarButtons / OnContextMenuPopup. Each policy maps to the
+   exact same predicate those ladders evaluated, so behavior is
+   preserved bit-for-bit while the rule itself lives in one place.}
+  case APolicy of
+    epAlways:
+      Result := True;
+    {Save / Copy must wait until extraction settles. PickActionCell
+     would otherwise return -1 (or a stale cell that just got reset
+     to a placeholder by a Refresh) and the action would silently
+     no-op, which reads as a broken button / hotkey.}
+    epRequiresExtract:
+      Result := CanExportFrames;
+    {Refresh / SelectAll. Refresh stays clickable during extraction so
+     the user can cancel and restart with new settings without waiting
+     for the current run to finish.}
+    epRequiresLoadedCell:
+      Result := Assigned(FFrameView) and FFrameView.HasLoadedCells;
+    epRequiresSelection:
+      Result := Assigned(FFrameView) and (FFrameView.SelectedCount > 0);
+  else
+    Result := False;
+  end;
+end;
+
+function TPluginForm.TryDispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1): Boolean;
+var
+  Desc: TCommandDescriptor;
+begin
+  if not FindCommandByTag(FCommandTable, Cardinal(ATag), Desc) then
+    Exit(False);
+  Result := PolicyAllows(Desc.EnabledPolicy);
+  if not Result then
+    Exit;
+  FCommandHandlers.SetContextCellIndex(AContextCellIndex);
+  Desc.Executor();
 end;
 
 function TPluginForm.ExecuteHotkey(AAction: TPluginAction): Boolean;
+var
+  Desc: TCommandDescriptor;
 begin
   Result := True;
   case AAction of
-    paSettings:
-      ShowSettings;
     paToggleToolbar:
       begin
         FToolbar.Visible := not FToolbar.Visible;
@@ -2084,27 +2429,6 @@ begin
         ShellExecute(Handle, 'open', PChar(FFileName), nil, nil, SW_SHOWNORMAL)
       else
         Result := False;
-    paRefreshExtraction:
-      RefreshExtraction;
-    paShuffleExtraction:
-      ShuffleExtraction;
-    {Save / copy hotkey actions dispatch through PickActionCell, which
-     picks the selected cell first and falls back to the focused / first
-     cell. Each routes through TryExecuteExportCommand so the
-     CanExportFrames gate is centralised — a mid-extraction keystroke
-     falls through (Result := False) instead of dispatching against an
-     unstable cell set, matching the toolbar / context-menu visual lock.}
-    paSaveFrame:      Result := TryExecuteExportCommand(CM_SAVE_FRAME);
-    paSaveFrames:     Result := TryExecuteExportCommand(CM_SAVE_FRAMES);
-    paSaveView:       Result := TryExecuteExportCommand(CM_SAVE_VIEW);
-    paSaveViewLive:   Result := TryExecuteExportCommand(CM_SAVE_VIEW_LIVE);
-    paSaveViewNative: Result := TryExecuteExportCommand(CM_SAVE_VIEW_NATIVE);
-    paSelectAllFrames:
-      FFrameView.SelectAll;
-    paCopyFrame:      Result := TryExecuteExportCommand(CM_COPY_FRAME);
-    paCopyView:       Result := TryExecuteExportCommand(CM_COPY_VIEW);
-    paCopyViewLive:   Result := TryExecuteExportCommand(CM_COPY_VIEW_LIVE);
-    paCopyViewNative: Result := TryExecuteExportCommand(CM_COPY_VIEW_NATIVE);
     paZoomIn:
       ZoomBy(ZOOM_IN_FACTOR);
     paZoomOut:
@@ -2124,6 +2448,20 @@ begin
       SwitchOrCycleMode(Ord('4'));
     paViewModeSingle:
       SwitchOrCycleMode(Ord('5'));
+  else
+    {Table-routed fallback: any remaining TPluginAction maps to a CM_*
+     descriptor (Save / Copy / Refresh / Shuffle / Settings /
+     SelectAll). TryDispatchCommand checks the descriptor's enable
+     policy and dispatches; a mid-extraction keystroke falls through
+     (Result := False) instead of acting on an unstable cell set,
+     matching the toolbar / context-menu visual lock and TC's
+     same-key shortcut takes over.
+
+     paNone never reaches here — FindCommandByAction filters it so
+     DeselectAll's slot (the only descriptor with ActionEnum=paNone)
+     can't false-match an unbound keystroke.}
+    if FindCommandByAction(FCommandTable, AAction, Desc) then
+      Result := TryDispatchCommand(Integer(Desc.Tag))
     else
       Result := False;
   end;
@@ -2380,100 +2718,41 @@ begin
 end;
 
 procedure TPluginForm.DispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1);
-var
-  ResolvedIdx: Integer;
-  ReExtract: TReExtractAction;
 begin
-  {Singular Save / Copy frame routes through PickActionCell so the same
-   selection-first policy drives every entry point: context menu,
-   toolbar button, configurable hotkey, TC lc_Copy. PickActionCell
-   returns -1 when no loaded cell is reachable; the dispatch then
-   silently skips the action.
+  {Single entry point for the right-click context menu, the toolbar
+   buttons, and TC's lc_Copy. Walks FCommandTable once, evaluates the
+   matched descriptor's enable policy via PolicyAllows, and invokes
+   the executor closure. The closure does the same work the original
+   CM_* case branches did (see TPluginCommandHandlers in this unit)
+   — the table is just data, the policy decision lives in PolicyAllows,
+   and the per-command logic lives in the handler class. Three
+   responsibilities, three locations, no four-way parallel ladder.
 
-   The resolved index is computed once and reused: WithReExtract pumps
-   the message loop while it re-extracts, so reading FFrameView state
-   twice could disagree if the user selects a different cell in between.
+   Selection-first picking for the singular Save / Copy frame variants
+   lives inside the handlers (SaveFrame / CopyFrame call PickActionCell)
+   — the resolved index is computed once and reused so a user
+   selection change while WithReExtract pumps the message loop can't
+   make the saved cell disagree with the dialog's promise.
 
-   Plural / view-level actions (Save frames, Save view, Copy view)
-   always act on the full loaded set or the selection set; PickActionCell
-   does not apply.
+   Singular Copy frame is the only command that consults
+   AContextCellIndex (the right-click cell): handlers read it via
+   FCommandHandlers.FNextContextCellIndex which we prime here before
+   invoking the executor. Other handlers ignore the field so toolbar /
+   hotkey / lc_Copy entry points (which pass -1) behave identically.
 
-   Save methods receive a re-extract callback so the dialog opens
+   Save methods receive a re-extract callback (via
+   TPluginCommandHandlers.MakeReExtract) so the dialog opens
    immediately and re-extract runs only after the user commits. The
    alternative (wrapping the dialog in WithReExtract upfront) blocked
-   TC for seconds before the dialog appeared and re-extracted even when
-   the user then cancelled.}
-  case ATag of
-    CM_SAVE_FRAME, CM_SAVE_FRAMES, CM_SAVE_VIEW, CM_SAVE_VIEW_LIVE, CM_SAVE_VIEW_NATIVE,
-    CM_COPY_FRAME, CM_COPY_VIEW, CM_COPY_VIEW_LIVE, CM_COPY_VIEW_NATIVE:
-      if not CanExportFrames then
-        Exit;
-  end;
-  ReExtract := procedure(const AIndices: TArray<Integer>; AAction: TProc)
-    begin
-      WithReExtract(AIndices, AAction);
-    end;
-  case ATag of
-    CM_SAVE_FRAME:
-      begin
-        ResolvedIdx := FExporter.PickActionCell(-1);
-        if ResolvedIdx >= 0 then
-          FExporter.SaveFrame(FFileName, ResolvedIdx, ReExtract);
-      end;
-    CM_SAVE_FRAMES:
-      FExporter.SaveFrames(FFileName, ReExtract);
-    CM_SAVE_VIEW:
-      {Default Save view: seed the dialog with the persisted setting.}
-      FExporter.SaveView(FFileName, FSettings.SaveAtLiveResolution, ReExtract);
-    CM_SAVE_VIEW_LIVE:
-      {Explicit "view resolution" variant from the Save view dropdown.}
-      FExporter.SaveView(FFileName, True, ReExtract);
-    CM_SAVE_VIEW_NATIVE:
-      {Explicit "native size" variant from the Save view dropdown.}
-      FExporter.SaveView(FFileName, False, ReExtract);
-    CM_COPY_FRAME:
-      begin
-        {Only Copy frame forwards AContextCellIndex to PickActionCell.
-         The right-click context menu wires its captured cursor cell
-         through here so a no-selection user gets the cell they clicked
-         on; when a selection exists, PickActionCell's step 1 takes
-         precedence and Copy frame acts on the first selected cell
-         regardless of where the right-click landed (matches Save frame
-         from the same menu and matches TC's "right-click anywhere acts
-         on the selection" convention). The toolbar button, configurable
-         hotkey, and TC lc_Copy all pass -1 and so never reach the
-         context-cell branch — selection-first behaves identically there.
+   TC for seconds before the dialog appeared and re-extracted even
+   when the user then cancelled.
 
-         The re-extract gate now lives inside CopyFrame (it temp-flips
-         SaveAtLiveResolution := CopyAtLiveResolution and decides from
-         there), so the dispatch just hands over the callback rather
-         than wrapping the call in WithReExtract upfront. Mirrors the
-         CopyView / SaveView pattern.}
-        ResolvedIdx := FExporter.PickActionCell(AContextCellIndex);
-        if ResolvedIdx >= 0 then
-          FExporter.CopyFrame(ResolvedIdx, ReExtract);
-      end;
-    CM_COPY_VIEW:
-      {Default Copy view: honour the persisted CopyAtLiveResolution
-       (separate setting from the save side since 1.1.3.4).}
-      FExporter.CopyView(FSettings.CopyAtLiveResolution, ReExtract);
-    CM_COPY_VIEW_LIVE:
-      {Explicit "view resolution" variant from the Copy view dropdown.}
-      FExporter.CopyView(True, ReExtract);
-    CM_COPY_VIEW_NATIVE:
-      {Explicit "native size" variant from the Copy view dropdown.}
-      FExporter.CopyView(False, ReExtract);
-    CM_SELECT_ALL:
-      FFrameView.SelectAll;
-    CM_DESELECT_ALL:
-      FFrameView.DeselectAll;
-    CM_REFRESH:
-      RefreshExtraction;
-    CM_SHUFFLE:
-      ShuffleExtraction;
-    CM_SETTINGS:
-      ShowSettings;
-  end;
+   Menu / button entry points discard the gate result: a blocked
+   command silently no-ops (UpdateToolbarButtons / OnContextMenuPopup
+   already greyed out the affordance, so this is just defense in
+   depth). Hotkey callers use TryDispatchCommand instead — they need
+   the False-return for TC fall-through semantics.}
+  TryDispatchCommand(ATag, AContextCellIndex);
 end;
 
 procedure TPluginForm.OnToolbarButtonClick(Sender: TObject);
@@ -2489,27 +2768,27 @@ end;
 procedure TPluginForm.UpdateToolbarButtons;
 var
   I: Integer;
-  HasFrames, CanExport: Boolean;
+  Desc: TCommandDescriptor;
 begin
-  HasFrames := Assigned(FFrameView) and FFrameView.HasLoadedCells;
-  {Save / copy must wait until extraction settles. PickActionCell would
-   otherwise return -1 (or a stale cell that just got reset to a
-   placeholder by a Refresh) and the action would silently no-op, which
-   reads as a broken button. Locking the buttons visually surfaces the
-   state to the user instead.}
-  CanExport := CanExportFrames;
+  {Walks each toolbar button and asks the descriptor table what its
+   enable state should be. Save / copy must wait until extraction
+   settles (epRequiresExtract → CanExportFrames): PickActionCell would
+   otherwise return -1 or a stale cell that just got reset to a
+   placeholder by a Refresh and the action would silently no-op, which
+   reads as a broken button. Refresh stays clickable during extraction
+   (epRequiresLoadedCell) so the user can cancel and restart with new
+   settings without waiting for the current run to finish. Settings is
+   always enabled (epAlways).
+
+   Buttons whose Tag has no descriptor (none today, but defense in
+   depth for future toolbar items) default to Enabled := True so a
+   missing entry surfaces as "always usable" instead of silently
+   greying the button.}
   for I := 0 to High(FToolbarButtons) do
-    case FToolbarButtons[I].Tag of
-      CM_SETTINGS:
-        FToolbarButtons[I].Enabled := True;
-      CM_REFRESH:
-        {Refresh stays clickable during extraction so the user can cancel
-         and restart with new settings without waiting for the current
-         run to finish.}
-        FToolbarButtons[I].Enabled := HasFrames;
-      else
-        FToolbarButtons[I].Enabled := CanExport;
-    end;
+    if FindCommandByTag(FCommandTable, Cardinal(FToolbarButtons[I].Tag), Desc) then
+      FToolbarButtons[I].Enabled := PolicyAllows(Desc.EnabledPolicy)
+    else
+      FToolbarButtons[I].Enabled := True;
 end;
 
 procedure TPluginForm.OnModeButtonClick(Sender: TObject);
@@ -2638,7 +2917,7 @@ procedure TPluginForm.OnContextMenuPopup(Sender: TObject);
 var
   I, SelCount: Integer;
   MI: TMenuItem;
-  HasFrames, CanExport: Boolean;
+  Desc: TCommandDescriptor;
 begin
   {Capture the cell under the cursor so OnContextMenuClick can route
    the right-clicked cell through DispatchCommand for Copy frame.
@@ -2646,40 +2925,32 @@ begin
    PickActionCell's downstream loaded-state check filters placeholders.}
   FContextCellIndex := FFrameView.CellIndexAt(FFrameView.ScreenToClient(Mouse.CursorPos));
 
-  HasFrames := FFrameView.CellCount > 0;
-  {Mid-extraction the loaded set is unstable (cells flip from placeholder
-   to loaded as workers finish, and Refresh resets every cell back to
-   placeholder). Save / copy wait until extraction settles so the action
-   sees a consistent set.}
-  CanExport := CanExportFrames;
+  {Each menu item's enable state comes from the descriptor table's
+   policy — same rules UpdateToolbarButtons applies. Save / copy wait
+   until extraction settles (epRequiresExtract) so the action sees a
+   consistent set: mid-extraction the loaded set is unstable (cells
+   flip from placeholder to loaded as workers finish, and Refresh
+   resets every cell back to placeholder).
 
+   The Save frames caption is selection-aware and lives outside the
+   policy table: when frames are selected the action saves only those,
+   otherwise it saves all loaded frames. The caption echoes the
+   selected count so the user knows which set is about to be written
+   before the file dialog opens. Caption code stays here because it's
+   not an enable-state concern — the policy table only owns the
+   Enabled flag.}
   for I := 0 to FContextMenu.Items.Count - 1 do
   begin
     MI := FContextMenu.Items[I];
-    case MI.Tag of
-      CM_SAVE_FRAME, CM_SAVE_VIEW, CM_COPY_FRAME, CM_COPY_VIEW:
-        MI.Enabled := CanExport;
-      CM_SAVE_FRAMES:
-        begin
-          {Selection-aware caption: when frames are selected the action
-           saves only those, otherwise it saves all loaded frames. The
-           caption echoes the selected count so the user knows which set
-           is about to be written before the file dialog opens.}
-          MI.Enabled := CanExport;
-          SelCount := FFrameView.SelectedCount;
-          if SelCount > 0 then
-            MI.Caption := Format('Save frames (%d selected)...'#9'Ctrl+Alt+Shift+S', [SelCount])
-          else
-            MI.Caption := 'Save frames (all)...'#9'Ctrl+Alt+Shift+S';
-        end;
-      CM_SELECT_ALL:
-        MI.Enabled := HasFrames;
-      CM_DESELECT_ALL:
-        MI.Enabled := FFrameView.SelectedCount > 0;
-      CM_REFRESH:
-        MI.Enabled := HasFrames;
-      CM_SETTINGS:
-        ; {always enabled}
+    if FindCommandByTag(FCommandTable, Cardinal(MI.Tag), Desc) then
+      MI.Enabled := PolicyAllows(Desc.EnabledPolicy);
+    if MI.Tag = CM_SAVE_FRAMES then
+    begin
+      SelCount := FFrameView.SelectedCount;
+      if SelCount > 0 then
+        MI.Caption := Format('Save frames (%d selected)...'#9'Ctrl+Alt+Shift+S', [SelCount])
+      else
+        MI.Caption := 'Save frames (all)...'#9'Ctrl+Alt+Shift+S';
     end;
   end;
 end;

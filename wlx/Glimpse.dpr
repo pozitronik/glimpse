@@ -65,6 +65,7 @@ uses
   uTextMeasurement in 'uTextMeasurement.pas',
   uFrameNotificationSink in '..\src\uFrameNotificationSink.pas',
   uPluginContext in 'uPluginContext.pas',
+  uCommandDescriptors in 'uCommandDescriptors.pas',
   uPluginDllPin in 'uPluginDllPin.pas',
   uVideoProbing in '..\src\uVideoProbing.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',

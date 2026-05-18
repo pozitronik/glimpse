@@ -87,6 +87,8 @@
         <DCCReference Include="..\wlx\uFrameView.pas"/>
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
         <DCCReference Include="..\wlx\uPluginForm.pas"/>
+        <DCCReference Include="..\wlx\uCommandDescriptors.pas"/>
+        <DCCReference Include="TestCommandDescriptors.pas"/>
         <DCCReference Include="..\wlx\uCaptureShortcutDlg.pas"/>
         <DCCReference Include="TestFrameView.pas"/>
         <DCCReference Include="..\src\uDebugLog.pas"/>

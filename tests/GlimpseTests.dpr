@@ -122,6 +122,8 @@ uses
   uFrameNotificationSink in '..\src\uFrameNotificationSink.pas',
   uPluginContext in '..\wlx\uPluginContext.pas',
   TestPluginContext in 'TestPluginContext.pas',
+  uCommandDescriptors in '..\wlx\uCommandDescriptors.pas',
+  TestCommandDescriptors in 'TestCommandDescriptors.pas',
   uPluginDllPin in '..\wlx\uPluginDllPin.pas',
   uVideoProbing in '..\src\uVideoProbing.pas',
   uWcxFrameCache in '..\wcx\uWcxFrameCache.pas',

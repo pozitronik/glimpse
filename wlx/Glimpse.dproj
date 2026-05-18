@@ -122,6 +122,7 @@
         <DCCReference Include="uTextMeasurement.pas"/>
         <DCCReference Include="..\src\uFrameNotificationSink.pas"/>
         <DCCReference Include="uPluginContext.pas"/>
+        <DCCReference Include="uCommandDescriptors.pas"/>
         <DCCReference Include="uPluginDllPin.pas"/>
         <DCCReference Include="..\src\uVideoProbing.pas"/>
         <DCCReference Include="..\src\uBitmapResize.pas"/>
