@@ -263,7 +263,6 @@ type
      understands what they will get). When stretch is off, the combo
      re-enables with whatever value it currently holds.}
     procedure UpdateStretchLockState;
-    procedure BrowseFolder(AEdit: TEdit);
     procedure PopulateHotkeyList;
     procedure RefreshHotkeyRow(AAction: uHotkeys.TPluginAction);
     function SelectedHotkeyAction: uHotkeys.TPluginAction;
@@ -623,30 +622,14 @@ begin
   UpdateClipboardFormatControlsEnabled;
 end;
 
-procedure TSettingsForm.BrowseFolder(AEdit: TEdit);
-var
-  Dlg: TFileOpenDialog;
-begin
-  Dlg := TFileOpenDialog.Create(Self);
-  try
-    Dlg.Options := [fdoPickFolders, fdoPathMustExist];
-    if AEdit.Text <> '' then
-      Dlg.DefaultFolder := ExpandEnvVars(AEdit.Text);
-    if Dlg.Execute then
-      AEdit.Text := Dlg.FileName;
-  finally
-    Dlg.Free;
-  end;
-end;
-
 procedure TSettingsForm.BtnSaveFolderClick(Sender: TObject);
 begin
-  BrowseFolder(EdtSaveFolder);
+  BrowseFolderInto(EdtSaveFolder, Self);
 end;
 
 procedure TSettingsForm.BtnCacheFolderClick(Sender: TObject);
 begin
-  BrowseFolder(EdtCacheFolder);
+  BrowseFolderInto(EdtCacheFolder, Self);
 end;
 
 procedure TSettingsForm.BtnFFmpegPathClick(Sender: TObject);

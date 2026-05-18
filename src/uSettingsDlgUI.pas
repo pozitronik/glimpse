@@ -15,7 +15,7 @@ unit uSettingsDlgUI;
 interface
 
 uses
-  System.SysUtils,
+  System.SysUtils, System.Classes,
   Vcl.Controls, Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Dialogs;
 
 {Opens AColorDialog seeded with the panel's current colour; commits the
@@ -57,7 +57,17 @@ procedure ApplyInfoParts(APrefixLabel: TLabel; AValueEdit: TEdit; const APrefix,
  AAutoSize is left unchanged.}
 procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AAutoSize: Boolean; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
 
+{Opens a folder-picker dialog seeded with AEdit's current text (env-var
+ expanded) and writes the chosen folder back to AEdit on accept. AOwner
+ is the VCL owner for the transient TFileOpenDialog instance — typically
+ the hosting form. Both WLX and WCX settings dialogs use this for their
+ Save folder / Cache folder picker buttons.}
+procedure BrowseFolderInto(AEdit: TEdit; AOwner: TComponent);
+
 implementation
+
+uses
+  uPathExpand;
 
 procedure PickColorForPanel(APanel: TPanel; AColorDialog: TColorDialog);
 begin
@@ -122,6 +132,22 @@ begin
     AFontSize := ClampInt(AFontDialog.Font.Size, AMinSize, AMaxSize);
     AAutoSize := False;
     RefreshBannerFontEdit(AEdit, AAutoSize, AFontName, AFontSize);
+  end;
+end;
+
+procedure BrowseFolderInto(AEdit: TEdit; AOwner: TComponent);
+var
+  Dlg: TFileOpenDialog;
+begin
+  Dlg := TFileOpenDialog.Create(AOwner);
+  try
+    Dlg.Options := [fdoPickFolders, fdoPathMustExist];
+    if AEdit.Text <> '' then
+      Dlg.DefaultFolder := ExpandEnvVars(AEdit.Text);
+    if Dlg.Execute then
+      AEdit.Text := Dlg.FileName;
+  finally
+    Dlg.Free;
   end;
 end;
 
