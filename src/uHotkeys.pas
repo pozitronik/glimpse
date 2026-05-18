@@ -453,16 +453,11 @@ end;
 procedure THotkeyBindings.Assign(const AOther: THotkeyBindings);
 var
   A: TPluginAction;
-  I: Integer;
 begin
   if AOther = nil then
     Exit;
   for A := Low(TPluginAction) to High(TPluginAction) do
-  begin
-    SetLength(FBindings[A], Length(AOther.FBindings[A]));
-    for I := 0 to High(AOther.FBindings[A]) do
-      FBindings[A][I] := AOther.FBindings[A][I];
-  end;
+    Put(A, AOther.Get(A));
 end;
 
 function THotkeyBindings.FindActionByChord(const AChord: THotkeyChord;
