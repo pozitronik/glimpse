@@ -27,45 +27,66 @@ unit uUnicodeIniFile;
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.IniFiles,
   uIniDocument;
 
 type
-  TUnicodeIniFile = class
+  {Descends from TCustomIniFile so the instance can substitute
+   wherever the RTL ini-file interface is expected. Every abstract
+   member is overridden; the inherited ReadDate / WriteDate / etc. work
+   transparently because they route through ReadString / WriteString
+   which the descendant implements over the line-list model. ReadBool /
+   WriteBool are also overridden to preserve the lenient
+   True/False/Yes/No/On/Off/0/1 contract — the base only accepts 0/1.}
+  TUnicodeIniFile = class(TCustomIniFile)
   strict private
-    FFileName: string;
     FDocument: TIniDocument;
 
     procedure LoadFromDisk;
   public
-    constructor Create(const AFileName: string);
+    {TCustomIniFile.Create's no-Encoding overload is non-virtual in
+     this Delphi RTL; reintroduce here keeps the same call site working
+     while we run our own initialization. The base's other Create
+     overload (with Encoding) is left alone — callers who want explicit
+     encoding can construct via the inherited form.}
+    constructor Create(const AFileName: string); reintroduce;
     destructor Destroy; override;
 
-    function ReadString(const ASection, AKey, ADefault: string): string;
-    function ReadInteger(const ASection, AKey: string; ADefault: Integer): Integer;
-    {Lenient ReadBool: True/Yes/On/1 -> True; False/No/Off/0 -> False;
-     anything else -> ADefault. Case-insensitive.}
-    function ReadBool(const ASection, AKey: string; ADefault: Boolean): Boolean;
+    function ReadString(const Section, Ident, Default: string): string; override;
+    procedure WriteString(const Section, Ident, Value: string); override;
+    {ReadInteger / WriteInteger / ReadBool / WriteBool are non-virtual
+     on TCustomIniFile (the base routes them through ReadString /
+     WriteString). reintroduce keeps the typed-as-TUnicodeIniFile
+     callers using the line-list-direct paths and preserves ReadBool's
+     leniency (True/Yes/On/1 → True; False/No/Off/0 → False); a caller
+     typed as TCustomIniFile would fall through to the base's stricter
+     0/1 ReadBool — same risk as not having these methods at all on
+     the base, accepted to keep the substitution promise.}
+    function ReadInteger(const Section, Ident: string; Default: Longint): Longint; reintroduce;
+    function ReadBool(const Section, Ident: string; Default: Boolean): Boolean; reintroduce;
+    procedure WriteInteger(const Section, Ident: string; Value: Longint); reintroduce;
+    procedure WriteBool(const Section, Ident: string; Value: Boolean); reintroduce;
 
-    procedure WriteString(const ASection, AKey, AValue: string);
-    procedure WriteInteger(const ASection, AKey: string; AValue: Integer);
-    procedure WriteBool(const ASection, AKey: string; AValue: Boolean);
-
-    procedure ReadSections(AStrings: TStrings);
-    procedure ReadSection(const ASection: string; AStrings: TStrings);
-    function ValueExists(const ASection, AKey: string): Boolean;
-    function SectionExists(const ASection: string): Boolean;
-    procedure DeleteKey(const ASection, AKey: string);
-    procedure EraseSection(const ASection: string);
+    procedure ReadSections(Strings: TStrings); override;
+    procedure ReadSection(const Section: string; Strings: TStrings); override;
+    {TCustomIniFile contract: emits "Key=Value" lines (one per key in
+     ASection). Our line-list model already carries Key + Value per
+     ilkKeyValue entry; the override walks it and assembles the
+     formatted strings the base expects.}
+    procedure ReadSectionValues(const Section: string; Strings: TStrings); override;
+    {ValueExists / SectionExists are non-virtual on TCustomIniFile —
+     reintroduce so the line-list-direct path stays in use.}
+    function ValueExists(const Section, Ident: string): Boolean; reintroduce;
+    function SectionExists(const Section: string): Boolean; reintroduce;
+    procedure DeleteKey(const Section, Ident: string); override;
+    procedure EraseSection(const Section: string); override;
     {Discards every line, leaving an empty in-memory document. Used
      when callers want to fully rewrite the file from scratch.}
     procedure Clear;
-    {Persists the in-memory state to FFileName as UTF-8 without BOM
-     and CRLF line endings. Silent no-op when FFileName is empty
+    {Persists the in-memory state to FileName as UTF-8 without BOM
+     and CRLF line endings. Silent no-op when FileName is empty
      (mirrors the TIniFile sentinel).}
-    procedure UpdateFile;
-
-    property FileName: string read FFileName;
+    procedure UpdateFile; override;
   end;
 
 {Decodes ABytes into a Delphi string per the BOM-then-strict-UTF-8
@@ -87,10 +108,9 @@ end;
 
 constructor TUnicodeIniFile.Create(const AFileName: string);
 begin
-  inherited Create;
-  FFileName := AFileName;
+  inherited Create(AFileName);
   FDocument := TIniDocument.Create;
-  if (FFileName <> '') and TFile.Exists(FFileName) then
+  if (FileName <> '') and TFile.Exists(FileName) then
     LoadFromDisk;
 end;
 
@@ -117,69 +137,93 @@ var
   Bytes: TBytes;
   Text: string;
 begin
-  Bytes := TFile.ReadAllBytes(FFileName);
+  Bytes := TFile.ReadAllBytes(FileName);
   Text := uIniEncoding.DecodeIniBytes(Bytes);
   FDocument.ParseFromText(Text);
 end;
 
-function TUnicodeIniFile.ReadString(const ASection, AKey, ADefault: string): string;
+function TUnicodeIniFile.ReadString(const Section, Ident, Default: string): string;
 begin
-  Result := FDocument.ReadString(ASection, AKey, ADefault);
+  Result := FDocument.ReadString(Section, Ident, Default);
 end;
 
-function TUnicodeIniFile.ReadInteger(const ASection, AKey: string; ADefault: Integer): Integer;
+function TUnicodeIniFile.ReadInteger(const Section, Ident: string; Default: Longint): Longint;
 begin
-  Result := FDocument.ReadInteger(ASection, AKey, ADefault);
+  Result := FDocument.ReadInteger(Section, Ident, Default);
 end;
 
-function TUnicodeIniFile.ReadBool(const ASection, AKey: string; ADefault: Boolean): Boolean;
+function TUnicodeIniFile.ReadBool(const Section, Ident: string; Default: Boolean): Boolean;
 begin
-  Result := FDocument.ReadBool(ASection, AKey, ADefault);
+  Result := FDocument.ReadBool(Section, Ident, Default);
 end;
 
-procedure TUnicodeIniFile.WriteString(const ASection, AKey, AValue: string);
+procedure TUnicodeIniFile.WriteString(const Section, Ident, Value: string);
 begin
-  FDocument.WriteString(ASection, AKey, AValue);
+  FDocument.WriteString(Section, Ident, Value);
 end;
 
-procedure TUnicodeIniFile.WriteInteger(const ASection, AKey: string; AValue: Integer);
+procedure TUnicodeIniFile.WriteInteger(const Section, Ident: string; Value: Longint);
 begin
-  FDocument.WriteInteger(ASection, AKey, AValue);
+  FDocument.WriteInteger(Section, Ident, Value);
 end;
 
-procedure TUnicodeIniFile.WriteBool(const ASection, AKey: string; AValue: Boolean);
+procedure TUnicodeIniFile.WriteBool(const Section, Ident: string; Value: Boolean);
 begin
-  FDocument.WriteBool(ASection, AKey, AValue);
+  FDocument.WriteBool(Section, Ident, Value);
 end;
 
-procedure TUnicodeIniFile.ReadSections(AStrings: TStrings);
+procedure TUnicodeIniFile.ReadSections(Strings: TStrings);
 begin
-  FDocument.ReadSections(AStrings);
+  FDocument.ReadSections(Strings);
 end;
 
-procedure TUnicodeIniFile.ReadSection(const ASection: string; AStrings: TStrings);
+procedure TUnicodeIniFile.ReadSection(const Section: string; Strings: TStrings);
 begin
-  FDocument.ReadSection(ASection, AStrings);
+  FDocument.ReadSection(Section, Strings);
 end;
 
-function TUnicodeIniFile.ValueExists(const ASection, AKey: string): Boolean;
+procedure TUnicodeIniFile.ReadSectionValues(const Section: string; Strings: TStrings);
+var
+  Keys: TStringList;
+  I: Integer;
+  Key: string;
 begin
-  Result := FDocument.ValueExists(ASection, AKey);
+  {TCustomIniFile contract: emits "Key=Value" pairs, one per line. The
+   line-list model carries each pair as a TIniLine; we re-format here
+   by reading keys via ReadSection (preserves document order) and
+   pairing each with its stored value.}
+  Strings.Clear;
+  Keys := TStringList.Create;
+  try
+    FDocument.ReadSection(Section, Keys);
+    for I := 0 to Keys.Count - 1 do
+    begin
+      Key := Keys[I];
+      Strings.Add(Key + '=' + FDocument.ReadString(Section, Key, ''));
+    end;
+  finally
+    Keys.Free;
+  end;
 end;
 
-function TUnicodeIniFile.SectionExists(const ASection: string): Boolean;
+function TUnicodeIniFile.ValueExists(const Section, Ident: string): Boolean;
 begin
-  Result := FDocument.SectionExists(ASection);
+  Result := FDocument.ValueExists(Section, Ident);
 end;
 
-procedure TUnicodeIniFile.DeleteKey(const ASection, AKey: string);
+function TUnicodeIniFile.SectionExists(const Section: string): Boolean;
 begin
-  FDocument.DeleteKey(ASection, AKey);
+  Result := FDocument.SectionExists(Section);
 end;
 
-procedure TUnicodeIniFile.EraseSection(const ASection: string);
+procedure TUnicodeIniFile.DeleteKey(const Section, Ident: string);
 begin
-  FDocument.EraseSection(ASection);
+  FDocument.DeleteKey(Section, Ident);
+end;
+
+procedure TUnicodeIniFile.EraseSection(const Section: string);
+begin
+  FDocument.EraseSection(Section);
 end;
 
 procedure TUnicodeIniFile.Clear;
@@ -192,11 +236,11 @@ var
   Text: string;
   Bytes: TBytes;
 begin
-  if FFileName = '' then
+  if FileName = '' then
     Exit;
   Text := FDocument.RenderToText;
   Bytes := uIniEncoding.EncodeIniBytes(Text);
-  TFile.WriteAllBytes(FFileName, Bytes);
+  TFile.WriteAllBytes(FileName, Bytes);
   FDocument.ClearDirty;
 end;
 

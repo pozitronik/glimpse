@@ -71,12 +71,22 @@ type
      it pushes the contract to callers (every settings Save path
      already calls UpdateFile explicitly).}
     [Test] procedure TestDestroyWithoutUpdateFile_DoesNotFlush;
+    {Substitution proof for step 68: a TUnicodeIniFile instance can be
+     used through a TCustomIniFile reference. Calls Write/Read methods
+     via the base reference and asserts the values round-trip through
+     the line-list model. The override correctness of every abstract
+     member is the implicit contract this test pins.}
+    [Test] procedure TestSubstitutesAsTCustomIniFile;
+    {ReadSectionValues is one of the abstract members the step 68
+     descent had to override (previous TUnicodeIniFile had no such
+     method). Pin the "Key=Value" emission format.}
+    [Test] procedure TestReadSectionValuesEmitsKeyEqualsValuePairs;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.IOUtils,
+  System.SysUtils, System.Classes, System.IOUtils, System.IniFiles,
   uUnicodeIniFile;
 
 procedure TTestUnicodeIniFile.Setup;
@@ -770,6 +780,68 @@ begin
   Body := TFile.ReadAllText(Path);
   Assert.IsTrue(Body.Contains('=stranded'),
     'Unparseable line preserved verbatim');
+end;
+
+procedure TTestUnicodeIniFile.TestSubstitutesAsTCustomIniFile;
+var
+  Path: string;
+  Concrete: TUnicodeIniFile;
+  Base: TCustomIniFile;
+begin
+  {Construct as TUnicodeIniFile, assign to a TCustomIniFile reference,
+   exercise the abstract API through that reference. Every Read/Write
+   the base declares must dispatch into the line-list model via our
+   override; the round-trip is the substitution proof.}
+  Path := TPath.Combine(FTempDir, 'subst.ini');
+  Concrete := TUnicodeIniFile.Create(Path);
+  try
+    Base := Concrete;
+    Base.WriteString('s', 'k1', 'via-base');
+    Base.WriteInteger('s', 'n', 42);
+    Base.WriteBool('s', 'b', True);
+
+    Assert.AreEqual('via-base', Base.ReadString('s', 'k1', ''),
+      'String written through TCustomIniFile ref must round-trip');
+    Assert.AreEqual<Integer>(42, Base.ReadInteger('s', 'n', 0));
+    Assert.IsTrue(Base.ReadBool('s', 'b', False));
+
+    Assert.IsTrue(Base.SectionExists('s'), 'SectionExists via base ref');
+    Assert.IsTrue(Base.ValueExists('s', 'k1'), 'ValueExists via base ref');
+
+    Base.DeleteKey('s', 'n');
+    Assert.IsFalse(Base.ValueExists('s', 'n'), 'DeleteKey via base ref');
+
+    Base.EraseSection('s');
+    Assert.IsFalse(Base.SectionExists('s'), 'EraseSection via base ref');
+  finally
+    Concrete.Free;
+  end;
+end;
+
+procedure TTestUnicodeIniFile.TestReadSectionValuesEmitsKeyEqualsValuePairs;
+var
+  Path: string;
+  Ini: TUnicodeIniFile;
+  Pairs: TStringList;
+begin
+  Path := TPath.Combine(FTempDir, 'rsv.ini');
+  Ini := TUnicodeIniFile.Create(Path);
+  try
+    Ini.WriteString('audio', 'codec', 'aac');
+    Ini.WriteInteger('audio', 'rate', 48000);
+    Pairs := TStringList.Create;
+    try
+      Ini.ReadSectionValues('audio', Pairs);
+      Assert.AreEqual<Integer>(2, Pairs.Count,
+        'ReadSectionValues emits one line per key');
+      Assert.AreEqual('codec=aac', Pairs[0]);
+      Assert.AreEqual('rate=48000', Pairs[1]);
+    finally
+      Pairs.Free;
+    end;
+  finally
+    Ini.Free;
+  end;
 end;
 
 procedure TTestUnicodeIniFile.TestDestroyWithoutUpdateFile_DoesNotFlush;
