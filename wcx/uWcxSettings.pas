@@ -79,6 +79,22 @@ type
      the top of Load so a fresh Load always starts from a known baseline,
      matching TPluginSettings behaviour.}
     procedure ResetDefaults;
+    {Load's three composable stages, public to allow per-stage tests.
+     Production callers should use Load (which orchestrates all three
+     after ResetDefaults). The stages are independent enough to be
+     exercised in isolation:
+       LoadFromIni     reads every simple key from AIni into the matching
+                       field with no transformation beyond a Byte narrowing
+                       where the target field's storage is narrower than the
+                       INI int (FBackgroundAlpha).
+       ParseLegacyFormats reads the string-encoded keys that need
+                       interpretation (Mode bitmask via ParseModeKey,
+                       Format JPEG/PNG enum, Background hex colour).
+       ApplyClamps     enforces the documented min/max ranges on fields
+                       whose values are bounded; safe to call repeatedly.}
+    procedure LoadFromIni(AIni: TUnicodeIniFile);
+    procedure ParseLegacyFormats(AIni: TUnicodeIniFile);
+    procedure ApplyClamps;
 
     property IniPath: string read FIniPath;
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
@@ -282,51 +298,74 @@ begin
     Exit;
   Ini := TUnicodeIniFile.Create(FIniPath);
   try
-    {Pass the current field value as the INI fallback so the post-Reset
-     default propagates through one source of truth (ResetDefaults). The
-     LoadFrom helpers on the group records already follow this pattern;
-     the inline reads now match. String-parsed enums (Mode, Format) and
-     the hex-encoded Background are kept on literal/constant fallbacks
-     because converting the current field back to a string just to feed
-     it as a default would add reverse-conversion noise for no benefit.}
-    FFFmpegExePath := Ini.ReadString('ffmpeg', 'ExePath', FFFmpegExePath);
-    FExtraction.LoadFrom(Ini, 'extraction');
-    FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', FRandomExtraction);
-    FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', FRandomPercent), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
-
-    {Mode is a bitmask of MODE_FRAMES / MODE_COMBINED / MODE_PRESETS.
-     Numeric values parse directly; the legacy string forms "separate"
-     and "combined" map to the single-bit equivalent so an INI written
-     by an older Glimpse build still loads.}
-    FMode := ParseModeKey(Ini.ReadString('output', 'Mode', ''), WCX_DEF_MODE);
-
-    if SameText(Ini.ReadString('output', 'Format', 'PNG'), 'JPEG') then
-      FSaveFormat := sfJPEG
-    else
-      FSaveFormat := sfPNG;
-    FJpegQuality := EnsureRange(Ini.ReadInteger('output', 'JpegQuality', FJpegQuality), MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-    FPngCompression := EnsureRange(Ini.ReadInteger('output', 'PngCompression', FPngCompression), MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
-    {Explicit Byte cast: EnsureRange returns Integer, target is Byte; the
-     range is [0, 255] so the narrowing is always safe but the cast
-     documents intent and survives stricter compiler options.}
-    FBackgroundAlpha := Byte(EnsureRange(Ini.ReadInteger('output', 'BackgroundAlpha', FBackgroundAlpha), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA));
-
-    FCombinedColumns := EnsureRange(Ini.ReadInteger('combined', 'Columns', FCombinedColumns), 0, 20);
-    FBackground := HexToColor(Ini.ReadString('combined', 'Background', ''), FBackground);
-    FCellGap := Max(Ini.ReadInteger('combined', 'CellGap', FCellGap), MIN_CELL_GAP);
-    FCombinedBorder := Max(Ini.ReadInteger('combined', 'CombinedBorder', FCombinedBorder), MIN_COMBINED_BORDER);
-    FTimestamp.LoadFrom(Ini, 'combined', 'ShowTimestamp');
-    FBanner.LoadFrom(Ini, 'combined');
-
-    FShowFileSizes := Ini.ReadBool('output', 'ShowFileSizes', FShowFileSizes);
-
-    FFrameMaxSide := EnsureRange(Ini.ReadInteger('output', 'FrameMaxSide', FFrameMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
-    FCombinedMaxSide := EnsureRange(Ini.ReadInteger('combined', 'CombinedMaxSide', FCombinedMaxSide), WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
-
-    FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
+    LoadFromIni(Ini);
+    ParseLegacyFormats(Ini);
+    ApplyClamps;
   finally
     Ini.Free;
   end;
+end;
+
+procedure TWcxSettings.LoadFromIni(AIni: TUnicodeIniFile);
+begin
+  {Pass the current field value as the INI fallback so the post-Reset
+   default propagates through one source of truth (ResetDefaults). The
+   LoadFrom helpers on the group records already follow this pattern;
+   the inline reads here match. Unclamped reads — ApplyClamps enforces
+   the documented bounds in a separate pass, exposing the clamp logic
+   to its own per-step tests.}
+  FFFmpegExePath := AIni.ReadString('ffmpeg', 'ExePath', FFFmpegExePath);
+  FExtraction.LoadFrom(AIni, 'extraction');
+  FRandomExtraction := AIni.ReadBool('extraction', 'RandomExtraction', FRandomExtraction);
+  FRandomPercent := AIni.ReadInteger('extraction', 'RandomPercent', FRandomPercent);
+  FJpegQuality := AIni.ReadInteger('output', 'JpegQuality', FJpegQuality);
+  FPngCompression := AIni.ReadInteger('output', 'PngCompression', FPngCompression);
+  {BackgroundAlpha is a Byte field; the EnsureRange + Byte cast happens
+   inline because narrowing a wider INI int into a Byte is intrinsic
+   to the read (any out-of-range INI value would be truncated by the
+   cast alone — EnsureRange is what makes the truncation meaningful).
+   This stays in LoadFromIni rather than ApplyClamps because the
+   field's storage type, not a logical range limit, drives it.}
+  FBackgroundAlpha := Byte(EnsureRange(AIni.ReadInteger('output', 'BackgroundAlpha', FBackgroundAlpha), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA));
+  FCombinedColumns := AIni.ReadInteger('combined', 'Columns', FCombinedColumns);
+  FCellGap := AIni.ReadInteger('combined', 'CellGap', FCellGap);
+  FCombinedBorder := AIni.ReadInteger('combined', 'CombinedBorder', FCombinedBorder);
+  FTimestamp.LoadFrom(AIni, 'combined', 'ShowTimestamp');
+  FBanner.LoadFrom(AIni, 'combined');
+  FShowFileSizes := AIni.ReadBool('output', 'ShowFileSizes', FShowFileSizes);
+  FFrameMaxSide := AIni.ReadInteger('output', 'FrameMaxSide', FFrameMaxSide);
+  FCombinedMaxSide := AIni.ReadInteger('combined', 'CombinedMaxSide', FCombinedMaxSide);
+  FDebugLogEnabled := AIni.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
+end;
+
+procedure TWcxSettings.ParseLegacyFormats(AIni: TUnicodeIniFile);
+begin
+  {Mode is a bitmask of MODE_FRAMES / MODE_COMBINED / MODE_PRESETS.
+   Numeric values parse directly; the legacy string forms "separate"
+   and "combined" map to the single-bit equivalent so an INI written
+   by an older Glimpse build still loads. String-parsed enums (Mode,
+   Format) and the hex-encoded Background keep literal/constant
+   fallbacks because converting the current field back to a string
+   just to feed it as a default would add reverse-conversion noise
+   for no benefit.}
+  FMode := ParseModeKey(AIni.ReadString('output', 'Mode', ''), WCX_DEF_MODE);
+  if SameText(AIni.ReadString('output', 'Format', 'PNG'), 'JPEG') then
+    FSaveFormat := sfJPEG
+  else
+    FSaveFormat := sfPNG;
+  FBackground := HexToColor(AIni.ReadString('combined', 'Background', ''), FBackground);
+end;
+
+procedure TWcxSettings.ApplyClamps;
+begin
+  FRandomPercent := EnsureRange(FRandomPercent, MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
+  FJpegQuality := EnsureRange(FJpegQuality, MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+  FPngCompression := EnsureRange(FPngCompression, MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+  FCombinedColumns := EnsureRange(FCombinedColumns, 0, 20);
+  FCellGap := Max(FCellGap, MIN_CELL_GAP);
+  FCombinedBorder := Max(FCombinedBorder, MIN_COMBINED_BORDER);
+  FFrameMaxSide := EnsureRange(FFrameMaxSide, WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
+  FCombinedMaxSide := EnsureRange(FCombinedMaxSide, WCX_MIN_OUTPUT_SIDE, WCX_MAX_OUTPUT_SIDE);
 end;
 
 procedure TWcxSettings.Save;

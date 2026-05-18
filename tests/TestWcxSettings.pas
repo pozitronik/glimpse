@@ -117,13 +117,22 @@ type
     [Test] procedure TestDebugLogEnabledDefault;
     [Test] procedure TestDebugLogEnabledRoundTrip;
     [Test] procedure TestDebugLogEnabledAbsentKeyKeepsDefault;
+    { Per-stage tests for the Load decomposition: LoadFromIni reads raw
+      values without clamping, ParseLegacyFormats interprets the
+      string-encoded keys, ApplyClamps enforces bounds. Each stage is
+      exercised in isolation so a regression in one is localised. }
+    [Test] procedure TestLoadFromIniReadsRawValuesWithoutClamping;
+    [Test] procedure TestParseLegacyFormatsAcceptsLegacyModeString;
+    [Test] procedure TestApplyClampsClampsRandomPercentHigh;
+    [Test] procedure TestApplyClampsClampsRandomPercentLow;
+    [Test] procedure TestApplyClampsRaisesCellGapToMinimum;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uWcxSettings, uBitmapSaver, uDefaults, uTypes;
+  uWcxSettings, uBitmapSaver, uDefaults, uTypes, uUnicodeIniFile;
 
 { TTestWcxSettings }
 
@@ -2095,6 +2104,127 @@ begin
     S.Load;
     Assert.AreEqual(WCX_DEF_DEBUG_LOG_ENABLED, S.DebugLogEnabled,
       'Missing [debug] LogEnabled key must leave the documented default intact');
+  finally
+    S.Free;
+  end;
+end;
+
+{ Per-stage tests for the Load decomposition }
+
+procedure TTestWcxSettings.TestLoadFromIniReadsRawValuesWithoutClamping;
+var
+  S: TWcxSettings;
+  Ini: TUnicodeIniFile;
+  IniPath: string;
+begin
+  {LoadFromIni reads INI keys into fields with no range enforcement;
+   ApplyClamps does that in a separate pass. After LoadFromIni alone,
+   an out-of-range value must be visible verbatim in the field.}
+  IniPath := TPath.Combine(FTempDir, 'wcx_raw_read.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', 999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    Ini := TUnicodeIniFile.Create(IniPath);
+    try
+      S.LoadFromIni(Ini);
+      Assert.AreEqual(999, S.RandomPercent,
+        'LoadFromIni must not clamp; the raw INI value reaches the field intact');
+    finally
+      Ini.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestParseLegacyFormatsAcceptsLegacyModeString;
+var
+  S: TWcxSettings;
+  Ini: TUnicodeIniFile;
+  IniPath: string;
+begin
+  {ParseLegacyFormats interprets the string-encoded Mode key. The
+   legacy "separate" form must resolve to MODE_FRAMES so old Glimpse
+   INIs keep loading; without ParseLegacyFormats, FMode would still
+   hold the post-Reset default.}
+  IniPath := TPath.Combine(FTempDir, 'wcx_legacy_mode.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('output', 'Mode', 'separate');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  S := TWcxSettings.Create(IniPath);
+  try
+    Ini := TUnicodeIniFile.Create(IniPath);
+    try
+      S.ParseLegacyFormats(Ini);
+      Assert.AreEqual(Integer(MODE_FRAMES), S.Mode,
+        'ParseLegacyFormats must map the legacy "separate" Mode string to MODE_FRAMES');
+    finally
+      Ini.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestApplyClampsClampsRandomPercentHigh;
+var
+  S: TWcxSettings;
+begin
+  {Per-stage test: set a raw out-of-range value via the public property
+   (no setter clamping), invoke ApplyClamps in isolation, verify the
+   max bound was enforced. Bypasses Load entirely so the clamp pass
+   alone is exercised.}
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_clamp_high.ini'));
+  try
+    S.RandomPercent := 999;
+    S.ApplyClamps;
+    Assert.AreEqual(MAX_RANDOM_PERCENT, S.RandomPercent,
+      'ApplyClamps must cap RandomPercent at MAX_RANDOM_PERCENT');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestApplyClampsClampsRandomPercentLow;
+var
+  S: TWcxSettings;
+begin
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_clamp_low.ini'));
+  try
+    S.RandomPercent := -50;
+    S.ApplyClamps;
+    Assert.AreEqual(MIN_RANDOM_PERCENT, S.RandomPercent,
+      'ApplyClamps must raise RandomPercent to MIN_RANDOM_PERCENT');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestApplyClampsRaisesCellGapToMinimum;
+var
+  S: TWcxSettings;
+begin
+  {CellGap uses a lower-bound Max(...) rather than EnsureRange because
+   the upper end is unbounded — pins the asymmetric clamp pattern so
+   future tweaks don't silently switch to a two-sided range.}
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_cellgap.ini'));
+  try
+    S.CellGap := -10;
+    S.ApplyClamps;
+    Assert.AreEqual(MIN_CELL_GAP, S.CellGap,
+      'ApplyClamps must raise CellGap to MIN_CELL_GAP when set below it');
   finally
     S.Free;
   end;
