@@ -11,7 +11,7 @@ uses
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
   uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
-  uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
+  uExtractionPlanner, uToolbarLayout, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
   uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
@@ -111,7 +111,7 @@ type
     FModePopups: array [TViewMode] of TPopupMenu;
     FContextMenu: TPopupMenu;
     FBtnTimecode: TSpeedButton;
-    FToolbarButtons: array of TButton;
+    FToolbarButtons: TArray<TButton>;
     FBtnHamburger: TButton;
     FHamburgerMenu: TPopupMenu;
     {Drop-down attached to the Refresh toolbar button: offers
@@ -121,14 +121,20 @@ type
     FRefreshPopup: TPopupMenu;
     FSaveViewPopup: TPopupMenu;
     FCopyViewPopup: TPopupMenu;
-    {Holds embedded PNG glyphs for toolbar buttons that have no good Unicode
-     equivalent; the hamburger is the first user. Owned by Self.}
+    {Owns the embedded ICON glyphs for toolbar buttons that have no good
+     Unicode equivalent (the hamburger is the first user). TComponent-owned
+     by Self so the form's inherited destructor releases it.}
+    FGlyphLibrary: TToolbarGlyphLibrary;
+    {Back-compat alias: points at FGlyphLibrary.Images. Several form sites
+     still reference FToolbarImages directly; CreateToolbar assigns this
+     field once the glyph library is constructed so those sites stay
+     unchanged.}
     FToolbarImages: TImageList;
     FProgressBar: TProgressBar;
     FProgressVisible: Boolean;
     {Per-element right pixel edges for collapse threshold checks}
     FFrameCountRight: Integer;
-    FElementRights: array of Integer;
+    FElementRights: TArray<Integer>;
     FVisibleElementCount: Integer;
     {Status bar}
     FStatusBar: TStatusBar;
@@ -255,14 +261,6 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
-    function CreateModePopup(AMode: TViewMode): TPopupMenu;
-    {Builds the dropdown menu attached to the Refresh toolbar button:
-     "Refresh" item (same as primary click) and "Shuffle" (random
-     positions). Both items dispatch through the existing OnContextMenuClick
-     so the keyboard hotkeys stay the single source of truth.}
-    function CreateRefreshPopup: TPopupMenu;
-    function CreateSaveViewPopup: TPopupMenu;
-    function CreateCopyViewPopup: TPopupMenu;
     {Walks the items of the given popup and rewrites Save/Copy view
      dropdown captions with their current predicted-size suffix. Called
      from each popup's OnPopup so the suffix tracks live cell size,
@@ -424,7 +422,8 @@ uses
   System.IOUtils, Winapi.ShellAPI,
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uBannerInfo, uTimecodeOverlay,
   uProgressModalForm,
-  uPlatformDetect, uDefaults;
+  uPlatformDetect, uDefaults,
+  uToolbarBuilder;
 
 type
   {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
@@ -540,26 +539,15 @@ begin
   inherited;
 end;
 
-{Embedded toolbar glyph resources; see CreateToolbar for use. The .res is
- generated from icons.rc by cgrc as a pre-build step in build.bat and
- test.bat — brcc32 (the default $R 'foo.rc' compiler) emits 16-bit-format
- resources that the Win64 linker rejects.}
+{Embedded toolbar glyph resources; consumed by TToolbarGlyphLibrary. The
+ .res is generated from icons.rc by cgrc as a pre-build step in build.bat
+ and test.bat — brcc32 (the default $R 'foo.rc' compiler) emits 16-bit-
+ format resources that the Win64 linker rejects. The $R directive must
+ stay on uPluginForm.pas because HInstance in uToolbarGlyphLibrary.pas
+ resolves to the same DLL module; if the resource were attached to the
+ glyph library unit instead the linker would still bundle it in the same
+ module image and this comment block would not exist.}
 {$R icons.res}
-
-{Loads an icon resource into AImageList. Icons preserve their alpha channel
- natively through TImageList.AddIcon; no manual scanline copy is needed.}
-procedure LoadIconResourceToImageList(AImageList: TImageList; const AResName: string);
-var
-  Icon: TIcon;
-begin
-  Icon := TIcon.Create;
-  try
-    Icon.LoadFromResourceName(HInstance, AResName);
-    AImageList.AddIcon(Icon);
-  finally
-    Icon.Free;
-  end;
-end;
 
 var
   {Subsystem logger; closure captures the 'Form' tag once at unit
@@ -679,22 +667,15 @@ begin
   Result := DefSubclassProc(HWND, uMsg, wParam, lParam);
 end;
 
-const
-  {Upper limit for the frame-count spin edit. Data-validation constant,
-   not a layout pixel — stays in uPluginForm because FUpDown.Max is the
-   only consumer and the value is product policy, not visual styling.}
-  MAX_FRAME_COUNT = 99;
+{Status bar panel widths are now driven by the template engine in
+ uStatusBarRenderer: each token's "width=auto" measurement uses the
+ sample text registered in uStatusBarTokens.StatusBarTokenSampleText,
+ and explicit "width=N" overrides them per token in the user's
+ template (DEF_STATUSBAR_TEMPLATE for the default layout).
+ Command tags, mode captions, sizing labels, and toolbar actions are
+ defined in uToolbarLayout.}
 
-  {Status bar panel widths are now driven by the template engine in
-   uStatusBarRenderer: each token's "width=auto" measurement uses the
-   sample text registered in uStatusBarTokens.StatusBarTokenSampleText,
-   and explicit "width=N" overrides them per token in the user's
-   template (DEF_STATUSBAR_TEMPLATE for the default layout).}
-
-  {Command tags, mode captions, sizing labels, and toolbar actions
-   are defined in uToolbarLayout}
-
-  {TPluginForm}
+{TPluginForm}
 
 procedure TPluginForm.OnFrameViewCtrlWheel(Sender: TObject; AWheelDelta: Integer);
 begin
@@ -1079,251 +1060,49 @@ begin
 end;
 
 procedure TPluginForm.CreateToolbar;
-const
-  TB_PAD = 4; {Vertical padding above and below controls}
-  CTRL_GAP = 8; {Gap between control groups}
-  BTN_GAP = 2; {Gap between adjacent buttons in a group}
-  BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
-  {Extra horizontal width reserved for the dropdown arrow on the
-   Refresh split button. The view-mode buttons use the same allowance
-   by virtue of the IDX_ICON_ARROW glyph; Refresh has no glyph so the
-   space is added explicitly to match the visual weight.}
-  REFRESH_DROPDOWN_EXTRA = 14;
-  {Save view / Copy view captions are longer than Refresh, so the
-   bsSplitButton arrow pinches the rendered text when only
-   REFRESH_DROPDOWN_EXTRA is reserved. Add a small buffer on top so the
-   full caption stays visible.}
-  VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
-  SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
-  PB_H = 16; {Progress bar height}
-  ICON_W = 16; {Toolbar icon width}
-  ICON_GAP = 4; {Space between icon and caption on icon-bearing buttons}
 var
-  X, CY, CtrlH, BW, I: Integer;
+  Builder: TToolbarBuilder;
+  H: TToolbarHandles;
   VM: TViewMode;
-  TabIdx: Integer;
-  Btn: TButton;
 begin
-  FToolbar := TPanel.Create(Self);
-  FToolbar.Parent := Self;
-  FToolbar.Align := alTop;
-  FToolbar.BevelOuter := bvNone;
-  FToolbar.ParentBackground := False;
-
-  {Create edit first: its auto-sized height is the reference for all controls}
-  FEditFrameCount := TEdit.Create(FToolbar);
-  FEditFrameCount.Parent := FToolbar;
-  FEditFrameCount.Width := FRAME_COUNT_EDIT_W;
-  FEditFrameCount.NumbersOnly := True;
-  FEditFrameCount.TabOrder := 0;
-  CtrlH := FEditFrameCount.Height;
-
-  FToolbar.Height := CtrlH + 2 * TB_PAD;
-  CY := TB_PAD;
-  X := CTRL_GAP;
-
-  FLblFrames := TLabel.Create(FToolbar);
-  FLblFrames.Parent := FToolbar;
-  FLblFrames.Caption := 'Frames:';
-  FLblFrames.AutoSize := True;
-  FLblFrames.Left := X;
-  FLblFrames.Top := CY + (CtrlH - FLblFrames.Height) div 2;
-  Inc(X, FLblFrames.Width + 4);
-
-  FEditFrameCount.SetBounds(X, CY, FRAME_COUNT_EDIT_W, CtrlH);
-  FEditFrameCount.Hint := 'Number of frames to extract from the video.';
-
-  FUpDown := TUpDown.Create(FToolbar);
-  FUpDown.Parent := FToolbar;
-  FUpDown.Associate := FEditFrameCount;
-  FUpDown.Min := 1;
-  FUpDown.Max := MAX_FRAME_COUNT;
-  FUpDown.Hint := 'Number of frames to extract from the video.';
-  Inc(X, FRAME_COUNT_EDIT_W + FUpDown.Width + CTRL_GAP);
-  FFrameCountRight := X;
-
-  {Collapsible elements: modes, timecodes, actions (left to right)}
-  SetLength(FElementRights, ELEM_TOTAL_COUNT);
-
-  {Toolbar glyphs are loaded from embedded ICON resources rather than relying
-   on Unicode characters: the runtime font (Tahoma/MS Sans Serif under TC's
-   Lister window) does not reliably cover U+2261/U+2194/U+2195. Index order
-   here must match the IDX_ICON_* constants.}
-  FToolbarImages := TImageList.Create(Self);
-  FToolbarImages.SetSize(ICON_W, ICON_W);
-  FToolbarImages.ColorDepth := cd32Bit;
-  LoadIconResourceToImageList(FToolbarImages, 'MENU');
-  LoadIconResourceToImageList(FToolbarImages, 'ARROW_W');
-  LoadIconResourceToImageList(FToolbarImages, 'ARROW_H');
-
-  {Create 5 mode buttons}
-  TabIdx := 1;
+  {Glyph library owns the shared TImageList that paints the hamburger
+   button, the arrow-bearing mode buttons, and the matching menu items
+   on the hamburger overflow. Self-owned so the form's inherited
+   destructor releases it; FToolbarImages remains a back-compat alias
+   for the bare image list so existing form sites keep working without
+   the extraction touching them.}
+  FGlyphLibrary := TToolbarGlyphLibrary.Create(Self);
+  FToolbarImages := FGlyphLibrary.Images;
+  Builder := TToolbarBuilder.Create(Self, FGlyphLibrary,
+    OnModeButtonClick, OnSizingMenuClick, OnTimecodeButtonClick,
+    OnToolbarButtonClick, OnContextMenuClick, OnViewDropdownPopup,
+    OnHamburgerClick, OnHamburgerMenuPopup);
+  try
+    H := Builder.Build;
+  finally
+    Builder.Free;
+  end;
+  {Copy each handle into its same-named form field so the rest of the
+   form (UpdateToolbarButtons, LayoutToolbar, OnHamburgerMenuPopup,
+   UpdateResolutionMenuLabels, ...) keeps reading its old fields.}
+  FToolbar := H.Toolbar;
+  FEditFrameCount := H.EditFrameCount;
+  FUpDown := H.UpDown;
+  FLblFrames := H.LblFrames;
   for VM := Low(TViewMode) to High(TViewMode) do
   begin
-    {Create popup menu first (needed for DropDownMenu assignment)}
-    FModePopups[VM] := CreateModePopup(VM);
-
-    FModeButtons[VM] := TButton.Create(FToolbar);
-    FModeButtons[VM].Parent := FToolbar;
-
-    {Auto-width: measure caption text and add padding. Scroll/Filmstrip
-     also reserve space for a directional arrow icon to the left of the
-     caption. The split-arrow reservation is skipped on legacy Windows
-     (XP/2003) because BS_SPLITBUTTON does not render there — keeping
-     the extra width would leave a dead gap between the caption and the
-     iaRight icon.}
-    BW := Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
-    if (FModePopups[VM] <> nil) and not IsLegacyWindows then
-      Inc(BW, SPLIT_ARROW_W);
-    if VM in [vmScroll, vmFilmstrip] then
-      Inc(BW, ICON_W + ICON_GAP);
-
-    FModeButtons[VM].SetBounds(X, CY, BW, CtrlH);
-    FModeButtons[VM].Caption := MODE_CAPTIONS[VM];
-    FModeButtons[VM].Hint := MODE_HINTS[VM];
-    FModeButtons[VM].Tag := Ord(VM);
-    FModeButtons[VM].TabOrder := TabIdx;
-    FModeButtons[VM].OnClick := OnModeButtonClick;
-
-    if MODE_GLYPH_INDEX[VM] >= 0 then
-    begin
-      FModeButtons[VM].Images := FToolbarImages;
-      FModeButtons[VM].ImageIndex := MODE_GLYPH_INDEX[VM];
-      {Qualified — TIconArrangement (Vcl.ComCtrls) also defines iaRight.
-       Icon sits to the right of the caption, matching the original ↕/↔
-       glyph position.}
-      FModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
-    end;
-
-    {Legacy Windows pulls the iaRight icon flush against the button's
-     right edge; modern Windows leaves a small visual margin courtesy of
-     the themed button paint. Add the missing inset manually on XP so the
-     glyph doesn't touch the border.}
-    if (VM in [vmScroll, vmFilmstrip]) and IsLegacyWindows then
-      FModeButtons[VM].ImageMargins.Right := 2;
-
-    {Split button: click activates mode, arrow shows submodes. PopupMenu
-     duplicates the same menu on right-click for every OS so the submodes
-     stay reachable on legacy Windows (where the split arrow does not
-     render) and gives modern users a discoverable alternative to the
-     small arrow glyph.}
-    if FModePopups[VM] <> nil then
-    begin
-      FModeButtons[VM].Style := bsSplitButton;
-      FModeButtons[VM].DropDownMenu := FModePopups[VM];
-      FModeButtons[VM].PopupMenu := FModePopups[VM];
-    end;
-
-    FElementRights[Ord(VM)] := X + BW;
-    Inc(TabIdx);
-    if VM < High(TViewMode) then
-      Inc(X, BW + BTN_GAP)
-    else
-      Inc(X, BW + CTRL_GAP);
+    FModeButtons[VM] := H.ModeButtons[VM];
+    FModePopups[VM] := H.ModePopups[VM];
   end;
-
-  FBtnTimecode := TSpeedButton.Create(FToolbar);
-  FBtnTimecode.Parent := FToolbar;
-  BW := Canvas.TextWidth('Timecodes') + BTN_PAD;
-  FBtnTimecode.SetBounds(X, CY, BW, CtrlH);
-  FBtnTimecode.Caption := 'Timecodes';
-  FBtnTimecode.Hint := 'Toggle timecode overlay on each frame (F2).';
-  FBtnTimecode.GroupIndex := 1;
-  FBtnTimecode.AllowAllUp := True;
-  FBtnTimecode.OnClick := OnTimecodeButtonClick;
-  FElementRights[ELEM_TIMECODE_INDEX] := X + BW;
-  Inc(X, BW + CTRL_GAP);
-
-  {Action buttons matching context menu (except selection-dependent commands).
-   The Refresh button is upgraded to a split button so the dropdown
-   exposes Shuffle as a peer action (primary click stays Refresh).}
-  SetLength(FToolbarButtons, 0);
-  FRefreshPopup := nil;
-  FSaveViewPopup := nil;
-  FCopyViewPopup := nil;
-  for I := 0 to High(TB_ACTIONS) do
-  begin
-    Btn := TButton.Create(FToolbar);
-    Btn.Parent := FToolbar;
-    BW := Canvas.TextWidth(TB_ACTIONS[I].Caption) + BTN_PAD;
-    {Skip the dropdown-arrow reservation on legacy Windows for the same
-     reason as the mode buttons above: BS_SPLITBUTTON does not render on
-     XP/2003 and the spare width would leave a dead gap.}
-    if not IsLegacyWindows then
-      case TB_ACTIONS[I].Tag of
-        CM_REFRESH:
-          Inc(BW, REFRESH_DROPDOWN_EXTRA);
-        CM_SAVE_VIEW, CM_COPY_VIEW:
-          Inc(BW, VIEW_DROPDOWN_EXTRA);
-      end;
-    Btn.SetBounds(X, CY, BW, CtrlH);
-    Btn.Caption := TB_ACTIONS[I].Caption;
-    Btn.Hint := TB_ACTIONS[I].Hint;
-    Btn.Tag := TB_ACTIONS[I].Tag;
-    Btn.Enabled := False;
-    Btn.OnClick := OnToolbarButtonClick;
-    if TB_ACTIONS[I].Tag = CM_REFRESH then
-    begin
-      FRefreshPopup := CreateRefreshPopup;
-      Btn.Style := bsSplitButton;
-      Btn.DropDownMenu := FRefreshPopup;
-      {Right-click pops the same Refresh / Shuffle menu — see the mode
-       buttons above for why this duplicates DropDownMenu.}
-      Btn.PopupMenu := FRefreshPopup;
-    end
-    else if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
-    begin
-      {Save view dropdown: explicit "...at view resolution" and "...at
-       native size" entry points. On modern Windows the file dialog's
-       checkbox is still authoritative; on legacy Windows (no checkbox)
-       this is the only way to pick the resolution per save without
-       opening the settings dialog first.}
-      FSaveViewPopup := CreateSaveViewPopup;
-      Btn.Style := bsSplitButton;
-      Btn.DropDownMenu := FSaveViewPopup;
-      Btn.PopupMenu := FSaveViewPopup;
-    end
-    else if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
-    begin
-      {Copy view dropdown: same idea as Save view but commits immediately
-       (no dialog), so the variants are the only way to override the
-       persisted SaveAtLiveResolution setting for a single Copy view.
-       The native variant also re-extracts at native resolution before
-       publishing to the clipboard, which the default Copy view used to
-       skip - the dropdown thus also fixes the long-standing "Copy view
-       at native resolution copies low-res cells" surprise.}
-      FCopyViewPopup := CreateCopyViewPopup;
-      Btn.Style := bsSplitButton;
-      Btn.DropDownMenu := FCopyViewPopup;
-      Btn.PopupMenu := FCopyViewPopup;
-    end;
-    FElementRights[ELEM_ACTION_FIRST + I] := X + BW;
-    Inc(X, BW + BTN_GAP);
-    SetLength(FToolbarButtons, Length(FToolbarButtons) + 1);
-    FToolbarButtons[High(FToolbarButtons)] := Btn;
-  end;
-
-  {Hamburger overflow button: hidden until toolbar is too narrow. Glyph
-   comes from FToolbarImages (created earlier with the mode-button arrow
-   icons) so the toolbar does not depend on the runtime font's coverage
-   of U+2261.}
-  FHamburgerMenu := TPopupMenu.Create(Self);
-  FHamburgerMenu.OnPopup := OnHamburgerMenuPopup;
-  {Sharing the toolbar's image list lets MI.ImageIndex paint the same arrow
-   glyphs next to the Scroll/Filmstrip menu items that the toolbar buttons
-   show — necessary because both modes share the textual caption.}
-  FHamburgerMenu.Images := FToolbarImages;
-
-  FBtnHamburger := TButton.Create(FToolbar);
-  FBtnHamburger.Parent := FToolbar;
-  FBtnHamburger.Images := FToolbarImages;
-  FBtnHamburger.ImageIndex := IDX_ICON_HAMBURGER;
-  FBtnHamburger.ImageAlignment := iaCenter;
-  FBtnHamburger.Hint := 'More commands (toolbar buttons that did not fit).';
-  {Square button matched to the rest of the toolbar's height}
-  FBtnHamburger.SetBounds(0, CY, CtrlH, CtrlH);
-  FBtnHamburger.OnClick := OnHamburgerClick;
-  FBtnHamburger.Visible := False;
+  FBtnTimecode := H.BtnTimecode;
+  FToolbarButtons := H.ToolbarButtons;
+  FRefreshPopup := H.RefreshPopup;
+  FSaveViewPopup := H.SaveViewPopup;
+  FCopyViewPopup := H.CopyViewPopup;
+  FBtnHamburger := H.BtnHamburger;
+  FHamburgerMenu := H.HamburgerMenu;
+  FElementRights := H.ElementRights;
+  FFrameCountRight := H.FrameCountRight;
 end;
 
 procedure TPluginForm.LayoutToolbar;
@@ -1426,68 +1205,6 @@ end;
 procedure TPluginForm.OnHamburgerActionClick(Sender: TObject);
 begin
   DispatchCommand(TMenuItem(Sender).Tag);
-end;
-
-function TPluginForm.CreateModePopup(AMode: TViewMode): TPopupMenu;
-var
-  ZM: TZoomMode;
-  MI: TMenuItem;
-begin
-  {Grid modes always fit all frames to the available space}
-  if AMode in [vmSmartGrid, vmGrid] then
-    Exit(nil);
-
-  Result := TPopupMenu.Create(Self);
-  for ZM := Low(TZoomMode) to High(TZoomMode) do
-  begin
-    MI := TMenuItem.Create(Result);
-    MI.Caption := SIZING_LABELS[AMode, ZM];
-    MI.Tag := Ord(ZM);
-    MI.RadioItem := True;
-    MI.Checked := ZM = zmFitWindow;
-    MI.OnClick := OnSizingMenuClick;
-    Result.Items.Add(MI);
-  end;
-end;
-
-function TPluginForm.CreateRefreshPopup: TPopupMenu;
-var
-  MI: TMenuItem;
-begin
-  Result := TPopupMenu.Create(Self);
-
-  MI := TMenuItem.Create(Result);
-  MI.Caption := 'Refresh'#9'R';
-  MI.Tag := CM_REFRESH;
-  MI.OnClick := OnContextMenuClick;
-  Result.Items.Add(MI);
-
-  MI := TMenuItem.Create(Result);
-  MI.Caption := 'Shuffle'#9'Ctrl+R';
-  MI.Tag := CM_SHUFFLE;
-  MI.OnClick := OnContextMenuClick;
-  Result.Items.Add(MI);
-end;
-
-function TPluginForm.CreateSaveViewPopup: TPopupMenu;
-begin
-  {Two explicit-resolution Save view variants. Their job is mainly to
-   give legacy Windows users a way to pick the resolution at all (the
-   modern file dialog's checkbox is unavailable on XP), but they also
-   work as a faster path on modern Windows: one click chooses the
-   resolution and opens the dialog with that as the seed. The item set
-   lives in uToolbarLayout.SAVE_VIEW_VARIANTS so the hamburger overflow
-   and the resolution-suffix updater stay in lockstep with this menu.}
-  Result := BuildViewVariantsMenu(Self, SAVE_VIEW_VARIANTS,
-    OnViewDropdownPopup, OnContextMenuClick);
-end;
-
-function TPluginForm.CreateCopyViewPopup: TPopupMenu;
-begin
-  {Mirror of CreateSaveViewPopup. No dialog follows so the COPY captions
-   omit the trailing ellipsis - the action commits immediately.}
-  Result := BuildViewVariantsMenu(Self, COPY_VIEW_VARIANTS,
-    OnViewDropdownPopup, OnContextMenuClick);
 end;
 
 procedure TPluginForm.UpdateResolutionMenuLabels(AMenu: TPopupMenu);

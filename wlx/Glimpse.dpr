@@ -40,6 +40,8 @@ uses
   uViewModeLogic in 'uViewModeLogic.pas',
   uExtractionPlanner in '..\src\uExtractionPlanner.pas',
   uToolbarLayout in 'uToolbarLayout.pas',
+  uToolbarGlyphLibrary in 'uToolbarGlyphLibrary.pas',
+  uToolbarBuilder in 'uToolbarBuilder.pas',
   uFileNavigator in '..\src\uFileNavigator.pas',
   uPathExpand in '..\src\uPathExpand.pas',
   uColorConv in '..\src\uColorConv.pas',

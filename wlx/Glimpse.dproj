@@ -97,6 +97,8 @@
         <DCCReference Include="uViewModeLogic.pas"/>
         <DCCReference Include="..\src\uExtractionPlanner.pas"/>
         <DCCReference Include="uToolbarLayout.pas"/>
+        <DCCReference Include="uToolbarGlyphLibrary.pas"/>
+        <DCCReference Include="uToolbarBuilder.pas"/>
         <DCCReference Include="..\src\uFileNavigator.pas"/>
         <DCCReference Include="..\src\uPathExpand.pas"/>
         <DCCReference Include="..\src\uColorConv.pas"/>

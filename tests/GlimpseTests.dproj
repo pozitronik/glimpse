@@ -118,6 +118,9 @@
         <DCCReference Include="TestExtractionPlanner.pas"/>
         <DCCReference Include="..\wlx\uToolbarLayout.pas"/>
         <DCCReference Include="TestToolbarLayout.pas"/>
+        <DCCReference Include="..\wlx\uToolbarGlyphLibrary.pas"/>
+        <DCCReference Include="TestToolbarGlyphLibrary.pas"/>
+        <DCCReference Include="..\wlx\uToolbarBuilder.pas"/>
         <DCCReference Include="..\src\uFileNavigator.pas"/>
         <DCCReference Include="TestFileNavigator.pas"/>
         <DCCReference Include="TestDebugLog.pas"/>
