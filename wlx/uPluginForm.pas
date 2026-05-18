@@ -211,7 +211,6 @@ type
     procedure SwitchOrCycleMode(AKey: Word);
     procedure ShowSettings;
     procedure CommitSettingsChanges;
-    procedure OnSettingsApply(Sender: TObject);
     procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
     procedure SoftRefreshExtraction;
@@ -2789,16 +2788,11 @@ begin
   UpdateStatusBar;
 end;
 
-procedure TPluginForm.OnSettingsApply(Sender: TObject);
-begin
-  CommitSettingsChanges;
-end;
-
 procedure TPluginForm.ShowSettings;
 begin
   FSettingsSnap := TakeSettingsSnapshot(FSettings);
 
-  if not ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath, OnSettingsApply) then
+  if not ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath, CommitSettingsChanges) then
     Exit;
 
   CommitSettingsChanges;

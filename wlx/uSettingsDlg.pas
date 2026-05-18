@@ -215,7 +215,7 @@ type
     FOwnerWnd: HWND;
     FResolvedFFmpegPath: string;
     FSettings: TPluginSettings;
-    FOnApply: TNotifyEvent;
+    FOnApply: TProc;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FBannerFontName: string;
@@ -282,7 +282,7 @@ type
    has pushed current control values into ASettings. Pass nil to disable live-apply.
    Returns True if the user pressed OK (ASettings is updated on top of any prior Apply).
    Returns False if dismissed. NOTE: an earlier Apply is not rolled back on Cancel.}
-function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TNotifyEvent = nil): Boolean;
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TProc = nil): Boolean;
 
 implementation
 
@@ -771,7 +771,7 @@ begin
     Exit;
   ControlsToSettings(FSettings);
   if Assigned(FOnApply) then
-    FOnApply(Self);
+    FOnApply();
 end;
 
 {Hotkeys tab}
@@ -1108,7 +1108,7 @@ begin
     Params.WndParent := FOwnerWnd;
 end;
 
-function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TNotifyEvent): Boolean;
+function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TProc): Boolean;
 var
   Form: TSettingsForm;
 begin
