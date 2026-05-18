@@ -6,7 +6,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver, uTypes, uDefaults, uHotkeys, uSettingsGroups, uUnicodeIniFile;
+  uBitmapSaver, uTypes, uStatusBarLayout, uDefaults, uHotkeys, uSettingsGroups, uUnicodeIniFile;
 
 type
   TPluginSettings = class

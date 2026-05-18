@@ -9,6 +9,7 @@ uses
   DUnitX.Loggers.Console,
   DUnitX.Loggers.XML.NUnit,
   uTypes in '..\src\uTypes.pas',
+  uStatusBarLayout in '..\src\uStatusBarLayout.pas',
   uDefaults in '..\src\uDefaults.pas',
   uSettingsGroups in '..\src\uSettingsGroups.pas',
   uSettings in '..\src\uSettings.pas',

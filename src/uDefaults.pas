@@ -6,7 +6,7 @@ interface
 
 uses
   System.UITypes,
-  uBitmapSaver, uTypes;
+  uBitmapSaver, uTypes, uStatusBarLayout;
 
 const
   {Extraction defaults}

@@ -289,7 +289,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  uTypes, uSettings, uDefaults, uBitmapSaver, uPathExpand, uColorConv;
+  uTypes, uStatusBarLayout, uSettings, uDefaults, uBitmapSaver, uPathExpand, uColorConv;
 
 procedure TTestPluginSettings.Setup;
 begin

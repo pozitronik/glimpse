@@ -53,6 +53,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="..\src\uTypes.pas"/>
+        <DCCReference Include="..\src\uStatusBarLayout.pas"/>
         <DCCReference Include="uWcxAPI.pas"/>
         <DCCReference Include="uWcxExports.pas"/>
         <DCCReference Include="uWcxSettings.pas"/>

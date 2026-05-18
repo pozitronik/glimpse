@@ -9,6 +9,7 @@ library Glimpse;
 uses
   Winapi.Windows,
   uTypes in '..\src\uTypes.pas',
+  uStatusBarLayout in '..\src\uStatusBarLayout.pas',
   uWcxAPI in 'uWcxAPI.pas',
   uWcxExports in 'uWcxExports.pas',
   uWcxSettings in 'uWcxSettings.pas',

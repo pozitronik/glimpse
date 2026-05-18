@@ -62,7 +62,7 @@ implementation
 
 uses
   System.SysUtils,
-  uTypes;
+  uTypes, uStatusBarLayout;
 
 procedure TTestTypes.ViewModeOrdinals;
 begin
