@@ -86,6 +86,8 @@ uses
   TestUnicodeIniFile in 'TestUnicodeIniFile.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
+  uFrameSelectionPolicy in '..\src\application\uFrameSelectionPolicy.pas',
+  TestFrameSelectionPolicy in 'TestFrameSelectionPolicy.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',

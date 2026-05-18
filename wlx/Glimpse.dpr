@@ -45,6 +45,7 @@ uses
   uSaveResolutionExtractor in 'uSaveResolutionExtractor.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
   uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
+  uFrameSelectionPolicy in '..\src\application\uFrameSelectionPolicy.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in 'uHotkeysVcl.pas',

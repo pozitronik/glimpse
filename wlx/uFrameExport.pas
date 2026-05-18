@@ -284,9 +284,27 @@ uses
   Vcl.Clipbrd, Vcl.Dialogs,
   uClipboardImage, uClipboardFormatStrategies, uSettingsGroups, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog,
-  uProgressModalForm;
+  uProgressModalForm, uFrameSelectionPolicy;
 
 type
+  {Production IFrameViewQuery adapter over a TFrameView. The selection
+   policy operates on this thin read-only view so its rules live in a
+   VCL-free unit. Lifetime tied to the owning TFrameExporter via the
+   adapter being constructed and freed per ResolveFrameIndex /
+   PickActionCell call (the adapter is stateless beyond holding a
+   FFrameView reference, so per-call construction is cheap).}
+  TFrameViewQueryAdapter = class(TInterfacedObject, IFrameViewQuery)
+  strict private
+    FFrameView: TFrameView;
+  public
+    constructor Create(AFrameView: TFrameView);
+    function CellCount: Integer;
+    function CurrentFrameIndex: Integer;
+    function CellIsLoaded(AIndex: Integer): Boolean;
+    function CellSelected(AIndex: Integer): Boolean;
+    function IsSingleView: Boolean;
+  end;
+
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
    IFileDialogCustomize support) declares its own TBITMAP record alias,
    which would otherwise shadow Vcl.Graphics.TBitmap throughout this
@@ -549,60 +567,59 @@ begin
 end;
 
 function TFrameExporter.ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
+var
+  View: IFrameViewQuery;
 begin
-  Result := False;
-  if FFrameView.CellCount = 0 then
-    Exit;
-  {Prefer the right-clicked cell, fall back to current frame, then index 0}
-  AIndex := AContextCellIndex;
-  if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
-    AIndex := FFrameView.CurrentFrameIndex;
-  if (AIndex < 0) or (AIndex >= FFrameView.CellCount) then
-    AIndex := 0;
-  Result := FFrameView.CellState(AIndex) = fcsLoaded;
+  {Explicit local: passing TFrameViewQueryAdapter.Create(...) directly
+   to a const interface parameter is a known Delphi leak gotcha — the
+   compiler skips the interface-temp's AddRef/Release pair under that
+   optimisation, so the adapter instance never gets freed. The local
+   holds the reference for the call's duration and releases it when
+   View goes out of scope.}
+  View := TFrameViewQueryAdapter.Create(FFrameView);
+  Result := TFrameSelectionPolicy.ResolveFrameIndex(View, AContextCellIndex, AIndex);
 end;
 
 function TFrameExporter.PickActionCell(AContextCellIndex: Integer): Integer;
 var
-  I: Integer;
+  View: IFrameViewQuery;
 begin
-  {Priority order, "selection-first":
+  View := TFrameViewQueryAdapter.Create(FFrameView);
+  Result := TFrameSelectionPolicy.PickActionCell(View, AContextCellIndex);
+end;
 
-     1. First selected loaded cell — selection is a longer-lived, more
-        deliberate gesture than a right-click and so wins even when the
-        right-click happened on a different cell. Matches TC's own
-        context-menu rule (right-clicking anywhere acts on the selection
-        when one exists).
-     2. Explicit context (right-click) — only consulted when no
-        selection exists. Lets a no-selection user click any cell and
-        get that one operated on.
-     3. Single-view focused frame — there is exactly one visible frame
-        and it is the natural target.
-     4. Cell 0 — last-ditch fallback so the action does something
-        rather than silently no-op when the user has neither selected
-        nor pointed at anything.
-     5. -1 when nothing is loaded; the caller must skip the action.}
+{ TFrameViewQueryAdapter }
 
-  {1. First selected loaded cell.}
-  for I := 0 to FFrameView.CellCount - 1 do
-    if FFrameView.CellSelected(I) and (FFrameView.CellState(I) = fcsLoaded) then
-      Exit(I);
+constructor TFrameViewQueryAdapter.Create(AFrameView: TFrameView);
+begin
+  inherited Create;
+  FFrameView := AFrameView;
+end;
 
-  {2. Explicit context (right-click) when it points to a loaded cell.}
-  if (AContextCellIndex >= 0) and (AContextCellIndex < FFrameView.CellCount) and (FFrameView.CellState(AContextCellIndex) = fcsLoaded) then
-    Exit(AContextCellIndex);
+function TFrameViewQueryAdapter.CellCount: Integer;
+begin
+  Result := FFrameView.CellCount;
+end;
 
-  {3. Single-view focused frame.}
-  if (FFrameView.ViewMode = vmSingle) and (FFrameView.CurrentFrameIndex >= 0) and (FFrameView.CurrentFrameIndex < FFrameView.CellCount) and
-    (FFrameView.CellState(FFrameView.CurrentFrameIndex) = fcsLoaded) then
-    Exit(FFrameView.CurrentFrameIndex);
+function TFrameViewQueryAdapter.CurrentFrameIndex: Integer;
+begin
+  Result := FFrameView.CurrentFrameIndex;
+end;
 
-  {4. Cell 0.}
-  if (FFrameView.CellCount > 0) and (FFrameView.CellState(0) = fcsLoaded) then
-    Exit(0);
+function TFrameViewQueryAdapter.CellIsLoaded(AIndex: Integer): Boolean;
+begin
+  Result := (AIndex >= 0) and (AIndex < FFrameView.CellCount)
+    and (FFrameView.CellState(AIndex) = fcsLoaded);
+end;
 
-  {5. Nothing loaded — caller must skip the action.}
-  Result := -1;
+function TFrameViewQueryAdapter.CellSelected(AIndex: Integer): Boolean;
+begin
+  Result := FFrameView.CellSelected(AIndex);
+end;
+
+function TFrameViewQueryAdapter.IsSingleView: Boolean;
+begin
+  Result := FFrameView.ViewMode = vmSingle;
 end;
 
 function TFrameExporter.BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
