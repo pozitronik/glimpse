@@ -98,6 +98,8 @@ uses
   uWcxFrameCache in '..\wcx\uWcxFrameCache.pas',
   uPresetExtractReporter in '..\wcx\uPresetExtractReporter.pas',
   TestPresetExtractReporter in 'TestPresetExtractReporter.pas',
+  uWcxProgressCallback in '..\wcx\uWcxProgressCallback.pas',
+  TestWcxProgressCallback in 'TestWcxProgressCallback.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',

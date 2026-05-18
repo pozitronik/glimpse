@@ -35,6 +35,7 @@ uses
   uVideoProbing in '..\src\uVideoProbing.pas',
   uWcxFrameCache in 'uWcxFrameCache.pas',
   uPresetExtractReporter in 'uPresetExtractReporter.pas',
+  uWcxProgressCallback in 'uWcxProgressCallback.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',

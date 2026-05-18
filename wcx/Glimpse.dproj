@@ -81,6 +81,7 @@
         <DCCReference Include="..\src\uVideoProbing.pas"/>
         <DCCReference Include="uWcxFrameCache.pas"/>
         <DCCReference Include="uPresetExtractReporter.pas"/>
+        <DCCReference Include="uWcxProgressCallback.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uHotkeys.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>

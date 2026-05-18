@@ -18,15 +18,12 @@ interface
 
 uses
   System.SysUtils, System.SyncObjs, Winapi.Windows,
-  uWcxAPI;
+  uWcxAPI, uWcxProgressCallback;
 
 type
   TWcxProgressBridge = class
   strict private
-    FCallbackA: TProcessDataProc;
-    FCallbackW: TProcessDataProcW;
-    FFileNameW: string;
-    FFileNameA: AnsiString;
+    FProc: IProcessDataProc;
     FCancelEvent: TEvent;
     FCancelled: Boolean;
     FLastPercent: Integer;
@@ -39,19 +36,21 @@ type
     {Bytes already attributed via callback calls; used to compute the
      next delta as (target - reported).}
     FReportedBytes: Int64;
-    {Picks the modern Wide callback when available, falls back to the
-     ANSI variant. When neither is set, returns 1 so the extractor runs
-     without surfacing progress (TC may not have wired the callback yet).}
     function InvokeCallback(APayload: Integer): Integer;
   public
-    {ACallbackA / ACallbackW are captured by reference; either or both may
-     be nil. The destination filename is held in both encodings so the
-     per-tick Invoke does not allocate. ATotalBytes is the denominator
-     deltas are scaled against — typically the source video size so TC's
+    {Primary constructor. AProc must be non-nil; pass a TWcxProcessDataProc
+     with nil inner pointers when no real callback is wired (its Notify
+     returns 1 unconditionally). ATotalBytes is the denominator deltas
+     are scaled against — typically the source video size so TC's
      listing column matches what was advertised in ReadHeaderExW. A zero
      or negative total degrades to silent (no callbacks emitted), which
      is harmless when TC is not displaying a progress bar anyway.}
-    constructor Create(const AFileName: string; ATotalBytes: Int64; ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
+    constructor Create(ATotalBytes: Int64; const AProc: IProcessDataProc); overload;
+    {Back-compat constructor used by DoExtractPreset and the existing
+     bridge tests: builds a TWcxProcessDataProc from the supplied
+     ANSI/Wide pair and delegates to the primary constructor.}
+    constructor Create(const AFileName: string; ATotalBytes: Int64;
+      ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW); overload;
     destructor Destroy; override;
     {Reports a progress percentage in [0, 100]. Values outside the range
      clamp silently so a transient ffmpeg out_time glitch does not crash
@@ -72,16 +71,10 @@ type
 
 implementation
 
-constructor TWcxProgressBridge.Create(const AFileName: string; ATotalBytes: Int64; ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
+constructor TWcxProgressBridge.Create(ATotalBytes: Int64; const AProc: IProcessDataProc);
 begin
   inherited Create;
-  FCallbackA := ACallbackA;
-  FCallbackW := ACallbackW;
-  FFileNameW := AFileName;
-  {Single ANSI conversion at construction; per-tick callbacks must not
-   allocate. Non-CP_ACP characters degrade silently here — modern TC
-   calls SetProcessDataProcW so the ANSI path is a fallback.}
-  FFileNameA := AnsiString(AFileName);
+  FProc := AProc;
   {Manual-reset event so RunProcess's WaitForMultipleObjects observes
    the cancel state across multiple polls; auto-reset would clear after
    the first waiter wakes and miss subsequent checks during the same
@@ -98,6 +91,15 @@ begin
   FReportedBytes := 0;
 end;
 
+constructor TWcxProgressBridge.Create(const AFileName: string; ATotalBytes: Int64;
+  ACallbackA: TProcessDataProc; ACallbackW: TProcessDataProcW);
+var
+  Wrapper: IProcessDataProc;
+begin
+  Wrapper := TWcxProcessDataProc.Create(AFileName, ACallbackA, ACallbackW);
+  Create(ATotalBytes, Wrapper);
+end;
+
 destructor TWcxProgressBridge.Destroy;
 begin
   FCancelEvent.Free;
@@ -111,12 +113,7 @@ end;
 
 function TWcxProgressBridge.InvokeCallback(APayload: Integer): Integer;
 begin
-  if Assigned(FCallbackW) then
-    Result := FCallbackW(PWideChar(FFileNameW), APayload)
-  else if Assigned(FCallbackA) then
-    Result := FCallbackA(PAnsiChar(FFileNameA), APayload)
-  else
-    Result := 1;
+  Result := FProc.Notify(APayload);
 end;
 
 function TWcxProgressBridge.ReportPercent(APercent: Integer): Boolean;
@@ -164,7 +161,7 @@ begin
     Delta := 0;
   if Delta > MaxInt then
     Delta := MaxInt;
-  ClampedDelta := Integer(Delta);
+  ClampedDelta := Integer(Delta);`
   Inc(FReportedBytes, ClampedDelta);
 
   if InvokeCallback(ClampedDelta) = 0 then
