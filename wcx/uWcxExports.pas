@@ -1019,7 +1019,11 @@ begin
         InvalidateFrameCache;
       end) then
     begin
-      Settings.Save;
+      {ShowWcxSettingsDialog returns True only when TrySaveAll succeeded,
+       which already called TWcxSettings.Save AND invoked the apply
+       callback (InvalidateFrameCache above). Keeping the InvalidateFrameCache
+       here is belt-and-braces in case the dialog's contract changes;
+       the previous duplicate Settings.Save was removed.}
       InvalidateFrameCache;
     end;
   finally
