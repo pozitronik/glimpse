@@ -303,7 +303,7 @@ uses
   Winapi.Windows, Winapi.ShlObj,
   System.Types, System.Math, System.UITypes, System.IOUtils,
   Vcl.Clipbrd, Vcl.Dialogs,
-  uClipboardImage, uClipboardFormatStrategies, uSettingsGroups, uFrameFileNames, uPathExpand, uTypes,
+  uClipboardImage, uClipboardFileDrop, uClipboardFormatStrategies, uSettingsGroups, uFrameFileNames, uPathExpand, uTypes,
   uViewModeLayout, uBitmapResize, uPlatformDetect, uDefaults, uDebugLog,
   uProgressModalForm, uFrameSelectionPolicy;
 

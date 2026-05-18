@@ -40,6 +40,8 @@ uses
   TestBitmapSaver in 'TestBitmapSaver.pas',
   uClipboardImage in '..\src\uClipboardImage.pas',
   TestClipboardImage in 'TestClipboardImage.pas',
+  uClipboardFileDrop in '..\src\uClipboardFileDrop.pas',
+  TestClipboardFileDrop in 'TestClipboardFileDrop.pas',
   uClipboardFormatStrategies in '..\src\uClipboardFormatStrategies.pas',
   TestClipboardFormatStrategies in 'TestClipboardFormatStrategies.pas',
   uZoomController in '..\wlx\uZoomController.pas',

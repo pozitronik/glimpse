@@ -29,6 +29,7 @@ uses
   uFrameFileNames in '..\src\uFrameFileNames.pas',
   uBitmapSaver in '..\src\uBitmapSaver.pas',
   uClipboardImage in '..\src\uClipboardImage.pas',
+  uClipboardFileDrop in '..\src\uClipboardFileDrop.pas',
   uClipboardFormatStrategies in '..\src\uClipboardFormatStrategies.pas',
   uSettingsGroups in '..\src\uSettingsGroups.pas',
   uZoomController in 'uZoomController.pas',
