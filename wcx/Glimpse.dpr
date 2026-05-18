@@ -17,7 +17,7 @@ uses
   uFrameOffsets in '..\src\uFrameOffsets.pas',
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',
   uFFmpegExe in '..\src\uFFmpegExe.pas',
-  uDebugLog in '..\src\uDebugLog.pas',
+  uDebugLog in '..\src\shared\uDebugLog.pas',
   uCacheStorage in '..\src\infrastructure\uCacheStorage.pas',
   uLruEvictionPolicy in '..\src\infrastructure\uLruEvictionPolicy.pas',
   uCache in '..\src\uCache.pas',

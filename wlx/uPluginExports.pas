@@ -213,14 +213,16 @@ begin
 
   if Ctx.Settings.DebugLogEnabled then
   begin
-    uDebugLog.GDebugLogPath := Ctx.PluginDir + 'glimpse_debug.log';
     {Start fresh log each TC session whenever logging is on, so a single
-     repro spans one self-contained file.}
-    if FileExists(uDebugLog.GDebugLogPath) then
-      DeleteFile(uDebugLog.GDebugLogPath);
+     repro spans one self-contained file. Delete BEFORE Configure so the
+     singleton opens a freshly-created file rather than seeking to the
+     end of a stale one.}
+    if FileExists(Ctx.PluginDir + 'glimpse_debug.log') then
+      DeleteFile(Ctx.PluginDir + 'glimpse_debug.log');
+    TDebugLog.Instance.Configure(Ctx.PluginDir + 'glimpse_debug.log');
   end
   else
-    uDebugLog.GDebugLogPath := '';
+    TDebugLog.Instance.Configure('');
 
   Log('ListSetDefaultParams');
   Log(Format('  PluginDir=%s', [Ctx.PluginDir]));

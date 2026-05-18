@@ -264,8 +264,8 @@ type
 
     {[debug] — hidden toggle, no UI. Written into Glimpse.ini under
      [debug] LogEnabled=1. Off by default. The plugin reads it once at
-     ListSetDefaultParams (TC startup) and applies it to GDebugLogPath;
-     hand-edits take effect on the next TC restart.}
+     ListSetDefaultParams (TC startup) and forwards to
+     TDebugLog.Configure; hand-edits take effect on the next TC restart.}
     property DebugLogEnabled: Boolean read FDebugLogEnabled write FDebugLogEnabled;
   end;
 

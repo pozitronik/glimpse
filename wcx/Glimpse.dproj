@@ -63,7 +63,7 @@
         <DCCReference Include="..\src\uFrameOffsets.pas"/>
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>
-        <DCCReference Include="..\src\uDebugLog.pas"/>
+        <DCCReference Include="..\src\shared\uDebugLog.pas"/>
         <DCCReference Include="..\src\infrastructure\uCacheStorage.pas"/>
         <DCCReference Include="..\src\infrastructure\uLruEvictionPolicy.pas"/>
         <DCCReference Include="..\src\uCache.pas"/>

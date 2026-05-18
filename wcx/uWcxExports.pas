@@ -339,9 +339,9 @@ begin
      so a hand-edit of "[debug] LogEnabled" in Glimpse.ini takes effect on
      the next archive open without forcing a TC restart.}
     if H.Settings.DebugLogEnabled then
-      GDebugLogPath := ChangeFileExt(GetModuleName(HInstance), '.log')
+      TDebugLog.Instance.Configure(ChangeFileExt(GetModuleName(HInstance), '.log'))
     else
-      GDebugLogPath := '';
+      TDebugLog.Instance.Configure('');
 
     H.FFmpegPath := FindFFmpegExe(ExtractFilePath(GIniPath), ExpandEnvVars(H.Settings.FFmpegExePath));
 
@@ -850,10 +850,10 @@ GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 GPresetFailureReporter := TMessageBoxFailureReporter.Create;
 
 {Debug logging is opt-in via the hidden "[debug] LogEnabled=1" key in
- Glimpse.ini. Start silent; DoOpenArchive flips GDebugLogPath on or off
- each time after reading the setting, so a hand-edit of the INI takes
- effect on the next archive open without a TC restart.}
-GDebugLogPath := '';
+ Glimpse.ini. Start silent; DoOpenArchive flips TDebugLog.Configure on
+ or off each time after reading the setting, so a hand-edit of the INI
+ takes effect on the next archive open without a TC restart.}
+TDebugLog.Instance.Configure('');
 
 {Seed the global Random once per DLL load. CalculateRandomFrameOffsets
  reads from this RNG; without seeding, every TC session would emit the

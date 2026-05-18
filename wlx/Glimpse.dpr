@@ -20,7 +20,7 @@ uses
   uFrameView in 'uFrameView.pas',
   uExtractionWorker in '..\src\uExtractionWorker.pas',
   uPluginForm in 'uPluginForm.pas',
-  uDebugLog in '..\src\uDebugLog.pas',
+  uDebugLog in '..\src\shared\uDebugLog.pas',
   uCacheStorage in '..\src\infrastructure\uCacheStorage.pas',
   uLruEvictionPolicy in '..\src\infrastructure\uLruEvictionPolicy.pas',
   uCache in '..\src\uCache.pas',

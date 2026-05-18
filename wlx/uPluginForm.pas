@@ -651,7 +651,7 @@ begin
    first and can intercept keys TC would otherwise consume (F2/F3).}
   PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
 
-  {GDebugLogPath is set once at TC startup by ListSetDefaultParams (which
+  {TDebugLog.Configure is called once at TC startup by ListSetDefaultParams (which
    honours [debug] LogEnabled in release builds and forces the log on in
    DEBUG builds). Re-applying it here would override that decision per
    file open, which is unwanted: the user's toggle is supposed to be
