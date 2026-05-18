@@ -25,21 +25,7 @@ uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
   Vcl.Graphics,
   uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uCache, uProbeCache,
-  uDebugLog, uThumbnailRender, uToolbarLayout;
-
-var
-  GSettings: TPluginSettings;
-  GPluginDir: string;
-  GFFmpegPath: string;
-  {Long-lived frame cache for the thumbnail path. Created in
-   ListSetDefaultParams; TNullFrameCache when caching is off. The TC
-   thumbnail worker calls DoGetPreviewBitmap from background threads, so
-   this must outlive any single call.}
-  GThumbnailCache: IFrameCache;
-  {Long-lived probe cache shared by every thumbnail preview call. Folder
-   scrolling hits the same videos repeatedly; without a shared cache each
-   call re-spawns ffmpeg just to read duration/resolution.}
-  GProbeCache: TProbeCache;
+  uDebugLog, uThumbnailRender, uToolbarLayout, uPluginContext;
 
 var
   {Subsystem logger; closure captures the 'Plugin' tag once at unit
@@ -66,8 +52,9 @@ begin
   Result := 0;
   Log(Format('DoListLoad: ParentWin=$%s File=%s Flags=%d', [IntToHex(ParentWin), AFileName, ShowFlags]));
   try
-    Log(Format('DoListLoad: ffmpegPath=%s', [GFFmpegPath]));
-    Form := TPluginForm.CreateForPlugin(ParentWin, AFileName, GSettings, GFFmpegPath);
+    Log(Format('DoListLoad: ffmpegPath=%s', [TPluginContext.Instance.FFmpegPath]));
+    Form := TPluginForm.CreateForPlugin(ParentWin, AFileName,
+      TPluginContext.Instance.Settings, TPluginContext.Instance.FFmpegPath);
     Form.ApplyListerParams(ShowFlags);
     Result := Form.Handle;
     Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s', [IntToHex(Result), BoolToStr(IsWindow(Result), True), BoolToStr(IsWindowVisible(Result), True), IntToHex(GetParent(Result))]));
@@ -150,7 +137,7 @@ var
   I: Integer;
   DS: AnsiString;
 begin
-  Extensions := GSettings.ExtensionList.Split([',', ' ']);
+  Extensions := TPluginContext.Instance.Settings.ExtensionList.Split([',', ' ']);
 
   Builder := '';
   for I := 0 to High(Extensions) do
@@ -207,9 +194,11 @@ procedure ListSetDefaultParams(dps: PListDefaultParamStruct); stdcall;
 var
   ModulePath: array [0 .. MAX_PATH] of Char;
   NewSettings: TPluginSettings;
+  Ctx: TPluginContext;
 begin
+  Ctx := TPluginContext.Instance;
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
-  GPluginDir := ExtractFilePath(string(ModulePath));
+  Ctx.PluginDir := ExtractFilePath(string(ModulePath));
 
   {Load settings before the first Log call so the [debug] LogEnabled
    toggle decides whether the log file gets created at all. The default
@@ -217,14 +206,14 @@ begin
    see DEF_DEBUG_LOG_ENABLED) so a fresh dev install still logs out of
    the box, while a release install stays silent until the user sets
    LogEnabled=1 in Glimpse.ini.}
-  NewSettings := TPluginSettings.Create(GPluginDir + 'Glimpse.ini');
+  NewSettings := TPluginSettings.Create(Ctx.PluginDir + 'Glimpse.ini');
   NewSettings.Load;
-  GSettings.Free;
-  GSettings := NewSettings;
+  {Setter frees the previous Settings instance atomically.}
+  Ctx.Settings := NewSettings;
 
-  if GSettings.DebugLogEnabled then
+  if Ctx.Settings.DebugLogEnabled then
   begin
-    uDebugLog.GDebugLogPath := GPluginDir + 'glimpse_debug.log';
+    uDebugLog.GDebugLogPath := Ctx.PluginDir + 'glimpse_debug.log';
     {Start fresh log each TC session whenever logging is on, so a single
      repro spans one self-contained file.}
     if FileExists(uDebugLog.GDebugLogPath) then
@@ -234,40 +223,40 @@ begin
     uDebugLog.GDebugLogPath := '';
 
   Log('ListSetDefaultParams');
-  Log(Format('  PluginDir=%s', [GPluginDir]));
+  Log(Format('  PluginDir=%s', [Ctx.PluginDir]));
   Log(Format('  DLL HInstance=$%s', [IntToHex(HInstance)]));
 
-  GFFmpegPath := FindFFmpegExe(GPluginDir, GSettings.FFmpegExePath);
-  Log(Format('  FFmpegPath=%s', [GFFmpegPath]));
+  Ctx.FFmpegPath := FindFFmpegExe(Ctx.PluginDir, Ctx.Settings.FFmpegExePath);
+  Log(Format('  FFmpegPath=%s', [Ctx.FFmpegPath]));
 
   {Probe cache is always enabled (no user-facing toggle); create once here
    so repeat thumbnail calls share probe results across the TC session.}
-  if GProbeCache = nil then
-    GProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
+  if Ctx.ProbeCache = nil then
+    Ctx.ProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
 
   {Run cache eviction once per session.
    Evict enumerates files and exits early if within budget, so no pre-check needed.
    Wrapped in try/except: invalid or inaccessible cache folder must not crash TC.}
-  if GSettings.CacheEnabled then
+  if Ctx.Settings.CacheEnabled then
   begin
     var
-    CacheDir := EffectiveCacheFolder(GSettings.CacheFolder);
+    CacheDir := EffectiveCacheFolder(Ctx.Settings.CacheFolder);
     try
-      CreateCacheManager(CacheDir, GSettings.CacheMaxSizeMB).Evict;
+      CreateCacheManager(CacheDir, Ctx.Settings.CacheMaxSizeMB).Evict;
       Log(Format('  CacheDir=%s', [CacheDir]));
       {Long-lived thumbnail cache: same directory + budget as the main
        cache so the two paths share evicted entries}
-      GThumbnailCache := TFrameCache.Create(CacheDir, GSettings.CacheMaxSizeMB);
+      Ctx.ThumbnailCache := TFrameCache.Create(CacheDir, Ctx.Settings.CacheMaxSizeMB);
     except
       on E: Exception do
       begin
         Log(Format('  Cache init failed: %s', [E.Message]));
-        GThumbnailCache := TNullFrameCache.Create;
+        Ctx.ThumbnailCache := TNullFrameCache.Create;
       end;
     end;
   end
   else
-    GThumbnailCache := TNullFrameCache.Create;
+    Ctx.ThumbnailCache := TNullFrameCache.Create;
 end;
 
 {Returns a preview bitmap for the TC thumbnail panel.
@@ -275,23 +264,25 @@ end;
  (returning 0) so TC falls back to its default icon.}
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 var
+  Ctx: TPluginContext;
   FFmpeg: TFFmpegExe;
   Bmp: TBitmap;
 begin
   Result := 0;
-  if (GSettings = nil) or not GSettings.ThumbnailsEnabled then
+  Ctx := TPluginContext.Instance;
+  if (Ctx.Settings = nil) or not Ctx.Settings.ThumbnailsEnabled then
     Exit;
-  if (GFFmpegPath = '') or not FileExists(GFFmpegPath) then
+  if (Ctx.FFmpegPath = '') or not FileExists(Ctx.FFmpegPath) then
     Exit;
-  if GThumbnailCache = nil then
+  if Ctx.ThumbnailCache = nil then
     Exit;
-  if GProbeCache = nil then
+  if Ctx.ProbeCache = nil then
     Exit;
 
   try
-    FFmpeg := TFFmpegExe.Create(GFFmpegPath);
+    FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath);
     try
-      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height, GSettings, GThumbnailCache, GProbeCache);
+      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height, Ctx.Settings, Ctx.ThumbnailCache, Ctx.ProbeCache);
       if Bmp <> nil then
         try
           {TC takes ownership of the returned HBITMAP; ReleaseHandle
@@ -326,13 +317,12 @@ end;
 initialization
 
 Log := DebugLogger('Plugin');
-GSettings := TPluginSettings.Create('');
+{TPluginContext.Instance lazy-creates with a default Settings snapshot on
+ first access; no eager construction needed here.}
 
 finalization
 
 Log('finalization');
-GThumbnailCache := nil;
-FreeAndNil(GProbeCache);
-FreeAndNil(GSettings);
+TPluginContext.ReleaseInstance;
 
 end.

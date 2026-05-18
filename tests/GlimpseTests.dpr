@@ -91,6 +91,8 @@ uses
   TestHotkeysVcl in 'TestHotkeysVcl.pas',
   uTextMeasurement in '..\wlx\uTextMeasurement.pas',
   uFrameNotificationSink in '..\src\uFrameNotificationSink.pas',
+  uPluginContext in '..\wlx\uPluginContext.pas',
+  TestPluginContext in 'TestPluginContext.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',
