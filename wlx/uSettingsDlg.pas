@@ -225,6 +225,12 @@ type
     {Local snapshot of the bindings so the live table isn't mutated unless
      the user confirms with OK/Apply. Mirrors the per-row listview rows.}
     FHotkeys: uHotkeys.THotkeyBindings;
+    {Parallel to LvwHotkeys.Items, indexed by Item.Index. Replaces the
+     earlier Item.Data := Pointer(NativeInt(Ord(A))) type-pun. The
+     listview is not sorted (SortType=stNone in the DFM), so insertion
+     order matches Item.Index; if sort is ever enabled this needs to
+     become a TDictionary<TListItem, TPluginAction>.}
+    FHotkeyRowActions: TArray<uHotkeys.TPluginAction>;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
     procedure UpdateMaxWorkersControls;
@@ -775,6 +781,7 @@ var
   A: uHotkeys.TPluginAction;
   Item: TListItem;
 begin
+  SetLength(FHotkeyRowActions, 0);
   LvwHotkeys.Items.BeginUpdate;
   try
     LvwHotkeys.Items.Clear;
@@ -782,9 +789,8 @@ begin
     begin
       Item := LvwHotkeys.Items.Add;
       Item.Caption := uHotkeys.ActionCaption(A);
-      {Tag-via-Data the action ordinal so the row survives a sort or
-       filter without relying on Items.IndexOf positional mapping.}
-      Item.Data := Pointer(NativeInt(Ord(A)));
+      SetLength(FHotkeyRowActions, Length(FHotkeyRowActions) + 1);
+      FHotkeyRowActions[High(FHotkeyRowActions)] := A;
       Item.SubItems.Add(uHotkeys.ChordsToDisplayStr(FHotkeys.Get(A)));
     end;
   finally
@@ -801,9 +807,9 @@ begin
   Display := uHotkeys.ChordsToDisplayStr(FHotkeys.Get(AAction));
   for I := 0 to LvwHotkeys.Items.Count - 1 do
   begin
-    Item := LvwHotkeys.Items[I];
-    if uHotkeys.TPluginAction(NativeInt(Item.Data)) = AAction then
+    if (I < Length(FHotkeyRowActions)) and (FHotkeyRowActions[I] = AAction) then
     begin
+      Item := LvwHotkeys.Items[I];
       if Item.SubItems.Count = 0 then
         Item.SubItems.Add(Display)
       else
@@ -820,7 +826,9 @@ begin
   Item := LvwHotkeys.Selected;
   if Item = nil then
     Exit(uHotkeys.paNone);
-  Result := uHotkeys.TPluginAction(NativeInt(Item.Data));
+  if (Item.Index < 0) or (Item.Index >= Length(FHotkeyRowActions)) then
+    Exit(uHotkeys.paNone);
+  Result := FHotkeyRowActions[Item.Index];
 end;
 
 procedure TSettingsForm.CaptureAndAssignHotkey(AAction: uHotkeys.TPluginAction);
