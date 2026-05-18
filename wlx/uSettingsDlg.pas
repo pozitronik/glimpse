@@ -291,7 +291,7 @@ implementation
 uses
   System.IOUtils, System.Math,
   uDefaults, uFFmpegExe, uCache, uProbeCache, uBitmapSaver, uPathExpand,
-  uSettingsDlgLogic, uSettingsDlgUI, uCaptureShortcutDlg,
+  uSettingsDlgLogic, uSettingsDlgUI, uPluginMessages, uCaptureShortcutDlg,
   uStatusBarTokens;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
@@ -663,7 +663,7 @@ begin
     begin
       if ValidateFFmpeg(Dlg.FileName) = '' then
       begin
-        MessageBox(Handle, PChar('The selected file is not a valid ffmpeg executable.'), 'Glimpse', MB_OK or MB_ICONWARNING);
+        ShowPluginMessage(Handle, 'The selected file is not a valid ffmpeg executable.', MB_OK or MB_ICONWARNING);
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
@@ -697,7 +697,7 @@ var
 begin
   Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
 
-  if MessageBox(Handle, 'Delete all cached frames and probe metadata?', 'Glimpse', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
+  if ShowPluginMessage(Handle, 'Delete all cached frames and probe metadata?', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
 
   if TDirectory.Exists(Dir) then
@@ -891,7 +891,7 @@ end;
 
 procedure TSettingsForm.BtnHotkeyResetAllClick(Sender: TObject);
 begin
-  if MessageBox(Handle, 'Reset every hotkey to its default? Unsaved changes in this tab will be lost.', 'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
+  if ShowPluginMessage(Handle, 'Reset every hotkey to its default? Unsaved changes in this tab will be lost.', MB_YESNO or MB_ICONQUESTION) <> IDYES then
     Exit;
   FHotkeys.ResetToDefaults;
   PopulateHotkeyList;

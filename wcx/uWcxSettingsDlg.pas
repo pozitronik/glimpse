@@ -231,7 +231,7 @@ implementation
 uses
   System.Math,
   uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegLocator, uSettingsDlgLogic,
-  uSettingsDlgUI, uDefaults, uTypes,
+  uSettingsDlgUI, uPluginMessages, uDefaults, uTypes,
   uWcxPresets;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
@@ -788,7 +788,7 @@ begin
     begin
       if ValidateFFmpeg(Dlg.FileName) = '' then
       begin
-        MessageBox(Handle, PChar('The selected file is not a valid ffmpeg executable.'), 'Glimpse', MB_OK or MB_ICONWARNING);
+        ShowPluginMessage(Handle, 'The selected file is not a valid ffmpeg executable.', MB_OK or MB_ICONWARNING);
         Exit;
       end;
       EdtFFmpegPath.Text := Dlg.FileName;
