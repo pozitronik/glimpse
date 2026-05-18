@@ -78,16 +78,23 @@ type
 {Returns the panel text for AToken given AValues. Empty string means
  "data unavailable" and the renderer is expected to either skip the
  panel (width=auto) or paint a placeholder (fixed width). tkUnknown
- always returns AToken.RawText so the user sees their typo back.}
+ always returns AToken.RawText so the user sees their typo back.
+
+ AResolutionTransformGlyph is the arrow/separator shown between the
+ native and capped dimensions in %save_dimension% / %copy_dimension%
+ when capping fires. The caller (typically the WLX form) resolves it
+ via uPlatformDetect.ResolutionTransformGlyph once and passes it here,
+ keeping this unit free of the OS-detect dependency. Empty string is a
+ valid default for tests that do not exercise the dim-with-cap path.}
 function FormatStatusBarToken(const AToken: TStatusBarToken;
-  const AValues: TStatusBarValues): string;
+  const AValues: TStatusBarValues;
+  const AResolutionTransformGlyph: string = ''): string;
 
 implementation
 
 uses
   System.SysUtils,
-  uFrameOffsets,
-  uPlatformDetect;
+  uFrameOffsets;
 
 function FormatBitrateKbps(AKbps: Integer): string;
 begin
@@ -120,13 +127,13 @@ end;
  when CombinedMaxSide actually shrinks the image.}
 function FormatPredictedDim(const ALabel: string;
   AAvailable: Boolean; AW, AH, ACappedW, ACappedH: Integer;
-  AShowCap: Boolean): string;
+  AShowCap: Boolean; const AGlyph: string): string;
 begin
   if not AAvailable then
     Exit('');
   if AShowCap and ((ACappedW <> AW) or (ACappedH <> AH)) then
     Result := Format('%s: %dx%d%s%dx%d',
-      [ALabel, AW, AH, ResolutionTransformGlyph, ACappedW, ACappedH])
+      [ALabel, AW, AH, AGlyph, ACappedW, ACappedH])
   else
     Result := Format('%s: %dx%d', [ALabel, AW, AH]);
 end;
@@ -139,7 +146,8 @@ begin
 end;
 
 function FormatStatusBarToken(const AToken: TStatusBarToken;
-  const AValues: TStatusBarValues): string;
+  const AValues: TStatusBarValues;
+  const AResolutionTransformGlyph: string): string;
 begin
   case AToken.Kind of
     tkUnknown:
@@ -208,14 +216,14 @@ begin
         AValues.SaveDimAvailable,
         AValues.SaveDimW, AValues.SaveDimH,
         AValues.SaveDimCappedW, AValues.SaveDimCappedH,
-        ResolveCapAttr(AToken));
+        ResolveCapAttr(AToken), AResolutionTransformGlyph);
 
     tkCopyDimension:
       Result := FormatPredictedDim('Copy',
         AValues.CopyDimAvailable,
         AValues.CopyDimW, AValues.CopyDimH,
         AValues.CopyDimCappedW, AValues.CopyDimCappedH,
-        ResolveCapAttr(AToken));
+        ResolveCapAttr(AToken), AResolutionTransformGlyph);
 
     tkViewMode:
       Result := AValues.ViewModeName;

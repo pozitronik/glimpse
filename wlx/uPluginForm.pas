@@ -1287,7 +1287,11 @@ begin
   FStatusBarRenderer := TStatusBarRenderer.Create(FStatusBar,
     function(const AToken: TStatusBarToken): string
     begin
-      Result := FormatStatusBarToken(AToken, FCachedStatusBarValues);
+      {Resolve the platform-specific glyph once per token; the formatter
+       used to call uPlatformDetect itself, but lifting the dependency
+       to the call site keeps uStatusBarFormatters truly pure.}
+      Result := FormatStatusBarToken(AToken, FCachedStatusBarValues,
+        ResolutionTransformGlyph);
     end);
 
   Bar.OnGetPanelHint :=

@@ -95,6 +95,8 @@ type
     [Test]
     procedure TestSaveDimensionCapFalseSuppressesTransform;
     [Test]
+    procedure TestSaveDimensionWithCapInjectsGlyphLiteral;
+    [Test]
     procedure TestCopyDimensionUsesCopyLabel;
 
     {View mode / zoom}
@@ -512,6 +514,23 @@ begin
   Assert.AreEqual('Save: 1920x1080',
     FormatStatusBarToken(MakeTokenWithAttr(tkSaveDimension, ATTR_CAP, 'false'), V),
     'cap=false must suppress the post-cap segment even when capping fires');
+end;
+
+procedure TTestStatusBarFormatters.TestSaveDimensionWithCapInjectsGlyphLiteral;
+var
+  V: TStatusBarValues;
+begin
+  {Pins the injected-glyph contract: whatever the caller passes for
+   AResolutionTransformGlyph appears verbatim between the pre-cap and
+   post-cap halves. The formatter used to query uPlatformDetect itself,
+   which made it OS-dependent and untestable; this test proves the
+   coupling is gone.}
+  V := EmptyValues;
+  V.SaveDimAvailable := True;
+  V.SaveDimW := 1920;      V.SaveDimH := 1080;
+  V.SaveDimCappedW := 192; V.SaveDimCappedH := 108;
+  Assert.AreEqual('Save: 1920x1080-XYZ-192x108',
+    FormatStatusBarToken(MakeToken(tkSaveDimension), V, '-XYZ-'));
 end;
 
 procedure TTestStatusBarFormatters.TestCopyDimensionUsesCopyLabel;
