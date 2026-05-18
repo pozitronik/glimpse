@@ -27,6 +27,7 @@ uses
   uCache in '..\src\uCache.pas',
   uCacheKey in '..\src\uCacheKey.pas',
   uProbeCache in '..\src\uProbeCache.pas',
+  uEnableRules in 'uEnableRules.pas',
   uSettingsDlg in 'uSettingsDlg.pas',
   uCaptureShortcutDlg in 'uCaptureShortcutDlg.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',

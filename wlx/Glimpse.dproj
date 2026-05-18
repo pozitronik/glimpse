@@ -81,6 +81,7 @@
         <DCCReference Include="..\src\uCache.pas"/>
         <DCCReference Include="..\src\uCacheKey.pas"/>
         <DCCReference Include="..\src\uProbeCache.pas"/>
+        <DCCReference Include="uEnableRules.pas"/>
         <DCCReference Include="uSettingsDlg.pas">
             <Form>SettingsForm</Form>
         </DCCReference>

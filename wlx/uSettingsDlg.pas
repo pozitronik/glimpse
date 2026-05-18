@@ -9,7 +9,7 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Dialogs,
   Winapi.Windows,
-  uTypes, uStatusBarLayout, uSettings, uHotkeys;
+  uTypes, uStatusBarLayout, uSettings, uHotkeys, uEnableRules;
 
 type
   TSettingsForm = class(TForm)
@@ -231,20 +231,28 @@ type
      order matches Item.Index; if sort is ever enabled this needs to
      become a TDictionary<TListItem, TPluginAction>.}
     FHotkeyRowActions: TArray<uHotkeys.TPluginAction>;
+    {Declarative table of (predicate, controls) tuples that replaces the
+     former cluster of seven UpdateXxxControls methods. Built once during
+     construction and recomputed by RecomputeEnables on every relevant
+     user-driven change. Closures capture the form's control fields by
+     reference; the table lives for the form's lifetime so there are no
+     dangling-reference concerns.}
+    FEnableRules: TEnableRules;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
-    procedure UpdateMaxWorkersControls;
-    procedure UpdateSaveFormatControls;
-    procedure UpdateBannerControls;
-    {Greys out the four per-format publish checkboxes (and their group
-     header label) when ChkClipboardAsFileReference is checked, since
-     the file-reference path overrides the format toggles. Wired both
-     to the override toggle's OnClick and called from SettingsToControls
-     after loading so the initial state matches the persisted value.}
-    procedure UpdateClipboardFormatControlsEnabled;
-    procedure UpdateCacheControls;
-    procedure UpdateScaledExtractionControls;
-    procedure UpdateThumbnailControls;
+    {Populates FEnableRules. Called once after the DFM-defined controls
+     exist (so the closures can safely reference them). Note: the
+     ClipboardAsFileReference rule subsumes the old UpdateClipboardFormat
+     ControlsEnabled — file-reference path bypasses the strategy
+     orchestrator entirely, so the per-format toggles have no effect
+     while the override is on; greying them out makes the override
+     visible without reading the hint text.}
+    procedure BuildEnableRules;
+    {Single entry point for all "refresh enable state" call sites. Evaluates
+     every rule unconditionally (one VCL property read per predicate) and
+     then performs the only non-enable side effect: refreshing the
+     MaxThreadsAuto caption to track UdMaxThreads.Position.}
+    procedure RecomputeEnables;
     procedure UpdateFFmpegInfo;
     procedure UpdateCacheFolderInfo;
     procedure UpdateCacheSizeInfo;
@@ -315,8 +323,11 @@ begin
   TrkRandomPercent.Position := ASettings.RandomPercent;
   LblRandomPercentValue.Caption := IntToStr(ASettings.RandomPercent) + '%';
   ChkCacheRandomFrames.Checked := ASettings.CacheRandomFrames;
-  UpdateMaxWorkersControls;
-  UpdateScaledExtractionControls;
+  {Early enable-rule sweep so the workers/scaled groups visually reflect
+   the just-loaded values before subsequent setters paint the remaining
+   tabs. A final RecomputeEnables at the bottom of this method picks up
+   the controls whose values are set further down (banner, cache, etc).}
+  RecomputeEnables;
   EdtExtensions.Text := ASettings.ExtensionList;
   EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
@@ -390,11 +401,7 @@ begin
   FHotkeys.Assign(ASettings.Hotkeys);
   PopulateHotkeyList;
 
-  UpdateSaveFormatControls;
-  UpdateBannerControls;
-  UpdateCacheControls;
-  UpdateThumbnailControls;
-  UpdateClipboardFormatControlsEnabled;
+  RecomputeEnables;
   UpdateFFmpegInfo;
   UpdateCacheFolderInfo;
   UpdateCacheSizeInfo;
@@ -613,12 +620,12 @@ end;
 
 procedure TSettingsForm.ChkShowBannerClick(Sender: TObject);
 begin
-  UpdateBannerControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.ChkClipboardAsFileReferenceClick(Sender: TObject);
 begin
-  UpdateClipboardFormatControlsEnabled;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.BtnSaveFolderClick(Sender: TObject);
@@ -663,7 +670,7 @@ end;
 
 procedure TSettingsForm.EdtMaxThreadsChange(Sender: TObject);
 begin
-  UpdateMaxWorkersControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.EdtCacheFolderChange(Sender: TObject);
@@ -715,17 +722,17 @@ end;
 
 procedure TSettingsForm.CbxSaveFormatChange(Sender: TObject);
 begin
-  UpdateSaveFormatControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.ChkMaxWorkersAutoClick(Sender: TObject);
 begin
-  UpdateMaxWorkersControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.ChkScaledExtractionClick(Sender: TObject);
 begin
-  UpdateScaledExtractionControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.TrkRandomPercentChange(Sender: TObject);
@@ -735,17 +742,17 @@ end;
 
 procedure TSettingsForm.ChkCacheEnabledClick(Sender: TObject);
 begin
-  UpdateCacheControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.ChkThumbnailsEnabledClick(Sender: TObject);
 begin
-  UpdateThumbnailControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.CbxThumbnailModeChange(Sender: TObject);
 begin
-  UpdateThumbnailControls;
+  RecomputeEnables;
 end;
 
 procedure TSettingsForm.BtnApplyClick(Sender: TObject);
@@ -867,124 +874,88 @@ begin
   PopulateHotkeyList;
 end;
 
-procedure TSettingsForm.UpdateMaxWorkersControls;
-var
-  OnePerFrame: Boolean;
+procedure TSettingsForm.BuildEnableRules;
 begin
-  OnePerFrame := ChkMaxWorkersAuto.Checked;
-  LblMaxWorkers.Enabled := not OnePerFrame;
-  EdtMaxWorkers.Enabled := not OnePerFrame;
-  UdMaxWorkers.Enabled := not OnePerFrame;
-  {Limit workers count is only relevant in one-per-frame mode}
-  LblMaxThreads.Enabled := OnePerFrame;
-  EdtMaxThreads.Enabled := OnePerFrame;
-  UdMaxThreads.Enabled := OnePerFrame;
-  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame, UdMaxThreads.Position, CPUCount);
-end;
+  SetLength(FEnableRules, 11);
 
-procedure TSettingsForm.UpdateSaveFormatControls;
-var
-  IsPNG: Boolean;
-begin
-  IsPNG := CbxSaveFormat.ItemIndex = Ord(sfPNG);
-  LblJpegQuality.Enabled := not IsPNG;
-  EdtJpegQuality.Enabled := not IsPNG;
-  UdJpegQuality.Enabled := not IsPNG;
-  LblPngCompression.Enabled := IsPNG;
-  EdtPngCompression.Enabled := IsPNG;
-  UdPngCompression.Enabled := IsPNG;
-  LblBackgroundAlpha.Enabled := IsPNG;
-  EdtBackgroundAlpha.Enabled := IsPNG;
-  UdBackgroundAlpha.Enabled := IsPNG;
-end;
+  {Max workers / max threads — auto mode swaps which of the two
+   workers/threads pairs is editable. Limit workers count is only
+   relevant in one-per-frame mode; in single-worker mode the per-frame
+   thread cap is what the user can tune.}
+  FEnableRules[0].Predicate := function: Boolean begin Result := not ChkMaxWorkersAuto.Checked end;
+  FEnableRules[0].Controls := [LblMaxWorkers, EdtMaxWorkers, UdMaxWorkers];
 
-procedure TSettingsForm.UpdateBannerControls;
-var
-  Enabled: Boolean;
-begin
-  {Banner style is only meaningful when the banner is actually drawn}
-  Enabled := ChkShowBanner.Checked;
-  LblBannerBackground.Enabled := Enabled;
-  PnlBannerBackground.Enabled := Enabled;
-  BtnBannerBackground.Enabled := Enabled;
-  LblBannerTextColor.Enabled := Enabled;
-  PnlBannerTextColor.Enabled := Enabled;
-  BtnBannerTextColor.Enabled := Enabled;
-  LblBannerFont.Enabled := Enabled;
-  EdtBannerFont.Enabled := Enabled;
-  BtnBannerFont.Enabled := Enabled;
-  ChkBannerAutoSize.Enabled := Enabled;
-  LblBannerPosition.Enabled := Enabled;
-  CbxBannerPosition.Enabled := Enabled;
-end;
+  FEnableRules[1].Predicate := function: Boolean begin Result := ChkMaxWorkersAuto.Checked end;
+  FEnableRules[1].Controls := [LblMaxThreads, EdtMaxThreads, UdMaxThreads];
 
-procedure TSettingsForm.UpdateClipboardFormatControlsEnabled;
-var
-  Enabled: Boolean;
-begin
+  {Save format — JPEG quality vs PNG compression/alpha are mutually
+   exclusive; the toggle is the format combo's item index.}
+  FEnableRules[2].Predicate := function: Boolean begin Result := CbxSaveFormat.ItemIndex <> Ord(sfPNG) end;
+  FEnableRules[2].Controls := [LblJpegQuality, EdtJpegQuality, UdJpegQuality];
+
+  FEnableRules[3].Predicate := function: Boolean begin Result := CbxSaveFormat.ItemIndex = Ord(sfPNG) end;
+  FEnableRules[3].Controls := [LblPngCompression, EdtPngCompression, UdPngCompression,
+                               LblBackgroundAlpha, EdtBackgroundAlpha, UdBackgroundAlpha];
+
+  {Banner style is only meaningful when the banner is actually drawn.}
+  FEnableRules[4].Predicate := function: Boolean begin Result := ChkShowBanner.Checked end;
+  FEnableRules[4].Controls := [LblBannerBackground, PnlBannerBackground, BtnBannerBackground,
+                               LblBannerTextColor, PnlBannerTextColor, BtnBannerTextColor,
+                               LblBannerFont, EdtBannerFont, BtnBannerFont,
+                               ChkBannerAutoSize, LblBannerPosition, CbxBannerPosition];
+
   {File-reference path bypasses the strategy orchestrator entirely, so
    the four per-format toggles have no effect while the override is on.
    Grey them out (and the group header label) so the override is
    visible to the user without reading the hint text.}
-  Enabled := not ChkClipboardAsFileReference.Checked;
-  LblClipboardFormatsHeader.Enabled := Enabled;
-  ChkPublishAlphaAwareBitmap.Enabled := Enabled;
-  ChkPublishCompressedPng.Enabled := Enabled;
-  ChkPublishFlattenedBitmap.Enabled := Enabled;
-  ChkPublishBitmapHandle.Enabled := Enabled;
+  FEnableRules[5].Predicate := function: Boolean begin Result := not ChkClipboardAsFileReference.Checked end;
+  FEnableRules[5].Controls := [LblClipboardFormatsHeader, ChkPublishAlphaAwareBitmap,
+                               ChkPublishCompressedPng, ChkPublishFlattenedBitmap, ChkPublishBitmapHandle];
+
+  {Cache folder + size cap are dead controls while the cache is off.}
+  FEnableRules[6].Predicate := function: Boolean begin Result := ChkCacheEnabled.Checked end;
+  FEnableRules[6].Controls := [LblCacheFolder, EdtCacheFolder, BtnCacheFolder,
+                               LblCacheMaxSize, EdtCacheMaxSize, UdCacheMaxSize, LblCacheMaxSizeUnit];
+
+  {Scaled extraction — Min/Max frame side bounds plus the auto-refresh
+   toggle, which has no effect when scaling is off (no MaxSide to
+   compare against).}
+  FEnableRules[7].Predicate := function: Boolean begin Result := ChkScaledExtraction.Checked end;
+  FEnableRules[7].Controls := [LblScaleTarget, EdtMinFrameSide, UdMinFrameSide,
+                               LblScaleSep, EdtMaxFrameSide, UdMaxFrameSide, LblScaleUnit,
+                               ChkAutoRefreshViewport];
+
+  {Thumbnails — three rules: the master toggle gates the mode combo,
+   then within an enabled group Single mode shows position controls and
+   Grid mode shows grid-frame count. Disabling avoids the user editing
+   fields that won't be used.}
+  FEnableRules[8].Predicate := function: Boolean begin Result := ChkThumbnailsEnabled.Checked end;
+  FEnableRules[8].Controls := [LblThumbnailMode, CbxThumbnailMode];
+
+  FEnableRules[9].Predicate := function: Boolean
+    begin
+      Result := ChkThumbnailsEnabled.Checked
+                and (CbxThumbnailMode.ItemIndex = Ord(tnmSingle));
+    end;
+  FEnableRules[9].Controls := [LblThumbnailPosition, EdtThumbnailPosition,
+                               UdThumbnailPosition, LblThumbnailPositionUnit];
+
+  FEnableRules[10].Predicate := function: Boolean
+    begin
+      Result := ChkThumbnailsEnabled.Checked
+                and (CbxThumbnailMode.ItemIndex = Ord(tnmGrid));
+    end;
+  FEnableRules[10].Controls := [LblThumbnailGridFrames, EdtThumbnailGridFrames, UdThumbnailGridFrames];
 end;
 
-procedure TSettingsForm.UpdateCacheControls;
-var
-  CacheOn: Boolean;
+procedure TSettingsForm.RecomputeEnables;
 begin
-  CacheOn := ChkCacheEnabled.Checked;
-  LblCacheFolder.Enabled := CacheOn;
-  EdtCacheFolder.Enabled := CacheOn;
-  BtnCacheFolder.Enabled := CacheOn;
-  LblCacheMaxSize.Enabled := CacheOn;
-  EdtCacheMaxSize.Enabled := CacheOn;
-  UdCacheMaxSize.Enabled := CacheOn;
-  LblCacheMaxSizeUnit.Enabled := CacheOn;
-end;
-
-procedure TSettingsForm.UpdateScaledExtractionControls;
-var
-  Enabled: Boolean;
-begin
-  Enabled := ChkScaledExtraction.Checked;
-  LblScaleTarget.Enabled := Enabled;
-  EdtMinFrameSide.Enabled := Enabled;
-  UdMinFrameSide.Enabled := Enabled;
-  LblScaleSep.Enabled := Enabled;
-  EdtMaxFrameSide.Enabled := Enabled;
-  UdMaxFrameSide.Enabled := Enabled;
-  LblScaleUnit.Enabled := Enabled;
-  {Auto-refresh has no effect when scaling is off (no MaxSide to compare).}
-  ChkAutoRefreshViewport.Enabled := Enabled;
-end;
-
-procedure TSettingsForm.UpdateThumbnailControls;
-var
-  GroupOn, IsSingle, IsGrid: Boolean;
-begin
-  GroupOn := ChkThumbnailsEnabled.Checked;
-  LblThumbnailMode.Enabled := GroupOn;
-  CbxThumbnailMode.Enabled := GroupOn;
-
-  {Position controls only meaningful in Single mode; grid frames only in
-   Grid mode. Disabling avoids the user editing fields that won't be used.}
-  IsSingle := GroupOn and (CbxThumbnailMode.ItemIndex = Ord(tnmSingle));
-  IsGrid := GroupOn and (CbxThumbnailMode.ItemIndex = Ord(tnmGrid));
-
-  LblThumbnailPosition.Enabled := IsSingle;
-  EdtThumbnailPosition.Enabled := IsSingle;
-  UdThumbnailPosition.Enabled := IsSingle;
-  LblThumbnailPositionUnit.Enabled := IsSingle;
-
-  LblThumbnailGridFrames.Enabled := IsGrid;
-  EdtThumbnailGridFrames.Enabled := IsGrid;
-  UdThumbnailGridFrames.Enabled := IsGrid;
+  ApplyEnableRules(FEnableRules);
+  {Caption update is the one non-enable mutation the former UpdateMax
+   WorkersControls method performed; keep it adjacent to its rule's
+   evaluation so the two stay coupled.}
+  LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(
+    ChkMaxWorkersAuto.Checked, UdMaxThreads.Position, CPUCount);
 end;
 
 procedure TSettingsForm.UpdateFFmpegInfo;
@@ -1062,6 +1033,9 @@ begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
   FHotkeys := uHotkeys.THotkeyBindings.Create;
+  {Built once after the DFM has instantiated every control referenced
+   by the rule closures; lives for the form's lifetime.}
+  BuildEnableRules;
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
