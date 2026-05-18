@@ -63,6 +63,11 @@ type
     [Test] procedure TestParseAudioSampleRate48000;
     [Test] procedure TestParseAudioSampleRateFullOutput;
     [Test] procedure TestParseAudioSampleRateNoAudio;
+    {Pins the "tolerates extra whitespace before the token" property
+     that ScanNumberBeforeToken introduced (step 54). The old open-coded
+     parser did NOT skip whitespace for ParseAudioSampleRate and would
+     return 0 for "48000   Hz"; the helper now handles either spacing.}
+    [Test] procedure TestParseAudioSampleRateAllowsExtraSpaces;
     { Audio channels }
     [Test] procedure TestParseAudioChannelsStereo;
     [Test] procedure TestParseAudioChannelsMono;
@@ -448,6 +453,18 @@ end;
 procedure TTestFFmpegParsing.TestParseAudioSampleRateNoAudio;
 begin
   Assert.AreEqual(0, ParseAudioSampleRate('Video: h264, 1920x1080'));
+end;
+
+procedure TTestFFmpegParsing.TestParseAudioSampleRateAllowsExtraSpaces;
+begin
+  {The unified ScanNumberBeforeToken helper skips whitespace backward
+   from the token, so an Audio line with extra spaces between the
+   number and "Hz" still parses. This is a deliberate change from the
+   pre-step-54 inline code which only handled the canonical one-space
+   "48000 Hz" form.}
+  Assert.AreEqual(48000,
+    ParseAudioSampleRate('Audio: aac (LC), 48000   Hz, 5.1, fltp'),
+    'ScanNumberBeforeToken must tolerate multiple spaces before the token');
 end;
 
 { TTestFFmpegParsing: Audio channels }

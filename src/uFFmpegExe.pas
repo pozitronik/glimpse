@@ -352,21 +352,38 @@ begin
   Result := P;
 end;
 
+{Composite helper used by the "value AToken" parsers (ParseFps, ParseAudioSampleRate):
+ find AToken in ALine, skip any whitespace immediately before it, then scan
+ backward for digits (or AAllowedChars) and return the literal in AValue.
+ Returns True on a non-empty digit run.
+
+ Does NOT fit ParseStreamBitrate — that one needs the LAST occurrence of
+ 'kb/s' (codec metadata can mention bitrates earlier on the same line),
+ so it keeps its own right-to-left walk.}
+function ScanNumberBeforeToken(const ALine, AToken: string;
+  const AAllowedChars: TSysCharSet; out AValue: string): Boolean;
+var
+  P: Integer;
+begin
+  AValue := '';
+  Result := False;
+  P := Pos(AToken, ALine);
+  if P < 2 then
+    Exit;
+  P := SkipSpacesBack(ALine, P - 1);
+  AValue := ScanNumberBefore(ALine, P, AAllowedChars);
+  Result := AValue <> '';
+end;
+
 function ParseFps(const AText: string): Double;
 var
   Line, NumStr: string;
-  P: Integer;
 begin
   Result := 0;
   Line := ExtractStreamLine(AText, 'Video:');
   if Line = '' then
     Exit;
-  P := Pos(' fps', Line);
-  if P < 2 then
-    Exit;
-  P := SkipSpacesBack(Line, P - 1);
-  NumStr := ScanNumberBefore(Line, P, ['0' .. '9', '.']);
-  if NumStr <> '' then
+  if ScanNumberBeforeToken(Line, ' fps', ['0' .. '9', '.'], NumStr) then
     Result := StrToFloatDef(NumStr, 0, TFormatSettings.Invariant);
 end;
 
@@ -419,17 +436,12 @@ end;
 function ParseAudioSampleRate(const AText: string): Integer;
 var
   Line, NumStr: string;
-  P: Integer;
 begin
   Result := 0;
   Line := ExtractStreamLine(AText, 'Audio:');
   if Line = '' then
     Exit;
-  P := Pos(' Hz', Line);
-  if P < 2 then
-    Exit;
-  NumStr := ScanNumberBefore(Line, P - 1, ['0' .. '9']);
-  if NumStr <> '' then
+  if ScanNumberBeforeToken(Line, ' Hz', ['0' .. '9'], NumStr) then
     Result := StrToIntDef(NumStr, 0);
 end;
 
