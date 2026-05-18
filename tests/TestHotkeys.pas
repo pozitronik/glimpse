@@ -110,6 +110,16 @@ type
     [Test] procedure Assign_DeepCopies;
     [Test] procedure FindActionByChord_DetectsConflict;
     [Test] procedure FindActionByChord_ExcludesSelf;
+    {ReassignExclusive moves chords away from any prior owner and Puts
+     them on the target action; returns the deduplicated list of
+     evicted actions so the dialog can refresh exactly those rows.
+     Pin three contracts: (a) eviction return value matches the source
+     of the evicted chord, (b) the chord actually moves (no longer
+     resolves to the old owner), (c) no-conflict case returns an
+     empty array.}
+    [Test] procedure ReassignExclusive_EvictsConflictingAction;
+    [Test] procedure ReassignExclusive_MovesChordToTarget;
+    [Test] procedure ReassignExclusive_NoConflict_ReturnsEmpty;
     [Test] procedure IniRoundTrip_MultiChordPreserved;
     [Test] procedure IniLoad_EmptyValue_Unbinds;
     [Test] procedure IniLoad_MissingKey_KeepsDefault;
@@ -1042,6 +1052,71 @@ begin
     Assert.AreEqual(Ord(paNone),
       Ord(B.FindActionByChord(THotkeyChord.Make(VK_F2, []), paSettings)),
       'Self-binding must not count as a conflict');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.ReassignExclusive_EvictsConflictingAction;
+var
+  B: THotkeyBindings;
+  NewChords: THotkeyChordArray;
+  Evicted: TArray<TPluginAction>;
+begin
+  {paSettings owns F2 by default. Reassigning F2 to paToggleToolbar
+   must evict paSettings — that action's row in the dialog then
+   needs a refresh.}
+  B := THotkeyBindings.Create;
+  try
+    SetLength(NewChords, 1);
+    NewChords[0] := THotkeyChord.Make(VK_F2, []);
+    Evicted := B.ReassignExclusive(paToggleToolbar, NewChords);
+    Assert.AreEqual<Integer>(1, Length(Evicted),
+      'Exactly one action must be evicted (paSettings owned F2)');
+    Assert.AreEqual(Ord(paSettings), Ord(Evicted[0]),
+      'Evicted action must be the prior chord owner');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.ReassignExclusive_MovesChordToTarget;
+var
+  B: THotkeyBindings;
+  NewChords: THotkeyChordArray;
+begin
+  {Sanity: after eviction, the chord must resolve to the new owner,
+   not the old one. Lookup is the user-visible side effect of the move;
+   pin it so a future change to Put / RemoveChord can't silently break
+   the "chord actually moved" promise.}
+  B := THotkeyBindings.Create;
+  try
+    SetLength(NewChords, 1);
+    NewChords[0] := THotkeyChord.Make(VK_F2, []);
+    B.ReassignExclusive(paToggleToolbar, NewChords);
+    Assert.AreEqual(Ord(paToggleToolbar),
+      Ord(B.Lookup(VK_F2, [])),
+      'F2 must now resolve to paToggleToolbar, not paSettings');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.ReassignExclusive_NoConflict_ReturnsEmpty;
+var
+  B: THotkeyBindings;
+  NewChords: THotkeyChordArray;
+  Evicted: TArray<TPluginAction>;
+begin
+  {Reassigning to an unbound chord (Ctrl+Shift+Alt+F12 is not in any
+   default binding) must touch no other action. The dialog uses the
+   empty result to skip its refresh loop.}
+  B := THotkeyBindings.Create;
+  try
+    SetLength(NewChords, 1);
+    NewChords[0] := THotkeyChord.Make(VK_F12, [ssCtrl, ssShift, ssAlt]);
+    Evicted := B.ReassignExclusive(paToggleToolbar, NewChords);
+    Assert.AreEqual<Integer>(0, Length(Evicted));
   finally
     B.Free;
   end;

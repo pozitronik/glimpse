@@ -92,6 +92,22 @@ type
      AChord. Returns paNone when no conflict.}
     function FindActionByChord(const AChord: THotkeyChord;
       AExcept: TPluginAction = paNone): TPluginAction;
+    {Reassigns AAction's chord list to AChords, taking ownership of any
+     chord currently held by another action. Replaces the assign-then-
+     reconcile dance the dialog used to do inline: for each chord in
+     AChords, every other action that contains it has it removed
+     (handles pathological INI-edited duplicates by stripping until
+     gone); AAction is then Put to the full new list.
+
+     Returns the deduplicated list of actions whose chord lists were
+     mutated by eviction — the dialog uses it to refresh those rows in
+     the visible table. AAction itself is excluded from the result even
+     though AAction's row will of course also need refreshing.
+
+     Idempotent in the no-conflict case: if no other action owns any
+     chord in AChords, the result is empty and only AAction is touched.}
+    function ReassignExclusive(AAction: TPluginAction;
+      const AChords: THotkeyChordArray): TArray<TPluginAction>;
   end;
 
 const
@@ -465,6 +481,35 @@ begin
         Exit(A);
   end;
   Result := paNone;
+end;
+
+function THotkeyBindings.ReassignExclusive(AAction: TPluginAction;
+  const AChords: THotkeyChordArray): TArray<TPluginAction>;
+var
+  I: Integer;
+  Conflict: TPluginAction;
+  Touched: array[TPluginAction] of Boolean;
+  A: TPluginAction;
+begin
+  for A := Low(TPluginAction) to High(TPluginAction) do
+    Touched[A] := False;
+  for I := 0 to High(AChords) do
+  begin
+    Conflict := FindActionByChord(AChords[I], AAction);
+    {Loop because a single chord could (in pathological INI-edited data)
+     appear in more than one action's list; keep stripping until gone.}
+    while Conflict <> paNone do
+    begin
+      RemoveChord(Conflict, AChords[I]);
+      Touched[Conflict] := True;
+      Conflict := FindActionByChord(AChords[I], AAction);
+    end;
+  end;
+  Put(AAction, AChords);
+  SetLength(Result, 0);
+  for A := Succ(paNone) to High(TPluginAction) do
+    if Touched[A] then
+      Result := Result + [A];
 end;
 
 {Unit-level helpers}

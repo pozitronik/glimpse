@@ -820,33 +820,21 @@ end;
 procedure TSettingsForm.CaptureAndAssignHotkey(AAction: uHotkeys.TPluginAction);
 var
   NewChords: uHotkeys.THotkeyChordArray;
-  I: Integer;
-  Conflict: uHotkeys.TPluginAction;
+  EvictedActions: TArray<uHotkeys.TPluginAction>;
+  Evicted: uHotkeys.TPluginAction;
 begin
   if AAction = uHotkeys.paNone then
     Exit;
   if not EditShortcuts(Self, AAction, FHotkeys, NewChords) then
     Exit;
 
-  {The editor prompted for conflicts at the moment each chord was added,
-   and the user said "Yes, reassign" for every chord that reached here.
-   Reconcile the table now by removing those chords from any other action
-   that still owns them. Without this step the old owner would keep the
-   binding in memory until the user also opens its row.}
-  for I := 0 to High(NewChords) do
-  begin
-    Conflict := FHotkeys.FindActionByChord(NewChords[I], AAction);
-    while Conflict <> uHotkeys.paNone do
-    begin
-      FHotkeys.RemoveChord(Conflict, NewChords[I]);
-      RefreshHotkeyRow(Conflict);
-      {A chord could (in pathological INI-edited data) appear more than
-       once across different actions; keep stripping until gone.}
-      Conflict := FHotkeys.FindActionByChord(NewChords[I], AAction);
-    end;
-  end;
-
-  FHotkeys.Put(AAction, NewChords);
+  {ReassignExclusive removes NewChords from any other action that owned
+   them (the editor already prompted the user and they said "Yes,
+   reassign") and Puts NewChords on AAction. Returns the list of actions
+   whose rows need a UI refresh.}
+  EvictedActions := FHotkeys.ReassignExclusive(AAction, NewChords);
+  for Evicted in EvictedActions do
+    RefreshHotkeyRow(Evicted);
   RefreshHotkeyRow(AAction);
 end;
 
