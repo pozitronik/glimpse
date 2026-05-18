@@ -299,7 +299,7 @@ uses
   System.IOUtils, System.Math,
   uDefaults, uFFmpegExe, uFFmpegCmdLine, uCache, uProbeCache, uBitmapSaver, uPathExpand,
   uSettingsDlgLogic, uSettingsDlgUI, uPluginMessages, uCaptureShortcutDlg,
-  uStatusBarTokens;
+  uStatusBarTokens, uHotkeysDisplay;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 var
@@ -784,7 +784,7 @@ begin
       Item.Caption := uHotkeys.ActionCaption(A);
       SetLength(FHotkeyRowActions, Length(FHotkeyRowActions) + 1);
       FHotkeyRowActions[High(FHotkeyRowActions)] := A;
-      Item.SubItems.Add(uHotkeys.ChordsToDisplayStr(FHotkeys.Get(A)));
+      Item.SubItems.Add(ChordsToDisplayStr(FHotkeys.Get(A)));
     end;
   finally
     LvwHotkeys.Items.EndUpdate;
@@ -797,7 +797,7 @@ var
   Item: TListItem;
   Display: string;
 begin
-  Display := uHotkeys.ChordsToDisplayStr(FHotkeys.Get(AAction));
+  Display := ChordsToDisplayStr(FHotkeys.Get(AAction));
   for I := 0 to LvwHotkeys.Items.Count - 1 do
   begin
     if (I < Length(FHotkeyRowActions)) and (FHotkeyRowActions[I] = AAction) then

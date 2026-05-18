@@ -96,6 +96,8 @@
         <DCCReference Include="..\src\infrastructure\uIniDocument.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uHotkeys.pas"/>
+        <DCCReference Include="..\src\uHotkeysCodec.pas"/>
+        <DCCReference Include="..\src\uHotkeysDisplay.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
         <DCCReference Include="..\src\uSettingsDlgUI.pas"/>
         <DCCReference Include="uWcxEntryExtractors.pas"/>

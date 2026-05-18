@@ -79,7 +79,11 @@
         <DCCReference Include="..\src\uSettingsToggleService.pas"/>
         <DCCReference Include="TestSettingsToggleService.pas"/>
         <DCCReference Include="..\src\uHotkeys.pas"/>
+        <DCCReference Include="..\src\uHotkeysCodec.pas"/>
+        <DCCReference Include="..\src\uHotkeysDisplay.pas"/>
         <DCCReference Include="TestHotkeys.pas"/>
+        <DCCReference Include="TestHotkeysCodec.pas"/>
+        <DCCReference Include="TestHotkeysDisplay.pas"/>
         <DCCReference Include="..\src\uFrameOffsets.pas"/>
         <DCCReference Include="..\src\uFFmpegLocator.pas"/>
         <DCCReference Include="..\src\uFFmpegExe.pas"/>

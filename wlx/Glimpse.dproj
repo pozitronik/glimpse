@@ -119,6 +119,8 @@
         <DCCReference Include="..\src\infrastructure\uIniDocument.pas"/>
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
+        <DCCReference Include="..\src\uHotkeysCodec.pas"/>
+        <DCCReference Include="..\src\uHotkeysDisplay.pas"/>
         <DCCReference Include="uHotkeysVcl.pas"/>
         <DCCReference Include="uPluginAppearance.pas"/>
         <DCCReference Include="uTextMeasurement.pas"/>

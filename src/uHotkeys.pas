@@ -142,94 +142,11 @@ function ActionIniKey(AAction: TPluginAction): string;
 {Human-readable caption for the action, used by the settings dialog UI.}
 function ActionCaption(AAction: TPluginAction): string;
 
-{Joins AChords with CHORD_SEPARATOR for INI storage.}
-function ChordsToIniStr(const AChords: THotkeyChordArray): string;
-
-{Parses AValue (CHORD_SEPARATOR-joined) into a list of chords. Unparseable
- segments are skipped rather than causing the whole value to be rejected.}
-function ChordsFromIniStr(const AValue: string): THotkeyChordArray;
-
-{Joins AChords with ', ' for on-screen display. Empty chord list renders
- as '' so the listview's Shortcut column is simply blank.}
-function ChordsToDisplayStr(const AChords: THotkeyChordArray): string;
-
 implementation
 
 uses
-  Winapi.Windows;
-
-type
-  TKeyName = record
-    Key: Word;
-    Name: string;
-  end;
-
-const
-  {Fixed named keys. Letter/digit keys are handled separately (single char).}
-  KEY_NAMES: array [0 .. 20] of TKeyName = (
-    (Key: VK_RETURN; Name: 'Enter'),
-    (Key: VK_ESCAPE; Name: 'Escape'),
-    (Key: VK_SPACE; Name: 'Space'),
-    (Key: VK_TAB; Name: 'Tab'),
-    (Key: VK_BACK; Name: 'Backspace'),
-    (Key: VK_DELETE; Name: 'Delete'),
-    (Key: VK_INSERT; Name: 'Insert'),
-    (Key: VK_HOME; Name: 'Home'),
-    (Key: VK_END; Name: 'End'),
-    (Key: VK_PRIOR; Name: 'PageUp'),
-    (Key: VK_NEXT; Name: 'PageDown'),
-    (Key: VK_LEFT; Name: 'Left'),
-    (Key: VK_RIGHT; Name: 'Right'),
-    (Key: VK_UP; Name: 'Up'),
-    (Key: VK_DOWN; Name: 'Down'),
-    (Key: VK_OEM_PLUS; Name: '+'),
-    (Key: VK_OEM_MINUS; Name: '-'),
-    (Key: VK_OEM_COMMA; Name: ','),
-    (Key: VK_OEM_PERIOD; Name: '.'),
-    (Key: VK_OEM_3; Name: '`'),
-    (Key: VK_OEM_2; Name: '/'));
-
-function VKToName(AKey: Word): string;
-var
-  I: Integer;
-begin
-  if (AKey >= VK_F1) and (AKey <= VK_F12) then
-    Exit(Format('F%d', [AKey - VK_F1 + 1]));
-  if (AKey >= Ord('0')) and (AKey <= Ord('9')) then
-    Exit(Chr(AKey));
-  if (AKey >= Ord('A')) and (AKey <= Ord('Z')) then
-    Exit(Chr(AKey));
-  for I := Low(KEY_NAMES) to High(KEY_NAMES) do
-    if KEY_NAMES[I].Key = AKey then
-      Exit(KEY_NAMES[I].Name);
-  Result := '';
-end;
-
-function NameToVK(const AName: string): Word;
-var
-  S: string;
-  I, N: Integer;
-begin
-  S := AName.Trim;
-  if S = '' then
-    Exit(0);
-  if (Length(S) >= 2) and ((S[1] = 'F') or (S[1] = 'f')) then
-  begin
-    if TryStrToInt(Copy(S, 2, Length(S) - 1), N) and (N >= 1) and (N <= 12) then
-      Exit(VK_F1 + N - 1);
-  end;
-  if Length(S) = 1 then
-  begin
-    if CharInSet(S[1], ['0' .. '9']) then
-      Exit(Ord(S[1]));
-    if CharInSet(S[1], ['A' .. 'Z', 'a' .. 'z']) then
-      Exit(Ord(UpCase(S[1])));
-  end;
-  for I := Low(KEY_NAMES) to High(KEY_NAMES) do
-    if SameText(KEY_NAMES[I].Name, S) then
-      Exit(KEY_NAMES[I].Key);
-  Result := 0;
-end;
+  Winapi.Windows,
+  uHotkeysCodec, uHotkeysDisplay;
 
 function NormalizeKey(AKey: Word): Word;
 begin
@@ -278,27 +195,13 @@ begin
 end;
 
 function THotkeyChord.ToDisplayStr: string;
-var
-  KeyName: string;
 begin
-  if not IsAssigned then
-    Exit('');
-  KeyName := VKToName(Key);
-  if KeyName = '' then
-    Exit('');
-  Result := '';
-  if ssCtrl in Modifiers then
-    Result := Result + 'Ctrl+';
-  if ssShift in Modifiers then
-    Result := Result + 'Shift+';
-  if ssAlt in Modifiers then
-    Result := Result + 'Alt+';
-  Result := Result + KeyName;
+  Result := uHotkeysDisplay.ChordToDisplayStr(Self);
 end;
 
 function THotkeyChord.ToIniStr: string;
 begin
-  Result := ToDisplayStr;
+  Result := uHotkeysCodec.ChordToIniStr(Self);
 end;
 
 class function THotkeyChord.Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord;
@@ -317,51 +220,8 @@ begin
 end;
 
 class function THotkeyChord.FromIniStr(const AValue: string): THotkeyChord;
-var
-  Parts: TArray<string>;
-  I: Integer;
-  Token, Body: string;
-  Mods: TShiftState;
-  KeyCode: Word;
 begin
-  Result := None;
-  Body := AValue.Trim;
-  if Body = '' then
-    Exit;
-  KeyCode := 0;
-  {OEM '+' key paired with modifiers serialises as 'Shift++' / 'Ctrl++' /
-   'Alt++'. Splitting on '+' would yield two empty trailing tokens and the
-   chord would silently disappear on round-trip. Strip the '++' tail here so
-   the modifier prefix can be parsed normally. Single trailing '+' without a
-   preceding one (e.g. 'Ctrl+') is still a broken input that returns None.}
-  if (Length(Body) >= 2)
-    and (Body[Length(Body)] = '+')
-    and (Body[Length(Body) - 1] = '+') then
-  begin
-    KeyCode := VK_OEM_PLUS;
-    Body := Copy(Body, 1, Length(Body) - 2);
-  end;
-  Parts := Body.Split(['+']);
-  Mods := [];
-  for I := 0 to High(Parts) do
-  begin
-    Token := Parts[I].Trim;
-    if SameText(Token, 'Ctrl') then
-      Include(Mods, ssCtrl)
-    else if SameText(Token, 'Shift') then
-      Include(Mods, ssShift)
-    else if SameText(Token, 'Alt') then
-      Include(Mods, ssAlt)
-    else if (Token <> '') and (KeyCode = 0) then
-      KeyCode := NameToVK(Token);
-  end;
-  {Bare '+' gets split into two empty tokens; recover it from the raw input.}
-  if (KeyCode = 0) and (AValue.Trim = '+') then
-    KeyCode := VK_OEM_PLUS;
-  if KeyCode = 0 then
-    Exit;
-  Result.Key := KeyCode;
-  Result.Modifiers := Mods;
+  Result := uHotkeysCodec.ChordFromIniStr(AValue);
 end;
 
 {THotkeyBindings}
@@ -453,7 +313,7 @@ begin
     if Raw.Trim = '' then
       FBindings[A] := nil
     else
-      FBindings[A] := ChordsFromIniStr(Raw);
+      FBindings[A] := uHotkeysCodec.ChordsFromIniStr(Raw);
   end;
 end;
 
@@ -462,7 +322,7 @@ var
   A: TPluginAction;
 begin
   for A := Succ(paNone) to High(TPluginAction) do
-    AIni.WriteString(HOTKEYS_SECTION, ActionIniKey(A), ChordsToIniStr(FBindings[A]));
+    AIni.WriteString(HOTKEYS_SECTION, ActionIniKey(A), uHotkeysCodec.ChordsToIniStr(FBindings[A]));
 end;
 
 procedure THotkeyBindings.ResetToDefaults;
@@ -649,60 +509,6 @@ begin
     paViewModeSingle:     Result := [THotkeyChord.Make(Ord('5'), [ssCtrl])];
   else
     Result := nil;
-  end;
-end;
-
-function ChordsToIniStr(const AChords: THotkeyChordArray): string;
-var
-  I: Integer;
-begin
-  Result := '';
-  for I := 0 to High(AChords) do
-  begin
-    if not AChords[I].IsAssigned then
-      Continue;
-    if Result <> '' then
-      Result := Result + CHORD_SEPARATOR;
-    Result := Result + AChords[I].ToIniStr;
-  end;
-end;
-
-function ChordsFromIniStr(const AValue: string): THotkeyChordArray;
-var
-  Parts: TArray<string>;
-  I, Count: Integer;
-  Parsed: THotkeyChord;
-begin
-  Result := nil;
-  if AValue.Trim = '' then
-    Exit;
-  Parts := AValue.Split([CHORD_SEPARATOR]);
-  SetLength(Result, Length(Parts));
-  Count := 0;
-  for I := 0 to High(Parts) do
-  begin
-    Parsed := THotkeyChord.FromIniStr(Parts[I]);
-    if Parsed.IsAssigned then
-    begin
-      Result[Count] := Parsed;
-      Inc(Count);
-    end;
-  end;
-  SetLength(Result, Count);
-end;
-
-function ChordsToDisplayStr(const AChords: THotkeyChordArray): string;
-var
-  I: Integer;
-begin
-  Result := '';
-  for I := 0 to High(AChords) do
-  begin
-    if not AChords[I].IsAssigned then
-      Continue;
-    if Result <> '' then
-      Result := Result + ', ';
-    Result := Result + AChords[I].ToDisplayStr;
   end;
 end;
 

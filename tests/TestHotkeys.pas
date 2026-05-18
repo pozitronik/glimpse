@@ -135,7 +135,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Classes,
   Winapi.Windows, Vcl.Controls,
-  uHotkeys, uUnicodeIniFile;
+  uHotkeys, uHotkeysCodec, uHotkeysDisplay, uUnicodeIniFile;
 
 {TTestHotkeyChord}
 
