@@ -285,18 +285,6 @@ begin
   WcxTest_SetDeleteDirectoryProc(nil);
 end;
 
-{Number of legacy (frame and/or combined) entries the cache code sizes
- its temp arrays against. With the Mode bitmask both can coexist:
- frames occupy slots 0..N-1, combined the slot right after. Presets do
- not pre-extract and so consume no temp slots.}
-function LegacyEntryCount(H: TArchiveHandle): Integer;
-begin
-  Result := 0;
-  if H.Settings.ShowFrames then
-    Result := Length(H.Offsets);
-  if H.Settings.ShowCombined then
-    Inc(Result);
-end;
 
 function GetEntryCount(H: TArchiveHandle): Integer;
 begin
@@ -462,7 +450,7 @@ begin
     Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
     {Cache arrays size to legacy entries only; preset entries do not
      pre-extract (they run on demand during ProcessFile).}
-    EntryCount := LegacyEntryCount(H);
+    EntryCount := LegacyEntryCount(H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined);
     SetLength(GCachedTempPaths, EntryCount);
     SetLength(GCachedEntrySizes, EntryCount);
 

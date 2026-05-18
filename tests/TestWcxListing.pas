@@ -26,6 +26,12 @@ type
     [Test] procedure TestCombinedEntryHasLegacyIndexZero;
     [Test] procedure TestPresetEntryHasNegativeLegacyIndex;
     [Test] procedure TestPresetEntryPresetIndexMatchesArrayPosition;
+    { LegacyEntryCount — slot-numbering invariant shared with uWcxExports }
+    [Test] procedure TestLegacyEntryCount_FramesOnly;
+    [Test] procedure TestLegacyEntryCount_CombinedOnly;
+    [Test] procedure TestLegacyEntryCount_FramesPlusCombined;
+    [Test] procedure TestLegacyEntryCount_BothOffReturnsZero;
+    [Test] procedure TestLegacyEntryCount_EmptyOffsetsWithFramesOn;
   end;
 
 implementation
@@ -258,6 +264,38 @@ begin
   Assert.AreEqual(0, Listing[0].PresetIndex);
   Assert.AreEqual(1, Listing[1].PresetIndex);
   Assert.AreEqual(2, Listing[2].PresetIndex);
+end;
+
+{ LegacyEntryCount }
+
+procedure TTestWcxListing.TestLegacyEntryCount_FramesOnly;
+begin
+  Assert.AreEqual(5, LegacyEntryCount(MakeOffsets(5), True, False));
+end;
+
+procedure TTestWcxListing.TestLegacyEntryCount_CombinedOnly;
+begin
+  {Frames off; only the combined image contributes one slot.}
+  Assert.AreEqual(1, LegacyEntryCount(MakeOffsets(5), False, True));
+end;
+
+procedure TTestWcxListing.TestLegacyEntryCount_FramesPlusCombined;
+begin
+  {Frames slots 0..N-1, combined at slot N.}
+  Assert.AreEqual(6, LegacyEntryCount(MakeOffsets(5), True, True));
+end;
+
+procedure TTestWcxListing.TestLegacyEntryCount_BothOffReturnsZero;
+begin
+  Assert.AreEqual(0, LegacyEntryCount(MakeOffsets(5), False, False));
+end;
+
+procedure TTestWcxListing.TestLegacyEntryCount_EmptyOffsetsWithFramesOn;
+begin
+  {Empty offset array with frames-shown is degenerate (the source video
+   had zero extracted frames) but must still return zero, not crash on
+   Length(nil).}
+  Assert.AreEqual(0, LegacyEntryCount(MakeOffsets(0), True, False));
 end;
 
 end.

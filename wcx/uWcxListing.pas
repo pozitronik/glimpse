@@ -54,10 +54,27 @@ type
 function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined, AShowPresets: Boolean;
   ASaveFormat: TSaveFormat; const APresets: TWcxPresetArray): TWcxListingEntryArray;
 
+{Number of legacy (frame + combined) entries the cache code sizes its
+ temp arrays against. Frames contribute Length(AOffsets) when shown; the
+ combined image contributes one slot after. Presets do not pre-extract
+ and so consume no temp slots. Single source of truth for the
+ slot-numbering invariant: BuildArchiveListing uses it internally, and
+ the cache layer in uWcxExports calls it before the listing exists.}
+function LegacyEntryCount(const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined: Boolean): Integer;
+
 implementation
 
 uses
   uFrameFileNames;
+
+function LegacyEntryCount(const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined: Boolean): Integer;
+begin
+  Result := 0;
+  if AShowFrames then
+    Result := Length(AOffsets);
+  if AShowCombined then
+    Inc(Result);
+end;
 
 function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined, AShowPresets: Boolean;
   ASaveFormat: TSaveFormat; const APresets: TWcxPresetArray): TWcxListingEntryArray;
@@ -70,9 +87,7 @@ begin
   else
     FrameCount := 0;
 
-  LegacyCount := FrameCount;
-  if AShowCombined then
-    Inc(LegacyCount);
+  LegacyCount := LegacyEntryCount(AOffsets, AShowFrames, AShowCombined);
 
   if AShowPresets then
     PresetCount := Length(APresets)
