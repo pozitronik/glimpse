@@ -421,15 +421,7 @@ begin
   ASettings.MaxThreads := UdMaxThreads.Position;
   ASettings.ExtensionList := EdtExtensions.Text;
 
-  {Switch to explicit mode when user provides a path}
-  if EdtFFmpegPath.Text <> '' then
-  begin
-    ASettings.FFmpegExePath := EdtFFmpegPath.Text;
-    ASettings.FFmpegMode := fmExe;
-  end else begin
-    ASettings.FFmpegExePath := '';
-    ASettings.FFmpegMode := fmAuto;
-  end;
+  ASettings.SetFFmpegPath(EdtFFmpegPath.Text);
 
   ASettings.Background := PnlBackground.Color;
   ASettings.TimecodeBackColor := PnlTCBack.Color;

@@ -26,6 +26,14 @@ type
     [Test]
     procedure TestFFmpegModeRoundTrip;
     [Test]
+    procedure TestSetFFmpegPath_EmptyClearsPathAndModeAuto;
+    [Test]
+    procedure TestSetFFmpegPath_NonEmptySetsPathAndModeExe;
+    [Test]
+    procedure TestSetFFmpegPath_PromotesFromAutoOnNonEmpty;
+    [Test]
+    procedure TestSetFFmpegPath_DemotesFromExeOnEmpty;
+    [Test]
     procedure TestViewModeRoundTrip;
     [Test]
     procedure TestZoomModeRoundTrip;
@@ -447,6 +455,71 @@ begin
     S.Save;
     S.Load;
     Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_EmptyClearsPathAndModeAuto;
+var
+  S: TPluginSettings;
+begin
+  {Empty path is the sentinel for "let the plugin pick ffmpeg from
+   bundled/PATH" — must atomically clear the explicit path and drop the
+   mode back to fmAuto, otherwise Load on the next run would silently
+   ignore a stale exe path stored under (fmAuto, '/old/path').}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.SetFFmpegPath('');
+    Assert.AreEqual(Ord(fmAuto), Ord(S.FFmpegMode));
+    Assert.AreEqual('', S.FFmpegExePath);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_NonEmptySetsPathAndModeExe;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.SetFFmpegPath('C:\tools\ffmpeg.exe');
+    Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode));
+    Assert.AreEqual('C:\tools\ffmpeg.exe', S.FFmpegExePath);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_PromotesFromAutoOnNonEmpty;
+var
+  S: TPluginSettings;
+begin
+  {Starting in fmAuto, setting an explicit path must promote mode.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FFmpegMode := fmAuto;
+    S.FFmpegExePath := '';
+    S.SetFFmpegPath('C:\tools\ffmpeg.exe');
+    Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode), 'Must promote to fmExe');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_DemotesFromExeOnEmpty;
+var
+  S: TPluginSettings;
+begin
+  {Starting in fmExe with a path, setting empty must demote both.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FFmpegMode := fmExe;
+    S.FFmpegExePath := 'C:\tools\ffmpeg.exe';
+    S.SetFFmpegPath('');
+    Assert.AreEqual(Ord(fmAuto), Ord(S.FFmpegMode), 'Must demote to fmAuto');
+    Assert.AreEqual('', S.FFmpegExePath, 'Must clear path');
   finally
     S.Free;
   end;

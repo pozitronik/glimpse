@@ -125,6 +125,14 @@ type
     property FFmpegExePath: string read FFFmpegExePath write FFFmpegExePath;
     property FFmpegAutoDownloaded: Boolean read FFFmpegAutoDownloaded write FFFmpegAutoDownloaded;
 
+    {Atomic setter that keeps FFmpegMode and FFmpegExePath consistent: an
+     empty APath drops both to (fmAuto, ''), a non-empty APath promotes
+     both to (fmExe, APath). Callers can still write the two properties
+     individually — the setter exists so a programmatic caller does not
+     accidentally leave (fmAuto, '/path/to/ffmpeg') — a state where Load
+     would silently discard the path because the persisted Mode is auto.}
+    procedure SetFFmpegPath(const APath: string);
+
     {[extraction] — delegated to FExtraction so the field layout and INI
      Load/Save stay in lockstep with WCX via uSettingsGroups.}
     property FramesCount: Integer read FExtraction.FramesCount write FExtraction.FramesCount;
@@ -562,6 +570,20 @@ begin
     Ini.UpdateFile;
   finally
     Ini.Free;
+  end;
+end;
+
+procedure TPluginSettings.SetFFmpegPath(const APath: string);
+begin
+  if APath <> '' then
+  begin
+    FFFmpegExePath := APath;
+    FFFmpegMode := fmExe;
+  end
+  else
+  begin
+    FFFmpegExePath := '';
+    FFFmpegMode := fmAuto;
   end;
 end;
 
