@@ -436,10 +436,10 @@ begin
   end;
 end;
 
-procedure FormLog(const AMsg: string);
-begin
-  DebugLog('Form', AMsg);
-end;
+var
+  {Subsystem logger; closure captures the 'Form' tag once at unit
+   initialization.}
+  FormLog: TProc<string>;
 
 {Closes the active menu on the calling thread}
 function EndMenu: BOOL; stdcall; external user32 name 'EndMenu';
@@ -2843,5 +2843,8 @@ begin
 
   SoftRefreshExtraction;
 end;
+
+initialization
+  FormLog := DebugLogger('Form');
 
 end.

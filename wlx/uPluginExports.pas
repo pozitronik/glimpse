@@ -41,10 +41,10 @@ var
    call re-spawns ffmpeg just to read duration/resolution.}
   GProbeCache: TProbeCache;
 
-procedure Log(const AMsg: string);
-begin
-  DebugLog('Plugin', AMsg);
-end;
+var
+  {Subsystem logger; closure captures the 'Plugin' tag once at unit
+   initialization.}
+  Log: TProc<string>;
 
 {Resolves a TC-provided window handle to our plugin form, or nil.}
 function FindPluginForm(ListWin: HWND): TPluginForm;
@@ -325,6 +325,7 @@ end;
 
 initialization
 
+Log := DebugLogger('Plugin');
 GSettings := TPluginSettings.Create('');
 
 finalization

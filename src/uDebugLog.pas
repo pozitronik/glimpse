@@ -5,6 +5,9 @@ unit uDebugLog;
 
 interface
 
+uses
+  System.SysUtils;
+
 var
   GDebugLogPath: string;
 
@@ -12,15 +15,35 @@ var
    No-op when GDebugLogPath is empty.}
 procedure DebugLog(const ATag, AMsg: string);
 
+{Returns a closure that prepends ATag and forwards to DebugLog. Lets a
+ unit declare `Log: TProc<string> := DebugLogger('ExtCtrl')` once and
+ call `Log('message')` everywhere, instead of hand-writing a
+ tag-prepending wrapper procedure in every unit that does subsystem
+ logging. The closure captures ATag by value so it is safe to keep as
+ a unit-level constant.}
+function DebugLogger(const ATag: string): TProc<string>;
+
 implementation
 
 uses
-  System.SysUtils, System.SyncObjs;
+  System.SyncObjs;
 
 function GetCurrentThreadId: Cardinal; stdcall; external 'kernel32.dll';
 
 var
   LogLock: TCriticalSection;
+
+function DebugLogger(const ATag: string): TProc<string>;
+begin
+  Result :=
+    procedure(AMsg: string)
+    begin
+      {TProc<string> is `reference to procedure(Arg1: string)` — no
+       const-qualifier. The forwarded call uses DebugLog's const-string
+       parameter which accepts the plain string without copy.}
+      DebugLog(ATag, AMsg);
+    end;
+end;
 
 procedure DebugLog(const ATag, AMsg: string);
 var

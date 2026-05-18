@@ -41,6 +41,10 @@ type
     procedure TestMultipleCallsAppend;
     [Test]
     procedure TestConcurrentWritesNoLoss;
+    [Test]
+    procedure TestDebugLoggerForwardsTagAndMessage;
+    [Test]
+    procedure TestDebugLoggerCapturesTagPerInstance;
   end;
 
 implementation
@@ -223,6 +227,40 @@ begin
   Lines := ReadLogLines;
   Assert.AreEqual(THREAD_COUNT * LINES_PER_THREAD, Integer(Length(Lines)),
     'Every log line from every thread must be present');
+end;
+
+procedure TTestDebugLog.TestDebugLoggerForwardsTagAndMessage;
+var
+  Log: TProc<string>;
+  Lines: TArray<string>;
+begin
+  {DebugLogger returns a closure that prepends the captured tag and
+   forwards the message to DebugLog. The output line must contain both
+   the tag (in [Tag] form) and the original message text.}
+  Log := DebugLogger('Closure1');
+  Log('hello from closure');
+  Lines := ReadLogLines;
+  Assert.AreEqual(1, Integer(Length(Lines)));
+  Assert.IsTrue(Pos('[Closure1]', Lines[0]) > 0, 'Line must contain the captured tag');
+  Assert.IsTrue(Pos('hello from closure', Lines[0]) > 0, 'Line must contain the message');
+end;
+
+procedure TTestDebugLog.TestDebugLoggerCapturesTagPerInstance;
+var
+  LogA, LogB: TProc<string>;
+  Lines: TArray<string>;
+begin
+  {Two closures created from different tags must each carry their own
+   tag — pins the per-call-time capture so future closure-state bugs
+   (shared mutable tag, broken capture) surface here.}
+  LogA := DebugLogger('TagA');
+  LogB := DebugLogger('TagB');
+  LogA('msg-a');
+  LogB('msg-b');
+  Lines := ReadLogLines;
+  Assert.AreEqual(2, Integer(Length(Lines)));
+  Assert.IsTrue(Pos('[TagA]', Lines[0]) > 0, 'First line must have TagA');
+  Assert.IsTrue(Pos('[TagB]', Lines[1]) > 0, 'Second line must have TagB');
 end;
 
 initialization

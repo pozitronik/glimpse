@@ -59,10 +59,11 @@ implementation
 uses
   System.SysUtils, uDebugLog, uSettings, uPathExpand;
 
-procedure CtrlLog(const AMsg: string);
-begin
-  DebugLog('ExtCtrl', AMsg);
-end;
+var
+  {Subsystem logger; closure captures the 'ExtCtrl' tag once at unit
+   initialization so call sites read as plain CtrlLog('msg') without
+   the tag literal duplicated everywhere.}
+  CtrlLog: TProc<string>;
 
 {TExtractionController}
 
@@ -193,5 +194,8 @@ begin
   else
     FCache := TNullFrameCache.Create;
 end;
+
+initialization
+  CtrlLog := DebugLogger('ExtCtrl');
 
 end.
