@@ -148,10 +148,14 @@ type
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
-    {Read-only view of the whole extraction group. Surfaced so callers
-     can use TExtractionSettingsGroup.ToExtractionOptions instead of
-     rebuilding a TExtractionOptions field-by-field.}
+    {Read-only views of the persisted-settings groups. Surfaced so
+     callers can use the group-aware factory methods on style records
+     (TTimestampStyle.FromSettings / TBannerStyle.FromSettings /
+     TExtractionSettingsGroup.ToExtractionOptions) instead of rebuilding
+     each value record field-by-field.}
     property Extraction: TExtractionSettingsGroup read FExtraction;
+    property Timestamp: TTimestampSettingsGroup read FTimestamp;
+    property Banner: TBannerSettingsGroup read FBanner;
     property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;

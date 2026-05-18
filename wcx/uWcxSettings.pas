@@ -95,6 +95,11 @@ type
      rebuilding a TExtractionOptions field-by-field at every export
      boundary.}
     property Extraction: TExtractionSettingsGroup read FExtraction;
+    {Read-only views of the timestamp + banner groups so callers can use
+     TTimestampStyle.FromSettings / TBannerStyle.FromSettings instead of
+     rebuilding the style records field-by-field.}
+    property Timestamp: TTimestampSettingsGroup read FTimestamp;
+    property Banner: TBannerSettingsGroup read FBanner;
     property RandomExtraction: Boolean read FRandomExtraction write FRandomExtraction;
     property RandomPercent: Integer read FRandomPercent write FRandomPercent;
     {Mode bitmask: bitwise OR of MODE_FRAMES, MODE_COMBINED, MODE_PRESETS.

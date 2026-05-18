@@ -1539,18 +1539,13 @@ begin
    instead of having to wait for the next extraction.}
   if FProgressVisible then
     RepositionProgressBar;
-  {Copy the current style so fields the live view owns (FontStyles: live view
-   renders non-bold) survive while settings-driven fields update.}
-  Style := FFrameView.TimestampStyle;
-  Style.Show := FSettings.ShowTimecode;
-  Style.Corner := FSettings.TimestampCorner;
-  Style.FontName := FSettings.TimestampFontName;
-  Style.FontSize := FSettings.TimestampFontSize;
-  Style.BackColor := FSettings.TimecodeBackColor;
-  Style.BackAlpha := FSettings.TimecodeBackAlpha;
-  Style.Mode := TimecodeStyleModeFor(Style.BackAlpha);
-  Style.TextColor := FSettings.TimestampTextColor;
-  Style.TextAlpha := FSettings.TimestampTextAlpha;
+  Style := TTimestampStyle.FromSettings(FSettings.Timestamp);
+  {Live view always renders with the modern rect painter regardless of
+   the persisted BackAlpha sentinel — legacy mode is a combined-image-
+   only concern. Pinning this here keeps ApplySettings from accidentally
+   inheriting the BackAlpha=0 -> tsmLegacy fallback that FromSettings
+   uses for combined-sheet renders.}
+  Style.Mode := tsmModern;
   FFrameView.TimestampStyle := Style;
   FFrameView.CellGap := FSettings.CellGap;
   FFrameView.CellMargin := FSettings.CombinedBorder;

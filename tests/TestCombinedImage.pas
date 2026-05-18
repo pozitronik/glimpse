@@ -127,6 +127,15 @@ type
     [Test] procedure ModeForZeroBackAlpha_IsLegacy;
     [Test] procedure ModeForOneBackAlpha_IsModern;
     [Test] procedure ModeFor255BackAlpha_IsModern;
+    {Style-record factories collapse the WCX RenderCombinedBitmap and
+     WLX BuildGridStyle / BuildTimestampStyle / RenderWithBanner inline
+     copies. Tests pin the field-for-field mapping plus the derived
+     Mode contract.}
+    [Test] procedure CombinedGridStyle_FromFields_CopiesAllFields;
+    [Test] procedure BannerStyle_FromSettings_CopiesAllSixFields;
+    [Test] procedure TimestampStyle_FromSettings_CopiesGroupFields;
+    [Test] procedure TimestampStyle_FromSettings_DefaultsFontStylesEmpty;
+    [Test] procedure TimestampStyle_FromSettings_DerivesModeFromBackAlpha;
     {Painter dispatch: confirm DrawCellTimecode reaches the legacy
      branch when Mode=tsmLegacy AND the modern branch when
      Mode=tsmModern, regardless of BackAlpha. The pixel-set signature
@@ -183,7 +192,8 @@ implementation
 uses
   Winapi.Windows,
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
-  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uRenderDefaults, uDefaults;
+  uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uRenderDefaults, uDefaults,
+  uSettingsGroups;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
@@ -2135,6 +2145,100 @@ end;
 procedure TTestCombinedImage.ModeFor255BackAlpha_IsModern;
 begin
   Assert.AreEqual(Ord(tsmModern), Ord(TimecodeStyleModeFor(255)));
+end;
+
+procedure TTestCombinedImage.CombinedGridStyle_FromFields_CopiesAllFields;
+var
+  G: TCombinedGridStyle;
+begin
+  G := TCombinedGridStyle.FromFields(7, 4, 12, clRed, 200);
+  Assert.AreEqual<Integer>(7, G.Columns);
+  Assert.AreEqual<Integer>(4, G.CellGap);
+  Assert.AreEqual<Integer>(12, G.Border);
+  Assert.AreEqual(TColor(clRed), G.Background);
+  Assert.AreEqual<Integer>(200, G.BackgroundAlpha);
+end;
+
+procedure TTestCombinedImage.BannerStyle_FromSettings_CopiesAllSixFields;
+var
+  Group: TBannerSettingsGroup;
+  Style: TBannerStyle;
+begin
+  Group := TBannerSettingsGroup.Defaults;
+  {Mutate every field away from the default so a missed copy in the
+   factory would surface as a failed assertion rather than passing on
+   the default value.}
+  Group.Background := clNavy;
+  Group.TextColor := clYellow;
+  Group.FontName := 'Tahoma';
+  Group.FontSize := 13;
+  Group.AutoSize := False;
+  Group.Position := bpBottom;
+
+  Style := TBannerStyle.FromSettings(Group);
+  Assert.AreEqual(TColor(clNavy), Style.Background);
+  Assert.AreEqual(TColor(clYellow), Style.TextColor);
+  Assert.AreEqual('Tahoma', Style.FontName);
+  Assert.AreEqual<Integer>(13, Style.FontSize);
+  Assert.IsFalse(Style.AutoSize);
+  Assert.AreEqual(Ord(bpBottom), Ord(Style.Position));
+end;
+
+procedure TTestCombinedImage.TimestampStyle_FromSettings_CopiesGroupFields;
+var
+  Group: TTimestampSettingsGroup;
+  Style: TTimestampStyle;
+begin
+  Group := TTimestampSettingsGroup.Defaults;
+  Group.Show := True;
+  Group.Corner := tcTopRight;
+  Group.FontName := 'Courier New';
+  Group.FontSize := 14;
+  Group.BackColor := clPurple;
+  Group.BackAlpha := 180;
+  Group.TextColor := clLime;
+  Group.TextAlpha := 220;
+
+  Style := TTimestampStyle.FromSettings(Group);
+  Assert.IsTrue(Style.Show);
+  Assert.AreEqual(Ord(tcTopRight), Ord(Style.Corner));
+  Assert.AreEqual('Courier New', Style.FontName);
+  Assert.AreEqual<Integer>(14, Style.FontSize);
+  Assert.AreEqual(TColor(clPurple), Style.BackColor);
+  Assert.AreEqual<Integer>(180, Style.BackAlpha);
+  Assert.AreEqual(TColor(clLime), Style.TextColor);
+  Assert.AreEqual<Integer>(220, Style.TextAlpha);
+end;
+
+procedure TTestCombinedImage.TimestampStyle_FromSettings_DefaultsFontStylesEmpty;
+var
+  Style: TTimestampStyle;
+begin
+  {FromSettings defaults FontStyles to [] (matches WLX live view).
+   WCX combined-sheet callers override after the call when they want
+   [fsBold]. The group doesn't carry FontStyles because the persisted
+   setting layer doesn't expose a bold toggle to users.}
+  Style := TTimestampStyle.FromSettings(TTimestampSettingsGroup.Defaults);
+  Assert.AreEqual<Integer>(0, Byte(Style.FontStyles),
+    'FromSettings must default FontStyles to the empty set');
+end;
+
+procedure TTestCombinedImage.TimestampStyle_FromSettings_DerivesModeFromBackAlpha;
+var
+  Group: TTimestampSettingsGroup;
+  ModernStyle, LegacyStyle: TTimestampStyle;
+begin
+  Group := TTimestampSettingsGroup.Defaults;
+
+  Group.BackAlpha := 0;
+  LegacyStyle := TTimestampStyle.FromSettings(Group);
+  Assert.AreEqual(Ord(tsmLegacy), Ord(LegacyStyle.Mode),
+    'BackAlpha=0 must derive tsmLegacy via the historical sentinel-mapping');
+
+  Group.BackAlpha := 128;
+  ModernStyle := TTimestampStyle.FromSettings(Group);
+  Assert.AreEqual(Ord(tsmModern), Ord(ModernStyle.Mode),
+    'BackAlpha>0 must derive tsmModern via the historical sentinel-mapping');
 end;
 
 { RenderSmartCombinedImage }

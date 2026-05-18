@@ -5,7 +5,8 @@ unit uCombinedImage;
 interface
 
 uses
-  Winapi.Windows, System.UITypes, Vcl.Graphics, uFrameOffsets, uFFmpegExe, uTypes;
+  Winapi.Windows, System.UITypes, Vcl.Graphics, uFrameOffsets, uFFmpegExe, uTypes,
+  uSettingsGroups;
 
 type
   {Video metadata for the info banner. Populated by the caller from
@@ -41,6 +42,11 @@ type
     FontSize: Integer;
     AutoSize: Boolean;
     Position: TBannerPosition;
+    {Builds the banner style from the persisted settings group. The
+     group's Show field is a gating concern (caller decides whether to
+     render the banner at all) and intentionally has no parallel in the
+     style record.}
+    class function FromSettings(const AGroup: TBannerSettingsGroup): TBannerStyle; static;
   end;
 
   {Grid geometry for the combined image. Columns = 0 means "auto" (ceil(sqrt(n)));
@@ -55,6 +61,15 @@ type
     Border: Integer;
     Background: TColor;
     BackgroundAlpha: Byte;
+    {The combined-grid settings do not live in a single settings group
+     today (Background / CellGap / CombinedBorder are on TPluginSettings
+     and TWcxSettings as flat fields under different INI sections;
+     CombinedColumns is WCX-only). Restructuring that storage to host a
+     group is out of scope here, so the factory takes individual fields.
+     Saves the zero-init line plus the 5 assignments at every call
+     site without forcing a settings-layer refactor.}
+    class function FromFields(AColumns, ACellGap, ABorder: Integer;
+      ABackground: TColor; ABackgroundAlpha: Byte): TCombinedGridStyle; static;
   end;
 
   {Explicit selector between the two timecode rendering algorithms. Was
@@ -85,6 +100,14 @@ type
     TextColor: TColor;
     TextAlpha: Byte;
     Mode: TTimecodeStyleMode;
+    {Builds the rendering style from the persisted settings group.
+     FontStyles is set to [] (WLX live-view convention); callers that
+     want bold (WCX combined sheet) override Result.FontStyles := [fsBold]
+     after the call. Mode is derived from BackAlpha via the historical
+     sentinel-mapping helper. Show comes from the group; callers wanting
+     to gate on a live-view toggle (WLX FFrameView.ShowTimecode) override
+     Result.Show.}
+    class function FromSettings(const AGroup: TTimestampSettingsGroup): TTimestampStyle; static;
   end;
 
   {Computes the historical Mode from a user-configured BackAlpha. Used
@@ -214,6 +237,40 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Math, System.Types,
   uDefaults, uTimecodeOverlay;
+
+class function TCombinedGridStyle.FromFields(AColumns, ACellGap, ABorder: Integer;
+  ABackground: TColor; ABackgroundAlpha: Byte): TCombinedGridStyle;
+begin
+  Result.Columns := AColumns;
+  Result.CellGap := ACellGap;
+  Result.Border := ABorder;
+  Result.Background := ABackground;
+  Result.BackgroundAlpha := ABackgroundAlpha;
+end;
+
+class function TTimestampStyle.FromSettings(const AGroup: TTimestampSettingsGroup): TTimestampStyle;
+begin
+  Result.Show := AGroup.Show;
+  Result.Corner := AGroup.Corner;
+  Result.FontName := AGroup.FontName;
+  Result.FontSize := AGroup.FontSize;
+  Result.FontStyles := [];
+  Result.BackColor := AGroup.BackColor;
+  Result.BackAlpha := AGroup.BackAlpha;
+  Result.TextColor := AGroup.TextColor;
+  Result.TextAlpha := AGroup.TextAlpha;
+  Result.Mode := TimecodeStyleModeFor(AGroup.BackAlpha);
+end;
+
+class function TBannerStyle.FromSettings(const AGroup: TBannerSettingsGroup): TBannerStyle;
+begin
+  Result.Background := AGroup.Background;
+  Result.TextColor := AGroup.TextColor;
+  Result.FontName := AGroup.FontName;
+  Result.FontSize := AGroup.FontSize;
+  Result.AutoSize := AGroup.AutoSize;
+  Result.Position := AGroup.Position;
+end;
 
 function TimecodeStyleModeFor(ABackAlpha: Byte): TTimecodeStyleMode;
 begin

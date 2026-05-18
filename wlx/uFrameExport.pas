@@ -683,25 +683,17 @@ end;
 
 procedure TFrameExporter.BuildGridStyle(out AGrid: TCombinedGridStyle);
 begin
-  AGrid.Columns := 0; {auto columns (= ceil(sqrt(N))) by default; callers override when needed}
-  AGrid.CellGap := FSettings.CellGap;
-  AGrid.Border := FSettings.CombinedBorder;
-  AGrid.Background := FSettings.Background;
-  AGrid.BackgroundAlpha := FSettings.BackgroundAlpha;
+  {Columns=0 means "auto" (ceil(sqrt(N))); callers override when needed.}
+  AGrid := TCombinedGridStyle.FromFields(0, FSettings.CellGap, FSettings.CombinedBorder,
+    FSettings.Background, FSettings.BackgroundAlpha);
 end;
 
 procedure TFrameExporter.BuildTimestampStyle(out ATs: TTimestampStyle);
 begin
+  ATs := TTimestampStyle.FromSettings(FSettings.Timestamp);
+  {Live-view "show timecode" toggle wins over the persisted setting so
+   the saved render matches what the user is looking at.}
   ATs.Show := FFrameView.ShowTimecode;
-  ATs.Corner := FSettings.TimestampCorner;
-  ATs.FontName := FSettings.TimestampFontName;
-  ATs.FontSize := FSettings.TimestampFontSize;
-  ATs.FontStyles := []; {Match the WLX live view; WCX uses [fsBold]}
-  ATs.BackColor := FSettings.TimecodeBackColor;
-  ATs.BackAlpha := FSettings.TimecodeBackAlpha;
-  ATs.TextColor := FSettings.TimestampTextColor;
-  ATs.TextAlpha := FSettings.TimestampTextAlpha;
-  ATs.Mode := TimecodeStyleModeFor(ATs.BackAlpha);
 end;
 
 {Counts the columns the live layout is currently using by iterating
@@ -1073,18 +1065,11 @@ begin
 end;
 
 function TFrameExporter.RenderWithBanner(ABmp: TBitmap): TBitmap;
-var
-  Style: TBannerStyle;
 begin
   if FSettings.ShowBanner then
   begin
-    Style.Background := FSettings.BannerBackground;
-    Style.TextColor := FSettings.BannerTextColor;
-    Style.FontName := FSettings.BannerFontName;
-    Style.FontSize := FSettings.BannerFontSize;
-    Style.AutoSize := FSettings.BannerFontAutoSize;
-    Style.Position := FSettings.BannerPosition;
-    Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo), Style);
+    Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo),
+      TBannerStyle.FromSettings(FSettings.Banner));
     ABmp.Free;
   end
   else

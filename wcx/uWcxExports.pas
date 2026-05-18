@@ -183,22 +183,14 @@ begin
     for I := 0 to Length(H.Offsets) - 1 do
       Frames[I] := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
 
-    GridStyle.Columns := H.Settings.CombinedColumns;
-    GridStyle.CellGap := H.Settings.CellGap;
-    GridStyle.Border := H.Settings.CombinedBorder;
-    GridStyle.Background := H.Settings.Background;
-    GridStyle.BackgroundAlpha := H.Settings.BackgroundAlpha;
+    GridStyle := TCombinedGridStyle.FromFields(
+      H.Settings.CombinedColumns, H.Settings.CellGap, H.Settings.CombinedBorder,
+      H.Settings.Background, H.Settings.BackgroundAlpha);
 
-    TimestampStyle.Show := H.Settings.ShowTimestamp;
-    TimestampStyle.Corner := H.Settings.TimestampCorner;
-    TimestampStyle.FontName := H.Settings.TimestampFontName;
-    TimestampStyle.FontSize := H.Settings.TimestampFontSize;
+    TimestampStyle := TTimestampStyle.FromSettings(H.Settings.Timestamp);
+    {WCX combined sheets historically render the timecode bold; FromSettings
+     defaults FontStyles to [] (matches WLX live view), so we override here.}
     TimestampStyle.FontStyles := [fsBold];
-    TimestampStyle.BackColor := H.Settings.TimecodeBackColor;
-    TimestampStyle.BackAlpha := H.Settings.TimecodeBackAlpha;
-    TimestampStyle.TextColor := H.Settings.TimestampTextColor;
-    TimestampStyle.TextAlpha := H.Settings.TimestampTextAlpha;
-    TimestampStyle.Mode := TimecodeStyleModeFor(TimestampStyle.BackAlpha);
 
     Result := RenderCombinedImage(Frames, H.Offsets, GridStyle, TimestampStyle);
 
@@ -216,12 +208,7 @@ begin
 
     if (Result <> nil) and H.Settings.ShowBanner then
     begin
-      BannerStyle.Background := H.Settings.BannerBackground;
-      BannerStyle.TextColor := H.Settings.BannerTextColor;
-      BannerStyle.FontName := H.Settings.BannerFontName;
-      BannerStyle.FontSize := H.Settings.BannerFontSize;
-      BannerStyle.AutoSize := H.Settings.BannerFontAutoSize;
-      BannerStyle.Position := H.Settings.BannerPosition;
+      BannerStyle := TBannerStyle.FromSettings(H.Settings.Banner);
       WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)), BannerStyle);
       Result.Free;
       Result := WithBanner;
