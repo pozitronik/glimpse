@@ -142,6 +142,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     G1.SaveTo(Ini, 'extraction');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -202,6 +203,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('extraction', 'FramesCount', 9999);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -277,6 +279,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('extraction', 'SkipEdges', -10);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -344,6 +347,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     G1.SaveTo(Ini, 'save');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -406,6 +410,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('save', 'BannerFont', '');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -437,6 +442,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('save', 'BannerFont', '   ');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -464,6 +470,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('save', 'BannerFontSize', 9999);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -489,6 +496,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('save', 'BannerFontSize', -50);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -517,6 +525,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('save', 'BannerPosition', 'sideways');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -588,6 +597,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     G1.SaveTo(Ini, 'view', 'ShowTimecode');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -646,6 +656,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('view', 'TimestampFont', '');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -673,6 +684,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('view', 'TimestampFontSize', 9999);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -698,6 +710,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteInteger('view', 'TimestampTextAlpha', 9999);
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -723,6 +736,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     Ini.WriteString('view', 'TimestampCorner', 'middle');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -757,6 +771,7 @@ begin
   Ini := TUnicodeIniFile.Create(IniPath);
   try
     G.SaveTo(Ini, 'combined', 'ShowTimestamp');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;

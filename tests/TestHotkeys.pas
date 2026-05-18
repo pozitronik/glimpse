@@ -1140,6 +1140,7 @@ begin
     Ini := TUnicodeIniFile.Create(Path);
     try
       A.Save(Ini);
+      Ini.UpdateFile;
     finally
       Ini.Free;
     end;
@@ -1177,6 +1178,7 @@ begin
   Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', '');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -1207,6 +1209,7 @@ begin
   Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'F9');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -1241,6 +1244,7 @@ begin
   Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'PrevFile', 'Left|NotAKey|PageUp');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -1282,6 +1286,7 @@ begin
   try
     Ini.WriteString(HOTKEYS_SECTION, 'Settings', 'F9');
     Ini.WriteString(HOTKEYS_SECTION, 'ToggleToolbar', 'F9');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -1325,6 +1330,7 @@ begin
   Ini := TUnicodeIniFile.Create(Path);
   try
     Ini.WriteString(HOTKEYS_SECTION, 'PrevFile', 'Left|Left');
+    Ini.UpdateFile;
   finally
     Ini.Free;
   end;
@@ -1362,6 +1368,7 @@ begin
     Ini := TUnicodeIniFile.Create(Path);
     try
       B.Save(Ini);
+      Ini.UpdateFile;
     finally
       Ini.Free;
     end;

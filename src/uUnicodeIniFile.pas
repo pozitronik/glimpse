@@ -96,16 +96,18 @@ end;
 
 destructor TUnicodeIniFile.Destroy;
 begin
-  {Auto-flush pending writes so a "create / write / free" caller does
-   not lose data. Mirrors TIniFile's expected behaviour.}
-  if (FDocument <> nil) and FDocument.Dirty then
-    try
-      UpdateFile;
-    except
-      {Swallow to avoid throwing during destruction; callers that need
-       guaranteed flush should call UpdateFile explicitly and handle
-       the exception.}
-    end;
+  {Destructor does NOT auto-flush (step 67 / N18). The previous policy
+   mirrored TIniFile's "writes hit the disk on Free" behaviour by
+   calling UpdateFile inside a swallow-everything try/except — that
+   silently dropped writes when UpdateFile raised (disk full, file
+   locked, permission denied), and the caller had no way to learn
+   their settings did not persist.
+
+   Every production caller (TPluginSettings.Save, TWcxSettings.Save,
+   uWcxPresets.SavePresets) already calls UpdateFile explicitly in its
+   try/finally, so this destructor change does not lose any writes in
+   the current code base. New callers MUST call UpdateFile explicitly;
+   the Dirty property is available if they want to gate the call.}
   FDocument.Free;
   inherited;
 end;

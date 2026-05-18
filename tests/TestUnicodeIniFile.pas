@@ -64,6 +64,13 @@ type
     [Test] procedure TestEmptyPathSaveSilentlyNoOp;
     [Test] procedure TestSemicolonAtLineStartIsComment;
     [Test] procedure TestEqualsAtColumnOneIsCommentLike;
+    {Regression for step 67: the destructor no longer auto-flushes.
+     Write a key, Free without UpdateFile, reopen, assert the key did
+     NOT make it to disk. The previous swallow-everything try/except
+     in Destroy silently lost writes when UpdateFile raised; removing
+     it pushes the contract to callers (every settings Save path
+     already calls UpdateFile explicitly).}
+    [Test] procedure TestDestroyWithoutUpdateFile_DoesNotFlush;
   end;
 
 implementation
@@ -763,6 +770,41 @@ begin
   Body := TFile.ReadAllText(Path);
   Assert.IsTrue(Body.Contains('=stranded'),
     'Unparseable line preserved verbatim');
+end;
+
+procedure TTestUnicodeIniFile.TestDestroyWithoutUpdateFile_DoesNotFlush;
+var
+  Path: string;
+  Writer, Reader: TUnicodeIniFile;
+begin
+  Path := TPath.Combine(FTempDir, 'no_flush_on_destroy.ini');
+  {Sanity: file does not exist yet.}
+  Assert.IsFalse(TFile.Exists(Path), 'Pre-condition: target file absent');
+
+  Writer := TUnicodeIniFile.Create(Path);
+  try
+    Writer.WriteString('test', 'transient', 'should-not-persist');
+    {Deliberately do NOT call UpdateFile.}
+  finally
+    Writer.Free;
+  end;
+
+  {The previous policy would have called UpdateFile inside Destroy and
+   the file would now exist with the key in it. The new policy puts the
+   flush contract on the caller — Free without UpdateFile means the
+   write is lost. This test pins that explicit-flush contract.}
+  Assert.IsFalse(TFile.Exists(Path),
+    'Destroy must not write to disk when UpdateFile was never called');
+
+  {Belt-and-braces: a follow-up reader on the same path sees no key
+   either, confirming the absence of disk state.}
+  Reader := TUnicodeIniFile.Create(Path);
+  try
+    Assert.AreEqual('absent', Reader.ReadString('test', 'transient', 'absent'),
+      'Reader must see the documented default — the prior writer''s value never persisted');
+  finally
+    Reader.Free;
+  end;
 end;
 
 end.
