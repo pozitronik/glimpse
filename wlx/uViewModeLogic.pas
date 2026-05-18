@@ -31,6 +31,12 @@ function ListerParamsToZoomMode(AParams: Integer): TZoomMode;
  length is the right divisor there.}
 function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;
 
+{User-facing display labels for the view-mode and zoom-mode enums.
+ Surfaced via the status bar's %viewmode% / %zoommode% tokens; returns
+ '' for unhandled enum values (defensive against future enum growth).}
+function ViewModeDisplayName(AMode: TViewMode): string;
+function ZoomModeDisplayName(AMode: TZoomMode): string;
+
 implementation
 
 uses
@@ -79,6 +85,30 @@ begin
   end
   else
     Result := zmActual;
+end;
+
+function ViewModeDisplayName(AMode: TViewMode): string;
+begin
+  case AMode of
+    vmSmartGrid: Result := 'Smart Grid';
+    vmGrid:      Result := 'Grid';
+    vmScroll:    Result := 'Scroll';
+    vmFilmstrip: Result := 'Filmstrip';
+    vmSingle:    Result := 'Single';
+  else
+    Result := '';
+  end;
+end;
+
+function ZoomModeDisplayName(AMode: TZoomMode): string;
+begin
+  case AMode of
+    zmFitWindow:   Result := 'Fit window';
+    zmFitIfLarger: Result := 'Fit if larger';
+    zmActual:      Result := 'Actual size';
+  else
+    Result := '';
+  end;
 end;
 
 function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;

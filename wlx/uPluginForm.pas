@@ -1364,30 +1364,6 @@ begin
     FStatusBar.CurrentPPI);
 end;
 
-function ViewModeDisplayName(AMode: TViewMode): string;
-begin
-  case AMode of
-    vmSmartGrid: Result := 'Smart Grid';
-    vmGrid:      Result := 'Grid';
-    vmScroll:    Result := 'Scroll';
-    vmFilmstrip: Result := 'Filmstrip';
-    vmSingle:    Result := 'Single';
-  else
-    Result := '';
-  end;
-end;
-
-function ZoomModeDisplayName(AMode: TZoomMode): string;
-begin
-  case AMode of
-    zmFitWindow:   Result := 'Fit window';
-    zmFitIfLarger: Result := 'Fit if larger';
-    zmActual:      Result := 'Actual size';
-  else
-    Result := '';
-  end;
-end;
-
 procedure TPluginForm.BuildStatusBarValues(out AValues: TStatusBarValues);
 var
   PredW, PredH, PredCappedW, PredCappedH: Integer;
