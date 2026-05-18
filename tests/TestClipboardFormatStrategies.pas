@@ -55,6 +55,27 @@ uses
   Winapi.Windows, Vcl.Graphics, Vcl.Clipbrd,
   uClipboardImage, uClipboardFormatStrategies, uSettingsGroups;
 
+{Test helper: opens the system clipboard with the same retry policy
+ production code uses (TryClipboardOpenWithRetry). The console DUnitX
+ runner has no message pump, so OpenClipboard transiently fails right
+ after another opener releases it. Mirrors the helper in
+ TestClipboardImage.pas.}
+procedure ClipboardOpenWithRetry;
+var
+  I: Integer;
+begin
+  for I := 1 to 20 do
+  begin
+    try
+      Clipboard.Open;
+      Exit;
+    except
+      Sleep(10);
+    end;
+  end;
+  Clipboard.Open; {Last attempt — let any remaining exception escape}
+end;
+
 {Test helper: minimal pf32bit bitmap with a single colour.}
 function MakePf32Bitmap(AWidth, AHeight: Integer;
   AB, AG, AR, AAlpha: Byte): Vcl.Graphics.TBitmap;
@@ -287,7 +308,7 @@ begin
 
   Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
   try
-    Clipboard.Open;
+    ClipboardOpenWithRetry;
     try
       EmptyClipboard;
       Assert.IsTrue(Strategies[0].Allocate(Bmp, clBlack));
@@ -302,7 +323,7 @@ begin
 
   PngFormatId := RegisterClipboardFormat('PNG');
   Assert.IsTrue(PngFormatId <> 0, 'RegisterClipboardFormat("PNG") must succeed');
-  Clipboard.Open;
+  ClipboardOpenWithRetry;
   try
     Mem := GetClipboardData(PngFormatId);
     Assert.IsTrue(Mem <> 0, 'Registered "PNG" format must be present after publish');
