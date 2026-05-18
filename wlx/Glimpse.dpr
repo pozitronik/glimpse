@@ -46,6 +46,7 @@ uses
   uCombinedImage in '..\src\uCombinedImage.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
+  uHotkeysVcl in 'uHotkeysVcl.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',

@@ -91,8 +91,6 @@ type
     [Test] procedure Defaults_CopyViewLiveIsCtrlAltL;
     [Test] procedure Defaults_CopyViewNativeIsCtrlAltN;
     [Test] procedure Defaults_SaveCopyViewVariants_NoCrossActionConflict;
-    [Test] procedure ToShortCut_UnboundIsZero;
-    [Test] procedure ToShortCut_CtrlShiftL_RoundsThroughVcl;
     [Test] procedure Lookup_Defaults_Resolve;
     [Test] procedure Lookup_PrevFile_EveryDefaultChord_ResolvesSameAction;
     [Test] procedure Lookup_BareLeft_IsFrameNavNotFileNav;
@@ -125,7 +123,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Classes,
-  Winapi.Windows, Vcl.Controls, Vcl.Menus,
+  Winapi.Windows, Vcl.Controls,
   uHotkeys, uUnicodeIniFile;
 
 {TTestHotkeyChord}
@@ -731,28 +729,6 @@ begin
   finally
     B.Free;
   end;
-end;
-
-procedure TTestHotkeyBindings.ToShortCut_UnboundIsZero;
-var
-  C: THotkeyChord;
-begin
-  C := THotkeyChord.None;
-  Assert.AreEqual<Integer>(0, C.ToShortCut,
-    'Unbound chord must produce TShortCut 0 so TMenuItem.ShortCut shows nothing');
-end;
-
-procedure TTestHotkeyBindings.ToShortCut_CtrlShiftL_RoundsThroughVcl;
-var
-  C: THotkeyChord;
-  Decoded: Word;
-  DecodedShift: TShiftState;
-begin
-  C := THotkeyChord.Make(Ord('L'), [ssCtrl, ssShift]);
-  Vcl.Menus.ShortCutToKey(C.ToShortCut, Decoded, DecodedShift);
-  Assert.AreEqual<Integer>(Ord('L'), Decoded);
-  Assert.IsTrue(DecodedShift = [ssCtrl, ssShift],
-    'VCL ShortCutToKey must reproduce the original modifier set');
 end;
 
 procedure TTestHotkeyBindings.Defaults_SaveCopyViewVariants_NoCrossActionConflict;

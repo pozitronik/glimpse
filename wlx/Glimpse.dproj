@@ -103,6 +103,7 @@
         <DCCReference Include="..\src\uCombinedImage.pas"/>
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
+        <DCCReference Include="uHotkeysVcl.pas"/>
         <DCCReference Include="..\src\uBitmapResize.pas"/>
         <DCCReference Include="..\src\uThumbnailRender.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>

@@ -87,6 +87,8 @@ uses
   uCombinedImage in '..\src\uCombinedImage.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
+  uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',
+  TestHotkeysVcl in 'TestHotkeysVcl.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',

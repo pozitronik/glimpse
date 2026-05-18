@@ -18,7 +18,6 @@ interface
 
 uses
   System.Classes, System.SysUtils,
-  Vcl.Menus,
   uUnicodeIniFile;
 
 type
@@ -54,10 +53,6 @@ type
     function Equals(const AOther: THotkeyChord): Boolean;
     function ToDisplayStr: string;
     function ToIniStr: string;
-    {VCL TShortCut Word for use with TMenuItem.ShortCut. Returns 0 when
-     the chord is unbound, which TMenuItem renders as "no shortcut" — so
-     callers can assign unconditionally without guarding.}
-    function ToShortCut: TShortCut;
     class function Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord; static;
     class function None: THotkeyChord; static;
     class function FromIniStr(const AValue: string): THotkeyChord; static;
@@ -269,13 +264,6 @@ end;
 function THotkeyChord.ToIniStr: string;
 begin
   Result := ToDisplayStr;
-end;
-
-function THotkeyChord.ToShortCut: TShortCut;
-begin
-  if not IsAssigned then
-    Exit(0);
-  Result := Vcl.Menus.ShortCut(Key, Modifiers);
 end;
 
 class function THotkeyChord.Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord;

@@ -9,7 +9,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
-  uTypes, uSettings, uHotkeys, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
+  uTypes, uSettings, uHotkeys, uHotkeysVcl, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
@@ -1182,7 +1182,7 @@ begin
      suffix entirely.}
     Chords := FSettings.Hotkeys.Get(Def.Action);
     if Length(Chords) > 0 then
-      MI.ShortCut := Chords[0].ToShortCut
+      MI.ShortCut := ToShortCut(Chords[0])
     else
       MI.ShortCut := 0;
   end;
