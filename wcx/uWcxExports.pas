@@ -71,7 +71,7 @@ uses
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
   uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize,
   uWcxPresets, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor,
-  uWcxFrameCache;
+  uWcxFrameCache, uPresetExtractReporter;
 
 type
   {State for one open archive (video file)}
@@ -108,6 +108,11 @@ type
 
 var
   GIniPath: string;
+  {Failure-UI seam for the preset extractor. Initialised at unit
+   start-up to TMessageBoxFailureReporter; replaced in tests via the
+   exported SetPresetFailureReporter to capture messages without
+   popping a modal dialog.}
+  GPresetFailureReporter: IPresetExtractFailureReporter;
 
 procedure WcxLog(const AMsg: string);
 begin
@@ -600,46 +605,6 @@ end;
  Both cancel and error paths map to E_EWRITE because TC handles E_EWRITE
  on cancel by suppressing its error popup, while a real error still
  surfaces via the WcxLog message and the dialog TC shows for E_EWRITE.}
-{Trims the ffmpeg stderr down to the most signal-rich one-liner for a
- dialog box. ffmpeg often emits a multi-line preamble before the actual
- error; prefer the LAST non-empty line because the immediate cause is
- typically last (e.g. "Output file does not contain any stream"). When
- ffmpeg said nothing useful, fall back to the exit code so the user
- still has a handle for searching docs.}
-function SummarizeFFmpegError(const AErrorMessage: string; AExitCode: Integer): string;
-var
-  Lines: TStringList;
-  I: Integer;
-begin
-  Result := '';
-  Lines := TStringList.Create;
-  try
-    Lines.Text := AErrorMessage;
-    for I := Lines.Count - 1 downto 0 do
-      if Trim(Lines[I]) <> '' then
-      begin
-        Result := Trim(Lines[I]);
-        Break;
-      end;
-  finally
-    Lines.Free;
-  end;
-  if Result = '' then
-    Result := Format('ffmpeg exited with code %d (no stderr captured)', [AExitCode]);
-end;
-
-procedure ShowPresetExtractError(const APresetName, AOutputPath: string; const AResult: TPresetExtractResult);
-var
-  Msg: string;
-begin
-  Msg := Format('Preset "%s" could not produce "%s":'#13#10#13#10'%s',
-    [APresetName, ExtractFileName(AOutputPath), SummarizeFFmpegError(AResult.ErrorMessage, AResult.ExitCode)]);
-  {Foreground window as parent so the dialog appears in front of TC and
-   inherits the right modality; passing 0 risks the dialog landing behind
-   the file panel on multi-monitor setups.}
-  MessageBox(GetForegroundWindow, PChar(Msg), 'Glimpse preset extraction failed', MB_OK or MB_ICONWARNING);
-end;
-
 function DoExtractPreset(H: TArchiveHandle; APresetIndex: Integer; const ADisplayName, ADestPath, ADestName: string): Integer;
 const
   {Effectively no wall-clock cap: presets are arbitrary user transcodes
@@ -706,9 +671,9 @@ begin
 
     {Surface the real ffmpeg error. TC's follow-up dialog ("Bad data" /
      "Write error") is generic and unhelpful for problems like "no audio
-     stream" or "unknown encoder"; this dialog gives the user the actual
+     stream" or "unknown encoder"; this message gives the user the actual
      reason they need to fix the preset or pick a different source.}
-    ShowPresetExtractError(Preset.Name, FullPath, ExtractResult);
+    GPresetFailureReporter.Report(MakeFailureMessage(Preset.Name, FullPath, ExtractResult));
 
     {Distinguish the two failure modes in the WCX return code:
      - ExitCode<>0 means ffmpeg refused (bad codec, no stream, bad args)
@@ -898,6 +863,8 @@ initialization
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 
+GPresetFailureReporter := TMessageBoxFailureReporter.Create;
+
 {Debug logging is opt-in via the hidden "[debug] LogEnabled=1" key in
  Glimpse.ini. Start silent; DoOpenArchive flips GDebugLogPath on or off
  each time after reading the setting, so a hand-edit of the INI takes
@@ -912,6 +879,7 @@ Randomize;
 
 finalization
 
+GPresetFailureReporter := nil;
 TWcxFrameCache.ReleaseInstance;
 
 end.

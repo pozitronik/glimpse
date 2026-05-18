@@ -34,6 +34,7 @@ uses
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uVideoProbing in '..\src\uVideoProbing.pas',
   uWcxFrameCache in 'uWcxFrameCache.pas',
+  uPresetExtractReporter in 'uPresetExtractReporter.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',

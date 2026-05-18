@@ -96,6 +96,8 @@ uses
   uPluginDllPin in '..\wlx\uPluginDllPin.pas',
   uVideoProbing in '..\src\uVideoProbing.pas',
   uWcxFrameCache in '..\wcx\uWcxFrameCache.pas',
+  uPresetExtractReporter in '..\wcx\uPresetExtractReporter.pas',
+  TestPresetExtractReporter in 'TestPresetExtractReporter.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',
