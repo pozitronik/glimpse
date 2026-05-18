@@ -88,6 +88,8 @@
         <DCCReference Include="..\src\infrastructure\uLineSplitter.pas"/>
         <DCCReference Include="..\src\infrastructure\uFFmpegProbeParser.pas"/>
         <DCCReference Include="..\src\infrastructure\uFFmpegCmdLine.pas"/>
+        <DCCReference Include="..\src\infrastructure\uIniEncoding.pas"/>
+        <DCCReference Include="..\src\infrastructure\uIniDocument.pas"/>
         <DCCReference Include="..\src\uSettings.pas"/>
         <DCCReference Include="..\src\uHotkeys.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>

@@ -97,6 +97,8 @@ uses
   TestLineSplitter in 'TestLineSplitter.pas',
   uFFmpegProbeParser in '..\src\infrastructure\uFFmpegProbeParser.pas',
   uFFmpegCmdLine in '..\src\infrastructure\uFFmpegCmdLine.pas',
+  uIniEncoding in '..\src\infrastructure\uIniEncoding.pas',
+  uIniDocument in '..\src\infrastructure\uIniDocument.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',

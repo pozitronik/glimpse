@@ -42,6 +42,8 @@ uses
   uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
   uFFmpegProbeParser in '..\src\infrastructure\uFFmpegProbeParser.pas',
   uFFmpegCmdLine in '..\src\infrastructure\uFFmpegCmdLine.pas',
+  uIniEncoding in '..\src\infrastructure\uIniEncoding.pas',
+  uIniDocument in '..\src\infrastructure\uIniDocument.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
