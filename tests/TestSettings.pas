@@ -47,6 +47,15 @@ type
     procedure TestClampOutOfRange;
     [Test]
     procedure TestFrameSideInvertedRangeNormalised;
+    {Validate is the home of cross-field invariants extracted from Load
+     in step 49. Pin two contracts: (a) it pulls Min down to Max when
+     they are inverted, and (b) repeated calls are no-ops. Validate is
+     called from Load/Save/ControlsToSettings, so the in-memory state
+     is always self-consistent regardless of which entry point ran.}
+    [Test]
+    procedure TestValidateSwapsMinMaxFrameSize;
+    [Test]
+    procedure TestValidateIsIdempotent;
     [Test]
     procedure TestEmptyExtensionListFallback;
     [Test]
@@ -731,6 +740,58 @@ begin
     Assert.IsTrue(S.MinFrameSide <= S.MaxFrameSide,
       Format('Inverted range must be normalised, got Min=%d Max=%d',
         [S.MinFrameSide, S.MaxFrameSide]));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestValidateSwapsMinMaxFrameSize;
+var
+  S: TPluginSettings;
+begin
+  {Property setters write fields directly with no clamping (documented
+   contract); a programmatic mutator can leave Min > Max in memory.
+   Validate is the central normalisation point — assert it pulls Min
+   down to Max so downstream CalcExtractionMaxSide receives valid
+   bounds. Without Validate, the per-setter-writes contract would
+   leak inverted bounds into the render pipeline.}
+  S := TPluginSettings.CreateDefaults;
+  try
+    S.MaxFrameSide := 800;
+    S.MinFrameSide := 2000;
+    Assert.IsTrue(S.MinFrameSide > S.MaxFrameSide,
+      'Sanity: setters write directly without clamping (per the property contract)');
+    S.Validate;
+    Assert.AreEqual<Integer>(800, S.MinFrameSide,
+      'Validate must pull Min down to Max when the two are inverted');
+    Assert.AreEqual<Integer>(800, S.MaxFrameSide,
+      'Validate must leave Max untouched (it is the user''s upper bound)');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestValidateIsIdempotent;
+var
+  S: TPluginSettings;
+  Min1, Max1, Min2, Max2: Integer;
+begin
+  {Validate is called from Load, Save, and ControlsToSettings — possibly
+   multiple times across a single user gesture. Each call must be a
+   no-op after the first one settles the state; otherwise Validate
+   itself becomes a source of drift.}
+  S := TPluginSettings.CreateDefaults;
+  try
+    S.MaxFrameSide := 1500;
+    S.MinFrameSide := 3000;
+    S.Validate;
+    Min1 := S.MinFrameSide;
+    Max1 := S.MaxFrameSide;
+    S.Validate;
+    Min2 := S.MinFrameSide;
+    Max2 := S.MaxFrameSide;
+    Assert.AreEqual<Integer>(Min1, Min2, 'Second Validate must not change MinFrameSide');
+    Assert.AreEqual<Integer>(Max1, Max2, 'Second Validate must not change MaxFrameSide');
   finally
     S.Free;
   end;

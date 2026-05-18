@@ -484,6 +484,13 @@ begin
 
   {Hotkeys were edited into our local snapshot; push the whole table back.}
   ASettings.Hotkeys.Assign(FHotkeys);
+
+  {Cross-field invariants (Min/Max frame side swap) — the dialog's
+   spin controls cannot prevent the user from typing Min > Max, so a
+   final normalisation is the safety net. Save calls Validate too;
+   this one keeps the in-memory state consistent for callers (like the
+   in-flight preview) that read settings before Save runs.}
+  ASettings.Validate;
 end;
 
 procedure TSettingsForm.PickColor(APanel: TPanel);

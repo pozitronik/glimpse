@@ -112,18 +112,29 @@ type
     procedure Save;
     {Resets all fields to default values without touching the file.}
     procedure ResetDefaults;
+    {Enforces cross-field invariants that per-setter writes cannot
+     guarantee on their own. Today: pulls FMinFrameSide down to
+     FMaxFrameSide when they are inverted (downstream CalcExtractionMaxSide
+     calls EnsureRange with swapped lo/hi and silently returns the larger
+     value, locking the extraction size). Idempotent — safe to call
+     repeatedly. Invoked at the tail of Load, the head of Save, and at
+     the tail of TSettingsForm.ControlsToSettings so the in-memory
+     state is always self-consistent regardless of which entry point
+     was used.}
+    procedure Validate;
 
     property IniPath: string read FIniPath;
 
     {Property contract: setters write the field directly with no range or
-     cross-field validation. The single source of truth is Load, which
-     clamps every numeric value and normalises cross-field relations
-     (e.g. MinFrameSide <= MaxFrameSide). Programmatic mutators that
-     bypass the dialog are expected to round-trip through Save+Load (or
-     write valid values themselves); the in-memory copy may briefly hold
-     out-of-range values but Load fixes them on the next read. Do not
-     add per-setter clamping here without removing the corresponding
-     clamp in Load - duplicate validation has historically diverged.}
+     cross-field validation. Load clamps every numeric value to its
+     documented range; Validate enforces cross-field invariants
+     (e.g. MinFrameSide <= MaxFrameSide) and is automatically called at
+     the tail of Load, the head of Save, and the tail of the dialog's
+     ControlsToSettings. Programmatic mutators that bypass the dialog
+     either write valid values themselves or call Validate explicitly.
+     Do not add per-setter clamping here without removing the
+     corresponding clamp in Load — duplicate validation has historically
+     diverged.}
 
     {[ffmpeg]}
     property FFmpegMode: TFFmpegMode read FFFmpegMode write FFFmpegMode;
@@ -426,12 +437,8 @@ begin
     FScaledExtraction := Ini.ReadBool('extraction', 'ScaledExtraction', DEF_SCALED_EXTRACTION);
     FMinFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MinFrameSide', DEF_MIN_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
     FMaxFrameSide := EnsureRange(Ini.ReadInteger('extraction', 'MaxFrameSide', DEF_MAX_FRAME_SIDE), MIN_FRAME_SIDE, MAX_FRAME_SIDE);
-    {Cross-validate: independent clamping passes inverted bounds (Min > Max)
-     untouched. Downstream CalcExtractionMaxSide then calls EnsureRange with
-     swapped lo/hi and silently returns the larger value, locking extraction
-     size. Pull Min down to Max so the cap honours the user's upper bound.}
-    if FMinFrameSide > FMaxFrameSide then
-      FMinFrameSide := FMaxFrameSide;
+    {Cross-field invariant — Min <= Max — is enforced by Validate at the
+     tail of this procedure, not inline here.}
     FAutoRefreshOnViewportChange := Ini.ReadBool('extraction', 'AutoRefreshOnViewportChange', DEF_AUTO_REFRESH_VIEWPORT);
     FRandomExtraction := Ini.ReadBool('extraction', 'RandomExtraction', DEF_RANDOM_EXTRACTION);
     FRandomPercent := EnsureRange(Ini.ReadInteger('extraction', 'RandomPercent', DEF_RANDOM_PERCENT), MIN_RANDOM_PERCENT, MAX_RANDOM_PERCENT);
@@ -512,6 +519,18 @@ begin
   finally
     Ini.Free;
   end;
+  Validate;
+end;
+
+procedure TPluginSettings.Validate;
+begin
+  {Downstream CalcExtractionMaxSide calls EnsureRange with the two
+   bounds in lo/hi order; if Min > Max, EnsureRange silently returns
+   the larger value and the extraction size is locked to that single
+   value. Pull Min down to Max so the cap honours the user's upper
+   bound regardless of which order they typed the two numbers in.}
+  if FMinFrameSide > FMaxFrameSide then
+    FMinFrameSide := FMaxFrameSide;
 end;
 
 procedure TPluginSettings.Save;
@@ -520,6 +539,7 @@ var
 begin
   if FIniPath = '' then
     Exit;
+  Validate;
   Ini := TUnicodeIniFile.Create(FIniPath);
   try
     Ini.WriteString('ffmpeg', 'Mode', FFmpegModeToStr(FFFmpegMode));
