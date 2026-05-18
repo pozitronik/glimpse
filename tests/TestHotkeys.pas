@@ -127,6 +127,7 @@ type
     [Test] procedure IniLoad_CrossActionDuplicate_FirstInEnumOrderWins;
     [Test] procedure IniLoad_WithinActionDuplicate_BothStoredAndActionResolves;
     [Test] procedure IniSave_SingleChord_NoSeparatorInOutput;
+    [Test] procedure ActionsTable_EveryEnumValueHasNonEmptyIniKeyAndCaption;
   end;
 
 implementation
@@ -1382,6 +1383,37 @@ begin
     end;
   finally
     B.Free;
+  end;
+end;
+
+procedure TTestHotkeyBindings.ActionsTable_EveryEnumValueHasNonEmptyIniKeyAndCaption;
+var
+  A: TPluginAction;
+begin
+  {Coverage guard for the ACTIONS table: every TPluginAction except
+   paNone (the explicit "no action" sentinel) must have both a
+   non-empty IniKey and a non-empty Caption. An empty IniKey would
+   make THotkeyBindings.Load/Save use '' as an INI key — silent data
+   loss; an empty Caption would surface as a blank row in the settings
+   dialog's action list. The positional const-array enforces presence
+   at compile time, but this test pins the "non-empty for non-paNone"
+   semantic contract too.}
+  for A := Low(TPluginAction) to High(TPluginAction) do
+  begin
+    if A = paNone then
+    begin
+      Assert.AreEqual('', ActionIniKey(A),
+        'paNone is the no-action sentinel and must carry an empty IniKey');
+      Assert.AreEqual('', ActionCaption(A),
+        'paNone is the no-action sentinel and must carry an empty Caption');
+    end
+    else
+    begin
+      Assert.AreNotEqual('', ActionIniKey(A),
+        Format('Enum value %d (TPluginAction) must have a non-empty INI key', [Integer(A)]));
+      Assert.AreNotEqual('', ActionCaption(A),
+        Format('Enum value %d (TPluginAction) must have a non-empty Caption', [Integer(A)]));
+    end;
   end;
 end;
 

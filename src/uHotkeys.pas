@@ -60,6 +60,25 @@ type
 
   THotkeyChordArray = TArray<THotkeyChord>;
 
+  {Descriptor row in the ACTIONS table. Each row pins the [hotkeys] INI
+   key and the display caption shown in the settings dialog.
+   Initialising the table as a positional aggregate
+   `array[TPluginAction] of TActionDescriptor` forces the Delphi
+   compiler to flag a missing entry — replacing the prior parallel case
+   ladders that silently returned '' (which THotkeyBindings.Load /
+   Save would then use as an INI key, causing silent data loss).
+
+   Default chord lists are NOT in this table: Delphi's const aggregate
+   syntax does not accept nested record-literals inside dynamic-array
+   fields (the inner `[...]` parses as a set, not an array). Defaults
+   live in DefaultBinding's case ladder; the silent-data-loss class is
+   not present there because a missing default just produces nil — the
+   action has no shortcut, which is benign and obvious in the dialog.}
+  TActionDescriptor = record
+    IniKey: string;
+    Caption: string;
+  end;
+
   THotkeyBindings = class
   private
     FBindings: array [TPluginAction] of THotkeyChordArray;
@@ -514,183 +533,122 @@ end;
 
 {Unit-level helpers}
 
-function DefaultBinding(AAction: TPluginAction): THotkeyChordArray;
-begin
-  case AAction of
-    paSettings:
-      Result := [THotkeyChord.Make(VK_F2, [])];
-    paToggleToolbar:
-      Result := [THotkeyChord.Make(VK_F4, [])];
-    paToggleStatusBar:
-      Result := [THotkeyChord.Make(VK_F3, [])];
-    paToggleTimecode:
-      Result := [THotkeyChord.Make(Ord('T'), [])];
-    paToggleMaximize:
-      Result := [THotkeyChord.Make(VK_F11, [])];
-    paToggleFullScreen:
-      Result := [THotkeyChord.Make(VK_RETURN, [ssAlt])];
-    paHamburgerMenu:
-      Result := [THotkeyChord.Make(VK_OEM_3, [])];
-    paCloseLister:
-      Result := [THotkeyChord.Make(VK_ESCAPE, [])];
-    paPrevFile:
-      Result := [THotkeyChord.Make(VK_PRIOR, []),
-                 THotkeyChord.Make(VK_BACK, []),
-                 THotkeyChord.Make(Ord('Z'), [])];
-    paNextFile:
-      Result := [THotkeyChord.Make(VK_NEXT, []),
-                 THotkeyChord.Make(VK_SPACE, [])];
-    paOpenInPlayer:
-      Result := [THotkeyChord.Make(VK_RETURN, [])];
-    paRefreshExtraction:
-      Result := [THotkeyChord.Make(Ord('R'), [])];
-    paShuffleExtraction:
-      Result := [THotkeyChord.Make(Ord('R'), [ssCtrl])];
-    {Bare Left/Right bind to frame navigation so the single-view "slideshow"
-     feel is the default. paPrevFrame/paNextFrame have a vmSingle guard in
-     the dispatcher — in other modes the action's ExecuteHotkey returns
-     False and the keystroke quietly does nothing (matching "no natural
-     arrow action in grid"). Ctrl+Left/Ctrl+Right are kept as a
-     modifier-qualified alias.}
-    paPrevFrame:
-      Result := [THotkeyChord.Make(VK_LEFT, []),
-                 THotkeyChord.Make(VK_LEFT, [ssCtrl])];
-    paNextFrame:
-      Result := [THotkeyChord.Make(VK_RIGHT, []),
-                 THotkeyChord.Make(VK_RIGHT, [ssCtrl])];
-    paFrameCountInc:
-      Result := [THotkeyChord.Make(VK_UP, [ssCtrl])];
-    paFrameCountDec:
-      Result := [THotkeyChord.Make(VK_DOWN, [ssCtrl])];
-    paSaveFrame:
-      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl])];
-    paSaveView:
-      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift])];
-    paSaveViewLive:
-      {Save view at view resolution. Mnemonic: L = Live (the on-screen
-       cell pixel dimensions). Shift modifier marks the Save side.}
-      Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssShift])];
-    paSaveViewNative:
-      {Save view at native resolution. Mnemonic: N = Native.}
-      Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssShift])];
-    paSaveFrames:
-      Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt, ssShift])];
-    paSelectAllFrames:
-      Result := [THotkeyChord.Make(Ord('A'), [ssCtrl])];
-    paCopyFrame:
-      Result := [THotkeyChord.Make(Ord('C'), [ssCtrl])];
-    paCopyView:
-      Result := [THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift])];
-    paCopyViewLive:
-      {Copy view at view resolution. Alt modifier marks the Copy side
-       (Shift was already taken by Save side variants).}
-      Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssAlt])];
-    paCopyViewNative:
-      Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssAlt])];
-    paZoomIn:
-      Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];
-    paZoomOut:
-      Result := [THotkeyChord.Make(VK_OEM_MINUS, [])];
-    paZoomReset:
-      Result := [THotkeyChord.Make(Ord('0'), [])];
-    paViewModeSmartGrid:
-      Result := [THotkeyChord.Make(Ord('1'), [ssCtrl])];
-    paViewModeGrid:
-      Result := [THotkeyChord.Make(Ord('2'), [ssCtrl])];
-    paViewModeScroll:
-      Result := [THotkeyChord.Make(Ord('3'), [ssCtrl])];
-    paViewModeFilmstrip:
-      Result := [THotkeyChord.Make(Ord('4'), [ssCtrl])];
-    paViewModeSingle:
-      Result := [THotkeyChord.Make(Ord('5'), [ssCtrl])];
-  else
-    Result := nil;
-  end;
-end;
+const
+  {Single source of truth for every TPluginAction's INI key + caption.
+   Indexed by enum value: Delphi enforces one entry per TPluginAction
+   at compile time, so adding a new action without an entry here
+   produces an incomplete-initialization error rather than a silent ''
+   INI key at runtime (which the original ladder did via its else
+   branch, causing data loss in THotkeyBindings.Load/Save).}
+  ACTIONS: array[TPluginAction] of TActionDescriptor = (
+    (IniKey: '';                  Caption: ''),                                                          {paNone}
+    (IniKey: 'Settings';          Caption: 'Settings'),                                                  {paSettings}
+    (IniKey: 'ToggleToolbar';     Caption: 'Toggle toolbar'),                                            {paToggleToolbar}
+    (IniKey: 'ToggleStatusBar';   Caption: 'Toggle statusbar'),                                          {paToggleStatusBar}
+    (IniKey: 'ToggleTimecode';    Caption: 'Toggle timecode overlay'),                                   {paToggleTimecode}
+    (IniKey: 'ToggleMaximize';    Caption: 'Toggle maximize'),                                           {paToggleMaximize}
+    (IniKey: 'ToggleFullScreen';  Caption: 'Toggle full-screen'),                                        {paToggleFullScreen}
+    (IniKey: 'HamburgerMenu';     Caption: 'Open hamburger menu'),                                       {paHamburgerMenu}
+    (IniKey: 'CloseLister';       Caption: 'Close viewer'),                                              {paCloseLister}
+    (IniKey: 'PrevFile';          Caption: 'Previous file'),                                             {paPrevFile}
+    (IniKey: 'NextFile';          Caption: 'Next file'),                                                 {paNextFile}
+    (IniKey: 'OpenInPlayer';      Caption: 'Open in default player'),                                    {paOpenInPlayer}
+    (IniKey: 'RefreshExtraction'; Caption: 'Refresh frames'),                                            {paRefreshExtraction}
+    (IniKey: 'ShuffleExtraction'; Caption: 'Shuffle frames (random positions)'),                         {paShuffleExtraction}
+    (IniKey: 'PrevFrame';         Caption: 'Previous frame (single view)'),                              {paPrevFrame}
+    (IniKey: 'NextFrame';         Caption: 'Next frame (single view)'),                                  {paNextFrame}
+    (IniKey: 'FrameCountInc';     Caption: 'Increase frame count'),                                      {paFrameCountInc}
+    (IniKey: 'FrameCountDec';     Caption: 'Decrease frame count'),                                      {paFrameCountDec}
+    (IniKey: 'SaveFrame';         Caption: 'Save frame'),                                                {paSaveFrame}
+    (IniKey: 'SaveFrames';        Caption: 'Save frames'),                                               {paSaveFrames}
+    (IniKey: 'SaveView';          Caption: 'Save view (honour persisted resolution toggle)'),            {paSaveView}
+    (IniKey: 'SaveViewLive';      Caption: 'Save view at view resolution (one-shot)'),                   {paSaveViewLive}
+    (IniKey: 'SaveViewNative';    Caption: 'Save view at native size (one-shot)'),                       {paSaveViewNative}
+    (IniKey: 'SelectAllFrames';   Caption: 'Select all frames'),                                         {paSelectAllFrames}
+    (IniKey: 'CopyFrame';         Caption: 'Copy frame to clipboard'),                                   {paCopyFrame}
+    (IniKey: 'CopyView';          Caption: 'Copy view to clipboard (honour persisted resolution toggle)'), {paCopyView}
+    (IniKey: 'CopyViewLive';      Caption: 'Copy view at view resolution (one-shot)'),                   {paCopyViewLive}
+    (IniKey: 'CopyViewNative';    Caption: 'Copy view at native size (one-shot)'),                       {paCopyViewNative}
+    (IniKey: 'ZoomIn';            Caption: 'Zoom in'),                                                   {paZoomIn}
+    (IniKey: 'ZoomOut';           Caption: 'Zoom out'),                                                  {paZoomOut}
+    (IniKey: 'ZoomReset';         Caption: 'Reset zoom'),                                                {paZoomReset}
+    (IniKey: 'ViewModeSmartGrid'; Caption: 'View mode: Smart grid'),                                     {paViewModeSmartGrid}
+    (IniKey: 'ViewModeGrid';      Caption: 'View mode: Grid'),                                           {paViewModeGrid}
+    (IniKey: 'ViewModeScroll';    Caption: 'View mode: Scroll'),                                         {paViewModeScroll}
+    (IniKey: 'ViewModeFilmstrip'; Caption: 'View mode: Filmstrip'),                                      {paViewModeFilmstrip}
+    (IniKey: 'ViewModeSingle';    Caption: 'View mode: Single frame')                                    {paViewModeSingle}
+  );
 
 function ActionIniKey(AAction: TPluginAction): string;
 begin
-  case AAction of
-    paSettings: Result := 'Settings';
-    paToggleToolbar: Result := 'ToggleToolbar';
-    paToggleStatusBar: Result := 'ToggleStatusBar';
-    paToggleTimecode: Result := 'ToggleTimecode';
-    paToggleMaximize: Result := 'ToggleMaximize';
-    paToggleFullScreen: Result := 'ToggleFullScreen';
-    paHamburgerMenu: Result := 'HamburgerMenu';
-    paCloseLister: Result := 'CloseLister';
-    paPrevFile: Result := 'PrevFile';
-    paNextFile: Result := 'NextFile';
-    paOpenInPlayer: Result := 'OpenInPlayer';
-    paRefreshExtraction: Result := 'RefreshExtraction';
-    paShuffleExtraction: Result := 'ShuffleExtraction';
-    paPrevFrame: Result := 'PrevFrame';
-    paNextFrame: Result := 'NextFrame';
-    paFrameCountInc: Result := 'FrameCountInc';
-    paFrameCountDec: Result := 'FrameCountDec';
-    paSaveFrame: Result := 'SaveFrame';
-    paSaveFrames: Result := 'SaveFrames';
-    paSaveView: Result := 'SaveView';
-    paSaveViewLive: Result := 'SaveViewLive';
-    paSaveViewNative: Result := 'SaveViewNative';
-    paSelectAllFrames: Result := 'SelectAllFrames';
-    paCopyFrame: Result := 'CopyFrame';
-    paCopyView: Result := 'CopyView';
-    paCopyViewLive: Result := 'CopyViewLive';
-    paCopyViewNative: Result := 'CopyViewNative';
-    paZoomIn: Result := 'ZoomIn';
-    paZoomOut: Result := 'ZoomOut';
-    paZoomReset: Result := 'ZoomReset';
-    paViewModeSmartGrid: Result := 'ViewModeSmartGrid';
-    paViewModeGrid: Result := 'ViewModeGrid';
-    paViewModeScroll: Result := 'ViewModeScroll';
-    paViewModeFilmstrip: Result := 'ViewModeFilmstrip';
-    paViewModeSingle: Result := 'ViewModeSingle';
-  else
-    Result := '';
-  end;
+  Result := ACTIONS[AAction].IniKey;
 end;
 
 function ActionCaption(AAction: TPluginAction): string;
 begin
+  Result := ACTIONS[AAction].Caption;
+end;
+
+function DefaultBinding(AAction: TPluginAction): THotkeyChordArray;
+begin
+  {Default-chord assignments still ride a case ladder because Delphi
+   const aggregates cannot nest record literals inside dynamic-array
+   fields. The bug class the violation flagged (silent '' INI key) is
+   gone via the ACTIONS table; a missing branch here returns nil which
+   is observable in the dialog (action has no shortcut) rather than
+   silently corrupting INI data.
+
+   Bare Left/Right bind to frame navigation so the single-view
+   "slideshow" feel is the default. paPrevFrame/paNextFrame have a
+   vmSingle guard in the dispatcher — in other modes the action's
+   ExecuteHotkey returns False and the keystroke quietly does nothing.
+   Ctrl+Left/Ctrl+Right are kept as a modifier-qualified alias.}
   case AAction of
-    paSettings: Result := 'Settings';
-    paToggleToolbar: Result := 'Toggle toolbar';
-    paToggleStatusBar: Result := 'Toggle statusbar';
-    paToggleTimecode: Result := 'Toggle timecode overlay';
-    paToggleMaximize: Result := 'Toggle maximize';
-    paToggleFullScreen: Result := 'Toggle full-screen';
-    paHamburgerMenu: Result := 'Open hamburger menu';
-    paCloseLister: Result := 'Close viewer';
-    paPrevFile: Result := 'Previous file';
-    paNextFile: Result := 'Next file';
-    paOpenInPlayer: Result := 'Open in default player';
-    paRefreshExtraction: Result := 'Refresh frames';
-    paShuffleExtraction: Result := 'Shuffle frames (random positions)';
-    paPrevFrame: Result := 'Previous frame (single view)';
-    paNextFrame: Result := 'Next frame (single view)';
-    paFrameCountInc: Result := 'Increase frame count';
-    paFrameCountDec: Result := 'Decrease frame count';
-    paSaveFrame: Result := 'Save frame';
-    paSaveFrames: Result := 'Save frames';
-    paSaveView: Result := 'Save view (honour persisted resolution toggle)';
-    paSaveViewLive: Result := 'Save view at view resolution (one-shot)';
-    paSaveViewNative: Result := 'Save view at native size (one-shot)';
-    paSelectAllFrames: Result := 'Select all frames';
-    paCopyFrame: Result := 'Copy frame to clipboard';
-    paCopyView: Result := 'Copy view to clipboard (honour persisted resolution toggle)';
-    paCopyViewLive: Result := 'Copy view at view resolution (one-shot)';
-    paCopyViewNative: Result := 'Copy view at native size (one-shot)';
-    paZoomIn: Result := 'Zoom in';
-    paZoomOut: Result := 'Zoom out';
-    paZoomReset: Result := 'Reset zoom';
-    paViewModeSmartGrid: Result := 'View mode: Smart grid';
-    paViewModeGrid: Result := 'View mode: Grid';
-    paViewModeScroll: Result := 'View mode: Scroll';
-    paViewModeFilmstrip: Result := 'View mode: Filmstrip';
-    paViewModeSingle: Result := 'View mode: Single frame';
+    paSettings:           Result := [THotkeyChord.Make(VK_F2, [])];
+    paToggleToolbar:      Result := [THotkeyChord.Make(VK_F4, [])];
+    paToggleStatusBar:    Result := [THotkeyChord.Make(VK_F3, [])];
+    paToggleTimecode:     Result := [THotkeyChord.Make(Ord('T'), [])];
+    paToggleMaximize:     Result := [THotkeyChord.Make(VK_F11, [])];
+    paToggleFullScreen:   Result := [THotkeyChord.Make(VK_RETURN, [ssAlt])];
+    paHamburgerMenu:      Result := [THotkeyChord.Make(VK_OEM_3, [])];
+    paCloseLister:        Result := [THotkeyChord.Make(VK_ESCAPE, [])];
+    paPrevFile:           Result := [THotkeyChord.Make(VK_PRIOR, []),
+                                     THotkeyChord.Make(VK_BACK, []),
+                                     THotkeyChord.Make(Ord('Z'), [])];
+    paNextFile:           Result := [THotkeyChord.Make(VK_NEXT, []),
+                                     THotkeyChord.Make(VK_SPACE, [])];
+    paOpenInPlayer:       Result := [THotkeyChord.Make(VK_RETURN, [])];
+    paRefreshExtraction:  Result := [THotkeyChord.Make(Ord('R'), [])];
+    paShuffleExtraction:  Result := [THotkeyChord.Make(Ord('R'), [ssCtrl])];
+    paPrevFrame:          Result := [THotkeyChord.Make(VK_LEFT, []),
+                                     THotkeyChord.Make(VK_LEFT, [ssCtrl])];
+    paNextFrame:          Result := [THotkeyChord.Make(VK_RIGHT, []),
+                                     THotkeyChord.Make(VK_RIGHT, [ssCtrl])];
+    paFrameCountInc:      Result := [THotkeyChord.Make(VK_UP, [ssCtrl])];
+    paFrameCountDec:      Result := [THotkeyChord.Make(VK_DOWN, [ssCtrl])];
+    paSaveFrame:          Result := [THotkeyChord.Make(Ord('S'), [ssCtrl])];
+    paSaveView:           Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift])];
+    {Save side: Shift modifier. Mnemonics L=Live (view-resolution),
+     N=Native (source pixel dimensions).}
+    paSaveViewLive:       Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssShift])];
+    paSaveViewNative:     Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssShift])];
+    paSaveFrames:         Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt, ssShift])];
+    paSelectAllFrames:    Result := [THotkeyChord.Make(Ord('A'), [ssCtrl])];
+    paCopyFrame:          Result := [THotkeyChord.Make(Ord('C'), [ssCtrl])];
+    paCopyView:           Result := [THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift])];
+    {Copy side: Alt modifier (Shift was already taken by Save side).}
+    paCopyViewLive:       Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssAlt])];
+    paCopyViewNative:     Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssAlt])];
+    paZoomIn:             Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];
+    paZoomOut:            Result := [THotkeyChord.Make(VK_OEM_MINUS, [])];
+    paZoomReset:          Result := [THotkeyChord.Make(Ord('0'), [])];
+    paViewModeSmartGrid:  Result := [THotkeyChord.Make(Ord('1'), [ssCtrl])];
+    paViewModeGrid:       Result := [THotkeyChord.Make(Ord('2'), [ssCtrl])];
+    paViewModeScroll:     Result := [THotkeyChord.Make(Ord('3'), [ssCtrl])];
+    paViewModeFilmstrip:  Result := [THotkeyChord.Make(Ord('4'), [ssCtrl])];
+    paViewModeSingle:     Result := [THotkeyChord.Make(Ord('5'), [ssCtrl])];
   else
-    Result := '';
+    Result := nil;
   end;
 end;
 
