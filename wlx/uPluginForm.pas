@@ -1548,6 +1548,7 @@ begin
   Style.FontSize := FSettings.TimestampFontSize;
   Style.BackColor := FSettings.TimecodeBackColor;
   Style.BackAlpha := FSettings.TimecodeBackAlpha;
+  Style.Mode := TimecodeStyleModeFor(Style.BackAlpha);
   Style.TextColor := FSettings.TimestampTextColor;
   Style.TextAlpha := FSettings.TimestampTextAlpha;
   FFrameView.TimestampStyle := Style;

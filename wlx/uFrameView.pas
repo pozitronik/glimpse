@@ -167,6 +167,9 @@ begin
   FStyle.FontSize := DEF_TIMESTAMP_FONT_SIZE;
   FStyle.FontStyles := []; {live-view timecodes render non-bold (canvas default)}
   FStyle.BackAlpha := DEF_TC_BACK_ALPHA;
+  {Live view always uses the modern rect renderer to match what the
+   user sees on screen; legacy mode is a combined-image-only concern.}
+  FStyle.Mode := tsmModern;
   FBackColor := DEF_BACKGROUND;
   FViewMode := vmGrid;
   FZoomMode := zmFitWindow;

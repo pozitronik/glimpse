@@ -701,6 +701,7 @@ begin
   ATs.BackAlpha := FSettings.TimecodeBackAlpha;
   ATs.TextColor := FSettings.TimestampTextColor;
   ATs.TextAlpha := FSettings.TimestampTextAlpha;
+  ATs.Mode := TimecodeStyleModeFor(ATs.BackAlpha);
 end;
 
 {Counts the columns the live layout is currently using by iterating

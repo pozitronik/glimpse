@@ -203,6 +203,7 @@ begin
     TimestampStyle.BackAlpha := H.Settings.TimecodeBackAlpha;
     TimestampStyle.TextColor := H.Settings.TimestampTextColor;
     TimestampStyle.TextAlpha := H.Settings.TimestampTextAlpha;
+    TimestampStyle.Mode := TimecodeStyleModeFor(TimestampStyle.BackAlpha);
 
     Result := RenderCombinedImage(Frames, H.Offsets, GridStyle, TimestampStyle);
 

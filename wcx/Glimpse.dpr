@@ -30,6 +30,7 @@ uses
   uDefaults in '..\src\uDefaults.pas',
   uFrameExtractor in '..\src\uFrameExtractor.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
+  uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uVideoProbing in '..\src\uVideoProbing.pas',

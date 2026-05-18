@@ -76,6 +76,7 @@
         <DCCReference Include="..\src\uDefaults.pas"/>
         <DCCReference Include="..\src\uFrameExtractor.pas"/>
         <DCCReference Include="..\src\uCombinedImage.pas"/>
+        <DCCReference Include="..\src\uTimecodeOverlay.pas"/>
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
         <DCCReference Include="..\src\uVideoProbing.pas"/>

@@ -117,6 +117,25 @@ type
     [Test] procedure DefaultTimestampStyle_ShowDefaultsOff;
     [Test] procedure DefaultTimestampStyle_FontAndSize;
     [Test] procedure DefaultTimestampStyle_CornerMatchesConstant;
+    {Mode discriminator: now explicit (was inferred from BackAlpha=0).
+     The default targets the legacy painter so pre-Mode saved sheets
+     re-render identically.}
+    [Test] procedure DefaultTimestampStyle_ModeIsLegacy;
+    {TimecodeStyleModeFor preserves the historical sentinel: BackAlpha=0
+     -> legacy, anything else -> modern. Keeps settings-driven
+     construction sites behaviour-equivalent.}
+    [Test] procedure ModeForZeroBackAlpha_IsLegacy;
+    [Test] procedure ModeForOneBackAlpha_IsModern;
+    [Test] procedure ModeFor255BackAlpha_IsModern;
+    {Painter dispatch: confirm DrawCellTimecode reaches the legacy
+     branch when Mode=tsmLegacy AND the modern branch when
+     Mode=tsmModern, regardless of BackAlpha. The pixel-set signature
+     differs between the two algorithms (legacy paints a 4px-inset
+     shadowed glyph stack; modern paints a full-width rect when
+     BackAlpha>0) so we can distinguish them by counting marker pixels
+     in regions where only one algorithm writes.}
+    [Test] procedure ModeLegacy_DoesNotPaintTopLeftCornerPixel;
+    [Test] procedure ModeModern_WithOpaqueBg_FillsCornerStripWithBackColor;
     { RenderSmartCombinedImage }
     [Test] procedure SmartRender_EmptyFrames_ReturnsNil;
     [Test] procedure SmartRender_OutputDimensionsMatchInputs;
@@ -249,6 +268,9 @@ begin
   Result.BackAlpha := ABackAlpha;
   Result.TextColor := ATextColor;
   Result.TextAlpha := ATextAlpha;
+  {Match the historical BackAlpha-as-discriminator so tests that pass
+   ABackAlpha=0 still exercise the legacy painter.}
+  Result.Mode := TimecodeStyleModeFor(ABackAlpha);
 end;
 
 { Empty input }
@@ -2093,6 +2115,28 @@ begin
     Ord(DefaultTimestampStyle.Corner));
 end;
 
+procedure TTestCombinedImage.DefaultTimestampStyle_ModeIsLegacy;
+begin
+  Assert.AreEqual(Ord(tsmLegacy), Ord(DefaultTimestampStyle.Mode),
+    'Default historically used the legacy shadow-only renderer ' +
+    '(via BackAlpha=0 sentinel); Mode field must keep that promise');
+end;
+
+procedure TTestCombinedImage.ModeForZeroBackAlpha_IsLegacy;
+begin
+  Assert.AreEqual(Ord(tsmLegacy), Ord(TimecodeStyleModeFor(0)));
+end;
+
+procedure TTestCombinedImage.ModeForOneBackAlpha_IsModern;
+begin
+  Assert.AreEqual(Ord(tsmModern), Ord(TimecodeStyleModeFor(1)));
+end;
+
+procedure TTestCombinedImage.ModeFor255BackAlpha_IsModern;
+begin
+  Assert.AreEqual(Ord(tsmModern), Ord(TimecodeStyleModeFor(255)));
+end;
+
 { RenderSmartCombinedImage }
 
 procedure TTestCombinedImage.SmartRender_EmptyFrames_ReturnsNil;
@@ -2314,6 +2358,7 @@ begin
   Result.BackAlpha := ABackAlpha;
   Result.TextColor := clWhite;
   Result.TextAlpha := 255;
+  Result.Mode := TimecodeStyleModeFor(ABackAlpha);
 end;
 
 {Counts pixels matching AColor inside ARect on ABmp.Canvas. Sparse cell
@@ -2414,6 +2459,66 @@ begin
     RedCount := CountMatchingPixels(Bmp, CellRect, clRed);
     Assert.IsTrue(RedCount < 200 * 100,
       'Some pixels must change when the helper draws the overlay');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.ModeLegacy_DoesNotPaintTopLeftCornerPixel;
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  {Legacy painter for tcTopLeft positions text at (Left+4, Top+4). The
+   pixel at (0,0) is therefore untouched. Modern painter would fill
+   that same pixel with its corner rect (when BackAlpha>0). Counting on
+   that single-pixel difference is fragile in general, but the painter
+   geometry is pinned elsewhere; here we just need a witness that the
+   dispatch went to the legacy branch. Defined here (rather than
+   alongside the other DefaultTimestampStyle_* tests) because
+   TimestampForGateTest is a free helper declared further down in
+   the file.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(200, 100);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 200, 100));
+
+    Style := TimestampForGateTest(True, tcTopLeft, 0);
+    Style.Mode := tsmLegacy;
+    DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 200, 100), 12.345, Style);
+
+    Assert.AreEqual<Integer>(clRed, Bmp.Canvas.Pixels[0, 0],
+      'Legacy painter insets text from the cell corner; (0,0) must remain the marker colour');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestCombinedImage.ModeModern_WithOpaqueBg_FillsCornerStripWithBackColor;
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  {Modern painter for tcTopLeft + opaque BackAlpha=255 paints a solid
+   BackColor rectangle anchored at the top-left, including (0,0). The
+   legacy painter would leave that pixel alone.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(200, 100);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 200, 100));
+
+    Style := TimestampForGateTest(True, tcTopLeft, 255);
+    Style.BackColor := clBlue;
+    Style.Mode := tsmModern;
+    DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 200, 100), 12.345, Style);
+
+    Assert.AreEqual<Integer>(clBlue, Bmp.Canvas.Pixels[0, 0],
+      'Modern painter with opaque background fills the corner rect; ' +
+      '(0,0) must carry BackColor');
   finally
     Bmp.Free;
   end;

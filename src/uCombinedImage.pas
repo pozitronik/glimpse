@@ -57,10 +57,23 @@ type
     BackgroundAlpha: Byte;
   end;
 
-  {Overlay style for per-cell timecodes. When Show=False nothing is drawn and
-   the other fields are ignored. BackAlpha=0 selects the legacy shadow-only
-   rendering (pixel-exact back-compat); values > 0 switch to the modern
-   flush-rect rendering that matches the live view's overlay.}
+  {Explicit selector between the two timecode rendering algorithms. Was
+   previously inferred from BackAlpha (0 -> legacy, >0 -> modern) which
+   conflated "user wanted no background block" with "render legacy
+   shadow-only" — two distinct intents. Mode now carries the choice
+   directly; BackAlpha controls only the background-block opacity within
+   the modern path.
+
+   - tsmModern: flush-to-corner rect with optional bg block + centred
+     text (matches live view).
+   - tsmLegacy: free-standing shadowed text inset by 4px (pixel-exact
+     back-compat with WLX 1.0.x saved grids; ignores BackColor /
+     BackAlpha).}
+  TTimecodeStyleMode = (tsmModern, tsmLegacy);
+
+  {Overlay style for per-cell timecodes. When Show=False nothing is drawn
+   and the other fields are ignored. Mode picks the rendering
+   algorithm; BackAlpha controls only the modern-path background block.}
   TTimestampStyle = record
     Show: Boolean;
     Corner: TTimestampCorner;
@@ -71,7 +84,15 @@ type
     BackAlpha: Byte;
     TextColor: TColor;
     TextAlpha: Byte;
+    Mode: TTimecodeStyleMode;
   end;
+
+  {Computes the historical Mode from a user-configured BackAlpha. Used
+   by settings-driven construction sites to preserve the pre-Mode-field
+   contract: BackAlpha=0 historically meant "render legacy"; any
+   non-zero value meant "render modern". A future user-facing Mode
+   setting would let this derivation be deleted.}
+function TimecodeStyleModeFor(ABackAlpha: Byte): TTimecodeStyleMode;
 
   {Formats banner info into human-readable text lines.
    Returns an empty array if AInfo has no meaningful data.}
@@ -192,7 +213,15 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Math, System.Types,
-  uDefaults;
+  uDefaults, uTimecodeOverlay;
+
+function TimecodeStyleModeFor(ABackAlpha: Byte): TTimecodeStyleMode;
+begin
+  if ABackAlpha = 0 then
+    Result := tsmLegacy
+  else
+    Result := tsmModern;
+end;
 
 const
   BANNER_PADDING_H = 10; {horizontal padding}
@@ -736,46 +765,11 @@ begin
 end;
 
 procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect; ATimeOffset: Double; const AStyle: TTimestampStyle);
-const
-  TC_PADDING_H = 8; {horizontal padding inside the modern-path timecode rect}
-  TC_MIN_H = 20; {minimum height for the modern-path rect (live-view parity for small fonts)}
-var
-  Tc: string;
-  TW, TH: Integer;
-  R: TRect;
 begin
   if (not AStyle.Show) or (AStyle.Corner = tcNone) then
     Exit;
-
-  Tc := FormatTimecode(ATimeOffset);
-  {Prime the canvas font so TextWidth/TextHeight match the final render in
-   both branches below.}
-  ACanvas.Font.Name := AStyle.FontName;
-  ACanvas.Font.Size := AStyle.FontSize;
-  ACanvas.Font.Style := AStyle.FontStyles;
-
-  if AStyle.BackAlpha > 0 then
-  begin
-    {Modern path: flush-to-corner rect with bg block and centred text
-     (matches live view). Rect height floors at TC_MIN_H for live-view
-     parity at small font sizes, but grows to fit when larger fonts
-     would otherwise be clipped by DT_VCENTER inside a fixed rect.}
-    TW := ACanvas.TextWidth(Tc) + TC_PADDING_H;
-    TH := Max(ACanvas.TextHeight(Tc) + 4, TC_MIN_H);
-    case AStyle.Corner of
-      tcTopLeft:
-        R := Rect(ACellRect.Left, ACellRect.Top, ACellRect.Left + TW, ACellRect.Top + TH);
-      tcTopRight:
-        R := Rect(ACellRect.Right - TW, ACellRect.Top, ACellRect.Right, ACellRect.Top + TH);
-      tcBottomRight:
-        R := Rect(ACellRect.Right - TW, ACellRect.Bottom - TH, ACellRect.Right, ACellRect.Bottom);
-      else {tcBottomLeft}
-        R := Rect(ACellRect.Left, ACellRect.Bottom - TH, ACellRect.Left + TW, ACellRect.Bottom);
-    end;
-    DrawTimecodeOverlay(ACanvas, R, Tc, AStyle);
-  end
-  else
-    DrawLegacyTimecodeOverlay(ACanvas, ACellRect, Tc, AStyle);
+  GetTimecodePainter(AStyle.Mode).Paint(ACanvas, ACellRect,
+    FormatTimecode(ATimeOffset), AStyle);
 end;
 
 {Rect-driven alpha-aware lift core. Allocates a pf32bit bitmap matching

@@ -67,6 +67,10 @@ begin
   Result.BackAlpha := 0;
   Result.TextColor := DEF_TIMESTAMP_TEXT_COLOR;
   Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
+  {Historic default matches the WLX 1.0.x legacy renderer for back-compat
+   with saved combined sheets; the modern rect-based path is opt-in via
+   the explicit Mode field.}
+  Result.Mode := tsmLegacy;
 end;
 
 end.

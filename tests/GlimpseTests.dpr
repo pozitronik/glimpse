@@ -85,6 +85,7 @@ uses
   uUnicodeIniFile in '..\src\uUnicodeIniFile.pas',
   TestUnicodeIniFile in 'TestUnicodeIniFile.pas',
   uCombinedImage in '..\src\uCombinedImage.pas',
+  uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',

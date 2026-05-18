@@ -101,6 +101,7 @@
         <DCCReference Include="uExtractionController.pas"/>
         <DCCReference Include="uSaveResolutionExtractor.pas"/>
         <DCCReference Include="..\src\uCombinedImage.pas"/>
+        <DCCReference Include="..\src\uTimecodeOverlay.pas"/>
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
         <DCCReference Include="uHotkeysVcl.pas"/>
