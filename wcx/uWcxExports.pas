@@ -69,7 +69,7 @@ uses
   Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
-  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uBitmapResize,
+  uCombinedImage, uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo, uBitmapResize,
   uWcxPresets, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor,
   uWcxFrameCache, uPresetExtractReporter;
 

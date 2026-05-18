@@ -193,7 +193,7 @@ uses
   Winapi.Windows,
   System.SysUtils, System.IOUtils, System.Types, System.UITypes,
   uTypes, uFrameOffsets, uFFmpegExe, uCombinedImage, uRenderDefaults, uDefaults,
-  uSettingsGroups;
+  uSettingsGroups, uVideoInfo;
 
 type
   {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
@@ -1400,7 +1400,8 @@ begin
     VideoInfo.AudioSampleRate := 48000;
     VideoInfo.AudioChannels := 'stereo';
     VideoInfo.AudioBitrateKbps := 192;
-    VideoInfo.IsValid := True;
+    {IsValid is a derived method (Duration > 0); set Duration above to
+     make IsValid return True.}
 
     Banner := BuildBannerInfo(TempFile, VideoInfo);
 

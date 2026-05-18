@@ -48,7 +48,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Classes,
-  uFFmpegExe, uVideoProbing, uProbeCache;
+  uFFmpegExe, uVideoProbing, uProbeCache, uVideoInfo;
 
 type
   {Stub IVideoProber: returns a canned TVideoInfo and counts calls so
@@ -132,7 +132,6 @@ begin
       Info.Duration := 120.5;
       Info.Width := 1920;
       Info.Height := 1080;
-      Info.IsValid := True;
 
       Cache.Put(TmpFile, Info);
       Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
@@ -175,7 +174,6 @@ begin
       Info.AudioSampleRate := 48000;
       Info.AudioChannels := '5.1';
       Info.AudioBitrateKbps := 192;
-      Info.IsValid := True;
 
       Cache.Put(TmpFile, Info);
       Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
@@ -217,7 +215,6 @@ begin
     try
       Info := Default(TVideoInfo);
       Info.Duration := -1;
-      Info.IsValid := False;
       Info.ErrorMessage := 'Could not parse';
 
       Cache.Put(TmpFile, Info);
@@ -258,7 +255,6 @@ begin
       Info.Duration := 60.0;
       Info.Width := 1280;
       Info.Height := 720;
-      Info.IsValid := True;
 
       Cache.Put(TmpFile, Info);
       Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
@@ -291,7 +287,6 @@ begin
     try
       Info := Default(TVideoInfo);
       Info.Duration := 10.0;
-      Info.IsValid := True;
 
       Cache.Put(TmpFile, Info);
 
@@ -333,7 +328,6 @@ begin
       Info.Duration := 42.5;
       Info.Width := 1280;
       Info.Height := 720;
-      Info.IsValid := True;
       Cache.Put(TmpFile, Info);
 
       Retrieved := Cache.TryGetOrProbe(TmpFile, '__no_such_ffmpeg__.exe');
@@ -396,8 +390,7 @@ begin
         Info := Default(TVideoInfo);
         Info.Duration := 123.456;
         Info.Fps := 29.97;
-        Info.IsValid := True;
-        Cache.Put(TmpFile, Info);
+          Cache.Put(TmpFile, Info);
       finally
         Cache.Free;
       end;
@@ -448,7 +441,6 @@ begin
       Info.Duration := 60;
       Info.Width := 1920;
       Info.Height := 1080;
-      Info.IsValid := True;
       Cache.Put(TmpFile, Info);
       Assert.IsTrue(Cache.GetTotalSize > 0,
         'After Put the total size must be non-zero');
@@ -489,7 +481,6 @@ begin
       Info.Duration := 60;
       Info.Width := 1920;
       Info.Height := 1080;
-      Info.IsValid := True;
       Cache.Put(TmpFile, Info);
       Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved), 'Pre-condition: cache hit');
 
@@ -535,7 +526,6 @@ begin
       Info.Duration := 60.0;
       Info.Width := 640;
       Info.Height := 360;
-      Info.IsValid := True;
 
       Cache.Put(TmpFile, Info);
 
@@ -571,7 +561,6 @@ begin
       Info.Duration := 30.0;
       Info.Width := 320;
       Info.Height := 240;
-      Info.IsValid := True;
       Cache.Put(TmpFile, Info);
 
       {Re-put with different values; MoveFileEx + MOVEFILE_REPLACE_EXISTING
@@ -612,7 +601,6 @@ var
   Probe: string;
 begin
   Canned := Default(TVideoInfo);
-  Canned.IsValid := True;
   Canned.Width := 1920;
   Canned.Height := 1080;
   Canned.Duration := 12.5;
@@ -658,7 +646,6 @@ begin
   TFile.WriteAllText(Probe, 'placeholder');
 
   Pre := Default(TVideoInfo);
-  Pre.IsValid := True;
   Pre.Width := 640;
   Pre.Height := 360;
   Pre.Duration := 1.0;

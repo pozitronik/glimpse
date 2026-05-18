@@ -10,7 +10,7 @@ unit uVideoProbing;
 interface
 
 uses
-  uFFmpegExe;
+  uFFmpegExe, uVideoInfo;
 
 type
   IVideoProber = interface

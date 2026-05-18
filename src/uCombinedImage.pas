@@ -6,7 +6,7 @@ interface
 
 uses
   Winapi.Windows, System.UITypes, Vcl.Graphics, uFrameOffsets, uFFmpegExe, uTypes,
-  uSettingsGroups;
+  uSettingsGroups, uVideoInfo;
 
 type
   {Video metadata for the info banner. Populated by the caller from

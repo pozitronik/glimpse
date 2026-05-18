@@ -5,35 +5,9 @@ interface
 
 uses
   System.SysUtils, System.Classes, Winapi.Windows, Vcl.Graphics,
-  uFrameOffsets, uTypes;
+  uFrameOffsets, uTypes, uVideoInfo;
 
 type
-  TVideoInfo = record
-    Duration: Double; {seconds; -1 if unknown}
-    Width: Integer; {storage pixel grid width}
-    Height: Integer; {storage pixel grid height}
-    {Sample aspect ratio (per-pixel display stretch) as a rational number.
-     1:1 means square pixels and is the default when the source carries no
-     SAR metadata. Anamorphic sources (DVD, broadcast, some camcorders)
-     have non-1:1 SAR; e.g. 720x576 SAR=64:45 displays as 16:9.}
-    SampleAspectN: Integer;
-    SampleAspectD: Integer;
-    {Pixel dimensions after applying SAR; equal to storage when SAR=1:1.
-     What every aspect-aware player shows on screen.}
-    DisplayWidth: Integer;
-    DisplayHeight: Integer;
-    VideoCodec: string;
-    VideoBitrateKbps: Integer; {0 if unknown}
-    Fps: Double; {0 if unknown}
-    Bitrate: Integer; {overall bitrate in kb/s; 0 if unknown}
-    AudioCodec: string; {empty if no audio}
-    AudioSampleRate: Integer; {Hz; 0 if unknown}
-    AudioChannels: string; {'mono', 'stereo', '5.1', etc.}
-    AudioBitrateKbps: Integer; {0 if unknown}
-    IsValid: Boolean; {True if at least duration was parsed}
-    ErrorMessage: string;
-  end;
-
   TFFmpegExe = class
   strict private
     FExePath: string;
@@ -570,12 +544,7 @@ begin
   Result.Duration := ParseDuration(StdErrStr);
   ParseResolution(StdErrStr, Result.Width, Result.Height);
   ParseSampleAspect(StdErrStr, Result.SampleAspectN, Result.SampleAspectD);
-  {Display dims = storage when SAR=1:1; SAR scales width, leaves height alone}
-  Result.DisplayHeight := Result.Height;
-  if (Result.Width > 0) and (Result.SampleAspectD > 0) then
-    Result.DisplayWidth := Round(Result.Width * Result.SampleAspectN / Result.SampleAspectD)
-  else
-    Result.DisplayWidth := Result.Width;
+  Result.RecalcDisplayDimensions;
   Result.VideoCodec := ParseVideoCodec(StdErrStr);
   Result.Bitrate := ParseBitrate(StdErrStr);
   Result.Fps := ParseFps(StdErrStr);
@@ -584,7 +553,6 @@ begin
   Result.AudioSampleRate := ParseAudioSampleRate(StdErrStr);
   Result.AudioChannels := ParseAudioChannels(StdErrStr);
   Result.AudioBitrateKbps := ParseAudioBitrate(StdErrStr);
-  Result.IsValid := Result.Duration > 0;
 
   if not Result.IsValid then
     Result.ErrorMessage := 'Could not parse video metadata';

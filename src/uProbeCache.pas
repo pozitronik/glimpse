@@ -8,7 +8,7 @@ unit uProbeCache;
 interface
 
 uses
-  uFFmpegExe, uVideoProbing;
+  uFFmpegExe, uVideoProbing, uVideoInfo;
 
 type
   TProbeCache = class
@@ -130,12 +130,15 @@ begin
     AInfo.SampleAspectD := StrToIntDef(Lines.Values['SampleAspectD'], 1);
     AInfo.DisplayWidth := StrToIntDef(Lines.Values['DisplayWidth'], 0);
     AInfo.DisplayHeight := StrToIntDef(Lines.Values['DisplayHeight'], 0);
-    {Backfill display dims from storage for cache entries written before
-     the SAR-aware probe was added. New entries always have these keys.}
-    if AInfo.DisplayWidth <= 0 then
-      AInfo.DisplayWidth := AInfo.Width;
-    if AInfo.DisplayHeight <= 0 then
-      AInfo.DisplayHeight := AInfo.Height;
+    {Cache entries written before the SAR-aware probe was added lack
+     explicit DisplayWidth/Height keys (StrToIntDef returned 0).
+     RecalcDisplayDimensions re-derives them from Width/Height +
+     SampleAspect, matching what ProbeVideo would have written. Newer
+     entries get their explicit values overwritten by the same
+     derivation, which is a no-op for SAR=1:1 and a self-consistency
+     check for anamorphic sources — same answer either way.}
+    if (AInfo.DisplayWidth <= 0) or (AInfo.DisplayHeight <= 0) then
+      AInfo.RecalcDisplayDimensions;
     AInfo.VideoCodec := Lines.Values['VideoCodec'];
     AInfo.VideoBitrateKbps := StrToIntDef(Lines.Values['VideoBitrateKbps'], 0);
     AInfo.Fps := StrToFloatDef(Lines.Values['Fps'], 0, InvFmt);
@@ -144,7 +147,6 @@ begin
     AInfo.AudioSampleRate := StrToIntDef(Lines.Values['AudioSampleRate'], 0);
     AInfo.AudioChannels := Lines.Values['AudioChannels'];
     AInfo.AudioBitrateKbps := StrToIntDef(Lines.Values['AudioBitrateKbps'], 0);
-    AInfo.IsValid := AInfo.Duration > 0;
     Result := AInfo.IsValid;
   finally
     Lines.Free;

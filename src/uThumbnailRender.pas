@@ -8,7 +8,7 @@ interface
 
 uses
   Winapi.Windows, Vcl.Graphics,
-  uTypes, uSettings, uFFmpegExe, uProbeCache, uCache, uFrameOffsets;
+  uTypes, uSettings, uFFmpegExe, uVideoInfo, uProbeCache, uCache, uFrameOffsets;
 
 {Computes the time offsets to extract for a thumbnail.
  Single mode: one offset at APositionPercent% of duration.

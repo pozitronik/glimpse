@@ -143,7 +143,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils,
   Winapi.Windows,
-  uTypes, uFFmpegExe, uFFmpegLocator;
+  uTypes, uFFmpegExe, uFFmpegLocator, uVideoInfo;
 
 function TestDataPath(const AFileName: string): string;
 begin

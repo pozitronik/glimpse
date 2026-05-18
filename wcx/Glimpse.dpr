@@ -37,6 +37,7 @@ uses
   uWcxFrameCache in 'uWcxFrameCache.pas',
   uPresetExtractReporter in 'uPresetExtractReporter.pas',
   uWcxProgressCallback in 'uWcxProgressCallback.pas',
+  uVideoInfo in '..\src\uVideoInfo.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',
