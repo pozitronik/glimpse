@@ -165,16 +165,22 @@ type
     procedure BtnPresetAddClick(Sender: TObject);
     procedure BtnPresetRemoveClick(Sender: TObject);
     procedure BtnPresetDuplicateClick(Sender: TObject);
-  private
-    FOwnerWnd: HWND;
+  strict private
+    {These three are set once in CreateForSettings and read by the
+     dialog's own methods. strict private blocks the previous
+     ShowWcxSettingsDialog pattern of reaching into private fields from
+     outside the class (same-unit "private" did not protect against
+     that). Construct the form via CreateForSettings to wire them.}
     FSettings: TWcxSettings;
     FOnApply: TProc;
+    FPresetsPath: string;
+  private
+    FOwnerWnd: HWND;
     FTimestampFontName: string;
     FTimestampFontSize: Integer;
     FBannerFontName: string;
     FBannerFontSize: Integer;
     FPresetModel: TPresetEditorModel;
-    FPresetsPath: string;
     {Tracks which row the edit fields currently mirror so a list-selection
      change can flush the in-progress edits back to the model before
      loading the newly-selected row.}
@@ -215,7 +221,13 @@ type
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
-    constructor CreateWithOwner(AOwnerWnd: HWND);
+    {Constructs the dialog and wires it to the supplied settings,
+     apply-callback and presets-INI path in one atomic step. Replaces
+     the older CreateWithOwner + reach-into-private-fields pattern.
+     Caller still owns ASettings; the form mutates it in place on Apply
+     and OK via TrySaveAll. APresetsPath '' disables preset persistence.}
+    constructor CreateForSettings(AOwnerWnd: HWND; ASettings: TWcxSettings;
+      AOnApply: TProc; const APresetsPath: string);
     destructor Destroy; override;
   end;
 
@@ -817,16 +829,25 @@ begin
   LblRandomPercentValue.Caption := IntToStr(TrkRandomPercent.Position) + '%';
 end;
 
-constructor TWcxSettingsForm.CreateWithOwner(AOwnerWnd: HWND);
+constructor TWcxSettingsForm.CreateForSettings(AOwnerWnd: HWND;
+  ASettings: TWcxSettings; AOnApply: TProc; const APresetsPath: string);
 begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
   FPresetModel := TPresetEditorModel.Create;
   FCurrentPresetIndex := -1;
+  FSettings := ASettings;
+  FOnApply := AOnApply;
+  FPresetsPath := APresetsPath;
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
   Application.HintHidePause := MaxInt;
+  if FSettings <> nil then
+  begin
+    SettingsToControls(FSettings);
+    LoadPresetsFromDisk;
+  end;
 end;
 
 destructor TWcxSettingsForm.Destroy;
@@ -849,13 +870,9 @@ var
   Dlg: TWcxSettingsForm;
 begin
   Result := False;
-  Dlg := TWcxSettingsForm.CreateWithOwner(AParentWnd);
+  Dlg := TWcxSettingsForm.CreateForSettings(AParentWnd, ASettings, AOnApply,
+    PresetsIniPath(ASettings.IniPath));
   try
-    Dlg.FSettings := ASettings;
-    Dlg.FOnApply := AOnApply;
-    Dlg.FPresetsPath := PresetsIniPath(ASettings.IniPath);
-    Dlg.SettingsToControls(ASettings);
-    Dlg.LoadPresetsFromDisk;
     if Dlg.ShowModal = mrOk then
     begin
       {Settings + presets are already persisted by BtnOKClick → TrySaveAll;
