@@ -234,14 +234,37 @@ begin
     Result := Integer(AValue);
 end;
 
+type
+  {One row in the exception-to-WCX-error lookup table. ExceptionClass is
+   the metaclass reference; the lookup matches via InheritsFrom so any
+   subclass of the listed class resolves to the same WcxError. Order
+   matters when one mapped class inherits from another (more-specific
+   first) — none of the current entries have that relationship.}
+  TExceptionClassMapping = record
+    ExceptionClass: TClass;
+    WcxError: Integer;
+  end;
+
+const
+  {Adding a new (ExceptionClass -> WcxError) mapping is a one-line table
+   entry. Unmapped classes (and nil) fall through to E_EWRITE — the WCX
+   "write error" code that TC interprets as a generic mid-extraction
+   failure with a follow-up dialog.}
+  EXCEPTION_MAP: array[0..1] of TExceptionClassMapping = (
+    (ExceptionClass: EOutOfMemory;           WcxError: E_NO_MEMORY),
+    (ExceptionClass: EFileNotFoundException; WcxError: E_EOPEN)
+  );
+
 function ExceptionClassToWcxError(AClass: TClass): Integer;
+var
+  I: Integer;
 begin
-  if (AClass <> nil) and AClass.InheritsFrom(EOutOfMemory) then
-    Result := E_NO_MEMORY
-  else if (AClass <> nil) and AClass.InheritsFrom(EFileNotFoundException) then
-    Result := E_EOPEN
-  else
-    Result := E_EWRITE;
+  if AClass = nil then
+    Exit(E_EWRITE);
+  for I := 0 to High(EXCEPTION_MAP) do
+    if AClass.InheritsFrom(EXCEPTION_MAP[I].ExceptionClass) then
+      Exit(EXCEPTION_MAP[I].WcxError);
+  Result := E_EWRITE;
 end;
 
 function ExceptionToWcxError(E: Exception): Integer;

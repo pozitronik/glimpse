@@ -67,6 +67,7 @@ type
     [Test] procedure ExcMap_FileNotFound_MapsToOpenError;
     [Test] procedure ExcMap_GenericException_FallsThroughToWriteError;
     [Test] procedure ExcMap_OSError_FallsThroughToWriteError;
+    [Test] procedure ExcMap_DerivedFromFileNotFound_MapsToOpenError;
   end;
 
 implementation
@@ -433,6 +434,21 @@ begin
    for them; E_EWRITE is the closest match for the IO-failed-mid-flight
    shape.}
   Assert.AreEqual(E_EWRITE, ExceptionClassToWcxError(EOSError));
+end;
+
+type
+  {Test-only subclass that exercises the InheritsFrom-based table walk.
+   The table contains EFileNotFoundException; a subclass must resolve
+   to the same E_EOPEN via the InheritsFrom check in the loop. Pins
+   the "more-specific classes inherit the mapping" semantic so a future
+   table walk change (e.g. swapping InheritsFrom for ClassType equality)
+   would surface here.}
+  EFileNotFoundSubclass = class(EFileNotFoundException);
+
+procedure TTestWcxAPI.ExcMap_DerivedFromFileNotFound_MapsToOpenError;
+begin
+  Assert.AreEqual(E_EOPEN, ExceptionClassToWcxError(EFileNotFoundSubclass),
+    'Subclass of a mapped exception must resolve via the InheritsFrom walk');
 end;
 
 end.
