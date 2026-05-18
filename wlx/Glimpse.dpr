@@ -52,6 +52,7 @@ uses
   uFrameNotificationSink in '..\src\uFrameNotificationSink.pas',
   uPluginContext in 'uPluginContext.pas',
   uPluginDllPin in 'uPluginDllPin.pas',
+  uVideoProbing in '..\src\uVideoProbing.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',

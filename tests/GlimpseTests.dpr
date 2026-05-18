@@ -94,6 +94,7 @@ uses
   uPluginContext in '..\wlx\uPluginContext.pas',
   TestPluginContext in 'TestPluginContext.pas',
   uPluginDllPin in '..\wlx\uPluginDllPin.pas',
+  uVideoProbing in '..\src\uVideoProbing.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',

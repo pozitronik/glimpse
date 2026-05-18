@@ -32,6 +32,7 @@ uses
   uCombinedImage in '..\src\uCombinedImage.pas',
   uRenderDefaults in '..\src\uRenderDefaults.pas',
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
+  uVideoProbing in '..\src\uVideoProbing.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',

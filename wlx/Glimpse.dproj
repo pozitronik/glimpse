@@ -109,6 +109,7 @@
         <DCCReference Include="..\src\uFrameNotificationSink.pas"/>
         <DCCReference Include="uPluginContext.pas"/>
         <DCCReference Include="uPluginDllPin.pas"/>
+        <DCCReference Include="..\src\uVideoProbing.pas"/>
         <DCCReference Include="..\src\uBitmapResize.pas"/>
         <DCCReference Include="..\src\uThumbnailRender.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
