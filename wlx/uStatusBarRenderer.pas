@@ -29,7 +29,7 @@ interface
 
 uses
   System.Classes, Vcl.ComCtrls,
-  uStatusBarTokens, uStatusBarTemplate;
+  uStatusBarTokens, uStatusBarTemplate, uTextMeasurement;
 
 type
   {Lambda the host form supplies to map a token to its current text.
@@ -42,6 +42,10 @@ type
   private
     FStatusBar: TStatusBar;
     FResolver: TStatusBarTokenTextResolver;
+    {Injected text measurer. Production wires TBitmapTextMeasurer (one
+     persistent TBitmap reused for every measurement) so a Refresh pass
+     does not construct a fresh bitmap per panel. Tests inject a stub.}
+    FMeasurer: ITextMeasurer;
     FTokens: TStatusBarTokenArray;
     {Parallel to FTokens. Cached width measured from the token's sample
      text, used when AutoWidthLive=False and the token has no explicit
@@ -77,9 +81,14 @@ type
     function ScaledExplicitWidth(ALogicalWidth: Integer): Integer;
     function MapAlignment(A: TStatusBarTokenAlign): TAlignment;
   public
-    {AStatusBar must outlive the renderer; AResolver may not be nil.}
+    {AStatusBar must outlive the renderer; AResolver may not be nil.
+     The 2-arg overload wires a default TBitmapTextMeasurer; tests use
+     the 3-arg overload to inject a stub measurer.}
     constructor Create(AStatusBar: TStatusBar;
-      AResolver: TStatusBarTokenTextResolver);
+      AResolver: TStatusBarTokenTextResolver); overload;
+    constructor Create(AStatusBar: TStatusBar;
+      AResolver: TStatusBarTokenTextResolver;
+      AMeasurer: ITextMeasurer); overload;
     {Replaces the template. Re-parses, re-measures auto widths against
      the current font, and rebuilds FStatusBar.Panels via Refresh.}
     procedure ApplyTemplate(const ATemplate: string);
@@ -133,6 +142,15 @@ uses
 constructor TStatusBarRenderer.Create(AStatusBar: TStatusBar;
   AResolver: TStatusBarTokenTextResolver);
 begin
+  {2-arg overload wires the production TBitmapTextMeasurer (lives for
+   the renderer's lifetime, reuses a single TBitmap for every
+   measurement). Tests pass an explicit stub via the 3-arg overload.}
+  Create(AStatusBar, AResolver, TBitmapTextMeasurer.Create);
+end;
+
+constructor TStatusBarRenderer.Create(AStatusBar: TStatusBar;
+  AResolver: TStatusBarTokenTextResolver; AMeasurer: ITextMeasurer);
+begin
   inherited Create;
   {Hard runtime check, not Assert. Assert compiles to nothing in $C-
    release builds; the constructor would then accept nil and the first
@@ -141,8 +159,11 @@ begin
     raise EArgumentNilException.Create('TStatusBarRenderer requires a TStatusBar instance');
   if not Assigned(AResolver) then
     raise EArgumentNilException.Create('TStatusBarRenderer requires a non-nil resolver');
+  if AMeasurer = nil then
+    raise EArgumentNilException.Create('TStatusBarRenderer requires a non-nil text measurer');
   FStatusBar := AStatusBar;
   FResolver := AResolver;
+  FMeasurer := AMeasurer;
   FAutoWidthLive := False;
   FFontName := AStatusBar.Font.Name;
   FFontSize := AStatusBar.Font.Size;
@@ -201,29 +222,20 @@ end;
 
 function TStatusBarRenderer.MeasureText(const AText: string): Integer;
 var
-  Bmp: TBitmap;
   Ppi: Integer;
 begin
   if AText = '' then
     Exit(0);
   {Status bar widths live in the bar's device pixels — on a 150% DPI
-   monitor "100 px" really means 150 device pixels. A fresh TBitmap
-   defaults its canvas to 96 DPI, so TextWidth on it would return
-   unscaled values and panel widths would clip under high-DPI / per-
-   monitor-aware mode. Borrow the bar's CurrentPPI so font height is
-   converted using the same context the panels will paint into.}
+   monitor "100 px" really means 150 device pixels. The injected
+   measurer respects APpi so panel widths track per-monitor DPI
+   correctly. Padding is added here (a status-bar policy) rather than
+   inside the measurer (which is a pure text-width primitive).}
   Ppi := FStatusBar.CurrentPPI;
   if Ppi <= 0 then
     Ppi := 96;
-  Bmp := TBitmap.Create;
-  try
-    Bmp.Canvas.Font.PixelsPerInch := Ppi;
-    Bmp.Canvas.Font.Name := FFontName;
-    Bmp.Canvas.Font.Size := FFontSize;
-    Result := Bmp.Canvas.TextWidth(AText) + MulDiv(STATUSBAR_AUTO_WIDTH_PADDING, Ppi, 96);
-  finally
-    Bmp.Free;
-  end;
+  Result := FMeasurer.MeasureWidth(AText, FFontName, FFontSize, Ppi)
+    + MulDiv(STATUSBAR_AUTO_WIDTH_PADDING, Ppi, 96);
 end;
 
 function TStatusBarRenderer.ScaledExplicitWidth(ALogicalWidth: Integer): Integer;

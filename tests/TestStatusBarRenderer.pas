@@ -5,9 +5,22 @@ interface
 uses
   DUnitX.TestFramework,
   Vcl.Forms, Vcl.ComCtrls,
-  uStatusBarTokens, uStatusBarTemplate, uStatusBarRenderer;
+  uStatusBarTokens, uStatusBarTemplate, uStatusBarRenderer, uTextMeasurement;
 
 type
+  {Stub ITextMeasurer implementation: returns Length(AText) * AWidthPerChar
+   and counts calls. Lets the renderer's measurement-driven layout be
+   exercised without a windowed VCL canvas.}
+  TStubTextMeasurer = class(TInterfacedObject, ITextMeasurer)
+  strict private
+    FWidthPerChar: Integer;
+    FCallCount: Integer;
+  public
+    constructor Create(AWidthPerChar: Integer);
+    function MeasureWidth(const AText, AFontName: string; AFontSize, APpi: Integer): Integer;
+    property CallCount: Integer read FCallCount;
+  end;
+
   [TestFixture]
   TTestStatusBarRenderer = class
   private
@@ -31,6 +44,12 @@ type
     procedure TestNilStatusBarRaisesEArgumentNilException;
     [Test]
     procedure TestNilResolverRaisesEArgumentNilException;
+    [Test]
+    procedure TestNilMeasurerRaisesEArgumentNilException;
+    [Test]
+    procedure TestStubMeasurerWidthDrivesAutoPanel;
+    [Test]
+    procedure TestStubMeasurerCalledOncePerTokenInPass;
     [Test]
     procedure TestEmptyTemplateProducesNoPanels;
     [Test]
@@ -110,6 +129,21 @@ implementation
 uses
   System.Classes, System.SysUtils, Vcl.Controls;
 
+{ TStubTextMeasurer }
+
+constructor TStubTextMeasurer.Create(AWidthPerChar: Integer);
+begin
+  inherited Create;
+  FWidthPerChar := AWidthPerChar;
+end;
+
+function TStubTextMeasurer.MeasureWidth(const AText, AFontName: string;
+  AFontSize, APpi: Integer): Integer;
+begin
+  Inc(FCallCount);
+  Result := Length(AText) * FWidthPerChar;
+end;
+
 {Setup}
 
 procedure TTestStatusBarRenderer.SetUp;
@@ -175,6 +209,63 @@ begin
       TStatusBarRenderer.Create(FStatusBar, nil).Free;
     end,
     EArgumentNilException);
+end;
+
+procedure TTestStatusBarRenderer.TestNilMeasurerRaisesEArgumentNilException;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      TStatusBarRenderer.Create(FStatusBar, ResolverConstant('x'), nil).Free;
+    end,
+    EArgumentNilException);
+end;
+
+procedure TTestStatusBarRenderer.TestStubMeasurerWidthDrivesAutoPanel;
+var
+  Stub: TStubTextMeasurer;
+  R: TStatusBarRenderer;
+begin
+  {Inject a stub that returns Length(AText) * 10 px; the renderer's
+   sample-text-derived auto width should track the stub's return value
+   (plus the constant STATUSBAR_AUTO_WIDTH_PADDING padding at the
+   bar's PPI). Pinning the contract that auto widths come from the
+   measurer rather than a hidden TBitmap call.}
+  Stub := TStubTextMeasurer.Create(10);
+  R := TStatusBarRenderer.Create(FStatusBar, ResolverConstant('xyz'), Stub);
+  try
+    R.ApplyTemplate('%duration%');
+    Assert.IsTrue(FStatusBar.Panels.Count = 1, 'Expected one panel');
+    {Sample text for duration is "0:00:00"; stub returns 7 chars * 10 = 70.
+     Cannot assert exact panel width because the renderer adds DPI-scaled
+     padding, but it must be at least the stub's return.}
+    Assert.IsTrue(FStatusBar.Panels[0].Width >= 70,
+      Format('Auto width %d should include stub measurement (70+)', [FStatusBar.Panels[0].Width]));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStubMeasurerCalledOncePerTokenInPass;
+var
+  Stub: TStubTextMeasurer;
+  R: TStatusBarRenderer;
+  BeforeCalls: Integer;
+begin
+  {Three tokens, AutoWidthLive=False (default). After ApplyTemplate the
+   stub should be called exactly three times (one sample-text measurement
+   per token). Pins that the bitmap-construction cost only scales with
+   token count, not panel-refresh count.}
+  Stub := TStubTextMeasurer.Create(5);
+  R := TStatusBarRenderer.Create(FStatusBar, ResolverConstant('a'), Stub);
+  try
+    BeforeCalls := Stub.CallCount;
+    R.ApplyTemplate('%duration%%fps%%resolution%');
+    Assert.AreEqual(BeforeCalls + 3, Stub.CallCount,
+      'Measurer must be called once per token, not per panel-refresh');
+  finally
+    R.Free;
+  end;
 end;
 
 procedure TTestStatusBarRenderer.TestEmptyTemplateProducesNoPanels;

@@ -48,6 +48,7 @@ uses
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in 'uHotkeysVcl.pas',
   uPluginAppearance in 'uPluginAppearance.pas',
+  uTextMeasurement in 'uTextMeasurement.pas',
   uBitmapResize in '..\src\uBitmapResize.pas',
   uThumbnailRender in '..\src\uThumbnailRender.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',

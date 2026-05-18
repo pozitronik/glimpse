@@ -89,6 +89,7 @@ uses
   uPluginMessages in '..\src\shared\uPluginMessages.pas',
   uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',
   TestHotkeysVcl in 'TestHotkeysVcl.pas',
+  uTextMeasurement in '..\wlx\uTextMeasurement.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',
