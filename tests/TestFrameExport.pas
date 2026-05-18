@@ -71,6 +71,15 @@ type
     [Test] procedure TestNilOverrideEntryFallsBackToLive;
     [Test] procedure TestClearOverrideFramesRestoresLive;
     [Test] procedure TestShorterOverrideArrayFallsBackToLive;
+    {M11 contract: the renderer's live-resolution intent travels as a
+     parameter and does NOT read FSettings.SaveAtLiveResolution. The
+     test sets the persisted setting opposite to the intent it passes
+     and asserts the renderer follows the intent (the persisted setting
+     is ignored). Previously the render path read FSettings directly
+     and CopyFrame/CopyView temp-flipped that field — a cross-cutting
+     hazard fixed by this step.}
+    [Test] procedure TestRenderIntentIgnoresPersistedSetting_LiveIntentOff;
+    [Test] procedure TestRenderIntentIgnoresPersistedSetting_LiveIntentOn;
   end;
 
   [TestFixture]
@@ -227,19 +236,22 @@ type
   { Test subclass that exposes protected render methods }
   TTestableExporter = class(TFrameExporter)
   public
-    function TestRenderCombinedFromCells: TBitmap;
+    {Default False matches the pre-step-48 production behaviour for
+     callers that did not set SaveAtLiveResolution (DEF_SAVE_AT_LIVE_RESOLUTION
+     = False). Tests that need the live branch pass True explicitly.}
+    function TestRenderCombinedFromCells(ALiveResolutionIntent: Boolean = False): TBitmap;
     function TestRenderWithBanner(ABmp: TBitmap): TBitmap;
     function TestScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
     function TestScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
     function TestRenderCellAtLiveSize(AIndex: Integer): TBitmap;
     function TestRenderGridCombinedAtLiveResolution: TBitmap;
-    function TestRenderSmartCombinedFromCells: TBitmap;
+    function TestRenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean = False): TBitmap;
     procedure TestSaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   end;
 
-function TTestableExporter.TestRenderCombinedFromCells: TBitmap;
+function TTestableExporter.TestRenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 begin
-  Result := RenderCombinedFromCells;
+  Result := RenderCombinedFromCells(ALiveResolutionIntent);
 end;
 
 function TTestableExporter.TestRenderWithBanner(ABmp: TBitmap): TBitmap;
@@ -267,9 +279,9 @@ begin
   Result := RenderGridCombinedAtLiveResolution;
 end;
 
-function TTestableExporter.TestRenderSmartCombinedFromCells: TBitmap;
+function TTestableExporter.TestRenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 begin
-  Result := RenderSmartCombinedFromCells;
+  Result := RenderSmartCombinedFromCells(ALiveResolutionIntent);
 end;
 
 procedure TTestableExporter.TestSaveFramesToDir(const ADir: string;
@@ -1362,12 +1374,12 @@ begin
     try
       Exporter := TTestableExporter.Create(View, Settings);
       try
-        BmpBaseline := Exporter.TestRenderCombinedFromCells;
+        BmpBaseline := Exporter.TestRenderCombinedFromCells(True);
         try
           Overrides := MakeOverrideBitmaps(4, 320, 180);
           try
             Exporter.SetOverrideFrames(Overrides);
-            BmpWithOverride := Exporter.TestRenderCombinedFromCells;
+            BmpWithOverride := Exporter.TestRenderCombinedFromCells(True);
             try
               Assert.AreEqual(BmpBaseline.Width, BmpWithOverride.Width,
                 'Toggle-on must ignore override (width unchanged)');
@@ -1382,6 +1394,111 @@ begin
           end;
         finally
           BmpBaseline.Free;
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportOverrideFrames.TestRenderIntentIgnoresPersistedSetting_LiveIntentOff;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  Bmp: TBitmap;
+begin
+  {Persisted SaveAtLiveResolution=True, but render is invoked with
+   intent=False. The renderer must follow the intent (native), which
+   means it must respect the override array. The width of an override
+   bitmap is 320 (set by MakeOverrideBitmaps), so rendering with
+   intent=False on a 4-cell single-column grid gives width >= 320.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := True;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        Overrides := MakeOverrideBitmaps(4, 320, 180);
+        try
+          Exporter.SetOverrideFrames(Overrides);
+          Bmp := Exporter.TestRenderCombinedFromCells(False);
+          try
+            {Native intent + override means each cell is the override
+             bitmap (320x180). Width must be a multiple of 320.}
+            Assert.AreEqual<Integer>(0, Bmp.Width mod 320,
+              'Native intent with override must use 320-wide override bitmaps regardless of the persisted SaveAtLiveResolution=True setting');
+          finally
+            Bmp.Free;
+          end;
+        finally
+          FreeOverrideBitmaps(Overrides);
+        end;
+      finally
+        Exporter.Free;
+      end;
+    finally
+      Settings.Free;
+    end;
+  finally
+    Form.Free;
+  end;
+end;
+
+procedure TTestFrameExportOverrideFrames.TestRenderIntentIgnoresPersistedSetting_LiveIntentOn;
+var
+  Form: TForm;
+  View: TFrameView;
+  Settings: TPluginSettings;
+  Exporter: TTestableExporter;
+  Overrides: TArray<TBitmap>;
+  BmpLiveNoOverride, BmpLiveWithOverride: TBitmap;
+begin
+  {Persisted SaveAtLiveResolution=False, but render is invoked with
+   intent=True. The renderer must follow the intent (live), which means
+   the override array must be ignored. Render twice and assert the two
+   widths match — if override was honoured (a settings-driven read
+   would do that) the widths would diverge.}
+  Form := TForm.CreateNew(nil);
+  try
+    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
+    Settings := CreateSettingsWithBanner(False);
+    Settings.SaveAtLiveResolution := False;
+    Settings.CellGap := 0;
+    Settings.CombinedBorder := 0;
+    try
+      Exporter := TTestableExporter.Create(View, Settings);
+      try
+        BmpLiveNoOverride := Exporter.TestRenderCombinedFromCells(True);
+        try
+          Overrides := MakeOverrideBitmaps(4, 320, 180);
+          try
+            Exporter.SetOverrideFrames(Overrides);
+            BmpLiveWithOverride := Exporter.TestRenderCombinedFromCells(True);
+            try
+              Assert.AreEqual(BmpLiveNoOverride.Width, BmpLiveWithOverride.Width,
+                'Live intent must ignore override (width unchanged) regardless of the persisted SaveAtLiveResolution=False setting');
+              Assert.AreEqual(BmpLiveNoOverride.Height, BmpLiveWithOverride.Height,
+                'Live intent must ignore override (height unchanged)');
+            finally
+              BmpLiveWithOverride.Free;
+            end;
+          finally
+            FreeOverrideBitmaps(Overrides);
+          end;
+        finally
+          BmpLiveNoOverride.Free;
         end;
       finally
         Exporter.Free;
@@ -2359,14 +2476,16 @@ begin
     View.ViewMode := AMode;
     Settings := CreateSettingsWithBanner(False);
     try
-      {Predictor reads AForceLiveRes as a parameter; the renderer reads
-       FSettings.SaveAtLiveResolution. Set both to the same value so the
-       comparison is apples-to-apples.}
+      {Both predictor and renderer take live-resolution intent as a
+       parameter (post step 48); the settings field is no longer read by
+       the render path. Keeping Settings.SaveAtLiveResolution in sync
+       is harmless and documents the intent in case a future test
+       wants to verify dialog seeding too.}
       Settings.SaveAtLiveResolution := AForceLive;
       Exporter := TTestableExporter.Create(View, Settings);
       try
         Exporter.PredictCombinedSize(AForceLive, PW, PH);
-        Bmp := Exporter.TestRenderCombinedFromCells;
+        Bmp := Exporter.TestRenderCombinedFromCells(AForceLive);
         try
           Assert.IsNotNull(Bmp, ContextLabel + ': renderer returned nil; cannot compare');
           Assert.AreEqual(Bmp.Width, PW, ContextLabel + ': predicted width must equal rendered width');

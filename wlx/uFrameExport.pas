@@ -105,8 +105,20 @@ type
     function ShowSaveDialog(const ATitle, ADefaultName: string; AOverwritePrompt: Boolean; AInitialLiveRes: Boolean; out APath: string; out AFormat: TSaveFormat): Boolean;
     {Returns the bitmap that the save/copy paths should consume for cell
      AIndex, honouring FOverrideFrames when set and the toggle is off.}
-    function PickSaveBitmap(AIndex: Integer): TBitmap;
-    function CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray): Integer;
+    {ALiveResolutionIntent: True means "render at on-screen cell size"
+     (callers route to RenderCellAtLiveSize separately and never invoke
+     PickSaveBitmap in that path today; the param is reserved for
+     symmetry with the other render-path entry points so a future
+     unified caller doesn't have to special-case the intent flag).
+     False means "native frame size" — the override array wins when
+     populated, falling back to the live cell.}
+    function PickSaveBitmap(AIndex: Integer; ALiveResolutionIntent: Boolean): TBitmap;
+    {ALiveResolutionIntent is forwarded to PickSaveBitmap for the
+     per-cell frame selection; native-resolution callers (False) get
+     override-aware frames, live-resolution callers (True) get raw cell
+     bitmaps.}
+    function CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray;
+      ALiveResolutionIntent: Boolean): Integer;
     procedure BuildGridStyle(out AGrid: TCombinedGridStyle);
     procedure BuildTimestampStyle(out ATs: TTimestampStyle);
     function CountLiveGridColumns: Integer;
@@ -131,8 +143,16 @@ type
     function ScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
     function RenderCellAtLiveSize(AIndex: Integer): TBitmap;
     function RenderGridCombinedAtLiveResolution: TBitmap;
-    function RenderSmartCombinedFromCells: TBitmap;
-    function RenderCombinedFromCells: TBitmap;
+    {ALiveResolutionIntent: True = panel-pixel cells (live view sizing),
+     False = anchor-to-widest native cell sizes. Replaces the previous
+     internal read of FSettings.SaveAtLiveResolution so CopyView /
+     CopyFrame can route their per-call intent through without temp-
+     flipping the settings field.}
+    function RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
+    {ALiveResolutionIntent: True dispatches to the always-live
+     RenderGridCombinedAtLiveResolution for uniform-row modes. Replaces
+     the previous internal read of FSettings.SaveAtLiveResolution.}
+    function RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
     {Saves ABitmap to a fresh %TEMP%\glimpse_clip_*.png and publishes
      its path as CF_HDROP. Deletes the previous temp file if any.
@@ -660,10 +680,10 @@ end;
  override entry falls back to the live cell so partial coverage degrades
  gracefully. With the toggle on, always uses the live cell since the
  toggle's contract is to mirror what is on screen.}
-function TFrameExporter.PickSaveBitmap(AIndex: Integer): TBitmap;
+function TFrameExporter.PickSaveBitmap(AIndex: Integer; ALiveResolutionIntent: Boolean): TBitmap;
 begin
   Result := nil;
-  if (not FSettings.SaveAtLiveResolution) and (AIndex >= 0) and (AIndex < Length(FOverrideFrames)) and (FOverrideFrames[AIndex] <> nil) then
+  if (not ALiveResolutionIntent) and (AIndex >= 0) and (AIndex < Length(FOverrideFrames)) and (FOverrideFrames[AIndex] <> nil) then
     Exit(FOverrideFrames[AIndex]);
   if (AIndex >= 0) and (AIndex < FFrameView.CellCount) and (FFrameView.CellState(AIndex) = fcsLoaded) then
     Result := FFrameView.CellBitmap(AIndex);
@@ -684,7 +704,8 @@ end;
  precedence over the live cells. Offsets always come from the live view.
  nil entries for placeholder/error/missing cells are passed through; the
  renderer skips them.}
-function TFrameExporter.CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray): Integer;
+function TFrameExporter.CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray;
+  ALiveResolutionIntent: Boolean): Integer;
 var
   I: Integer;
 begin
@@ -693,7 +714,7 @@ begin
   SetLength(AOffsets, Result);
   for I := 0 to Result - 1 do
   begin
-    AFrames[I] := PickSaveBitmap(I);
+    AFrames[I] := PickSaveBitmap(I, ALiveResolutionIntent);
     AOffsets[I].TimeOffset := FFrameView.CellTimeOffset(I);
   end;
 end;
@@ -972,7 +993,7 @@ var
   Ts: TTimestampStyle;
   CellW, CellH, Cols, I, N: Integer;
 begin
-  N := CollectFramesAndOffsets(Frames, Offsets);
+  N := CollectFramesAndOffsets(Frames, Offsets, True);
   if N = 0 then
     Exit(nil);
 
@@ -1005,7 +1026,7 @@ end;
  - False: anchor to the row with the most cells, sized at native frame
  width; total inner aspect ratio still tracks the panel so rows look
  the same shape as on screen.}
-function TFrameExporter.RenderSmartCombinedFromCells: TBitmap;
+function TFrameExporter.RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 var
   Frames: TArray<TBitmap>;
   Offsets: TFrameOffsetArray;
@@ -1014,11 +1035,11 @@ var
   RowCounts: TArray<Integer>;
   N, OutputW, OutputH: Integer;
 begin
-  N := CollectFramesAndOffsets(Frames, Offsets);
+  N := CollectFramesAndOffsets(Frames, Offsets, ALiveResolutionIntent);
   if N = 0 then
     Exit(nil);
 
-  ComputeSmartCombinedLayout(FSettings.SaveAtLiveResolution, Frames, OutputW, OutputH, RowCounts);
+  ComputeSmartCombinedLayout(ALiveResolutionIntent, Frames, OutputW, OutputH, RowCounts);
   if Length(RowCounts) = 0 then
     Exit(nil);
 
@@ -1046,7 +1067,7 @@ end;
 
  Returns nil only when there are no cells; placeholder/error cells are
  passed through as nil bitmaps and skipped by the renderer.}
-function TFrameExporter.RenderCombinedFromCells: TBitmap;
+function TFrameExporter.RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 var
   Frames: TArray<TBitmap>;
   Offsets: TFrameOffsetArray;
@@ -1055,15 +1076,15 @@ var
   N, Cols, CellW, CellH: Integer;
 begin
   if FFrameView.ViewMode = vmSmartGrid then
-    Exit(RenderSmartCombinedFromCells);
+    Exit(RenderSmartCombinedFromCells(ALiveResolutionIntent));
 
   {The uniform-row modes (vmGrid, vmFilmstrip, vmScroll) all share the
    same live-resolution path: it picks Columns from the live layout
    via CountLiveGridColumns, which generalises across the three.}
-  if FSettings.SaveAtLiveResolution and (FFrameView.ViewMode in [vmGrid, vmFilmstrip, vmScroll]) then
+  if ALiveResolutionIntent and (FFrameView.ViewMode in [vmGrid, vmFilmstrip, vmScroll]) then
     Exit(RenderGridCombinedAtLiveResolution);
 
-  N := CollectFramesAndOffsets(Frames, Offsets);
+  N := CollectFramesAndOffsets(Frames, Offsets, ALiveResolutionIntent);
   if N = 0 then
     Exit(nil);
 
@@ -1331,7 +1352,7 @@ begin
       end;
     end
     else
-      uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(I), TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+      uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(I, False), TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
   end;
 end;
 
@@ -1366,7 +1387,7 @@ begin
         end;
       end
       else
-        uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(Idx), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
+        uBitmapSaver.SaveBitmapToFile(PickSaveBitmap(Idx, False), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
     end;
 
   {Native-resolution path may need re-extract; defer to host. Live-
@@ -1461,7 +1482,7 @@ begin
        user gets a hint about the cause and possible workarounds, rather
        than the host's generic OS-level message.}
       try
-        Bmp := RenderWithBanner(RenderCombinedFromCells);
+        Bmp := RenderWithBanner(RenderCombinedFromCells(FSettings.SaveAtLiveResolution));
         try
           ApplyCombinedSizeCap(Bmp);
           uBitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
@@ -1485,8 +1506,8 @@ end;
 procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer; AReExtract: TReExtractAction);
 var
   Idx: Integer;
+  CopyLiveRes: Boolean;
   WriteAction: TProc;
-  PriorLiveRes: Boolean;
 begin
   if not ResolveFrameIndex(AContextCellIndex, Idx) then
     Exit;
@@ -1500,11 +1521,14 @@ begin
    because the combined image carries cell-gap transparency that only
    CF_DIBV5 can round-trip; do not collapse the two paths.
 
-   The render path reads FSettings.SaveAtLiveResolution; we temp-flip it
-   to CopyAtLiveResolution for the duration of this call so the copy
-   surface honours its own setting. AReExtract sees the flipped value
-   too (it queries SaveAtLiveResolution to decide whether re-extract is
-   needed), so the gate is consistent across render and re-extract.}
+   Copy-side resolution intent is captured as a local; the render path
+   used to read FSettings.SaveAtLiveResolution and required a temp-flip
+   to CopyAtLiveResolution around the call. That temp-flip was a
+   cross-cutting hazard for any concurrent reader of SaveAtLiveResolution
+   (toolbar button state, settings dialog mid-paint, status-bar resolver).
+   The intent now travels as a value through PickSaveBitmap's parameter.}
+  CopyLiveRes := FSettings.CopyAtLiveResolution;
+
   WriteAction := procedure
     var
       Tmp, Source: TBitmap;
@@ -1514,17 +1538,16 @@ begin
       {Pick the bitmap that becomes the clipboard payload. The
        file-reference path needs the bitmap object to encode to PNG;
        the legacy path hands it to VCL's Clipboard.Assign which
-       publishes CF_BITMAP. Resolution choice (live vs native) is the
-       same for both paths — temp-flipped to CopyAtLiveResolution
-       earlier so SaveAtLiveResolution reads as the copy-side intent.}
-      if FSettings.SaveAtLiveResolution then
+       publishes CF_BITMAP. CopyLiveRes is the copy-side intent
+       captured above the closure.}
+      if CopyLiveRes then
       begin
         Source := RenderCellAtLiveSize(Idx);
         OwnsSource := True;
       end
       else
       begin
-        Source := PickSaveBitmap(Idx);
+        Source := PickSaveBitmap(Idx, False);
         OwnsSource := False;
       end;
       try
@@ -1592,22 +1615,15 @@ begin
       end;
     end;
 
-  PriorLiveRes := FSettings.SaveAtLiveResolution;
-  FSettings.SaveAtLiveResolution := FSettings.CopyAtLiveResolution;
-  try
-    if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
-      AReExtract([Idx], WriteAction)
-    else
-      WriteAction;
-  finally
-    FSettings.SaveAtLiveResolution := PriorLiveRes;
-  end;
+  if (not CopyLiveRes) and Assigned(AReExtract) then
+    AReExtract([Idx], WriteAction)
+  else
+    WriteAction;
 end;
 
 procedure TFrameExporter.CopyView(AForceLiveRes: Boolean; AReExtract: TReExtractAction);
 var
   WriteAction: TProc;
-  PriorLiveRes: Boolean;
 begin
   if FFrameView.CellCount = 0 then
     Exit;
@@ -1617,11 +1633,11 @@ begin
     Exit;
   end;
 
-  {The render pipeline reads FSettings.SaveAtLiveResolution to decide live
-   vs native; for a one-shot dropdown choice we flip it for the duration
-   of this call only and restore in finally. No FSettings.Save call -
-   the persisted value is unchanged, only the in-memory copy briefly.}
-  PriorLiveRes := FSettings.SaveAtLiveResolution;
+  {Copy-side resolution intent (AForceLiveRes) used to be installed by
+   temp-flipping FSettings.SaveAtLiveResolution for the duration of
+   this call. That was a cross-cutting hazard for concurrent readers
+   of SaveAtLiveResolution; the render path now takes the intent as a
+   parameter so we pass AForceLiveRes through directly.}
 
   WriteAction := procedure
     var
@@ -1634,7 +1650,7 @@ begin
        which historically meant the user saw the clipboard simply not
        change. Surface that as an explicit error too.}
       try
-        Bmp := RenderWithBanner(RenderCombinedFromCells);
+        Bmp := RenderWithBanner(RenderCombinedFromCells(AForceLiveRes));
         try
           ApplyCombinedSizeCap(Bmp);
           {Publishes the strategy array assembled from FSettings.ClipboardFormats
@@ -1662,15 +1678,10 @@ begin
       end;
     end;
 
-  FSettings.SaveAtLiveResolution := AForceLiveRes;
-  try
-    if (not AForceLiveRes) and Assigned(AReExtract) then
-      AReExtract(BuildSaveIndicesAllLoaded, WriteAction)
-    else
-      WriteAction;
-  finally
-    FSettings.SaveAtLiveResolution := PriorLiveRes;
-  end;
+  if (not AForceLiveRes) and Assigned(AReExtract) then
+    AReExtract(BuildSaveIndicesAllLoaded, WriteAction)
+  else
+    WriteAction;
 end;
 
 end.
