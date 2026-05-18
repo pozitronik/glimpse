@@ -24,7 +24,12 @@ procedure EncodeBitmapAsPng(ABitmap: TBitmap; AStream: TStream; APngCompression:
  AJpegQuality: 1..100, APngCompression: 0..9.}
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 
-{Converts raw PNG bytes to a TBitmap (pf24bit).
+{Converts raw PNG bytes to a TBitmap.
+ The returned bitmap is always pf24bit: any alpha channel the source PNG
+ carried is stripped during the TPngImage.Assign step, then PixelFormat
+ is set to pf24bit so the result is a plain DIB safe to render from any
+ thread without GDI alpha handling. Callers needing the source PNG's
+ alpha should decode through Vcl.Imaging.pngimage.TPngImage directly.
  Caller owns the returned bitmap. Raises on invalid data.}
 function PngBytesToBitmap(const AData: TBytes): TBitmap;
 
