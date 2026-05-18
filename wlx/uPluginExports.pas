@@ -282,7 +282,8 @@ begin
   try
     FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath);
     try
-      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height, Ctx.Settings, Ctx.ThumbnailCache, Ctx.ProbeCache);
+      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height,
+        TThumbnailParams.FromSettings(Ctx.Settings), Ctx.ThumbnailCache, Ctx.ProbeCache);
       if Bmp <> nil then
         try
           {TC takes ownership of the returned HBITMAP; ReleaseHandle

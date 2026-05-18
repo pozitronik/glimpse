@@ -10,6 +10,33 @@ uses
   Winapi.Windows, Vcl.Graphics,
   uTypes, uSettings, uFFmpegExe, uVideoInfo, uProbeCache, uCache, uFrameOffsets;
 
+type
+  {Narrow input for RenderThumbnail. The renderer used to take a whole
+   `TPluginSettings` reference — a god-object that contains 60+ fields
+   the thumbnail path does not touch. This record carries only the 9
+   fields the pipeline actually reads, plus a `FromSettings` factory
+   so production callers don't have to construct it field-by-field.
+
+   Tests construct this directly with literal values instead of building
+   a TPluginSettings, removing the settings dependency from the
+   thumbnail test surface.}
+  TThumbnailParams = record
+    Enabled: Boolean;
+    Mode: TThumbnailMode;
+    Position: Integer;     {0..100, only used in Single mode}
+    GridFrames: Integer;   {>=1, only used in Grid mode}
+    SkipEdgesPercent: Integer;
+    HwAccel: Boolean;
+    UseKeyframes: Boolean;
+    RespectAnamorphic: Boolean;
+    Background: TColor;
+
+    {Projects the fields RenderThumbnail reads out of a TPluginSettings.
+     Production caller (uPluginExports) uses this; tests construct the
+     record directly.}
+    class function FromSettings(const ASettings: TPluginSettings): TThumbnailParams; static;
+  end;
+
 {Computes the time offsets to extract for a thumbnail.
  Single mode: one offset at APositionPercent% of duration.
  Grid mode: AGridFrames evenly-spaced offsets honoring ASkipEdgesPercent.
@@ -26,7 +53,7 @@ function PickThumbnailExtractionMaxSide(AReqWidth, AReqHeight: Integer): Integer
  field-by-field copy; earlier the function silently dropped
  RespectAnamorphic, distorting anamorphic-source thumbnails relative to
  the lister's main extraction path.}
-function BuildThumbnailExtractionOptions(const ASettings: TPluginSettings; AReqWidth, AReqHeight: Integer): TExtractionOptions;
+function BuildThumbnailExtractionOptions(const AParams: TThumbnailParams; AReqWidth, AReqHeight: Integer): TExtractionOptions;
 
 {Renders a thumbnail bitmap for the given video file.
  Returns nil if disabled, on probe failure, or on extraction failure.
@@ -35,7 +62,7 @@ function BuildThumbnailExtractionOptions(const ASettings: TPluginSettings; AReqW
  AProbeCache consolidates probe results across the thumbnail panel and the
  lister form so folder scrolling does not re-spawn ffmpeg for files already
  probed once; never pass nil.}
-function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string; AReqWidth, AReqHeight: Integer; const ASettings: TPluginSettings; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
+function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
 
 implementation
 
@@ -84,7 +111,20 @@ begin
   Result := ((Bigger + SCALE_BUCKET - 1) div SCALE_BUCKET) * SCALE_BUCKET;
 end;
 
-function BuildThumbnailExtractionOptions(const ASettings: TPluginSettings; AReqWidth, AReqHeight: Integer): TExtractionOptions;
+class function TThumbnailParams.FromSettings(const ASettings: TPluginSettings): TThumbnailParams;
+begin
+  Result.Enabled := ASettings.ThumbnailsEnabled;
+  Result.Mode := ASettings.ThumbnailMode;
+  Result.Position := ASettings.ThumbnailPosition;
+  Result.GridFrames := ASettings.ThumbnailGridFrames;
+  Result.SkipEdgesPercent := ASettings.SkipEdgesPercent;
+  Result.HwAccel := ASettings.HwAccel;
+  Result.UseKeyframes := ASettings.UseKeyframes;
+  Result.RespectAnamorphic := ASettings.RespectAnamorphic;
+  Result.Background := ASettings.Background;
+end;
+
+function BuildThumbnailExtractionOptions(const AParams: TThumbnailParams; AReqWidth, AReqHeight: Integer): TExtractionOptions;
 begin
   Result := Default (TExtractionOptions);
   {BMP pipe is preferred for speed (we have memory headroom for tiny thumbs).
@@ -93,14 +133,14 @@ begin
    across neighbouring TC sizes.}
   Result.UseBmpPipe := True;
   Result.MaxSide := PickThumbnailExtractionMaxSide(AReqWidth, AReqHeight);
-  Result.HwAccel := ASettings.HwAccel;
-  Result.UseKeyframes := ASettings.UseKeyframes;
+  Result.HwAccel := AParams.HwAccel;
+  Result.UseKeyframes := AParams.UseKeyframes;
   {Match the lister's main extraction path: anamorphic sources must render
    at display dimensions, not the raw storage pixel grid. Earlier this
    field was left at Default(False), so DVD rips and broadcast captures
    appeared squashed in the TC panel while the live preview rendered them
    correctly.}
-  Result.RespectAnamorphic := ASettings.RespectAnamorphic;
+  Result.RespectAnamorphic := AParams.RespectAnamorphic;
 end;
 
 {Resolves the cache + extract pair for a single offset. The cache lookup
@@ -150,7 +190,7 @@ begin
   end;
 end;
 
-function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string; AReqWidth, AReqHeight: Integer; const ASettings: TPluginSettings; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
+function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
 var
   Info: TVideoInfo;
   Offsets: TFrameOffsetArray;
@@ -160,9 +200,9 @@ var
   I: Integer;
 begin
   Result := nil;
-  if (AFFmpeg = nil) or (ASettings = nil) or (ACache = nil) or (AProbeCache = nil) then
+  if (AFFmpeg = nil) or (ACache = nil) or (AProbeCache = nil) then
     Exit;
-  if not ASettings.ThumbnailsEnabled then
+  if not AParams.Enabled then
     Exit;
   if (AReqWidth <= 0) or (AReqHeight <= 0) then
     Exit;
@@ -175,7 +215,7 @@ begin
       Exit;
 
     try
-      Offsets := CalcThumbnailOffsets(Info.Duration, ASettings.ThumbnailMode, ASettings.ThumbnailPosition, ASettings.ThumbnailGridFrames, ASettings.SkipEdgesPercent);
+      Offsets := CalcThumbnailOffsets(Info.Duration, AParams.Mode, AParams.Position, AParams.GridFrames, AParams.SkipEdgesPercent);
     except
       on EArgumentException do
         Exit;
@@ -183,7 +223,7 @@ begin
     if Length(Offsets) = 0 then
       Exit;
 
-    Options := BuildThumbnailExtractionOptions(ASettings, AReqWidth, AReqHeight);
+    Options := BuildThumbnailExtractionOptions(AParams, AReqWidth, AReqHeight);
 
     SetLength(Frames, Length(Offsets));
     try
@@ -193,11 +233,11 @@ begin
         {Single mode: a missing frame is a hard failure (no fallback).
          Grid mode: we still try to render whatever frames we got; nil cells
          are tolerated by RenderCombinedImage.}
-        if (ASettings.ThumbnailMode = tnmSingle) and (Frames[I] = nil) then
+        if (AParams.Mode = tnmSingle) and (Frames[I] = nil) then
           Exit;
       end;
 
-      if ASettings.ThumbnailMode = tnmSingle then
+      if AParams.Mode = tnmSingle then
       begin
         {Detach the only frame; the finally block leaves it alone}
         Result := Frames[0];
@@ -206,7 +246,7 @@ begin
         {Combine into a grid. Gap=0 keeps tiny thumbnails tight; timecode
          overlay is suppressed because thumbnail cells are too small to read.}
         GridStyle := DefaultCombinedGridStyle;
-        GridStyle.Background := ASettings.Background;
+        GridStyle.Background := AParams.Background;
         Result := RenderCombinedImage(Frames, Offsets, GridStyle, DefaultTimestampStyle);
         if Result = nil then
           Exit;

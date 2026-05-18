@@ -46,7 +46,6 @@ type
 
     { RenderThumbnail guard conditions (no ffmpeg required) }
     [Test] procedure RenderThumbnail_NilFFmpeg_ReturnsNil;
-    [Test] procedure RenderThumbnail_NilSettings_ReturnsNil;
     [Test] procedure RenderThumbnail_NilCache_ReturnsNil;
     [Test] procedure RenderThumbnail_NilProbeCache_ReturnsNil;
     [Test] procedure RenderThumbnail_Disabled_ReturnsNil;
@@ -69,6 +68,22 @@ begin
     TDirectory is not created here; TProbeCache only writes on Put(). }
   Result := TProbeCache.Create(TPath.Combine(TPath.GetTempPath,
     'glimpse_thumb_probe_' + IntToStr(Random(MaxInt))));
+end;
+
+{Returns a TThumbnailParams with Enabled=True so the pipeline reaches
+ past its early-disabled guard. Other fields stay at Default (which is
+ what production callers' "no override" path would do too). Tests that
+ want a specific field override do so on the returned record before
+ passing it to RenderThumbnail / BuildThumbnailExtractionOptions.
+
+ The post-step-58 Default(TThumbnailParams) gives Enabled=False (record
+ zero-init), unlike a fresh TPluginSettings which has ThumbnailsEnabled
+ := DEF_THUMBNAILS_ENABLED (True). This helper preserves the pre-58
+ "enabled by default" convention for the existing tests.}
+function MakeEnabledThumbnailParams: TThumbnailParams;
+begin
+  Result := Default(TThumbnailParams);
+  Result.Enabled := True;
 end;
 
 { -------- CalcThumbnailOffsets — single mode -------- }
@@ -246,229 +261,187 @@ end;
 
 procedure TTestThumbnailRender.BuildOptions_UseBmpPipeAlwaysTrue;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   O: TExtractionOptions;
 begin
-  S := TPluginSettings.Create('');
-  try
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsTrue(O.UseBmpPipe, 'Thumbnails always use the bmp pipe for speed');
-  finally
-    S.Free;
-  end;
+  P := Default(TThumbnailParams);
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsTrue(O.UseBmpPipe, 'Thumbnails always use the bmp pipe for speed');
 end;
 
 procedure TTestThumbnailRender.BuildOptions_HwAccelMirrorsSettings;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   O: TExtractionOptions;
 begin
-  S := TPluginSettings.Create('');
-  try
-    S.HwAccel := True;
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsTrue(O.HwAccel);
-    S.HwAccel := False;
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsFalse(O.HwAccel);
-  finally
-    S.Free;
-  end;
+  P := Default(TThumbnailParams);
+  P.HwAccel := True;
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsTrue(O.HwAccel);
+  P.HwAccel := False;
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsFalse(O.HwAccel);
 end;
 
 procedure TTestThumbnailRender.BuildOptions_UseKeyframesMirrorsSettings;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   O: TExtractionOptions;
 begin
-  S := TPluginSettings.Create('');
-  try
-    S.UseKeyframes := True;
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsTrue(O.UseKeyframes);
-    S.UseKeyframes := False;
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsFalse(O.UseKeyframes);
-  finally
-    S.Free;
-  end;
+  P := Default(TThumbnailParams);
+  P.UseKeyframes := True;
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsTrue(O.UseKeyframes);
+  P.UseKeyframes := False;
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsFalse(O.UseKeyframes);
 end;
 
 procedure TTestThumbnailRender.BuildOptions_RespectAnamorphicMirrorsSettings;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   O: TExtractionOptions;
 begin
-  S := TPluginSettings.Create('');
-  try
-    {Bug regression pin. Earlier the inline build forgot to copy
-     RespectAnamorphic, so anamorphic-source thumbnails appeared squashed
-     while the live preview rendered them correctly.}
-    S.RespectAnamorphic := True;
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsTrue(O.RespectAnamorphic,
-      'Thumbnail must respect anamorphic when the user has the toggle on');
-    S.RespectAnamorphic := False;
-    O := BuildThumbnailExtractionOptions(S, 256, 256);
-    Assert.IsFalse(O.RespectAnamorphic,
-      'Thumbnail must follow the toggle off');
-  finally
-    S.Free;
-  end;
+  {Bug regression pin. Earlier the inline build forgot to copy
+   RespectAnamorphic, so anamorphic-source thumbnails appeared squashed
+   while the live preview rendered them correctly.}
+  P := Default(TThumbnailParams);
+  P.RespectAnamorphic := True;
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsTrue(O.RespectAnamorphic,
+    'Thumbnail must respect anamorphic when the user has the toggle on');
+  P.RespectAnamorphic := False;
+  O := BuildThumbnailExtractionOptions(P, 256, 256);
+  Assert.IsFalse(O.RespectAnamorphic,
+    'Thumbnail must follow the toggle off');
 end;
 
 procedure TTestThumbnailRender.BuildOptions_MaxSideFromRequestedCellSize;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   O: TExtractionOptions;
 begin
-  S := TPluginSettings.Create('');
-  try
-    O := BuildThumbnailExtractionOptions(S, 100, 50);
-    Assert.AreEqual(PickThumbnailExtractionMaxSide(100, 50), O.MaxSide,
-      'MaxSide must come from the requested cell size, not MaxFrameSide');
-  finally
-    S.Free;
-  end;
+  P := Default(TThumbnailParams);
+  O := BuildThumbnailExtractionOptions(P, 100, 50);
+  Assert.AreEqual(PickThumbnailExtractionMaxSide(100, 50), O.MaxSide,
+    'MaxSide must come from the requested cell size, not MaxFrameSide');
 end;
 
 { -------- RenderThumbnail guards -------- }
 
 procedure TTestThumbnailRender.RenderThumbnail_NilFFmpeg_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Cache: IFrameCache;
   Probe: TProbeCache;
 begin
-  S := TPluginSettings.Create('');
+  P := MakeEnabledThumbnailParams;
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(nil, 'x.mp4', 256, 256, S, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(nil, 'x.mp4', 256, 256, P, Cache, Probe));
   finally
     Probe.Free;
-    S.Free;
-  end;
-end;
-
-procedure TTestThumbnailRender.RenderThumbnail_NilSettings_ReturnsNil;
-var
-  Cache: IFrameCache;
-  Ff: TFFmpegExe;
-  Probe: TProbeCache;
-begin
-  Cache := TNullFrameCache.Create;
-  Ff := TFFmpegExe.Create('ffmpeg.exe');
-  Probe := MakeTempProbeCache;
-  try
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, nil, Cache, Probe));
-  finally
-    Probe.Free;
-    Ff.Free;
   end;
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_NilCache_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Ff: TFFmpegExe;
   Probe: TProbeCache;
 begin
-  S := TPluginSettings.Create('');
+  P := MakeEnabledThumbnailParams;
   Ff := TFFmpegExe.Create('ffmpeg.exe');
   Probe := MakeTempProbeCache;
   try
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, nil, Probe));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, P, nil, Probe));
   finally
     Probe.Free;
     Ff.Free;
-    S.Free;
   end;
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_NilProbeCache_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
 begin
   { Probe cache is required — without it the pipeline cannot resolve video
     metadata and must fail fast, consistent with the other nil guards. }
-  S := TPluginSettings.Create('');
+  P := MakeEnabledThumbnailParams;
   Ff := TFFmpegExe.Create('ffmpeg.exe');
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, Cache, nil));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, P, Cache, nil));
   finally
     Ff.Free;
-    S.Free;
   end;
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_Disabled_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
   Probe: TProbeCache;
 begin
-  S := TPluginSettings.Create('');
+  {Default(TThumbnailParams).Enabled is False — exactly the contract this
+   test pins. No need to override.}
+  P := Default(TThumbnailParams);
   Ff := TFFmpegExe.Create('ffmpeg.exe');
   Probe := MakeTempProbeCache;
   try
-    S.ThumbnailsEnabled := False;
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, S, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, P, Cache, Probe));
   finally
     Probe.Free;
     Ff.Free;
-    S.Free;
   end;
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_ZeroWidth_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
   Probe: TProbeCache;
 begin
-  S := TPluginSettings.Create('');
+  P := MakeEnabledThumbnailParams;
   Ff := TFFmpegExe.Create('ffmpeg.exe');
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 0, 256, S, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 0, 256, P, Cache, Probe));
   finally
     Probe.Free;
     Ff.Free;
-    S.Free;
   end;
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_ZeroHeight_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
   Probe: TProbeCache;
 begin
-  S := TPluginSettings.Create('');
+  P := MakeEnabledThumbnailParams;
   Ff := TFFmpegExe.Create('ffmpeg.exe');
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 0, S, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 0, P, Cache, Probe));
   finally
     Probe.Free;
     Ff.Free;
-    S.Free;
   end;
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_BadFFmpegPath_ReturnsNil;
 var
-  S: TPluginSettings;
+  P: TThumbnailParams;
   Cache: IFrameCache;
   Ff: TFFmpegExe;
   Probe: TProbeCache;
@@ -476,16 +449,15 @@ begin
   { Probe will fail (or yield IsValid=False) on a bogus ffmpeg path; the
     function must return nil rather than raise. This is the closest we
     can get to integration testing without shipping a sample video. }
-  S := TPluginSettings.Create('');
+  P := MakeEnabledThumbnailParams;
   Ff := TFFmpegExe.Create('Z:\nonexistent\ffmpeg.exe');
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'Z:\nonexistent.mp4', 256, 256, S, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Ff, 'Z:\nonexistent.mp4', 256, 256, P, Cache, Probe));
   finally
     Probe.Free;
     Ff.Free;
-    S.Free;
   end;
 end;
 
