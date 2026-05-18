@@ -63,7 +63,7 @@ end;
 
 class function TProbeCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string;
 begin
-  Result := AnsiLowerCase(AFilePath) + '|' + IntToStr(AFileSize) + '|' + FormatDateTime('yyyymmddhhnnsszzz', AFileTime);
+  Result := BuildFileIdentityKey(AFilePath, AFileSize, AFileTime);
 end;
 
 function TProbeCache.ProbeKey(const AFilePath: string): string;

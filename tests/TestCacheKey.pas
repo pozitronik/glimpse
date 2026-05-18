@@ -28,6 +28,12 @@ type
      hex (or removal of ToLower regressing the contract) is caught.}
     [Test]
     procedure TestCacheHashKeyAlwaysLowercase;
+    [Test]
+    procedure TestBuildFileIdentityKeyFormat;
+    [Test]
+    procedure TestBuildFileIdentityKeyLowercasesPath;
+    [Test]
+    procedure TestBuildFileIdentityKeyMtimeIncludesMilliseconds;
   end;
 
 implementation
@@ -107,6 +113,44 @@ begin
       Assert.IsFalse(CharInSet(C, ['A'..'Z']),
         Format('Hex output must be lowercase; got %s for %s', [Key, Input]));
   end;
+end;
+
+procedure TTestCacheKey.TestBuildFileIdentityKeyFormat;
+var
+  Key: string;
+begin
+  {Pins the lowercased-path | size | yyyymmddhhnnsszzz format that both
+   TFrameCache and TProbeCache rely on. A regression here would silently
+   invalidate every cached entry across both caches.}
+  Key := BuildFileIdentityKey('C:\Videos\sample.mkv', 12345,
+    EncodeDate(2025, 6, 15) + EncodeTime(14, 30, 45, 123));
+  Assert.AreEqual('c:\videos\sample.mkv|12345|20250615143045123', Key);
+end;
+
+procedure TTestCacheKey.TestBuildFileIdentityKeyLowercasesPath;
+var
+  KeyUpper, KeyLower: string;
+begin
+  {Identical files under different case should produce the same key so a
+   case-insensitive filesystem (NTFS / TC default) does not duplicate
+   cache entries.}
+  KeyUpper := BuildFileIdentityKey('C:\Videos\SAMPLE.MKV', 1, EncodeDate(2025, 1, 1));
+  KeyLower := BuildFileIdentityKey('c:\videos\sample.mkv', 1, EncodeDate(2025, 1, 1));
+  Assert.AreEqual(KeyLower, KeyUpper);
+end;
+
+procedure TTestCacheKey.TestBuildFileIdentityKeyMtimeIncludesMilliseconds;
+var
+  K1, K2: string;
+begin
+  {Mtime differing only in milliseconds must produce a different key —
+   the format string carries zzz, so a future drop of millisecond
+   precision in any caller would invalidate every entry it touches.}
+  K1 := BuildFileIdentityKey('a.mkv', 1,
+    EncodeDate(2025, 1, 1) + EncodeTime(0, 0, 0, 100));
+  K2 := BuildFileIdentityKey('a.mkv', 1,
+    EncodeDate(2025, 1, 1) + EncodeTime(0, 0, 0, 200));
+  Assert.AreNotEqual(K1, K2);
 end;
 
 initialization

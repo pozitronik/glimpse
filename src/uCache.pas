@@ -255,7 +255,7 @@ end;
 
 class function TFrameCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;
 begin
-  Result := AnsiLowerCase(AFilePath) + '|' + IntToStr(AFileSize) + '|' + FormatDateTime('yyyymmddhhnnsszzz', AFileTime) + '|' + Format('%.3f', [ATimeOffset], InvFmt);
+  Result := BuildFileIdentityKey(AFilePath, AFileSize, AFileTime) + '|' + Format('%.3f', [ATimeOffset], InvFmt);
   {Append scaled resolution to distinguish from full-size cache entries}
   if AMaxSide > 0 then
     Result := Result + '|s' + IntToStr(AMaxSide);

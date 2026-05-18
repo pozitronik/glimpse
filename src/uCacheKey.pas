@@ -18,6 +18,15 @@ const
    process-wide.}
 function InvFmt: TFormatSettings;
 
+{Composes the "file identity" portion of a cache key string:
+ lowercased-path + '|' + size + '|' + mtime (formatted as
+ yyyymmddhhnnsszzz). Used by both TFrameCache and TProbeCache as the
+ leading prefix of their respective key strings; subclass-specific
+ fields (time offset, max side, etc.) get appended by the caller.
+ Centralising the format here keeps the two caches' identity rules
+ in lockstep — a change to how mtime is encoded only happens once.}
+function BuildFileIdentityKey(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string;
+
 {Computes an MD5 hash of AKeyString, returned as a lowercase hex string.}
 function CacheHashKey(const AKeyString: string): string;
 
@@ -38,6 +47,12 @@ var
 function InvFmt: TFormatSettings;
 begin
   Result := GInvFmt;
+end;
+
+function BuildFileIdentityKey(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string;
+begin
+  Result := AnsiLowerCase(AFilePath) + '|' + IntToStr(AFileSize) + '|' +
+    FormatDateTime('yyyymmddhhnnsszzz', AFileTime);
 end;
 
 function CacheHashKey(const AKeyString: string): string;
