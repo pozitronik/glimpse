@@ -66,6 +66,7 @@ type
   TTestLayoutFactory = class
   public
     [Test] procedure TestCreatesCorrectTypes;
+    [Test] procedure TestUnknownModeRaises;
   end;
 
   [TestFixture]
@@ -704,6 +705,24 @@ begin
   try Assert.IsTrue(L is TFilmstripLayout, 'vmFilmstrip -> TFilmstripLayout'); finally L.Free; end;
   L := CreateViewModeLayout(vmSingle);
   try Assert.IsTrue(L is TSingleLayout, 'vmSingle -> TSingleLayout'); finally L.Free; end;
+end;
+
+procedure TTestLayoutFactory.TestUnknownModeRaises;
+begin
+  {A TViewMode value outside the enum range (e.g. an int cast for a
+   future-added mode that lacks a factory branch) must raise loudly
+   instead of silently producing a TGridLayout. Pins the contract so the
+   "add an enum value, forget to update the factory" footgun fires at
+   the first call site that instantiates the unmapped mode.}
+  Assert.WillRaise(
+    procedure
+    var L: TViewModeLayout;
+    begin
+      L := CreateViewModeLayout(TViewMode(99));
+      L.Free;
+    end,
+    EArgumentException,
+    'Unmapped TViewMode must raise EArgumentException');
 end;
 
 { TTestComputeSmartGridRows }

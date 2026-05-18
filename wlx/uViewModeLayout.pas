@@ -109,7 +109,7 @@ function CreateViewModeLayout(AMode: TViewMode): TViewModeLayout;
 implementation
 
 uses
-  System.Math, uZoomController;
+  System.SysUtils, System.Math, uZoomController;
 
 {TViewModeLayout}
 
@@ -579,7 +579,11 @@ begin
     vmSingle:
       Result := TSingleLayout.Create;
     else
-      Result := TGridLayout.Create;
+      {A new TViewMode value added to the enum without a factory branch
+       used to silently get TGridLayout; raising loudly catches the
+       omission at the first attempt to instantiate the unmapped mode.}
+      raise EArgumentException.CreateFmt(
+        'CreateViewModeLayout: no factory branch for TViewMode(%d)', [Ord(AMode)]);
   end;
 end;
 
