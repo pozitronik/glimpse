@@ -2,7 +2,7 @@ unit TestSettingsDlgUI;
 
 {Tests for uSettingsDlgUI -- the VCL-touching helpers shared by the WLX
  and WCX settings dialogs. Coverage is intentionally limited to the two
- readout formatters (RefreshTimestampFontEdit / RefreshBannerFontEdit)
+ readout formatters (RefreshFontEdit / RefreshBannerFontEdit)
  because the Pick* helpers call AFontDialog.Execute / AColorDialog.Execute,
  which open real Windows dialogs and cannot be driven headlessly.}
 
@@ -41,7 +41,7 @@ begin
   try
     Edit := TEdit.Create(Form);
     Edit.Parent := Form;
-    RefreshTimestampFontEdit(Edit, 'Consolas', 9);
+    RefreshFontEdit(Edit, 'Consolas', 9);
     Assert.AreEqual('Consolas, 9 pt', Edit.Text);
   finally
     Form.Free;
@@ -61,7 +61,7 @@ begin
   try
     Edit := TEdit.Create(Form);
     Edit.Parent := Form;
-    RefreshTimestampFontEdit(Edit, '', 12);
+    RefreshFontEdit(Edit, '', 12);
     Assert.AreEqual(', 12 pt', Edit.Text);
   finally
     Form.Free;

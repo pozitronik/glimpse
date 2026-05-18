@@ -22,20 +22,21 @@ uses
  chosen colour back to the panel if the user accepts.}
 procedure PickColorForPanel(APanel: TPanel; AColorDialog: TColorDialog);
 
-{Formats AEdit's text as "Name, N pt" — the timestamp-font readout the
+{Formats AEdit's text as "Name, N pt" — the simple-font readout the
  dialogs use to surface the picked font without putting a real font
- control on the form.}
-procedure RefreshTimestampFontEdit(AEdit: TEdit; const AFontName: string; AFontSize: Integer);
+ control on the form. Used for timestamp, status-bar, and any other
+ font field that does not need the banner's auto-size branch.}
+procedure RefreshFontEdit(AEdit: TEdit; const AFontName: string; AFontSize: Integer);
 
 {Formats AEdit's text as "Name, auto" when the auto-size checkbox is
- checked, otherwise "Name, N pt". Mirrors RefreshTimestampFontEdit but
+ checked, otherwise "Name, N pt". Mirrors RefreshFontEdit but
  honours the auto-size special case the banner uses.}
 procedure RefreshBannerFontEdit(AEdit: TEdit; AAutoSize: Boolean; const AFontName: string; AFontSize: Integer);
 
 {Drives AFontDialog seeded with the current font name and size; writes
  the picked values back through the var parameters and refreshes AEdit.
  Picked size is clamped to [AMinSize, AMaxSize] before storage.}
-procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
+procedure PickFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
 
 {Wires the two-control "info" pattern: a fixed-status TLabel (e.g.
  "Detected:") next to a borderless read-only TEdit that holds the
@@ -45,7 +46,7 @@ procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFon
  is '').}
 procedure ApplyInfoParts(APrefixLabel: TLabel; AValueEdit: TEdit; const APrefix, AValue: string);
 
-{Same as PickTimestampFontInto but for the banner font, with two extra
+{Same as PickFontInto but for the banner font, with two extra
  wrinkles:
  - When AChkAutoSize is checked at entry, the dialog seeds the size
  field with ADefaultSize so the user sees a sensible starting value
@@ -63,7 +64,7 @@ begin
     APanel.Color := AColorDialog.Color;
 end;
 
-procedure RefreshTimestampFontEdit(AEdit: TEdit; const AFontName: string; AFontSize: Integer);
+procedure RefreshFontEdit(AEdit: TEdit; const AFontName: string; AFontSize: Integer);
 begin
   AEdit.Text := Format('%s, %d pt', [AFontName, AFontSize]);
 end;
@@ -94,7 +95,7 @@ begin
   Result := AValue;
 end;
 
-procedure PickTimestampFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
+procedure PickFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize: Integer);
 begin
   AFontDialog.Font.Name := AFontName;
   AFontDialog.Font.Size := AFontSize;
@@ -102,7 +103,7 @@ begin
   begin
     AFontName := AFontDialog.Font.Name;
     AFontSize := ClampInt(AFontDialog.Font.Size, AMinSize, AMaxSize);
-    RefreshTimestampFontEdit(AEdit, AFontName, AFontSize);
+    RefreshFontEdit(AEdit, AFontName, AFontSize);
   end;
 end;
 

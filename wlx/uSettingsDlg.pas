@@ -502,7 +502,7 @@ end;
 
 procedure TSettingsForm.UpdateTimestampFontDisplay;
 begin
-  RefreshTimestampFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
+  RefreshFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
 end;
 
 procedure TSettingsForm.UpdateBannerFontDisplay;
@@ -512,7 +512,7 @@ end;
 
 procedure TSettingsForm.PickTimestampFont;
 begin
-  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+  PickFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 end;
 
 procedure TSettingsForm.PickBannerFont;
@@ -532,12 +532,12 @@ end;
 
 procedure TSettingsForm.UpdateStatusBarFontDisplay;
 begin
-  RefreshTimestampFontEdit(EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize);
+  RefreshFontEdit(EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize);
 end;
 
 procedure TSettingsForm.PickStatusBarFont;
 begin
-  PickTimestampFontInto(FontDlg, EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize,
+  PickFontInto(FontDlg, EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize,
     MIN_STATUSBAR_FONT_SIZE, MAX_STATUSBAR_FONT_SIZE);
 end;
 

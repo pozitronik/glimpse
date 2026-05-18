@@ -489,7 +489,7 @@ end;
 
 procedure TWcxSettingsForm.UpdateTimestampFontDisplay;
 begin
-  RefreshTimestampFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
+  RefreshFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
 end;
 
 procedure TWcxSettingsForm.UpdateBannerFontDisplay;
@@ -499,7 +499,7 @@ end;
 
 procedure TWcxSettingsForm.PickTimestampFont;
 begin
-  PickTimestampFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
+  PickFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
 end;
 
 procedure TWcxSettingsForm.PickBannerFont;
