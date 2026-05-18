@@ -64,37 +64,54 @@ type
   end;
 
   {No-op cache: always misses, never stores. Used when caching is disabled
-   so callers don't need nil checks.}
-  TNullFrameCache = class(TFrameCacheBase)
+   so callers don't need nil checks. Admin ops are no-ops (Clear/Evict do
+   nothing, GetTotalSize is 0) so a TNullFrameCache substitutes uniformly
+   in either contract.}
+  TNullFrameCache = class(TFrameCacheBase, ICacheManager)
   public
     function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
+    procedure Clear;
+    procedure Evict;
+    function GetTotalSize: Int64;
   end;
 
   {Decorator that skips cache reads but delegates writes to the inner cache.
    Used for forced re-extraction (Refresh) where we want fresh frames
-   but still want to update the cache with the new results.}
-  TBypassFrameCache = class(TFrameCacheBase)
+   but still want to update the cache with the new results.
+   Admin ops (Clear/Evict/GetTotalSize) propagate to the inner if it
+   exposes ICacheManager, so wrapping in TBypassFrameCache does not
+   silently drop admin capability.}
+  TBypassFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FInner: IFrameCache;
+    FInnerMgr: ICacheManager;
   public
     constructor Create(const AInner: IFrameCache);
     function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
+    procedure Clear;
+    procedure Evict;
+    function GetTotalSize: Int64;
   end;
 
   {Decorator that delegates reads but drops writes. Used for random
    extraction when the user has CacheRandomFrames disabled: a previously
    cached random pick can still hit (cheap), but new picks do not
    pollute the cache. Mirror image of TBypassFrameCache; the two narrow
-   types are easier to reason about than one configurable wrapper.}
-  TReadOnlyFrameCache = class(TFrameCacheBase)
+   types are easier to reason about than one configurable wrapper.
+   Admin ops propagate to the inner identically to TBypassFrameCache.}
+  TReadOnlyFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FInner: IFrameCache;
+    FInnerMgr: ICacheManager;
   public
     constructor Create(const AInner: IFrameCache);
     function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
+    procedure Clear;
+    procedure Evict;
+    function GetTotalSize: Int64;
   end;
 
   {Real disk cache. Thin composition over ICacheStorage + TLruEvictionPolicy.
@@ -187,12 +204,32 @@ begin
   {Intentionally empty}
 end;
 
+procedure TNullFrameCache.Clear;
+begin
+  {No-op: nothing has ever been stored.}
+end;
+
+procedure TNullFrameCache.Evict;
+begin
+  {No-op: nothing to evict.}
+end;
+
+function TNullFrameCache.GetTotalSize: Int64;
+begin
+  Result := 0;
+end;
+
 {TBypassFrameCache}
 
 constructor TBypassFrameCache.Create(const AInner: IFrameCache);
 begin
   inherited Create;
   FInner := AInner;
+  {Cache the inner's admin facet so the per-call Supports query happens
+   once. FInnerMgr stays nil if the inner doesn't expose ICacheManager;
+   admin ops then become no-ops, preserving the previous "decorator
+   silently swallows admin" semantics for that case.}
+  Supports(FInner, ICacheManager, FInnerMgr);
 end;
 
 function TBypassFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
@@ -205,12 +242,33 @@ begin
   FInner.Put(AKey, ABitmap);
 end;
 
+procedure TBypassFrameCache.Clear;
+begin
+  if FInnerMgr <> nil then
+    FInnerMgr.Clear;
+end;
+
+procedure TBypassFrameCache.Evict;
+begin
+  if FInnerMgr <> nil then
+    FInnerMgr.Evict;
+end;
+
+function TBypassFrameCache.GetTotalSize: Int64;
+begin
+  if FInnerMgr <> nil then
+    Result := FInnerMgr.GetTotalSize
+  else
+    Result := 0;
+end;
+
 {TReadOnlyFrameCache}
 
 constructor TReadOnlyFrameCache.Create(const AInner: IFrameCache);
 begin
   inherited Create;
   FInner := AInner;
+  Supports(FInner, ICacheManager, FInnerMgr);
 end;
 
 function TReadOnlyFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
@@ -223,6 +281,26 @@ begin
   {Intentional no-op: random extractions with CacheRandomFrames=False
    read from the disk cache when an offset happens to be cached, but
    never write fresh picks back.}
+end;
+
+procedure TReadOnlyFrameCache.Clear;
+begin
+  if FInnerMgr <> nil then
+    FInnerMgr.Clear;
+end;
+
+procedure TReadOnlyFrameCache.Evict;
+begin
+  if FInnerMgr <> nil then
+    FInnerMgr.Evict;
+end;
+
+function TReadOnlyFrameCache.GetTotalSize: Int64;
+begin
+  if FInnerMgr <> nil then
+    Result := FInnerMgr.GetTotalSize
+  else
+    Result := 0;
 end;
 
 {TFrameCache}

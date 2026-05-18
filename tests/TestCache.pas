@@ -80,6 +80,29 @@ type
     [Test]
     procedure TestReadOnlyCachePutIsNoOp;
 
+    { Decorator admin propagation: every decorator implements ICacheManager
+      so wrapping the cache does not silently drop admin capability. }
+    [Test]
+    procedure TestNullCacheAdminClearIsNoOp;
+    [Test]
+    procedure TestNullCacheAdminEvictIsNoOp;
+    [Test]
+    procedure TestNullCacheAdminGetTotalSizeIsZero;
+    [Test]
+    procedure TestBypassCacheAdminClearDelegates;
+    [Test]
+    procedure TestBypassCacheAdminEvictDelegates;
+    [Test]
+    procedure TestBypassCacheAdminGetTotalSizeDelegates;
+    [Test]
+    procedure TestReadOnlyCacheAdminClearDelegates;
+    [Test]
+    procedure TestReadOnlyCacheAdminEvictDelegates;
+    [Test]
+    procedure TestReadOnlyCacheAdminGetTotalSizeDelegates;
+    [Test]
+    procedure TestChainedDecoratorsPropagateAdminToInnermost;
+
     { Eviction edge cases }
     [Test]
     procedure TestEvictionSkipsLockedFiles;
@@ -685,6 +708,215 @@ begin
 
   Probe := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 11.0, 0, False));
   Assert.IsNull(Probe, 'ReadOnly Put must drop writes; inner cache must remain empty');
+end;
+
+{ Decorator admin propagation }
+
+procedure TTestFrameCache.TestNullCacheAdminClearIsNoOp;
+var
+  Null: TNullFrameCache;
+  Mgr: ICacheManager;
+begin
+  Null := TNullFrameCache.Create;
+  Mgr := Null;
+  Mgr.Clear;
+  Assert.Pass('TNullFrameCache.Clear must not raise; it has no state to clear');
+end;
+
+procedure TTestFrameCache.TestNullCacheAdminEvictIsNoOp;
+var
+  Null: TNullFrameCache;
+  Mgr: ICacheManager;
+begin
+  Null := TNullFrameCache.Create;
+  Mgr := Null;
+  Mgr.Evict;
+  Assert.Pass('TNullFrameCache.Evict must not raise; it has no state to evict');
+end;
+
+procedure TTestFrameCache.TestNullCacheAdminGetTotalSizeIsZero;
+var
+  Null: TNullFrameCache;
+  Mgr: ICacheManager;
+begin
+  Null := TNullFrameCache.Create;
+  Mgr := Null;
+  Assert.AreEqual<Int64>(0, Mgr.GetTotalSize, 'A null cache holds nothing, so its total size is always 0');
+end;
+
+procedure TTestFrameCache.TestBypassCacheAdminClearDelegates;
+var
+  RealCache, Bypass: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  {Put a frame through the real cache, then Clear through the bypass
+   wrapper, then verify the frame is gone via the real cache. Proves
+   Bypass.Clear reached the inner.}
+  FilePath := CreateDummyFile('bypass_admin_clear.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(16, 16);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  Bypass := TBypassFrameCache.Create(RealCache);
+  Mgr := Bypass as ICacheManager;
+  Mgr.Clear;
+
+  Bmp := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 1.0, 0, False));
+  Assert.IsNull(Bmp, 'Bypass.Clear must wipe the inner cache; the put-then-cleared key must miss');
+end;
+
+procedure TTestFrameCache.TestBypassCacheAdminEvictDelegates;
+var
+  RealCache, Bypass: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+  TotalBefore, TotalAfter: Int64;
+begin
+  {Real cache with a 0 MB budget so Evict will reclaim everything;
+   measure GetTotalSize through the same Bypass wrapper to prove the
+   delegation chain is end-to-end.}
+  FilePath := CreateDummyFile('bypass_admin_evict.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 0);
+  Bmp := CreateTestBitmap(32, 32);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  Bypass := TBypassFrameCache.Create(RealCache);
+  Mgr := Bypass as ICacheManager;
+  TotalBefore := Mgr.GetTotalSize;
+  Assert.IsTrue(TotalBefore > 0, 'Sanity: a freshly-put entry must contribute non-zero total size');
+
+  Mgr.Evict;
+  TotalAfter := Mgr.GetTotalSize;
+  Assert.AreEqual<Int64>(0, TotalAfter, 'Evict at 0 MB budget must reclaim everything via the inner');
+end;
+
+procedure TTestFrameCache.TestBypassCacheAdminGetTotalSizeDelegates;
+var
+  RealCache, Bypass: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  FilePath := CreateDummyFile('bypass_admin_size.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(40, 40);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 2.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  Bypass := TBypassFrameCache.Create(RealCache);
+  Mgr := Bypass as ICacheManager;
+  Assert.IsTrue(Mgr.GetTotalSize > 0, 'Bypass.GetTotalSize must reflect inner cache contents');
+end;
+
+procedure TTestFrameCache.TestReadOnlyCacheAdminClearDelegates;
+var
+  RealCache, ReadOnly: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  FilePath := CreateDummyFile('ro_admin_clear.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(16, 16);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  ReadOnly := TReadOnlyFrameCache.Create(RealCache);
+  Mgr := ReadOnly as ICacheManager;
+  Mgr.Clear;
+
+  Bmp := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 1.0, 0, False));
+  Assert.IsNull(Bmp, 'ReadOnly.Clear must wipe the inner cache; the put-then-cleared key must miss');
+end;
+
+procedure TTestFrameCache.TestReadOnlyCacheAdminEvictDelegates;
+var
+  RealCache, ReadOnly: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+  TotalAfter: Int64;
+begin
+  FilePath := CreateDummyFile('ro_admin_evict.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 0);
+  Bmp := CreateTestBitmap(32, 32);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  ReadOnly := TReadOnlyFrameCache.Create(RealCache);
+  Mgr := ReadOnly as ICacheManager;
+  Mgr.Evict;
+  TotalAfter := Mgr.GetTotalSize;
+  Assert.AreEqual<Int64>(0, TotalAfter, 'ReadOnly.Evict at 0 MB budget must reclaim everything via the inner');
+end;
+
+procedure TTestFrameCache.TestReadOnlyCacheAdminGetTotalSizeDelegates;
+var
+  RealCache, ReadOnly: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  FilePath := CreateDummyFile('ro_admin_size.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(40, 40);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 2.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  ReadOnly := TReadOnlyFrameCache.Create(RealCache);
+  Mgr := ReadOnly as ICacheManager;
+  Assert.IsTrue(Mgr.GetTotalSize > 0, 'ReadOnly.GetTotalSize must reflect inner cache contents');
+end;
+
+procedure TTestFrameCache.TestChainedDecoratorsPropagateAdminToInnermost;
+var
+  RealCache, ReadOnly, Bypass: IFrameCache;
+  Mgr: ICacheManager;
+  Bmp: TBitmap;
+  FilePath: string;
+begin
+  {Compose TBypass(TReadOnly(real)). An admin op on the outer decorator
+   must walk down through both wrappers and reach the real cache. Proves
+   the propagation is recursive, not just one-hop.}
+  FilePath := CreateDummyFile('chained_admin.mp4', 256);
+  RealCache := TFrameCache.Create(FCacheDir, 100);
+  Bmp := CreateTestBitmap(24, 24);
+  try
+    RealCache.Put(TFrameCacheKey.Create(FilePath, 1.0, 0, False), Bmp);
+  finally
+    Bmp.Free;
+  end;
+
+  ReadOnly := TReadOnlyFrameCache.Create(RealCache);
+  Bypass := TBypassFrameCache.Create(ReadOnly);
+  Mgr := Bypass as ICacheManager;
+  Mgr.Clear;
+
+  Bmp := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 1.0, 0, False));
+  Assert.IsNull(Bmp, 'Chained Bypass(ReadOnly(real)).Clear must reach the real cache');
 end;
 
 procedure TTestFrameCache.TestEvictionSkipsLockedFiles;
