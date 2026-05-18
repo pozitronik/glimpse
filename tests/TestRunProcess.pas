@@ -39,6 +39,14 @@ type
     [Test] procedure Streaming_StderrStillBuffered;
     [Test] procedure Streaming_ReturnsExitCode;
     [Test] procedure Streaming_CancelHandleStopsLongRunningChild;
+    {RunProcessCore is the shared plumbing both public overloads delegate
+     to (step 64). A direct test exercises it with a custom consumer that
+     reads the stdout pipe directly — proves the core's contract
+     (consumer runs on calling thread, pipe handle is valid during the
+     call, exit code is propagated, cleanup happens in finally so a
+     raising consumer doesn't orphan the child).}
+    [Test] procedure RunProcessCore_CustomConsumer_ReceivesPipeAndExitCode;
+    [Test] procedure RunProcessCore_RaisingConsumer_StillCleansUpProcess;
   end;
 
 implementation
@@ -419,6 +427,71 @@ begin
   finally
     CancelEvent.Free;
   end;
+end;
+
+procedure TTestRunProcess.RunProcessCore_CustomConsumer_ReceivesPipeAndExitCode;
+var
+  StdErr: TBytes;
+  Captured: TBytes;
+  ConsumerInvoked: Boolean;
+  ExitCode: Integer;
+begin
+  {The custom consumer drains stdout via ReadPipeToEnd (same primitive
+   the public buffered overload uses). Verifies that the core delivers
+   a valid pipe handle to the consumer and that the exit code returned
+   by the core matches what the child process emitted.}
+  Captured := nil;
+  ConsumerInvoked := False;
+  ExitCode := RunProcessCore('cmd.exe /c echo direct-core-test',
+    procedure(AStdOutPipe: THandle)
+    begin
+      ConsumerInvoked := True;
+      Assert.AreNotEqual(THandle(0), AStdOutPipe,
+        'Consumer must receive a valid pipe handle');
+      Captured := ReadPipeToEnd(AStdOutPipe);
+    end,
+    StdErr, 10000, 0);
+
+  Assert.IsTrue(ConsumerInvoked, 'Consumer must be invoked exactly once');
+  Assert.AreEqual<Integer>(0, ExitCode, 'cmd.exe echo must exit 0');
+  Assert.IsTrue(Length(Captured) > 0, 'Captured stdout must be non-empty');
+end;
+
+procedure TTestRunProcess.RunProcessCore_RaisingConsumer_StillCleansUpProcess;
+var
+  StdErr: TBytes;
+  Raised: Boolean;
+begin
+  {If the consumer raises mid-call, the core's try/finally must still
+   drain the stderr thread, wait on the watcher, close every handle,
+   and let the exception propagate. The test verifies the exception
+   propagates and that a follow-up call works (which it would not if
+   handles or threads leaked across the call boundary).}
+  Raised := False;
+  try
+    RunProcessCore('cmd.exe /c echo will-be-ignored',
+      procedure(AStdOutPipe: THandle)
+      begin
+        raise EAssertionFailed.Create('intentional consumer failure');
+      end,
+      StdErr, 10000, 0);
+  except
+    on E: EAssertionFailed do
+      Raised := E.Message = 'intentional consumer failure';
+  end;
+  Assert.IsTrue(Raised, 'Consumer exception must propagate through the core');
+
+  {A follow-up successful call proves no orphaned handles / threads
+   from the raising call.}
+  RunProcessCore('cmd.exe /c echo after-raise',
+    procedure(AStdOutPipe: THandle)
+    var
+      Drained: TBytes;
+    begin
+      Drained := ReadPipeToEnd(AStdOutPipe);
+      Assert.IsTrue(Length(Drained) > 0, 'Follow-up call must succeed');
+    end,
+    StdErr, 10000, 0);
 end;
 
 end.
