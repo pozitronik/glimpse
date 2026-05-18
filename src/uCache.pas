@@ -1,14 +1,20 @@
-﻿{Disk cache for extracted video frames.
- Stores frames as PNG files in a sharded directory structure, keyed by
- video file metadata and frame time offset. Provides LRU eviction.}
+{Disk cache for extracted video frames.
+ Composes:
+   - ICacheStorage  (atomic byte-keyed storage, see uCacheStorage)
+   - TLruEvictionPolicy (uLruEvictionPolicy)
+   - PNG encoding/decoding (uBitmapSaver)
+ TFrameCache itself only owns the lock, the bitmap<->bytes encoding, and
+ the hash-key computation from file metadata. The disk layout and the
+ LRU algorithm live in their own units so each can be tested in
+ isolation against a memory-backed storage fake.}
 unit uCache;
 
 interface
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes, System.SyncObjs,
-  System.Generics.Collections, System.Generics.Defaults,
-  Vcl.Graphics, Vcl.Imaging.pngimage, uBitmapSaver;
+  System.SysUtils, System.SyncObjs,
+  Vcl.Graphics,
+  uCacheStorage, uLruEvictionPolicy;
 
 type
   {Lookup identity for a cached frame. Bundles the four fields that made the
@@ -91,26 +97,24 @@ type
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
   end;
 
-  {Real disk cache with sharded PNG storage and LRU eviction.}
+  {Real disk cache. Thin composition over ICacheStorage + TLruEvictionPolicy.
+   Owns the lock that serialises every public op; the storage and policy
+   collaborators are non-thread-safe and trust the cache to call them
+   from inside the critical section.}
   TFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FCacheDir: string;
-    FMaxSizeBytes: Int64;
+    FStorage: ICacheStorage;
+    FPolicy: TLruEvictionPolicy;
     {Serialises every public operation. NTFS rename is atomic, so a
      concurrent TryGet during a Put already sees old-or-new but never
      partial; the lock additionally guards Evict's directory walk
      against a Put adding new entries mid-scan and the GetTotalSize /
      Clear admin paths against in-flight reads. Lock is held across the
-     PNG encode + disk write inside Put; workers therefore serialise on
-     cache writes, which is acceptable given typical frame sizes and
+     PNG encode + storage write inside Put; workers therefore serialise
+     on cache writes, which is acceptable given typical frame sizes and
      the disk being the real bottleneck anyway.}
     FLock: TCriticalSection;
-
-    class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string; static;
-    {Best-effort cleanup of leftover Put-temp files. Called from the
-     constructor; safe to call repeatedly.}
-    procedure SweepOrphanedTempFiles;
-
   public
     constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
     destructor Destroy; override;
@@ -139,12 +143,27 @@ function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICach
 implementation
 
 uses
-  System.DateUtils, uDebugLog, uCacheKey;
+  System.IOUtils, System.Classes,
+  Vcl.Imaging.pngimage,
+  uDebugLog, uCacheKey, uBitmapSaver;
 
-const
-  MOVEFILE_REPLACE_EXISTING = 1;
-
-function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
+{Test- and cache-internal helper: encode a bitmap to PNG bytes using
+ fast compression (CompressionLevel=1 matches the previous behaviour
+ of writing cache PNGs directly via TPngImage).}
+function EncodeBitmapToPngBytes(ABitmap: TBitmap): TBytes;
+var
+  Stream: TBytesStream;
+begin
+  Stream := TBytesStream.Create;
+  try
+    EncodeBitmapAsPng(ABitmap, Stream, 1);
+    SetLength(Result, Stream.Size);
+    if Stream.Size > 0 then
+      Move(Stream.Bytes[0], Result[0], Stream.Size);
+  finally
+    Stream.Free;
+  end;
+end;
 
 {TFrameCacheKey}
 
@@ -213,55 +232,17 @@ begin
   inherited Create;
   FLock := TCriticalSection.Create;
   FCacheDir := ACacheDir;
-  FMaxSizeBytes := Int64(AMaxSizeMB) * 1024 * 1024;
-  if not TDirectory.Exists(FCacheDir) then
-    TDirectory.CreateDirectory(FCacheDir);
-  SweepOrphanedTempFiles;
+  FStorage := TDiskCacheStorage.Create(ACacheDir, '.png');
+  FPolicy := TLruEvictionPolicy.Create(Int64(AMaxSizeMB) * 1024 * 1024);
   DebugLog('Cache', Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
 end;
 
 destructor TFrameCache.Destroy;
 begin
+  FPolicy.Free;
+  {FStorage is an interface; refcount drops to zero with the field clearing}
   FLock.Free;
   inherited;
-end;
-
-procedure TFrameCache.SweepOrphanedTempFiles;
-var
-  Files: TArray<string>;
-  F: string;
-begin
-  {Put writes <CacheDir>\<guid>.tmp and renames it via MoveFileEx. If the
-   process crashed between SaveToFile and the rename, the .tmp survived
-   forever - there was no later sweep, and Evict only walked .png files.
-   Wipe leftover temp files at construction so a crash-prone environment
-   does not accumulate disk-leaking shards.}
-  if not TDirectory.Exists(FCacheDir) then
-    Exit;
-  try
-    Files := TDirectory.GetFiles(FCacheDir, '*.tmp', TSearchOption.soTopDirectoryOnly);
-  except
-    Exit;
-  end;
-  for F in Files do
-    try
-      TFile.Delete(F);
-    except
-      {Best-effort: a temp may still be locked by another TC instance
-       holding the cache open for a different put-in-progress. Skipping
-       leaves it for the next constructor call.}
-    end;
-end;
-
-class function TFrameCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;
-begin
-  Result := BuildFileIdentityKey(AFilePath, AFileSize, AFileTime) + '|' + Format('%.3f', [ATimeOffset], InvFmt);
-  {Append scaled resolution to distinguish from full-size cache entries}
-  if AMaxSide > 0 then
-    Result := Result + '|s' + IntToStr(AMaxSide);
-  {Keyframe-only seek produces different frames than accurate seek}
-  if AUseKeyframes then
-    Result := Result + '|kf';
 end;
 
 class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;
@@ -275,7 +256,7 @@ begin
       Exit;
     FileSize := TFile.GetSize(AFilePath);
     FileTime := TFile.GetLastWriteTime(AFilePath);
-    Result := CacheHashKey(BuildKeyString(AFilePath, FileSize, FileTime, ATimeOffset, AMaxSide, AUseKeyframes));
+    Result := CacheHashKey(BuildFrameCacheKeyString(AFilePath, FileSize, FileTime, ATimeOffset, AMaxSide, AUseKeyframes));
   except
     {File inaccessible - return empty, caller treats as cache miss}
   end;
@@ -283,7 +264,7 @@ end;
 
 function TFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
 var
-  Key, Path: string;
+  Key: string;
   Data: TBytes;
 begin
   Result := nil;
@@ -293,14 +274,12 @@ begin
   FLock.Enter;
   try
     try
-      Path := ShardedKeyPath(FCacheDir, Key, '.png');
-      if not TFile.Exists(Path) then
+      Data := FStorage.Read(Key);
+      if Length(Data) = 0 then
       begin
         DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]));
         Exit;
       end;
-
-      Data := TFile.ReadAllBytes(Path);
       DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, Length(Data)]));
       Result := PngBytesToBitmap(Data);
       DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d', [Result.Width, Result.Height, BoolToStr(Result.Empty, True), Ord(Result.PixelFormat)]));
@@ -311,15 +290,8 @@ begin
         FreeAndNil(Result);
       end;
     end;
-
-    {Update access time for LRU tracking; isolated so a failure here
-     cannot discard the successfully loaded bitmap.}
     if Result <> nil then
-      try
-        TFile.SetLastAccessTime(ShardedKeyPath(FCacheDir, Key, '.png'), Now);
-      except
-        {Access time is cosmetic for LRU; failure is harmless}
-      end;
+      FStorage.Touch(Key);
   finally
     FLock.Leave;
   end;
@@ -327,8 +299,8 @@ end;
 
 procedure TFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
 var
-  Key, FinalPath, TempPath, SubDir: string;
-  Png: TPngImage;
+  Key: string;
+  Data: TBytes;
 begin
   if ABitmap = nil then
     Exit;
@@ -339,48 +311,12 @@ begin
   FLock.Enter;
   try
     try
-      FinalPath := ShardedKeyPath(FCacheDir, Key, '.png');
-      SubDir := ExtractFilePath(FinalPath);
-      if not TDirectory.Exists(SubDir) then
-        TDirectory.CreateDirectory(SubDir);
-
-      {Write to temp file, then rename for atomicity}
-      TempPath := TPath.Combine(FCacheDir, TGUID.NewGuid.ToString + '.tmp');
-      Png := TPngImage.Create;
-      try
-        Png.Assign(ABitmap);
-        Png.CompressionLevel := 1; {Fast compression for cache writes}
-        Png.SaveToFile(TempPath);
-        DebugLog('Cache', Format('  saved tmp=%s pngSize=%d', [TempPath, TFile.GetSize(TempPath)]));
-      finally
-        Png.Free;
-      end;
-
-      {Atomic replace: MoveFileEx with MOVEFILE_REPLACE_EXISTING is atomic
-       on NTFS, eliminating the window where concurrent readers see no file}
-      if not MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING) then
-      begin
-        DebugLog('Cache', Format('  MoveFileEx failed err=%d', [GetLastError]));
-        try
-          if TFile.Exists(TempPath) then
-            TFile.Delete(TempPath);
-        except
-          {Best-effort temp file cleanup}
-        end;
-        Exit;
-      end;
-      DebugLog('Cache', Format('  moved to %s', [FinalPath]));
+      Data := EncodeBitmapToPngBytes(ABitmap);
+      DebugLog('Cache', Format('  encoded pngSize=%d', [Length(Data)]));
+      FStorage.Write(Key, Data);
     except
       on E: Exception do
-      begin
         DebugLog('Cache', Format('Put EXCEPTION key=%s %s: %s', [Key, E.ClassName, E.Message]));
-        try
-          if TFile.Exists(TempPath) then
-            TFile.Delete(TempPath);
-        except
-          {Best-effort temp file cleanup}
-        end;
-      end;
     end;
   finally
     FLock.Leave;
@@ -391,98 +327,17 @@ procedure TFrameCache.Clear;
 begin
   FLock.Enter;
   try
-    try
-      if TDirectory.Exists(FCacheDir) then
-        TDirectory.Delete(FCacheDir, True);
-      TDirectory.CreateDirectory(FCacheDir);
-    except
-      {Best-effort clear; directory may be locked}
-    end;
+    FStorage.Clear;
   finally
     FLock.Leave;
   end;
 end;
 
 procedure TFrameCache.Evict;
-type
-  TCacheFileInfo = record
-    Path: string;
-    Size: Int64;
-    AccessTime: TDateTime;
-  end;
-var
-  Infos: TList<TCacheFileInfo>;
-  Info: TCacheFileInfo;
-  TotalSize: Int64;
-  Dirs: TArray<string>;
-  Dir: string;
 begin
-  if not TDirectory.Exists(FCacheDir) then
-    Exit;
-
   FLock.Enter;
   try
-    Infos := TList<TCacheFileInfo>.Create;
-    try
-      TotalSize := 0;
-      try
-        for var FileName in TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories) do
-        begin
-          try
-            Info.Path := FileName;
-            Info.Size := TFile.GetSize(FileName);
-            Info.AccessTime := TFile.GetLastAccessTime(FileName);
-            Infos.Add(Info);
-            TotalSize := TotalSize + Info.Size;
-          except
-            {Skip files we cannot stat}
-          end;
-        end;
-      except
-        Exit; {Directory inaccessible; nothing to evict}
-      end;
-
-      if TotalSize <= FMaxSizeBytes then
-        Exit;
-
-      {Sort by access time ascending (oldest first)}
-      Infos.Sort(TComparer<TCacheFileInfo>.Construct(
-        function(const A, B: TCacheFileInfo): Integer
-        begin
-          Result := CompareDateTime(A.AccessTime, B.AccessTime);
-        end));
-
-      {Delete oldest files until within budget}
-      for Info in Infos do
-      begin
-        if TotalSize <= FMaxSizeBytes then
-          Break;
-        try
-          TFile.Delete(Info.Path);
-          TotalSize := TotalSize - Info.Size;
-        except
-          {File may be locked by another TC instance}
-        end;
-      end;
-
-      {Clean up empty subdirectories}
-      try
-        Dirs := TDirectory.GetDirectories(FCacheDir);
-        for Dir in Dirs do
-        begin
-          try
-            if Length(TDirectory.GetFiles(Dir)) = 0 then
-              TDirectory.Delete(Dir, False);
-          except
-            {Skip dirs that can't be removed}
-          end;
-        end;
-      except
-        {Subdirectory enumeration failed; not critical}
-      end;
-    finally
-      Infos.Free;
-    end;
+    FPolicy.Evict(FStorage);
   finally
     FLock.Leave;
   end;
@@ -490,27 +345,15 @@ end;
 
 function TFrameCache.GetTotalSize: Int64;
 var
-  Files: TArray<string>;
-  FileName: string;
+  Entries: TArray<TCacheEntryInfo>;
+  I: Integer;
 begin
   Result := 0;
-  if not TDirectory.Exists(FCacheDir) then
-    Exit;
   FLock.Enter;
   try
-    try
-      Files := TDirectory.GetFiles(FCacheDir, '*.png', TSearchOption.soAllDirectories);
-      for FileName in Files do
-      begin
-        try
-          Result := Result + TFile.GetSize(FileName);
-        except
-          {Skip files we cannot stat}
-        end;
-      end;
-    except
-      {Directory enumeration failed; return partial result}
-    end;
+    Entries := FStorage.List;
+    for I := 0 to High(Entries) do
+      Result := Result + Entries[I].Size;
   finally
     FLock.Leave;
   end;

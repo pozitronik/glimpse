@@ -75,6 +75,8 @@
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="..\src\uDebugLog.pas"/>
+        <DCCReference Include="..\src\infrastructure\uCacheStorage.pas"/>
+        <DCCReference Include="..\src\infrastructure\uLruEvictionPolicy.pas"/>
         <DCCReference Include="..\src\uCache.pas"/>
         <DCCReference Include="..\src\uCacheKey.pas"/>
         <DCCReference Include="..\src\uProbeCache.pas"/>

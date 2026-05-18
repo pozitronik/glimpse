@@ -18,6 +18,8 @@ uses
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',
   uFFmpegExe in '..\src\uFFmpegExe.pas',
   uDebugLog in '..\src\uDebugLog.pas',
+  uCacheStorage in '..\src\infrastructure\uCacheStorage.pas',
+  uLruEvictionPolicy in '..\src\infrastructure\uLruEvictionPolicy.pas',
   uCache in '..\src\uCache.pas',
   uCacheKey in '..\src\uCacheKey.pas',
   uProbeCache in '..\src\uProbeCache.pas',

@@ -33,6 +33,13 @@ function CacheHashKey(const AKeyString: string): string;
 {Builds a sharded file path: <CacheDir>/<first N chars of key>/<key>.<ext>}
 function ShardedKeyPath(const ACacheDir, AKey, AExt: string): string;
 
+{Composes the full frame-cache key string from file identity plus the
+ per-extraction parameters that change the frame contents (time offset,
+ scale cap, keyframe-vs-accurate seek). The result is what gets fed to
+ CacheHashKey to produce the on-disk filename. Lives here next to
+ BuildFileIdentityKey so the two key formats stay in one place.}
+function BuildFrameCacheKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;
+
 implementation
 
 uses
@@ -63,6 +70,17 @@ end;
 function ShardedKeyPath(const ACacheDir, AKey, AExt: string): string;
 begin
   Result := TPath.Combine(TPath.Combine(ACacheDir, Copy(AKey, 1, SHARD_PREFIX_LEN)), AKey + AExt);
+end;
+
+function BuildFrameCacheKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;
+begin
+  Result := BuildFileIdentityKey(AFilePath, AFileSize, AFileTime) + '|' + Format('%.3f', [ATimeOffset], GInvFmt);
+  {Append scaled resolution to distinguish from full-size cache entries}
+  if AMaxSide > 0 then
+    Result := Result + '|s' + IntToStr(AMaxSide);
+  {Keyframe-only seek produces different frames than accurate seek}
+  if AUseKeyframes then
+    Result := Result + '|kf';
 end;
 
 initialization
