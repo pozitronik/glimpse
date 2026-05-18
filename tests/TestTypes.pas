@@ -56,13 +56,38 @@ type
     [Test] procedure StrToBannerPosition_RoundTrip_BothValues;
     [Test] procedure StrToBannerPosition_Unknown_ReturnsDefault;
     [Test] procedure StrToBannerPosition_MixedCase_Accepted;
+    {Enum codecs moved out of TPluginSettings into free functions here.
+     The one-arg StrToX overloads fall back to a hard-coded default
+     baked into the function — pinning that default plus the round-trip
+     contract for every enum value.}
+    [Test] procedure FFmpegModeToStr_BothValues;
+    [Test] procedure StrToFFmpegMode_KnownTokens;
+    [Test] procedure StrToFFmpegMode_RoundTrip;
+    [Test] procedure StrToFFmpegMode_UnknownReturnsAuto;
+    [Test] procedure ViewModeToStr_AllValues;
+    [Test] procedure StrToViewMode_KnownTokens;
+    [Test] procedure StrToViewMode_RoundTrip;
+    [Test] procedure StrToViewMode_UnknownReturnsGrid;
+    [Test] procedure ZoomModeToStr_AllValues;
+    [Test] procedure StrToZoomMode_KnownTokens;
+    [Test] procedure StrToZoomMode_RoundTrip;
+    [Test] procedure StrToZoomMode_UnknownReturnsFitWindow;
+    [Test] procedure ThumbnailModeToStr_BothValues;
+    [Test] procedure StrToThumbnailMode_KnownTokens;
+    [Test] procedure StrToThumbnailMode_RoundTrip;
+    [Test] procedure StrToThumbnailMode_UnknownReturnsSingle;
+    [Test] procedure SaveFormatToStr_BothValues;
+    [Test] procedure StrToSaveFormat_KnownTokens;
+    [Test] procedure StrToSaveFormat_RoundTrip;
+    [Test] procedure StrToSaveFormat_UnknownReturnsPng;
+    [Test] procedure StrToSaveFormat_AcceptsJpgAlias;
   end;
 
 implementation
 
 uses
   System.SysUtils,
-  uTypes, uStatusBarLayout;
+  uBitmapSaver, uTypes, uStatusBarLayout;
 
 procedure TTestTypes.ViewModeOrdinals;
 begin
@@ -457,6 +482,173 @@ begin
   B.UseKeyframes := True;
   Assert.AreEqual(480, A.MaxSide);
   Assert.IsFalse(A.UseKeyframes);
+end;
+
+procedure TTestTypes.FFmpegModeToStr_BothValues;
+begin
+  Assert.AreEqual('auto', FFmpegModeToStr(fmAuto));
+  Assert.AreEqual('exe', FFmpegModeToStr(fmExe));
+end;
+
+procedure TTestTypes.StrToFFmpegMode_KnownTokens;
+begin
+  Assert.AreEqual(Ord(fmAuto), Ord(StrToFFmpegMode('auto')));
+  Assert.AreEqual(Ord(fmExe), Ord(StrToFFmpegMode('exe')));
+  {SameText comparison: a hand-edited INI value with case variation must parse.}
+  Assert.AreEqual(Ord(fmExe), Ord(StrToFFmpegMode('EXE')));
+end;
+
+procedure TTestTypes.StrToFFmpegMode_RoundTrip;
+var
+  M: TFFmpegMode;
+begin
+  for M := Low(TFFmpegMode) to High(TFFmpegMode) do
+    Assert.AreEqual(Ord(M), Ord(StrToFFmpegMode(FFmpegModeToStr(M))),
+      Format('Round-trip failed for FFmpegMode #%d', [Ord(M)]));
+end;
+
+procedure TTestTypes.StrToFFmpegMode_UnknownReturnsAuto;
+begin
+  {The one-arg overload's documented fallback is fmAuto — preserved from
+   the pre-extraction TPluginSettings.StrToFFmpegMode (which used
+   DEF_FFMPEG_MODE = fmAuto). A garbage token must not silently promote
+   to fmExe.}
+  Assert.AreEqual(Ord(fmAuto), Ord(StrToFFmpegMode('garbage')));
+  Assert.AreEqual(Ord(fmAuto), Ord(StrToFFmpegMode('')));
+end;
+
+procedure TTestTypes.ViewModeToStr_AllValues;
+begin
+  Assert.AreEqual('smartgrid', ViewModeToStr(vmSmartGrid));
+  Assert.AreEqual('grid', ViewModeToStr(vmGrid));
+  Assert.AreEqual('scroll', ViewModeToStr(vmScroll));
+  Assert.AreEqual('filmstrip', ViewModeToStr(vmFilmstrip));
+  Assert.AreEqual('single', ViewModeToStr(vmSingle));
+end;
+
+procedure TTestTypes.StrToViewMode_KnownTokens;
+begin
+  Assert.AreEqual(Ord(vmSmartGrid), Ord(StrToViewMode('smartgrid')));
+  Assert.AreEqual(Ord(vmGrid), Ord(StrToViewMode('grid')));
+  Assert.AreEqual(Ord(vmScroll), Ord(StrToViewMode('scroll')));
+  Assert.AreEqual(Ord(vmFilmstrip), Ord(StrToViewMode('filmstrip')));
+  Assert.AreEqual(Ord(vmSingle), Ord(StrToViewMode('single')));
+end;
+
+procedure TTestTypes.StrToViewMode_RoundTrip;
+var
+  V: TViewMode;
+begin
+  for V := Low(TViewMode) to High(TViewMode) do
+    Assert.AreEqual(Ord(V), Ord(StrToViewMode(ViewModeToStr(V))),
+      Format('Round-trip failed for ViewMode #%d', [Ord(V)]));
+end;
+
+procedure TTestTypes.StrToViewMode_UnknownReturnsGrid;
+begin
+  {Historical fallback: vmGrid is the default view mode (DEF_VIEW_MODE).
+   Note: 'grid' is not actually matched explicitly by StrToViewMode —
+   it falls through every if branch and lands on the default. Empty,
+   garbage, and 'grid' itself all resolve to vmGrid.}
+  Assert.AreEqual(Ord(vmGrid), Ord(StrToViewMode('garbage')));
+  Assert.AreEqual(Ord(vmGrid), Ord(StrToViewMode('')));
+end;
+
+procedure TTestTypes.ZoomModeToStr_AllValues;
+begin
+  Assert.AreEqual('fit', ZoomModeToStr(zmFitWindow));
+  Assert.AreEqual('fitlarger', ZoomModeToStr(zmFitIfLarger));
+  Assert.AreEqual('actual', ZoomModeToStr(zmActual));
+end;
+
+procedure TTestTypes.StrToZoomMode_KnownTokens;
+begin
+  Assert.AreEqual(Ord(zmFitWindow), Ord(StrToZoomMode('fit')));
+  Assert.AreEqual(Ord(zmFitIfLarger), Ord(StrToZoomMode('fitlarger')));
+  Assert.AreEqual(Ord(zmActual), Ord(StrToZoomMode('actual')));
+end;
+
+procedure TTestTypes.StrToZoomMode_RoundTrip;
+var
+  Z: TZoomMode;
+begin
+  for Z := Low(TZoomMode) to High(TZoomMode) do
+    Assert.AreEqual(Ord(Z), Ord(StrToZoomMode(ZoomModeToStr(Z))),
+      Format('Round-trip failed for ZoomMode #%d', [Ord(Z)]));
+end;
+
+procedure TTestTypes.StrToZoomMode_UnknownReturnsFitWindow;
+begin
+  {zmFitWindow is the historical default (DEF_ZOOM_MODE). 'fit' is not
+   explicitly matched either — it falls through to the default. Both
+   garbage and 'fit' resolve to zmFitWindow.}
+  Assert.AreEqual(Ord(zmFitWindow), Ord(StrToZoomMode('garbage')));
+  Assert.AreEqual(Ord(zmFitWindow), Ord(StrToZoomMode('')));
+end;
+
+procedure TTestTypes.ThumbnailModeToStr_BothValues;
+begin
+  Assert.AreEqual('single', ThumbnailModeToStr(tnmSingle));
+  Assert.AreEqual('grid', ThumbnailModeToStr(tnmGrid));
+end;
+
+procedure TTestTypes.StrToThumbnailMode_KnownTokens;
+begin
+  Assert.AreEqual(Ord(tnmGrid), Ord(StrToThumbnailMode('grid')));
+  {Anything not 'grid' resolves to tnmSingle — explicit 'single' included.}
+  Assert.AreEqual(Ord(tnmSingle), Ord(StrToThumbnailMode('single')));
+end;
+
+procedure TTestTypes.StrToThumbnailMode_RoundTrip;
+var
+  M: TThumbnailMode;
+begin
+  for M := Low(TThumbnailMode) to High(TThumbnailMode) do
+    Assert.AreEqual(Ord(M), Ord(StrToThumbnailMode(ThumbnailModeToStr(M))),
+      Format('Round-trip failed for ThumbnailMode #%d', [Ord(M)]));
+end;
+
+procedure TTestTypes.StrToThumbnailMode_UnknownReturnsSingle;
+begin
+  Assert.AreEqual(Ord(tnmSingle), Ord(StrToThumbnailMode('garbage')));
+  Assert.AreEqual(Ord(tnmSingle), Ord(StrToThumbnailMode('')));
+end;
+
+procedure TTestTypes.SaveFormatToStr_BothValues;
+begin
+  Assert.AreEqual('PNG', SaveFormatToStr(sfPNG));
+  Assert.AreEqual('JPEG', SaveFormatToStr(sfJPEG));
+end;
+
+procedure TTestTypes.StrToSaveFormat_KnownTokens;
+begin
+  Assert.AreEqual(Ord(sfPNG), Ord(StrToSaveFormat('PNG')));
+  Assert.AreEqual(Ord(sfJPEG), Ord(StrToSaveFormat('JPEG')));
+end;
+
+procedure TTestTypes.StrToSaveFormat_RoundTrip;
+var
+  F: TSaveFormat;
+begin
+  for F := Low(TSaveFormat) to High(TSaveFormat) do
+    Assert.AreEqual(Ord(F), Ord(StrToSaveFormat(SaveFormatToStr(F))),
+      Format('Round-trip failed for SaveFormat #%d', [Ord(F)]));
+end;
+
+procedure TTestTypes.StrToSaveFormat_UnknownReturnsPng;
+begin
+  {sfPNG is the historical default (DEF_SAVE_FORMAT). Anything not JPEG
+   or JPG resolves to sfPNG so a corrupt INI degrades to a lossless save.}
+  Assert.AreEqual(Ord(sfPNG), Ord(StrToSaveFormat('garbage')));
+  Assert.AreEqual(Ord(sfPNG), Ord(StrToSaveFormat('')));
+end;
+
+procedure TTestTypes.StrToSaveFormat_AcceptsJpgAlias;
+begin
+  {JPG is a documented alias for JPEG — TC users with hand-edited INIs
+   often write 'JPG' rather than 'JPEG'. Pinning the alias.}
+  Assert.AreEqual(Ord(sfJPEG), Ord(StrToSaveFormat('JPG')));
+  Assert.AreEqual(Ord(sfJPEG), Ord(StrToSaveFormat('jpg')));
 end;
 
 end.

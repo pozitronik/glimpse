@@ -82,11 +82,120 @@ type
     [Test] procedure SaveTo_HonoursShowKeyParameter;
   end;
 
+  [TestFixture]
+  TTestFFmpegSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_MissingMode_FallsBackToAuto;
+  end;
+
+  [TestFixture]
+  TTestViewSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure Defaults_EveryModeZoomDefaultsFitWindow;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure SaveThenLoad_PerModeZoomSurvives;
+    [Test] procedure Load_CellGapClampedNonNegative;
+    [Test] procedure Load_CombinedBorderClampedNonNegative;
+    [Test] procedure Load_MissingKeys_PreservesCurrentValues;
+  end;
+
+  [TestFixture]
+  TTestSaveSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_JpegQualityClampedHigh;
+    [Test] procedure Load_PngCompressionClampedHigh;
+    [Test] procedure Load_FrameSidesClamped;
+    [Test] procedure Load_EmptyExtensionList_FallsBackToDefault;
+    [Test] procedure Load_CombinedMaxSideClamped;
+  end;
+
+  [TestFixture]
+  TTestCacheSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_MaxSizeMBClampedLow;
+    [Test] procedure Load_MaxSizeMBClampedHigh;
+    [Test] procedure Load_RandomPercentClampedLow;
+    [Test] procedure Load_RandomPercentClampedHigh;
+  end;
+
+  [TestFixture]
+  TTestQuickViewSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_MissingKeys_PreservesCurrentValues;
+  end;
+
+  [TestFixture]
+  TTestThumbnailsSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_PositionClampedHigh;
+    [Test] procedure Load_GridFramesClampedHigh;
+    [Test] procedure Load_GridFramesClampedLow;
+    [Test] procedure Load_UnknownMode_FallsBackToSingle;
+  end;
+
+  [TestFixture]
+  TTestStatusBarSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_EmptyTemplate_FallsBackToDefault;
+    [Test] procedure Load_EmptyFont_FallsBackToDefault;
+    [Test] procedure Load_FontSizeClamped;
+    [Test] procedure Load_HeightClamped;
+    [Test] procedure Load_UnknownApplyMode_KeepsCurrent;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.UITypes,
-  uTypes, uDefaults, uSettingsGroups, uUnicodeIniFile;
+  uBitmapSaver, uStatusBarLayout, uTypes, uDefaults, uSettingsGroups, uUnicodeIniFile;
 
 {TTestExtractionSettingsGroup}
 
@@ -788,9 +897,1195 @@ begin
   Assert.IsTrue(Wlx, 'ShowTimecode must be absent (default returned)');
 end;
 
+{TTestFFmpegSettingsGroup}
+
+procedure TTestFFmpegSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_FfmpegTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestFFmpegSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestFFmpegSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestFFmpegSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TFFmpegSettingsGroup;
+begin
+  G := TFFmpegSettingsGroup.Defaults;
+  Assert.AreEqual(Ord(fmAuto), Ord(G.Mode));
+  Assert.AreEqual('', G.ExePath);
+  Assert.IsFalse(G.AutoDownloaded);
+end;
+
+procedure TTestFFmpegSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TFFmpegSettingsGroup;
+begin
+  IniPath := MakeIniPath('ffmpeg_rt.ini');
+  G1 := TFFmpegSettingsGroup.Defaults;
+  G1.Mode := fmExe;
+  G1.ExePath := 'C:\bin\ffmpeg.exe';
+  G1.AutoDownloaded := True;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'ffmpeg');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TFFmpegSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'ffmpeg');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Ord(G1.Mode), Ord(G2.Mode));
+  Assert.AreEqual(G1.ExePath, G2.ExePath);
+  Assert.AreEqual(G1.AutoDownloaded, G2.AutoDownloaded);
+end;
+
+procedure TTestFFmpegSettingsGroup.Load_MissingMode_FallsBackToAuto;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TFFmpegSettingsGroup;
+begin
+  {The Mode load path uses StrToFFmpegMode(ReadString(...,'')) which falls
+   back to fmAuto on empty input — preserving the historical TPluginSettings
+   behaviour even if the caller seeded the record with fmExe.}
+  IniPath := MakeIniPath('ffmpeg_missing_mode.ini');
+  TFile.WriteAllText(IniPath, '');
+
+  G := TFFmpegSettingsGroup.Defaults;
+  G.Mode := fmExe;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'ffmpeg');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Ord(fmAuto), Ord(G.Mode),
+    'Missing/empty Mode must always resolve to fmAuto regardless of seed');
+end;
+
+{TTestViewSettingsGroup}
+
+procedure TTestViewSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_ViewTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestViewSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestViewSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestViewSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TViewSettingsGroup;
+begin
+  G := TViewSettingsGroup.Defaults;
+  Assert.AreEqual(Ord(vmGrid), Ord(G.Mode));
+  Assert.AreEqual(Integer(TColor($001E1E1E)), Integer(G.Background));
+  Assert.IsTrue(G.ShowToolbar);
+  Assert.IsTrue(G.ShowStatusBar);
+  Assert.AreEqual(0, G.CellGap);
+  Assert.AreEqual(DEF_COMBINED_BORDER, G.CombinedBorder);
+  Assert.AreEqual(Ord(pblAuto), Ord(G.ProgressBarLayout));
+end;
+
+procedure TTestViewSettingsGroup.Defaults_EveryModeZoomDefaultsFitWindow;
+var
+  G: TViewSettingsGroup;
+  VM: TViewMode;
+begin
+  {Every view mode must default to zmFitWindow — the historical
+   DEF_ZOOM_MODE. Pinning explicitly so a future enum addition forces an
+   update to the defaults loop in TViewSettingsGroup.Defaults.}
+  G := TViewSettingsGroup.Defaults;
+  for VM := Low(TViewMode) to High(TViewMode) do
+    Assert.AreEqual(Ord(zmFitWindow), Ord(G.ModeZoom[VM]),
+      Format('ViewMode #%d must default to zmFitWindow', [Ord(VM)]));
+end;
+
+procedure TTestViewSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TViewSettingsGroup;
+begin
+  IniPath := MakeIniPath('view_rt.ini');
+  G1 := TViewSettingsGroup.Defaults;
+  G1.Mode := vmScroll;
+  G1.Background := TColor($00ABCDEF);
+  G1.ShowToolbar := False;
+  G1.ShowStatusBar := False;
+  G1.CellGap := 12;
+  G1.CombinedBorder := 5;
+  G1.ProgressBarLayout := pblOverPanels;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'view');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TViewSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'view');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Ord(G1.Mode), Ord(G2.Mode));
+  Assert.AreEqual(Integer(G1.Background), Integer(G2.Background));
+  Assert.IsFalse(G2.ShowToolbar);
+  Assert.IsFalse(G2.ShowStatusBar);
+  Assert.AreEqual(G1.CellGap, G2.CellGap);
+  Assert.AreEqual(G1.CombinedBorder, G2.CombinedBorder);
+  Assert.AreEqual(Ord(G1.ProgressBarLayout), Ord(G2.ProgressBarLayout));
+end;
+
+procedure TTestViewSettingsGroup.SaveThenLoad_PerModeZoomSurvives;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TViewSettingsGroup;
+  VM: TViewMode;
+begin
+  {The per-mode zoom table is the trickiest part of the view group —
+   each mode persists into a sub-section named 'view.<modename>' under
+   the key 'ZoomMode'. Mutating every mode to a different zoom and
+   round-tripping pins both the section-naming convention and the array
+   indexing.}
+  IniPath := MakeIniPath('view_modezoom.ini');
+  G1 := TViewSettingsGroup.Defaults;
+  G1.ModeZoom[vmSmartGrid] := zmActual;
+  G1.ModeZoom[vmGrid] := zmFitIfLarger;
+  G1.ModeZoom[vmScroll] := zmActual;
+  G1.ModeZoom[vmFilmstrip] := zmFitIfLarger;
+  G1.ModeZoom[vmSingle] := zmActual;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'view');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TViewSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'view');
+  finally
+    Ini.Free;
+  end;
+
+  for VM := Low(TViewMode) to High(TViewMode) do
+    Assert.AreEqual(Ord(G1.ModeZoom[VM]), Ord(G2.ModeZoom[VM]),
+      Format('ModeZoom must round-trip for ViewMode #%d', [Ord(VM)]));
+end;
+
+procedure TTestViewSettingsGroup.Load_CellGapClampedNonNegative;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TViewSettingsGroup;
+begin
+  IniPath := MakeIniPath('view_cellgap.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CellGap', -100);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TViewSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'view');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MIN_CELL_GAP, G.CellGap);
+end;
+
+procedure TTestViewSettingsGroup.Load_CombinedBorderClampedNonNegative;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TViewSettingsGroup;
+begin
+  IniPath := MakeIniPath('view_border.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CombinedBorder', -50);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TViewSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'view');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MIN_COMBINED_BORDER, G.CombinedBorder);
+end;
+
+procedure TTestViewSettingsGroup.Load_MissingKeys_PreservesCurrentValues;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TViewSettingsGroup;
+begin
+  IniPath := MakeIniPath('view_empty.ini');
+  TFile.WriteAllText(IniPath, '');
+
+  G := TViewSettingsGroup.Defaults;
+  G.Background := TColor($00FFFFFF);
+  G.ShowToolbar := False;
+  G.CellGap := 17;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'view');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Integer(TColor($00FFFFFF)), Integer(G.Background));
+  Assert.IsFalse(G.ShowToolbar);
+  Assert.AreEqual(17, G.CellGap);
+end;
+
+{TTestSaveSettingsGroup}
+
+procedure TTestSaveSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_SaveTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestSaveSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestSaveSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestSaveSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TSaveSettingsGroup;
+begin
+  G := TSaveSettingsGroup.Defaults;
+  Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(G.SaveFormat));
+  Assert.AreEqual(DEF_JPEG_QUALITY, G.JpegQuality);
+  Assert.AreEqual(DEF_PNG_COMPRESSION, G.PngCompression);
+  Assert.AreEqual(Integer(DEF_BACKGROUND_ALPHA), Integer(G.BackgroundAlpha));
+  Assert.AreEqual('', G.SaveFolder);
+  Assert.AreEqual(DEF_SAVE_AT_LIVE_RESOLUTION, G.SaveAtLiveResolution);
+  Assert.AreEqual(DEF_COPY_AT_LIVE_RESOLUTION, G.CopyAtLiveResolution);
+  Assert.AreEqual(DEF_CLIPBOARD_AS_FILE_REFERENCE, G.ClipboardAsFileReference);
+  Assert.AreEqual(DEF_COMBINED_MAX_SIDE, G.CombinedMaxSide);
+  Assert.AreEqual(DEF_SCALED_EXTRACTION, G.ScaledExtraction);
+  Assert.AreEqual(DEF_MIN_FRAME_SIDE, G.MinFrameSide);
+  Assert.AreEqual(DEF_MAX_FRAME_SIDE, G.MaxFrameSide);
+  Assert.AreEqual(DEF_AUTO_REFRESH_VIEWPORT, G.AutoRefreshOnViewportChange);
+  Assert.AreEqual(DEF_EXTENSION_LIST, G.ExtensionList);
+end;
+
+procedure TTestSaveSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TSaveSettingsGroup;
+begin
+  IniPath := MakeIniPath('save_rt.ini');
+  G1 := TSaveSettingsGroup.Defaults;
+  G1.SaveFormat := sfJPEG;
+  G1.JpegQuality := 70;
+  G1.PngCompression := 4;
+  G1.BackgroundAlpha := 100;
+  G1.SaveFolder := 'C:\out';
+  G1.SaveAtLiveResolution := True;
+  G1.CopyAtLiveResolution := True;
+  G1.ClipboardAsFileReference := True;
+  G1.CombinedMaxSide := 2000;
+  G1.ScaledExtraction := True;
+  G1.MinFrameSide := 200;
+  G1.MaxFrameSide := 1000;
+  G1.AutoRefreshOnViewportChange := False;
+  G1.ExtensionList := 'mp4,mkv';
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TSaveSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Ord(G1.SaveFormat), Ord(G2.SaveFormat));
+  Assert.AreEqual(G1.JpegQuality, G2.JpegQuality);
+  Assert.AreEqual(G1.PngCompression, G2.PngCompression);
+  Assert.AreEqual(Integer(G1.BackgroundAlpha), Integer(G2.BackgroundAlpha));
+  Assert.AreEqual(G1.SaveFolder, G2.SaveFolder);
+  Assert.IsTrue(G2.SaveAtLiveResolution);
+  Assert.IsTrue(G2.CopyAtLiveResolution);
+  Assert.IsTrue(G2.ClipboardAsFileReference);
+  Assert.AreEqual(G1.CombinedMaxSide, G2.CombinedMaxSide);
+  Assert.IsTrue(G2.ScaledExtraction);
+  Assert.AreEqual(G1.MinFrameSide, G2.MinFrameSide);
+  Assert.AreEqual(G1.MaxFrameSide, G2.MaxFrameSide);
+  Assert.IsFalse(G2.AutoRefreshOnViewportChange);
+  Assert.AreEqual(G1.ExtensionList, G2.ExtensionList);
+end;
+
+procedure TTestSaveSettingsGroup.Load_JpegQualityClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TSaveSettingsGroup;
+begin
+  IniPath := MakeIniPath('save_jq.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'JpegQuality', 9999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TSaveSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_JPEG_QUALITY, G.JpegQuality);
+end;
+
+procedure TTestSaveSettingsGroup.Load_PngCompressionClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TSaveSettingsGroup;
+begin
+  IniPath := MakeIniPath('save_pc.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'PngCompression', 100);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TSaveSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_PNG_COMPRESSION, G.PngCompression);
+end;
+
+procedure TTestSaveSettingsGroup.Load_FrameSidesClamped;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TSaveSettingsGroup;
+begin
+  {Independent of the cross-field Min<=Max invariant (enforced by the
+   owning TPluginSettings.Validate, NOT the group). The group's per-field
+   clamps still kick in for individually out-of-range values.}
+  IniPath := MakeIniPath('save_frame.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'MinFrameSide', 1);
+    Ini.WriteInteger('extraction', 'MaxFrameSide', 99999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TSaveSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MIN_FRAME_SIDE, G.MinFrameSide);
+  Assert.AreEqual(MAX_FRAME_SIDE, G.MaxFrameSide);
+end;
+
+procedure TTestSaveSettingsGroup.Load_EmptyExtensionList_FallsBackToDefault;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TSaveSettingsGroup;
+begin
+  {A cleared ExtensionList would strand the user with no recognised
+   files. The group must fall back to DEF_EXTENSION_LIST when the value
+   is empty or whitespace.}
+  IniPath := MakeIniPath('save_ext.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('extensions', 'List', '   ');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TSaveSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(DEF_EXTENSION_LIST, G.ExtensionList);
+end;
+
+procedure TTestSaveSettingsGroup.Load_CombinedMaxSideClamped;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TSaveSettingsGroup;
+begin
+  IniPath := MakeIniPath('save_cm.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'CombinedMaxSide', 999999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TSaveSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_COMBINED_MAX_SIDE, G.CombinedMaxSide);
+end;
+
+{TTestCacheSettingsGroup}
+
+procedure TTestCacheSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_CacheTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestCacheSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestCacheSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestCacheSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TCacheSettingsGroup;
+begin
+  G := TCacheSettingsGroup.Defaults;
+  Assert.IsTrue(G.Enabled);
+  Assert.AreEqual('', G.Folder);
+  Assert.AreEqual(500, G.MaxSizeMB);
+  Assert.AreEqual(DEF_RANDOM_EXTRACTION, G.RandomExtraction);
+  Assert.AreEqual(DEF_RANDOM_PERCENT, G.RandomPercent);
+  Assert.AreEqual(DEF_CACHE_RANDOM_FRAMES, G.CacheRandomFrames);
+end;
+
+procedure TTestCacheSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TCacheSettingsGroup;
+begin
+  IniPath := MakeIniPath('cache_rt.ini');
+  G1 := TCacheSettingsGroup.Defaults;
+  G1.Enabled := False;
+  G1.Folder := 'C:\cache';
+  G1.MaxSizeMB := 1234;
+  G1.RandomExtraction := True;
+  G1.RandomPercent := 33;
+  G1.CacheRandomFrames := True;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TCacheSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.IsFalse(G2.Enabled);
+  Assert.AreEqual(G1.Folder, G2.Folder);
+  Assert.AreEqual(G1.MaxSizeMB, G2.MaxSizeMB);
+  Assert.IsTrue(G2.RandomExtraction);
+  Assert.AreEqual(G1.RandomPercent, G2.RandomPercent);
+  Assert.IsTrue(G2.CacheRandomFrames);
+end;
+
+procedure TTestCacheSettingsGroup.Load_MaxSizeMBClampedLow;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TCacheSettingsGroup;
+begin
+  IniPath := MakeIniPath('cache_mlo.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 1);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TCacheSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(10, G.MaxSizeMB);
+end;
+
+procedure TTestCacheSettingsGroup.Load_MaxSizeMBClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TCacheSettingsGroup;
+begin
+  IniPath := MakeIniPath('cache_mhi.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 100000);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TCacheSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(10000, G.MaxSizeMB);
+end;
+
+procedure TTestCacheSettingsGroup.Load_RandomPercentClampedLow;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TCacheSettingsGroup;
+begin
+  IniPath := MakeIniPath('cache_rplo.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', -50);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TCacheSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MIN_RANDOM_PERCENT, G.RandomPercent);
+end;
+
+procedure TTestCacheSettingsGroup.Load_RandomPercentClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TCacheSettingsGroup;
+begin
+  IniPath := MakeIniPath('cache_rphi.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', 9999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TCacheSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini);
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_RANDOM_PERCENT, G.RandomPercent);
+end;
+
+{TTestQuickViewSettingsGroup}
+
+procedure TTestQuickViewSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_QvTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestQuickViewSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestQuickViewSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestQuickViewSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TQuickViewSettingsGroup;
+begin
+  G := TQuickViewSettingsGroup.Defaults;
+  Assert.IsTrue(G.DisableNavigation);
+  Assert.IsTrue(G.HideToolbar);
+  Assert.IsTrue(G.HideStatusBar);
+end;
+
+procedure TTestQuickViewSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TQuickViewSettingsGroup;
+begin
+  IniPath := MakeIniPath('qv_rt.ini');
+  G1 := TQuickViewSettingsGroup.Defaults;
+  G1.DisableNavigation := False;
+  G1.HideToolbar := False;
+  G1.HideStatusBar := False;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'quickview');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TQuickViewSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'quickview');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.IsFalse(G2.DisableNavigation);
+  Assert.IsFalse(G2.HideToolbar);
+  Assert.IsFalse(G2.HideStatusBar);
+end;
+
+procedure TTestQuickViewSettingsGroup.Load_MissingKeys_PreservesCurrentValues;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TQuickViewSettingsGroup;
+begin
+  IniPath := MakeIniPath('qv_empty.ini');
+  TFile.WriteAllText(IniPath, '');
+
+  G := TQuickViewSettingsGroup.Defaults;
+  G.DisableNavigation := False;
+  G.HideToolbar := True;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'quickview');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.IsFalse(G.DisableNavigation);
+  Assert.IsTrue(G.HideToolbar);
+end;
+
+{TTestThumbnailsSettingsGroup}
+
+procedure TTestThumbnailsSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_ThumbTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestThumbnailsSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestThumbnailsSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestThumbnailsSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TThumbnailsSettingsGroup;
+begin
+  G := TThumbnailsSettingsGroup.Defaults;
+  Assert.AreEqual(DEF_THUMBNAILS_ENABLED, G.Enabled);
+  Assert.AreEqual(Ord(DEF_THUMBNAIL_MODE), Ord(G.Mode));
+  Assert.AreEqual(DEF_THUMBNAIL_POSITION, G.Position);
+  Assert.AreEqual(DEF_THUMBNAIL_GRID_FRAMES, G.GridFrames);
+end;
+
+procedure TTestThumbnailsSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TThumbnailsSettingsGroup;
+begin
+  IniPath := MakeIniPath('thumb_rt.ini');
+  G1 := TThumbnailsSettingsGroup.Defaults;
+  G1.Enabled := False;
+  G1.Mode := tnmGrid;
+  G1.Position := 25;
+  G1.GridFrames := 9;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'thumbnails');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TThumbnailsSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'thumbnails');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.IsFalse(G2.Enabled);
+  Assert.AreEqual(Ord(tnmGrid), Ord(G2.Mode));
+  Assert.AreEqual(25, G2.Position);
+  Assert.AreEqual(9, G2.GridFrames);
+end;
+
+procedure TTestThumbnailsSettingsGroup.Load_PositionClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TThumbnailsSettingsGroup;
+begin
+  IniPath := MakeIniPath('thumb_pos.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'Position', 999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TThumbnailsSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'thumbnails');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_THUMBNAIL_POSITION, G.Position);
+end;
+
+procedure TTestThumbnailsSettingsGroup.Load_GridFramesClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TThumbnailsSettingsGroup;
+begin
+  IniPath := MakeIniPath('thumb_gfhi.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'GridFrames', 999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TThumbnailsSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'thumbnails');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_THUMBNAIL_GRID_FRAMES, G.GridFrames);
+end;
+
+procedure TTestThumbnailsSettingsGroup.Load_GridFramesClampedLow;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TThumbnailsSettingsGroup;
+begin
+  IniPath := MakeIniPath('thumb_gflo.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'GridFrames', 0);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TThumbnailsSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'thumbnails');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MIN_THUMBNAIL_GRID_FRAMES, G.GridFrames);
+end;
+
+procedure TTestThumbnailsSettingsGroup.Load_UnknownMode_FallsBackToSingle;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TThumbnailsSettingsGroup;
+begin
+  {StrToThumbnailMode returns tnmSingle for anything other than 'grid'
+   (one-arg overload, hard-coded fallback). The group must inherit
+   that behaviour rather than silently keeping the record's current value.}
+  IniPath := MakeIniPath('thumb_mode.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('thumbnails', 'Mode', 'garbage');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TThumbnailsSettingsGroup.Defaults;
+  G.Mode := tnmGrid;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'thumbnails');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Ord(tnmSingle), Ord(G.Mode));
+end;
+
+{TTestStatusBarSettingsGroup}
+
+procedure TTestStatusBarSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_SbTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestStatusBarSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestStatusBarSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestStatusBarSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TStatusBarSettingsGroup;
+begin
+  G := TStatusBarSettingsGroup.Defaults;
+  Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, G.Template);
+  Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, G.FontName);
+  Assert.AreEqual(DEF_STATUSBAR_FONT_SIZE, G.FontSize);
+  Assert.AreEqual(DEF_STATUSBAR_AUTO_WIDTH_LIVE, G.AutoWidthLive);
+  Assert.AreEqual(DEF_STATUSBAR_STRETCH_PANELS, G.StretchPanels);
+  Assert.AreEqual(DEF_STATUSBAR_HEIGHT, G.Height);
+  Assert.AreEqual(Ord(DEF_STATUSBAR_HEIGHT_APPLY_MODE), Ord(G.HeightApplyMode));
+end;
+
+procedure TTestStatusBarSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TStatusBarSettingsGroup;
+begin
+  IniPath := MakeIniPath('sb_rt.ini');
+  G1 := TStatusBarSettingsGroup.Defaults;
+  G1.Template := '%resolution%%fps%';
+  G1.FontName := 'Segoe UI';
+  G1.FontSize := 12;
+  G1.AutoWidthLive := False;
+  G1.StretchPanels := True;
+  G1.Height := 40;
+  G1.HeightApplyMode := sbhamQuickView;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'statusbar');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TStatusBarSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'statusbar');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(G1.Template, G2.Template);
+  Assert.AreEqual(G1.FontName, G2.FontName);
+  Assert.AreEqual(G1.FontSize, G2.FontSize);
+  Assert.IsFalse(G2.AutoWidthLive);
+  Assert.IsTrue(G2.StretchPanels);
+  Assert.AreEqual(G1.Height, G2.Height);
+  Assert.AreEqual(Ord(G1.HeightApplyMode), Ord(G2.HeightApplyMode));
+end;
+
+procedure TTestStatusBarSettingsGroup.Load_EmptyTemplate_FallsBackToDefault;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TStatusBarSettingsGroup;
+begin
+  {Empty/whitespace template falls back to DEF_STATUSBAR_TEMPLATE rather
+   than leaving the bar blank — same safety net as the pre-refactor
+   TPluginSettings.Load.}
+  IniPath := MakeIniPath('sb_empty_tpl.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'Template', '   ');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TStatusBarSettingsGroup.Defaults;
+  G.Template := 'foo';
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'statusbar');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, G.Template);
+end;
+
+procedure TTestStatusBarSettingsGroup.Load_EmptyFont_FallsBackToDefault;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TStatusBarSettingsGroup;
+begin
+  IniPath := MakeIniPath('sb_empty_font.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'FontName', '');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TStatusBarSettingsGroup.Defaults;
+  G.FontName := 'CustomFont';
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'statusbar');
+  finally
+    Ini.Free;
+  end;
+
+  {Unlike the banner/timestamp groups (which keep the record's current
+   value), the status bar group falls back to the DEFAULT constant
+   because it serves as the bar's permanent label-rendering font.}
+  Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, G.FontName);
+end;
+
+procedure TTestStatusBarSettingsGroup.Load_FontSizeClamped;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TStatusBarSettingsGroup;
+begin
+  IniPath := MakeIniPath('sb_fs.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'FontSize', 9999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TStatusBarSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'statusbar');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_STATUSBAR_FONT_SIZE, G.FontSize);
+end;
+
+procedure TTestStatusBarSettingsGroup.Load_HeightClamped;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TStatusBarSettingsGroup;
+begin
+  IniPath := MakeIniPath('sb_h.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'Height', 9999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TStatusBarSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'statusbar');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(MAX_STATUSBAR_HEIGHT, G.Height);
+end;
+
+procedure TTestStatusBarSettingsGroup.Load_UnknownApplyMode_KeepsCurrent;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TStatusBarSettingsGroup;
+begin
+  IniPath := MakeIniPath('sb_apply.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'HeightApplyMode', 'unrecognised');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TStatusBarSettingsGroup.Defaults;
+  G.HeightApplyMode := sbhamLister;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'statusbar');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(Ord(sbhamLister), Ord(G.HeightApplyMode));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestExtractionSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestBannerSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestTimestampSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestFFmpegSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestViewSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestSaveSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestCacheSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestQuickViewSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestThumbnailsSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestStatusBarSettingsGroup);
 
 end.

@@ -45,6 +45,14 @@ type
     function Extension: string;
   end;
 
+{Enum <-> INI-string conversions for TSaveFormat. Match the
+ StrToIntDef convention: StrToSaveFormat falls back to sfPNG (the
+ historical default) when AValue is neither 'JPEG' nor 'JPG'.
+ Lives here next to the enum so settings layers depending on uBitmapSaver
+ do not need to drag in a separate codec unit.}
+function StrToSaveFormat(const AValue: string): TSaveFormat;
+function SaveFormatToStr(AFormat: TSaveFormat): string;
+
 {Picks the saver implementation matching AFormat. AJpegQuality is
  ignored when AFormat=sfPNG, APngCompression is ignored when
  AFormat=sfJPEG — passing dummy values is fine when the call only
@@ -200,6 +208,24 @@ end;
 function TJpegBitmapSaver.Extension: string;
 begin
   Result := '.jpg';
+end;
+
+function StrToSaveFormat(const AValue: string): TSaveFormat;
+begin
+  if SameText(AValue, 'JPEG') or SameText(AValue, 'JPG') then
+    Result := sfJPEG
+  else
+    Result := sfPNG;
+end;
+
+function SaveFormatToStr(AFormat: TSaveFormat): string;
+begin
+  case AFormat of
+    sfJPEG:
+      Result := 'JPEG';
+    else
+      Result := 'PNG';
+  end;
 end;
 
 function MakeBitmapSaver(AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer): IBitmapSaver;
