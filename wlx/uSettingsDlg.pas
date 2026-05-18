@@ -544,10 +544,7 @@ procedure TSettingsForm.UpdateStretchLockState;
 begin
   if ChkStatusBarStretchPanels.Checked then
   begin
-    {Ord(pblOverPanels) — index 1 in CbxProgressBarLayout. Hardcoded to
-     avoid pulling uTypes into a place that already has enough imports;
-     test pinned in TestProgressBarLayoutIndexIsStable below.}
-    CbxProgressBarLayout.ItemIndex := 1;
+    CbxProgressBarLayout.ItemIndex := Ord(pblOverPanels);
     CbxProgressBarLayout.Enabled := False;
   end
   else
