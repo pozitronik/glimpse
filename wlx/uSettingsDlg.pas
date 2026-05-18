@@ -698,7 +698,7 @@ procedure TSettingsForm.BtnDefaultsClick(Sender: TObject);
 var
   Defaults: TPluginSettings;
 begin
-  Defaults := TPluginSettings.Create('');
+  Defaults := TPluginSettings.CreateDefaults;
   try
     SettingsToControls(Defaults);
   finally

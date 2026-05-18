@@ -100,6 +100,11 @@ type
   public
     constructor Create(const AIniPath: string);
     destructor Destroy; override;
+    {Creates a transient TPluginSettings (no INI path) seeded with the
+     historical defaults. Used by the Settings dialog's Defaults button
+     to push every field back to its baked-in value without touching the
+     persisted file. Caller owns the returned instance.}
+    class function CreateDefaults: TPluginSettings; static;
 
     {Loads all settings from the INI file. Missing or invalid values get defaults.}
     procedure Load;
@@ -312,6 +317,14 @@ begin
   FIniPath := AIniPath;
   FHotkeys := THotkeyBindings.Create;
   ResetDefaults;
+end;
+
+class function TPluginSettings.CreateDefaults: TPluginSettings;
+begin
+  {Empty IniPath is the documented sentinel for "in-memory only, no
+   persistence". The base constructor calls ResetDefaults so no extra
+   step is needed.}
+  Result := TPluginSettings.Create('');
 end;
 
 destructor TPluginSettings.Destroy;
