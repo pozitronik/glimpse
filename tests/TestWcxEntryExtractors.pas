@@ -41,7 +41,7 @@ uses
 type
   {Captures one Save call. Never touches disk so frame/combined extract
    tests are safe in CI where the temp directory may be read-only.}
-  TFakeBitmapSaver = class(TInterfacedObject, IBitmapSaver)
+  TFakeBitmapSaverRouter = class(TInterfacedObject, IBitmapSaverRouter)
   strict private
     FCalled: Boolean;
     FPath: string;
@@ -92,7 +92,7 @@ type
     FProcessDataProc: TProcessDataProc;
     FProcessDataProcW: TProcessDataProcW;
     FFrameExtractor: IFrameExtractor;
-    FBitmapSaver: IBitmapSaver;
+    FBitmapSaver: IBitmapSaverRouter;
   public
     constructor Create;
     destructor Destroy; override;
@@ -108,7 +108,7 @@ type
     function GetProcessDataProc: TProcessDataProc;
     function GetProcessDataProcW: TProcessDataProcW;
     function GetFrameExtractor: IFrameExtractor;
-    function GetBitmapSaver: IBitmapSaver;
+    function GetBitmapSaver: IBitmapSaverRouter;
 
     procedure SetFileName(const AValue: string);
     procedure SetFFmpegPath(const AValue: string);
@@ -118,12 +118,12 @@ type
     procedure SetEntrySizes(const AValue: TArray<Int64>);
     procedure SetTempPaths(const AValue: TArray<string>);
     procedure SetFrameExtractor(const AValue: IFrameExtractor);
-    procedure SetBitmapSaver(const AValue: IBitmapSaver);
+    procedure SetBitmapSaver(const AValue: IBitmapSaverRouter);
   end;
 
-{ TFakeBitmapSaver }
+{ TFakeBitmapSaverRouter }
 
-procedure TFakeBitmapSaver.Save(ABitmap: TBitmap; const APath: string;
+procedure TFakeBitmapSaverRouter.Save(ABitmap: TBitmap; const APath: string;
   AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 begin
   FCalled := True;
@@ -231,7 +231,7 @@ begin
   Result := FFrameExtractor;
 end;
 
-function TFakeContext.GetBitmapSaver: IBitmapSaver;
+function TFakeContext.GetBitmapSaver: IBitmapSaverRouter;
 begin
   Result := FBitmapSaver;
 end;
@@ -276,7 +276,7 @@ begin
   FFrameExtractor := AValue;
 end;
 
-procedure TFakeContext.SetBitmapSaver(const AValue: IBitmapSaver);
+procedure TFakeContext.SetBitmapSaver(const AValue: IBitmapSaverRouter);
 begin
   FBitmapSaver := AValue;
 end;
@@ -379,9 +379,9 @@ var
   ICtx: IWcxExtractionContext;
   Entry: IWcxEntryExtractor;
   FrameExtractor: TFakeFrameExtractor;
-  Saver: TFakeBitmapSaver;
+  Saver: TFakeBitmapSaverRouter;
   IFrameExtr: IFrameExtractor;
-  ISaver: IBitmapSaver;
+  ISaver: IBitmapSaverRouter;
   Status: Integer;
 begin
   {Verifies the Extract path goes through both seams: the frame
@@ -394,7 +394,7 @@ begin
   Ctx.SetOffsets(MakeOffsets(2));
   FrameExtractor := TFakeFrameExtractor.Create;
   IFrameExtr := FrameExtractor;
-  Saver := TFakeBitmapSaver.Create;
+  Saver := TFakeBitmapSaverRouter.Create;
   ISaver := Saver;
   Ctx.SetFrameExtractor(IFrameExtr);
   Ctx.SetBitmapSaver(ISaver);
@@ -415,7 +415,7 @@ var
   ICtx: IWcxExtractionContext;
   Entry: IWcxEntryExtractor;
   IFrameExtr: IFrameExtractor;
-  ISaver: IBitmapSaver;
+  ISaver: IBitmapSaverRouter;
 begin
   {ExtractFrame returning nil (ffmpeg failure path) maps to E_BAD_DATA
    per the prior DoExtractSeparate contract.}
@@ -424,7 +424,7 @@ begin
   Ctx.SetFileName('C:\v\bad.mkv');
   Ctx.SetOffsets(MakeOffsets(1));
   IFrameExtr := TFakeFrameExtractor.Create(True);
-  ISaver := TFakeBitmapSaver.Create;
+  ISaver := TFakeBitmapSaverRouter.Create;
   Ctx.SetFrameExtractor(IFrameExtr);
   Ctx.SetBitmapSaver(ISaver);
 

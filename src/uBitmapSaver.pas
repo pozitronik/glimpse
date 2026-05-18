@@ -10,7 +10,49 @@ uses
 type
   TSaveFormat = (sfPNG, sfJPEG);
 
-  {Returns the file extension for a save format, including the dot.}
+  {Per-format bitmap saver. One implementation per supported file format;
+   adding a new format (WEBP, AVIF, ...) is a new class plus one entry
+   in MakeBitmapSaver's case — no edits to SaveBitmapToFile or
+   SaveFormatExtension. The concrete implementations encapsulate
+   format-specific options (PNG compression level, JPEG quality)
+   passed at construction time so per-call dispatch stays uniform.
+
+   Distinct from `IBitmapSaverRouter` in `wcx/uWcxEntryExtractors.pas`:
+   the router is a multi-format dispatcher (test seam for WCX entry
+   extractors that record what would have been saved); this interface
+   is the per-format polymorphic family used inside the router.}
+  IBitmapSaver = interface
+    ['{B4F8E2A1-3C5D-4E6F-9A7B-8C9D0E1F2A3B}']
+    procedure Save(ABitmap: TBitmap; const APath: string);
+    function Extension: string;
+  end;
+
+  TPngBitmapSaver = class(TInterfacedObject, IBitmapSaver)
+  strict private
+    FCompression: Integer;
+  public
+    constructor Create(ACompression: Integer);
+    procedure Save(ABitmap: TBitmap; const APath: string);
+    function Extension: string;
+  end;
+
+  TJpegBitmapSaver = class(TInterfacedObject, IBitmapSaver)
+  strict private
+    FQuality: Integer;
+  public
+    constructor Create(AQuality: Integer);
+    procedure Save(ABitmap: TBitmap; const APath: string);
+    function Extension: string;
+  end;
+
+{Picks the saver implementation matching AFormat. AJpegQuality is
+ ignored when AFormat=sfPNG, APngCompression is ignored when
+ AFormat=sfJPEG — passing dummy values is fine when the call only
+ needs the extension. The single dispatch point that selects the
+ concrete class; SaveBitmapToFile and SaveFormatExtension both use it.}
+function MakeBitmapSaver(AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer): IBitmapSaver;
+
+{Returns the file extension for a save format, including the dot.}
 function SaveFormatExtension(AFormat: TSaveFormat): string;
 
 {Encodes a bitmap as PNG bytes into AStream starting at its current
@@ -108,43 +150,78 @@ begin
   end;
 end;
 
-function SaveFormatExtension(AFormat: TSaveFormat): string;
+{TPngBitmapSaver}
+
+constructor TPngBitmapSaver.Create(ACompression: Integer);
 begin
-  case AFormat of
-    sfJPEG:
-      Result := '.jpg';
-    else
-      Result := '.png';
+  inherited Create;
+  FCompression := ACompression;
+end;
+
+procedure TPngBitmapSaver.Save(ABitmap: TBitmap; const APath: string);
+var
+  Stream: TFileStream;
+begin
+  Stream := TFileStream.Create(APath, fmCreate);
+  try
+    EncodeBitmapAsPng(ABitmap, Stream, FCompression);
+  finally
+    Stream.Free;
   end;
 end;
 
-procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+function TPngBitmapSaver.Extension: string;
+begin
+  Result := '.png';
+end;
+
+{TJpegBitmapSaver}
+
+constructor TJpegBitmapSaver.Create(AQuality: Integer);
+begin
+  inherited Create;
+  FQuality := AQuality;
+end;
+
+procedure TJpegBitmapSaver.Save(ABitmap: TBitmap; const APath: string);
 var
-  Stream: TFileStream;
   Jpg: TJPEGImage;
 begin
-  case AFormat of
-    sfPNG:
-      begin
-        Stream := TFileStream.Create(APath, fmCreate);
-        try
-          EncodeBitmapAsPng(ABitmap, Stream, APngCompression);
-        finally
-          Stream.Free;
-        end;
-      end;
-    sfJPEG:
-      begin
-        Jpg := TJPEGImage.Create;
-        try
-          Jpg.CompressionQuality := AJpegQuality;
-          Jpg.Assign(ABitmap);
-          Jpg.SaveToFile(APath);
-        finally
-          Jpg.Free;
-        end;
-      end;
+  Jpg := TJPEGImage.Create;
+  try
+    Jpg.CompressionQuality := FQuality;
+    Jpg.Assign(ABitmap);
+    Jpg.SaveToFile(APath);
+  finally
+    Jpg.Free;
   end;
+end;
+
+function TJpegBitmapSaver.Extension: string;
+begin
+  Result := '.jpg';
+end;
+
+function MakeBitmapSaver(AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer): IBitmapSaver;
+begin
+  case AFormat of
+    sfJPEG: Result := TJpegBitmapSaver.Create(AJpegQuality);
+  else
+    Result := TPngBitmapSaver.Create(APngCompression);
+  end;
+end;
+
+function SaveFormatExtension(AFormat: TSaveFormat): string;
+begin
+  {Extension is constant per format and independent of quality /
+   compression, but route through the factory anyway so adding a new
+   format only touches MakeBitmapSaver.}
+  Result := MakeBitmapSaver(AFormat, 0, 0).Extension;
+end;
+
+procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+begin
+  MakeBitmapSaver(AFormat, AJpegQuality, APngCompression).Save(ABitmap, APath);
 end;
 
 function PngBytesToBitmap(const AData: TBytes): TBitmap;

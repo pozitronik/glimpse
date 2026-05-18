@@ -15,8 +15,15 @@
  Two narrow seams live alongside for test isolation:
    - IFrameExtractor (already exported by uFrameExtractor) lets frame /
      combined Extract tests run without launching ffmpeg.
-   - IBitmapSaver wraps SaveBitmapToFile so the same tests can verify
-     "what would have been written" without touching the disk.
+   - IBitmapSaverRouter is the multi-format dispatcher seam: entry
+     classes call its single Save(ABitmap, APath, AFormat, AJpegQuality,
+     APngCompression) method so the per-archive Settings.SaveFormat can
+     vary. Production wiring (TVclBitmapSaverRouter) delegates to
+     uBitmapSaver.MakeBitmapSaver internally; test fakes record what
+     would have been written without touching disk. Distinct from the
+     per-format `IBitmapSaver` polymorphic family in uBitmapSaver — the
+     router selects the right per-format saver, the family encapsulates
+     the format-specific encoding.
 
  The preset path (TPresetEntry.Extract) uses concrete dependencies
  (TWcxProgressBridge / ExtractPreset / GPresetFailureReporter) because
@@ -37,7 +44,7 @@ uses
 type
   IWcxExtractionContext = interface;
   IWcxEntryExtractor = interface;
-  IBitmapSaver = interface;
+  IBitmapSaverRouter = interface;
 
   {Abstracts what one entry extractor reads from the open archive handle.
    TArchiveHandle in uWcxExports implements it directly; tests pass a
@@ -61,7 +68,7 @@ type
     function GetProcessDataProc: TProcessDataProc;
     function GetProcessDataProcW: TProcessDataProcW;
     function GetFrameExtractor: IFrameExtractor;
-    function GetBitmapSaver: IBitmapSaver;
+    function GetBitmapSaver: IBitmapSaverRouter;
 
     property FileName: string read GetFileName;
     property FFmpegPath: string read GetFFmpegPath;
@@ -75,7 +82,7 @@ type
     property ProcessDataProc: TProcessDataProc read GetProcessDataProc;
     property ProcessDataProcW: TProcessDataProcW read GetProcessDataProcW;
     property FrameExtractor: IFrameExtractor read GetFrameExtractor;
-    property BitmapSaver: IBitmapSaver read GetBitmapSaver;
+    property BitmapSaver: IBitmapSaverRouter read GetBitmapSaver;
   end;
 
   {One archive entry. The dispatch in DoProcessFile collapses to
@@ -96,16 +103,19 @@ type
 
   TWcxEntryExtractorArray = TArray<IWcxEntryExtractor>;
 
-  {Bitmap-saving seam so frame/combined Extract tests do not write real
-   files. TVclBitmapSaver wraps the production SaveBitmapToFile in
-   uBitmapSaver; test fakes record what would have been written.}
-  IBitmapSaver = interface
+  {Multi-format bitmap-saving seam so frame/combined Extract tests do
+   not write real files. TVclBitmapSaverRouter is the production wiring
+   — it delegates to uBitmapSaver.MakeBitmapSaver (the per-format
+   polymorphic family), so adding a new format only requires touching
+   MakeBitmapSaver; the router stays the same. Test fakes record what
+   would have been written.}
+  IBitmapSaverRouter = interface
     ['{2F1E8D5A-9C4B-47A6-B8E3-5D1F0A6C2E4B}']
     procedure Save(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat;
       AJpegQuality, APngCompression: Integer);
   end;
 
-  TVclBitmapSaver = class(TInterfacedObject, IBitmapSaver)
+  TVclBitmapSaverRouter = class(TInterfacedObject, IBitmapSaverRouter)
   public
     procedure Save(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat;
       AJpegQuality, APngCompression: Integer);
@@ -299,12 +309,15 @@ begin
   end;
 end;
 
-{ TVclBitmapSaver }
+{ TVclBitmapSaverRouter }
 
-procedure TVclBitmapSaver.Save(ABitmap: TBitmap; const APath: string;
+procedure TVclBitmapSaverRouter.Save(ABitmap: TBitmap; const APath: string;
   AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 begin
-  SaveBitmapToFile(ABitmap, APath, AFormat, AJpegQuality, APngCompression);
+  {Delegate to the per-format polymorphic family in uBitmapSaver.
+   SaveBitmapToFile itself now routes through MakeBitmapSaver, so this
+   could call either — going direct keeps one less indirection.}
+  MakeBitmapSaver(AFormat, AJpegQuality, APngCompression).Save(ABitmap, APath);
 end;
 
 { TFrameEntry }

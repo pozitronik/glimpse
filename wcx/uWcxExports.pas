@@ -117,7 +117,7 @@ type
      extractor wraps ffmpeg; bitmap saver wraps SaveBitmapToFile. Both
      are interface-typed so the field lifetime is automatic.}
     FrameExtractor: IFrameExtractor;
-    BitmapSaver: IBitmapSaver;
+    BitmapSaver: IBitmapSaverRouter;
     {IWcxExtractionContext implementation. All trivial — each returns
      the matching field. Implemented as methods (not direct field
      reads) because Delphi properties on interfaces require getters.}
@@ -133,7 +133,7 @@ type
     function GetProcessDataProc: TProcessDataProc;
     function GetProcessDataProcW: TProcessDataProcW;
     function GetFrameExtractor: IFrameExtractor;
-    function GetBitmapSaver: IBitmapSaver;
+    function GetBitmapSaver: IBitmapSaverRouter;
   end;
 
 var
@@ -209,7 +209,7 @@ begin
   Result := FrameExtractor;
 end;
 
-function TArchiveHandle.GetBitmapSaver: IBitmapSaver;
+function TArchiveHandle.GetBitmapSaver: IBitmapSaverRouter;
 begin
   Result := BitmapSaver;
 end;
@@ -423,7 +423,7 @@ begin
      dependents (TFrameEntry / TCombinedEntry / the pre-extract cache
      path) reuse the same instances across the session.}
     H.FrameExtractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-    H.BitmapSaver := TVclBitmapSaver.Create;
+    H.BitmapSaver := TVclBitmapSaverRouter.Create;
 
     ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
     try

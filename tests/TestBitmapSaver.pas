@@ -31,6 +31,12 @@ type
     [Test] procedure TestEncodeBitmapAsPngRoundTripsViaPngBytesToBitmap;
     [Test] procedure TestEncodeBitmapAsPngPreservesAlpha;
     [Test] procedure TestEncodeBitmapAsPngCompressionAffectsSize;
+    { Per-format polymorphic family (TPngBitmapSaver / TJpegBitmapSaver). }
+    [Test] procedure TestPngBitmapSaverExtensionIsDotPng;
+    [Test] procedure TestJpegBitmapSaverExtensionIsDotJpg;
+    [Test] procedure TestPngBitmapSaverWritesPngFile;
+    [Test] procedure TestJpegBitmapSaverWritesJpegFile;
+    [Test] procedure TestMakeBitmapSaverDispatchesPngVsJpeg;
   end;
 
 implementation
@@ -553,6 +559,79 @@ begin
   finally
     Bmp.Free;
   end;
+end;
+
+{ Per-format polymorphic family tests }
+
+procedure TTestBitmapSaver.TestPngBitmapSaverExtensionIsDotPng;
+var
+  Saver: IBitmapSaver;
+begin
+  Saver := TPngBitmapSaver.Create(6);
+  Assert.AreEqual('.png', Saver.Extension,
+    'TPngBitmapSaver must declare its file extension as .png');
+end;
+
+procedure TTestBitmapSaver.TestJpegBitmapSaverExtensionIsDotJpg;
+var
+  Saver: IBitmapSaver;
+begin
+  Saver := TJpegBitmapSaver.Create(90);
+  Assert.AreEqual('.jpg', Saver.Extension,
+    'TJpegBitmapSaver must declare its file extension as .jpg');
+end;
+
+procedure TTestBitmapSaver.TestPngBitmapSaverWritesPngFile;
+var
+  Bmp: TBitmap;
+  Saver: IBitmapSaver;
+  Path: string;
+begin
+  Path := TPath.Combine(FTempDir, 'polymorphic_png.png');
+  Bmp := TBitmap.Create;
+  try
+    Bmp.SetSize(8, 8);
+    Saver := TPngBitmapSaver.Create(6);
+    Saver.Save(Bmp, Path);
+  finally
+    Bmp.Free;
+  end;
+  Assert.IsTrue(TFile.Exists(Path),
+    'TPngBitmapSaver.Save must create the target file');
+  Assert.IsTrue(TFile.GetSize(Path) > 0, 'Written PNG must be non-empty');
+end;
+
+procedure TTestBitmapSaver.TestJpegBitmapSaverWritesJpegFile;
+var
+  Bmp: TBitmap;
+  Saver: IBitmapSaver;
+  Path: string;
+begin
+  Path := TPath.Combine(FTempDir, 'polymorphic_jpg.jpg');
+  Bmp := TBitmap.Create;
+  try
+    Bmp.SetSize(8, 8);
+    Saver := TJpegBitmapSaver.Create(85);
+    Saver.Save(Bmp, Path);
+  finally
+    Bmp.Free;
+  end;
+  Assert.IsTrue(TFile.Exists(Path),
+    'TJpegBitmapSaver.Save must create the target file');
+  Assert.IsTrue(TFile.GetSize(Path) > 0, 'Written JPEG must be non-empty');
+end;
+
+procedure TTestBitmapSaver.TestMakeBitmapSaverDispatchesPngVsJpeg;
+var
+  PngSaver, JpegSaver: IBitmapSaver;
+begin
+  {Pins the factory's dispatch contract: PNG saves get TPngBitmapSaver,
+   JPEG saves get TJpegBitmapSaver. A regression here would surface in
+   wrong-extension files at the SaveBitmapToFile path.}
+  PngSaver := MakeBitmapSaver(sfPNG, 0, 6);
+  JpegSaver := MakeBitmapSaver(sfJPEG, 90, 0);
+  Assert.AreEqual('.png', PngSaver.Extension);
+  Assert.AreEqual('.jpg', JpegSaver.Extension);
 end;
 
 initialization
