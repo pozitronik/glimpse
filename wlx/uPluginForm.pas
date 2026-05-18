@@ -125,7 +125,6 @@ type
     procedure OnHamburgerMenuPopup(Sender: TObject);
     procedure OnHamburgerModeClick(Sender: TObject);
     procedure OnHamburgerZoomClick(Sender: TObject);
-    procedure OnHamburgerTimecodeClick(Sender: TObject);
     procedure OnHamburgerActionClick(Sender: TObject);
     procedure CreateFrameView;
     procedure OnFrameViewCtrlWheel(Sender: TObject; AWheelDelta: Integer);
@@ -1062,7 +1061,7 @@ begin
   State.ModeImageIndex[vmScroll] := IDX_ICON_ARROW_W;
   State.ModeImageIndex[vmFilmstrip] := IDX_ICON_ARROW_H;
 
-  PopulateHamburgerMenu(FHamburgerMenu, State, OnHamburgerModeClick, OnHamburgerZoomClick, OnHamburgerTimecodeClick, OnHamburgerActionClick);
+  PopulateHamburgerMenu(FHamburgerMenu, State, OnHamburgerModeClick, OnHamburgerZoomClick, OnTimecodeButtonClick, OnHamburgerActionClick);
   UpdateResolutionMenuLabels(FHamburgerMenu);
 end;
 
@@ -1091,11 +1090,6 @@ begin
   FSettings.ZoomMode := AZoom;
   FSettings.Save;
   SyncZoomMenuChecks(AMode, AZoom);
-end;
-
-procedure TPluginForm.OnHamburgerTimecodeClick(Sender: TObject);
-begin
-  OnTimecodeButtonClick(Sender);
 end;
 
 procedure TPluginForm.OnHamburgerActionClick(Sender: TObject);
