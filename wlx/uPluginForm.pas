@@ -1784,17 +1784,14 @@ begin
   ShowProgress('Extracting...');
   FAnimTimer.Enabled := True;
 
-  {Zero-init so any future TExtractionOptions fields default to 0}
-  Options := Default (TExtractionOptions);
-  Options.UseBmpPipe := FSettings.UseBmpPipe;
   if FSettings.ScaledExtraction then
   begin
     ViewportFrames := ViewportFrameCount(FFrameView.ViewMode, Length(FOffsets));
-    Options.MaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide);
-  end;
-  Options.HwAccel := FSettings.HwAccel;
-  Options.UseKeyframes := FSettings.UseKeyframes;
-  Options.RespectAnamorphic := FSettings.RespectAnamorphic;
+    Options := FSettings.Extraction.ToExtractionOptions(
+      CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide));
+  end
+  else
+    Options := FSettings.Extraction.ToExtractionOptions;
 
   {Remember the extraction size so OnViewportRefreshTimer can decide
    whether the next viewport-change event actually changed anything.}

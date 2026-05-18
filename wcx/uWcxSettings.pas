@@ -90,6 +90,11 @@ type
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
+    {Read-only view of the whole extraction group. Surfaced so callers
+     can use TExtractionSettingsGroup.ToExtractionOptions instead of
+     rebuilding a TExtractionOptions field-by-field at every export
+     boundary.}
+    property Extraction: TExtractionSettingsGroup read FExtraction;
     property RandomExtraction: Boolean read FRandomExtraction write FRandomExtraction;
     property RandomPercent: Integer read FRandomPercent write FRandomPercent;
     {Mode bitmask: bitwise OR of MODE_FRAMES, MODE_COMBINED, MODE_PRESETS.

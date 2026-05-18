@@ -46,6 +46,16 @@ type
     procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
     {Writes the group to AIni. Round-trips exactly through LoadFrom.}
     procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    {Builds a TExtractionOptions from this group's UseBmpPipe / HwAccel /
+     UseKeyframes / RespectAnamorphic, with the caller-supplied MaxSide.
+     The four boolean fields travel together through the extraction
+     pipeline as TExtractionOptions; owning the conversion here keeps
+     the field-by-field copy from leaking into every export-boundary
+     caller (uWcxExports.BuildExtractionOptions, WLX TPluginForm's
+     extraction kickoff, etc.).
+     AMaxSide=0 means "no scale limit" — combined-mode callers rely on
+     this because the assembled grid is shrunk separately after rendering.}
+    function ToExtractionOptions(AMaxSide: Integer = 0): TExtractionOptions;
   end;
 
   {Info-banner group — seven fields shared verbatim between WLX and WCX.
@@ -140,6 +150,16 @@ begin
   HwAccel := AIni.ReadBool(ASection, 'HwAccel', HwAccel);
   UseKeyframes := AIni.ReadBool(ASection, 'UseKeyframes', UseKeyframes);
   RespectAnamorphic := AIni.ReadBool(ASection, 'RespectAnamorphic', RespectAnamorphic);
+end;
+
+function TExtractionSettingsGroup.ToExtractionOptions(AMaxSide: Integer): TExtractionOptions;
+begin
+  Result := Default(TExtractionOptions);
+  Result.UseBmpPipe := UseBmpPipe;
+  Result.HwAccel := HwAccel;
+  Result.UseKeyframes := UseKeyframes;
+  Result.RespectAnamorphic := RespectAnamorphic;
+  Result.MaxSide := AMaxSide;
 end;
 
 procedure TExtractionSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);

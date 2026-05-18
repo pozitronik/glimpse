@@ -37,6 +37,13 @@ type
     [Test] procedure Load_MissingKeys_PreservesCurrentValues;
     [Test] procedure Load_FrameCountClamped;
     [Test] procedure Load_SkipEdgesClamped;
+    {ToExtractionOptions copies the four boolean fields and stamps the
+     caller-supplied MaxSide. The owning export-boundary callers
+     (WCX BuildExtractionOptions, WLX TPluginForm extraction kickoff)
+     collapsed to one-line delegations; this fixture pins the contract.}
+    [Test] procedure ToExtractionOptions_CopiesAllBooleanFields;
+    [Test] procedure ToExtractionOptions_StampsCallerSuppliedMaxSide;
+    [Test] procedure ToExtractionOptions_DefaultMaxSideIsZero;
   end;
 
   [TestFixture]
@@ -208,6 +215,56 @@ begin
   end;
 
   Assert.AreEqual(MAX_FRAMES_COUNT, G.FramesCount);
+end;
+
+procedure TTestExtractionSettingsGroup.ToExtractionOptions_CopiesAllBooleanFields;
+var
+  G: TExtractionSettingsGroup;
+  Opts: TExtractionOptions;
+begin
+  G := TExtractionSettingsGroup.Defaults;
+  G.UseBmpPipe := True;
+  G.HwAccel := False;
+  G.UseKeyframes := True;
+  G.RespectAnamorphic := False;
+
+  Opts := G.ToExtractionOptions(0);
+  Assert.IsTrue(Opts.UseBmpPipe);
+  Assert.IsFalse(Opts.HwAccel);
+  Assert.IsTrue(Opts.UseKeyframes);
+  Assert.IsFalse(Opts.RespectAnamorphic);
+
+  {Flip every flag and re-derive to prove the copy is per-field, not a
+   shared template.}
+  G.UseBmpPipe := False;
+  G.HwAccel := True;
+  G.UseKeyframes := False;
+  G.RespectAnamorphic := True;
+  Opts := G.ToExtractionOptions(0);
+  Assert.IsFalse(Opts.UseBmpPipe);
+  Assert.IsTrue(Opts.HwAccel);
+  Assert.IsFalse(Opts.UseKeyframes);
+  Assert.IsTrue(Opts.RespectAnamorphic);
+end;
+
+procedure TTestExtractionSettingsGroup.ToExtractionOptions_StampsCallerSuppliedMaxSide;
+var
+  G: TExtractionSettingsGroup;
+begin
+  G := TExtractionSettingsGroup.Defaults;
+  Assert.AreEqual<Integer>(1280, G.ToExtractionOptions(1280).MaxSide);
+  Assert.AreEqual<Integer>(4096, G.ToExtractionOptions(4096).MaxSide);
+end;
+
+procedure TTestExtractionSettingsGroup.ToExtractionOptions_DefaultMaxSideIsZero;
+var
+  G: TExtractionSettingsGroup;
+begin
+  {The optional-arg default is 0 so combined-mode callers can call
+   ToExtractionOptions with no argument and get the "no scale limit"
+   contract (the assembled grid is shrunk separately).}
+  G := TExtractionSettingsGroup.Defaults;
+  Assert.AreEqual<Integer>(0, G.ToExtractionOptions.MaxSide);
 end;
 
 procedure TTestExtractionSettingsGroup.Load_SkipEdgesClamped;

@@ -148,6 +148,10 @@ type
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
+    {Read-only view of the whole extraction group. Surfaced so callers
+     can use TExtractionSettingsGroup.ToExtractionOptions instead of
+     rebuilding a TExtractionOptions field-by-field.}
+    property Extraction: TExtractionSettingsGroup read FExtraction;
     property ScaledExtraction: Boolean read FScaledExtraction write FScaledExtraction;
     property MinFrameSide: Integer read FMinFrameSide write FMinFrameSide;
     property MaxFrameSide: Integer read FMaxFrameSide write FMaxFrameSide;

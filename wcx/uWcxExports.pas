@@ -126,12 +126,7 @@ end;
  filter fits the longer dimension to the cap.}
 function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
 begin
-  Result := Default (TExtractionOptions);
-  Result.UseBmpPipe := ASettings.UseBmpPipe;
-  Result.HwAccel := ASettings.HwAccel;
-  Result.UseKeyframes := ASettings.UseKeyframes;
-  Result.RespectAnamorphic := ASettings.RespectAnamorphic;
-  Result.MaxSide := AMaxSide;
+  Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
 end;
 
 function ClampSizeForAnsiHeader(AValue: Int64): Integer;
