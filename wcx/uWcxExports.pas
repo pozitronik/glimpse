@@ -586,7 +586,7 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
-  if H.Listing[H.CurrentIndex].Kind = ekPreset then
+  if H.Listing[H.CurrentIndex].Kind = ekUserPreset then
     {Source file size as a placeholder — believable in the listing column
      and gives the bridge a non-zero denominator so the progress bar
      animates. Output size is unknown in advance.}
@@ -615,7 +615,7 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   StrLCopy(HeaderData.FileName, PChar(Name), Length(HeaderData.FileName) - 1);
-  if H.Listing[H.CurrentIndex].Kind = ekPreset then
+  if H.Listing[H.CurrentIndex].Kind = ekUserPreset then
   begin
     Size := H.SourceFileSize;
     HeaderData.UnpSize := DWORD(Size);
@@ -655,7 +655,7 @@ end;
 {Extracts a single frame at the legacy frame index AFrameIndex.
  Index is decoupled from H.CurrentIndex because the listing now interleaves
  presets after the legacy frames, so the TC iteration position no longer
- matches the offset/temp-path index. ekFrame entries carry their own
+ matches the offset/temp-path index. ekSeparateFrame entries carry their own
  LegacyIndex, which the dispatch in DoProcessFile passes in here.}
 function DoExtractSeparate(H: TArchiveHandle; AFrameIndex: Integer; const ADestPath, ADestName: string): Integer;
 var
@@ -889,11 +889,11 @@ begin
   begin
     Entry := H.Listing[H.CurrentIndex];
     case Entry.Kind of
-      ekFrame:
+      ekSeparateFrame:
         Result := DoExtractSeparate(H, Entry.LegacyIndex, ADestPath, ADestName);
-      ekCombined:
+      ekCombinedSheet:
         Result := DoExtractCombined(H, Entry.LegacyIndex, ADestPath, ADestName);
-      ekPreset:
+      ekUserPreset:
         Result := DoExtractPreset(H, Entry.PresetIndex, Entry.FileName, ADestPath, ADestName);
     else
       Result := E_NOT_SUPPORTED;

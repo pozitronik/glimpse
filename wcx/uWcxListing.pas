@@ -19,17 +19,17 @@ uses
 
 type
   {Distinguishes the three sources an archive entry can come from.
-   - ekFrame: one of the per-frame still images
-   - ekCombined: the single contact-sheet image
-   - ekPreset: a user-defined ffmpeg preset transcode}
-  TWcxEntryKind = (ekFrame, ekCombined, ekPreset);
+   - ekSeparateFrame: one of the per-frame still images
+   - ekCombinedSheet: the single contact-sheet image
+   - ekUserPreset: a user-defined ffmpeg preset transcode}
+  TWcxEntryKind = (ekSeparateFrame, ekCombinedSheet, ekUserPreset);
 
   {One row in the archive listing as TC sees it.
    FileName is the post-dedupe display name. LegacyIndex maps to the
-   slot in the cache arrays (TempPaths / EntrySizes) for ekFrame and
-   ekCombined entries — frames occupy slots 0..N-1 (when shown), the
+   slot in the cache arrays (TempPaths / EntrySizes) for ekSeparateFrame and
+   ekCombinedSheet entries — frames occupy slots 0..N-1 (when shown), the
    combined image occupies the slot right after them. PresetIndex points
-   into the preset array for ekPreset; both indices are -1 when not
+   into the preset array for ekUserPreset; both indices are -1 when not
    applicable so a misuse traps loudly instead of silently picking 0.}
   TWcxListingEntry = record
     FileName: string;
@@ -121,7 +121,7 @@ begin
     for I := 0 to FrameCount - 1 do
     begin
       Result[EntryIdx].FileName := AllNames[EntryIdx];
-      Result[EntryIdx].Kind := ekFrame;
+      Result[EntryIdx].Kind := ekSeparateFrame;
       Result[EntryIdx].LegacyIndex := I;
       Result[EntryIdx].PresetIndex := -1;
       Inc(EntryIdx);
@@ -129,14 +129,14 @@ begin
   if AShowCombined then
   begin
     Result[EntryIdx].FileName := AllNames[EntryIdx];
-    Result[EntryIdx].Kind := ekCombined;
+    Result[EntryIdx].Kind := ekCombinedSheet;
     Result[EntryIdx].LegacyIndex := CombinedSlot;
     Result[EntryIdx].PresetIndex := -1;
   end;
   for I := 0 to PresetCount - 1 do
   begin
     Result[LegacyCount + I].FileName := AllNames[LegacyCount + I];
-    Result[LegacyCount + I].Kind := ekPreset;
+    Result[LegacyCount + I].Kind := ekUserPreset;
     Result[LegacyCount + I].LegacyIndex := -1;
     Result[LegacyCount + I].PresetIndex := I;
   end;

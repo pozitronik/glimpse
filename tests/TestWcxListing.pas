@@ -80,7 +80,7 @@ begin
   begin
     Expected := GenerateFrameFileName('C:\v\Movie.mkv', I, Offsets[I].TimeOffset, sfPNG);
     Assert.AreEqual(Expected, Listing[I].FileName, Format('Frame %d filename mismatch', [I]));
-    Assert.IsTrue(Listing[I].Kind = ekFrame, 'Frame entries must report ekFrame');
+    Assert.IsTrue(Listing[I].Kind = ekSeparateFrame, 'Frame entries must report ekSeparateFrame');
   end;
 end;
 
@@ -91,7 +91,7 @@ begin
   Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), False, True, False, sfJPEG, nil);
   Assert.AreEqual(1, Integer(Length(Listing)),
     'Combined mode produces exactly one entry regardless of frame count');
-  Assert.IsTrue(Listing[0].Kind = ekCombined);
+  Assert.IsTrue(Listing[0].Kind = ekCombinedSheet);
   Assert.AreEqual(GenerateCombinedFileName('C:\v\Movie.mkv', sfJPEG), Listing[0].FileName);
 end;
 
@@ -137,9 +137,9 @@ begin
     'Two frames + one preset = three entries');
   { Preset must be at the END so the legacy frame indices stay where TC and
     any pre-existing scripts expect them. }
-  Assert.IsTrue(Listing[0].Kind = ekFrame);
-  Assert.IsTrue(Listing[1].Kind = ekFrame);
-  Assert.IsTrue(Listing[2].Kind = ekPreset);
+  Assert.IsTrue(Listing[0].Kind = ekSeparateFrame);
+  Assert.IsTrue(Listing[1].Kind = ekSeparateFrame);
+  Assert.IsTrue(Listing[2].Kind = ekUserPreset);
   Assert.AreEqual('Movie_track.mp3', Listing[2].FileName);
 end;
 
@@ -168,8 +168,8 @@ begin
   Presets[0] := MakePreset('audio', '', 'mp3');
   Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), False, True, True, sfJPEG, Presets);
   Assert.AreEqual(2, Integer(Length(Listing)));
-  Assert.IsTrue(Listing[0].Kind = ekCombined);
-  Assert.IsTrue(Listing[1].Kind = ekPreset);
+  Assert.IsTrue(Listing[0].Kind = ekCombinedSheet);
+  Assert.IsTrue(Listing[1].Kind = ekUserPreset);
 end;
 
 { Cross-section dedupe }
@@ -229,7 +229,7 @@ var
   Listing: TWcxListingEntryArray;
 begin
   { Combined uses temp-path slot 0; the dispatch code expects LegacyIndex=0
-    so the same TryCopyCachedFrame call works for both ekFrame and ekCombined. }
+    so the same TryCopyCachedFrame call works for both ekSeparateFrame and ekCombinedSheet. }
   Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(5), False, True, False, sfPNG, nil);
   Assert.AreEqual(0, Listing[0].LegacyIndex);
 end;
