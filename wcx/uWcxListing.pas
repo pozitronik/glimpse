@@ -15,7 +15,7 @@ interface
 uses
   uBitmapSaver,
   uFrameOffsets,
-  uWcxPresets;
+  uWcxPresets, uWcxPresetTemplate, uFileNameDedupe;
 
 type
   {Distinguishes the three sources an archive entry can come from.

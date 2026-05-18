@@ -12,7 +12,7 @@ interface
 
 uses
   Winapi.Windows, System.SysUtils,
-  uWcxPresets;
+  uWcxPresets, uCmdLineTokens;
 
 type
   {Returns True to continue extraction, False to cancel. Wired by the WCX

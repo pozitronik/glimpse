@@ -71,7 +71,7 @@ uses
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
   uBannerInfo, uBannerPainter, uCombinedGrid, uTimecodeOverlay,
   uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo, uBitmapResize,
-  uWcxPresets, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor,
+  uWcxPresets, uWcxPresetTemplate, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor,
   uWcxFrameCache, uPresetExtractReporter;
 
 type

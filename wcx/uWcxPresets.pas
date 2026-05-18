@@ -1,15 +1,17 @@
-{User-defined ffmpeg preset model and loader for the WCX plugin.
+{User-defined ffmpeg preset model and INI loader/saver for the WCX plugin.
  Each preset becomes one virtual file in the archive listing; running it
  invokes ffmpeg with the user's argument string against the source video.
- This unit owns the data model, INI loading, template expansion, validation,
- and the dedupe pass that resolves listing-time filename collisions.
- No process execution lives here — that belongs to uWcxPresetExtractor.}
+ This unit owns the data model and INI I/O only — template expansion,
+ validation, tokenisation, and the dedupe pass live in their own units
+ (uWcxPresetTemplate / uWcxPresetValidation / uCmdLineTokens /
+ uFileNameDedupe). No process execution lives here either — that
+ belongs to uWcxPresetExtractor.}
 unit uWcxPresets;
 
 interface
 
 uses
-  System.SysUtils, System.IniFiles;
+  System.SysUtils;
 
 type
   {Preset definition as it appears in presets.ini.
@@ -63,77 +65,6 @@ function LoadAllPresets(const APath: string): TWcxPresetArray;
  previous content first so removed presets do not leak back in.}
 procedure SavePresets(const APath: string; const APresets: TWcxPresetArray);
 
-{Expands the recognised template variables against AInputPath and APresetName.
- Recognised tokens: %basename% (input filename without path or extension),
- %name% (the preset section name verbatim), %ext% (input extension without
- the leading dot, lowercased so case-only differences do not propagate into
- the output filename). Unknown %tokens% pass through unchanged so future
- additions stay backwards-compatible at the INI layer.}
-function ExpandTemplate(const ATemplate, AInputPath, APresetName: string): string;
-
-{Builds the listed filename for APreset against AInputPath.
- Honours APreset.OutputName when non-empty; empty falls back to the
- documented default %basename%_%name%. The OutputExt is appended with a
- single separating dot. Pure function; performs no I/O.}
-function BuildOutputFileName(const APreset: TWcxPreset; const AInputPath: string): string;
-
-{Walks ANames in order and renames colliding entries TC-style: the first
- occurrence keeps its bare name; later occurrences become "<base>(N)<ext>"
- with N starting at 2 and incrementing until a free slot is found.
- Comparison is case-insensitive because Windows filesystems are
- case-insensitive — TC would otherwise treat "Poster.jpg" and "poster.jpg"
- as the same listing entry. The probe-against-running-set algorithm also
- protects literal hand-written entries: if a user defines a preset that
- produces "poster(2).jpg" verbatim, the auto-dedupe of a colliding
- "poster.jpg" entry skips 2 and lands on 3.}
-function DeduplicateFileNames(const ANames: TArray<string>): TArray<string>;
-
-{Validates an Args string against the forbidden-token list.
- Returns True with AReason=''. Returns False with AReason populated when
- the args contain a forbidden token: -i (would override the input the
- extractor injects), -y / -n (would override the tempfile-and-rename
- overwrite policy), pipe:0/pipe:1/pipe:2 (would clash with the -progress
- channel and our disk output target). Tokenisation is whitespace-based
- and respects double-quoted substrings; flag comparison is
- case-insensitive so "-Y" is also rejected.}
-function ValidatePresetArgs(const AArgs: string; out AReason: string): Boolean;
-
-{Tokenises a command-line-style argument string into whitespace-separated
- tokens, treating double-quoted runs as a single token (the surrounding
- quotes are stripped). Exposed for the validator and the extractor's
- future argv builder so both share the same parse rules.}
-function TokenizeArgs(const AArgs: string): TArray<string>;
-
-{Normalises a path-style OutputName template to the WCX-canonical form:
- backslash separators (per the WCX SDK spec — TC does not recognise
- forward slashes as folder separators in archive entry names). Both '/'
- and '\' may appear in user input; both end up as '\' here. Keeps
- everything else verbatim, including template tokens like %basename%.
- Pure transform; safe to apply repeatedly.}
-function NormalizeOutputName(const ATemplate: string): string;
-
-{Validates an OutputName template that may contain virtual path segments.
- Returns True with AReason='' on accept; False with AReason populated
- on reject. Empty input is accepted (loader / extractor falls back to
- the default template).
- Reject rules:
-   - Leading separator (rooted virtual path)
-   - "." or ".." segment (path traversal or no-op confusion)
-   - Empty segment (double separator)
-   - Any of :*?"<>| inside any segment (Windows-illegal in filenames)
- Both '/' and '\' are accepted as separators; the validator normalises
- internally so users may type either form.}
-function ValidateOutputName(const ATemplate: string; out AReason: string): Boolean;
-
-{Validates an output-extension string (no leading dot, no spaces, no
- Windows path separators or wildcards). Empty or whitespace-only is
- rejected with "OutputExt is required". The first forbidden character
- surfaces as "OutputExt contains an invalid character: '<C>'". Used by
- NormalizeOutputExt internally (which discards the reason) and by
- TPresetEditorModel.Validate (which surfaces it to the editor user).
- The single source of truth for the forbidden-character set.}
-function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
-
 {Returns the full path to the presets file expected to live next to the
  WCX settings INI. Pure path manipulation; does not touch the disk.
  Returns '' when the settings path is empty so callers downstream can
@@ -143,8 +74,8 @@ function PresetsIniPath(const ASettingsIniPath: string): string;
 implementation
 
 uses
-  System.Generics.Collections, System.Classes, System.Character, System.IOUtils,
-  uDebugLog, uUnicodeIniFile;
+  System.Generics.Collections, System.Classes,
+  uDebugLog, uUnicodeIniFile, uWcxPresetValidation;
 
 const
   CPresetLog = 'WCX-Presets';
@@ -152,238 +83,6 @@ const
 procedure PresetLog(const AMsg: string);
 begin
   DebugLog(CPresetLog, AMsg);
-end;
-
-function TokenizeArgs(const AArgs: string): TArray<string>;
-var
-  List: TList<string>;
-  I: Integer;
-  Token: string;
-  InQuote: Boolean;
-  C: Char;
-begin
-  List := TList<string>.Create;
-  try
-    Token := '';
-    InQuote := False;
-    I := 1;
-    while I <= Length(AArgs) do
-    begin
-      C := AArgs[I];
-      if C = '"' then
-      begin
-        {Toggle quote state without copying the quote into the token —
-         CreateProcess's command-line parser treats the same way, so the
-         token shape we validate matches what ffmpeg eventually sees.}
-        InQuote := not InQuote;
-      end
-      else if (not InQuote) and CharInSet(C, [' ', #9]) then
-      begin
-        if Token <> '' then
-        begin
-          List.Add(Token);
-          Token := '';
-        end;
-      end
-      else
-        Token := Token + C;
-      Inc(I);
-    end;
-    if Token <> '' then
-      List.Add(Token);
-    Result := List.ToArray;
-  finally
-    List.Free;
-  end;
-end;
-
-function ValidatePresetArgs(const AArgs: string; out AReason: string): Boolean;
-var
-  Tokens: TArray<string>;
-  T, Lower: string;
-begin
-  AReason := '';
-  Tokens := TokenizeArgs(AArgs);
-  for T in Tokens do
-  begin
-    Lower := T.ToLower;
-    if (Lower = '-i') or (Lower = '-y') or (Lower = '-n') then
-    begin
-      AReason := Format('forbidden flag "%s" overrides extractor-managed behaviour', [T]);
-      Exit(False);
-    end;
-    {pipe:N is always lowercase from ffmpeg's own emitters but tolerate
-     uppercase user input by comparing the lowered token.}
-    if (Lower = 'pipe:0') or (Lower = 'pipe:1') or (Lower = 'pipe:2') then
-    begin
-      AReason := Format('forbidden token "%s" clashes with extractor stdio channels', [T]);
-      Exit(False);
-    end;
-  end;
-  Result := True;
-end;
-
-function ExpandTemplate(const ATemplate, AInputPath, APresetName: string): string;
-var
-  BaseName, Ext: string;
-begin
-  {ExtractFileName then strip extension via ChangeFileExt; ExtractFileExt
-   includes the leading dot which we drop for %ext% so users can write
-   "%basename%.%ext%" and get "Movie.mkv" rather than "Movie..mkv".}
-  BaseName := TPath.GetFileNameWithoutExtension(AInputPath);
-  Ext := ExtractFileExt(AInputPath);
-  if (Length(Ext) > 0) and (Ext[1] = '.') then
-    Ext := Copy(Ext, 2, Length(Ext) - 1);
-  Ext := Ext.ToLower;
-
-  Result := ATemplate;
-  Result := StringReplace(Result, '%basename%', BaseName, [rfReplaceAll]);
-  Result := StringReplace(Result, '%name%', APresetName, [rfReplaceAll]);
-  Result := StringReplace(Result, '%ext%', Ext, [rfReplaceAll]);
-end;
-
-function BuildOutputFileName(const APreset: TWcxPreset; const AInputPath: string): string;
-const
-  CDefaultTemplate = '%basename%_%name%';
-var
-  Template: string;
-begin
-  if APreset.OutputName <> '' then
-    Template := APreset.OutputName
-  else
-    Template := CDefaultTemplate;
-  Result := ExpandTemplate(Template, AInputPath, APreset.Name) + '.' + APreset.OutputExt;
-  {Normalise to '/' so virtual subfolders in user templates feed the
-   listing builder and dedupe in canonical form regardless of which
-   separator the user typed.}
-  Result := NormalizeOutputName(Result);
-end;
-
-function DeduplicateFileNames(const ANames: TArray<string>): TArray<string>;
-var
-  Taken: TDictionary<string, Boolean>;
-  I, N: Integer;
-  Name, Base, Ext, Candidate: string;
-begin
-  SetLength(Result, Length(ANames));
-  {Case-insensitive set of already-claimed names. Lowercased keys avoid
-   pulling in IEqualityComparer<string> just for one collision check.}
-  Taken := TDictionary<string, Boolean>.Create;
-  try
-    for I := 0 to High(ANames) do
-    begin
-      Name := ANames[I];
-      if not Taken.ContainsKey(Name.ToLower) then
-      begin
-        Result[I] := Name;
-        Taken.Add(Name.ToLower, True);
-        Continue;
-      end;
-      Ext := ExtractFileExt(Name);
-      Base := Copy(Name, 1, Length(Name) - Length(Ext));
-      N := 2;
-      repeat
-        Candidate := Format('%s(%d)%s', [Base, N, Ext]);
-        Inc(N);
-      until not Taken.ContainsKey(Candidate.ToLower);
-      Result[I] := Candidate;
-      Taken.Add(Candidate.ToLower, True);
-    end;
-  finally
-    Taken.Free;
-  end;
-end;
-
-const
-  {Single source of truth for "characters that cannot appear in an output
-   extension". Used by ValidateOutputExt; NormalizeOutputExt and the
-   editor model both go through ValidateOutputExt so neither needs to
-   know this set directly.}
-  CForbiddenExtChars = '\/:*?"<>| ' + #9;
-
-function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
-var
-  C: Char;
-begin
-  AReason := '';
-  if ARaw.Trim = '' then
-  begin
-    AReason := 'OutputExt is required';
-    Exit(False);
-  end;
-  for C in ARaw do
-    if Pos(C, CForbiddenExtChars) > 0 then
-    begin
-      AReason := Format('OutputExt contains an invalid character: "%s"', [C]);
-      Exit(False);
-    end;
-  Result := True;
-end;
-
-function NormalizeOutputExt(const ARaw: string; out ANormalized: string): Boolean;
-var
-  S, Reason: string;
-begin
-  ANormalized := '';
-  S := ARaw.Trim;
-  if (Length(S) > 0) and (S[1] = '.') then
-    S := Copy(S, 2, Length(S) - 1);
-  Result := ValidateOutputExt(S, Reason);
-  if Result then
-    ANormalized := S;
-end;
-
-function NormalizeOutputName(const ATemplate: string): string;
-begin
-  Result := StringReplace(ATemplate, '/', '\', [rfReplaceAll]);
-end;
-
-function ValidateOutputName(const ATemplate: string; out AReason: string): Boolean;
-const
-  CForbiddenInSegment = ':*?"<>|';
-var
-  Normalized: string;
-  Segments: TArray<string>;
-  Segment: string;
-  C: Char;
-begin
-  AReason := '';
-  if ATemplate = '' then
-    Exit(True);
-  {NormalizeOutputName converts to backslashes (the WCX-canonical form);
-   split here on the same separator so segment-level rules apply.}
-  Normalized := NormalizeOutputName(ATemplate);
-  if (Length(Normalized) > 0) and (Normalized[1] = '\') then
-  begin
-    AReason := 'Leading separator is not allowed (no rooted virtual paths)';
-    Exit(False);
-  end;
-  Segments := Normalized.Split(['\']);
-  for Segment in Segments do
-  begin
-    if Segment = '' then
-    begin
-      AReason := 'Empty path segment (double separator)';
-      Exit(False);
-    end;
-    if Segment = '.' then
-    begin
-      AReason := '"." segment is not allowed';
-      Exit(False);
-    end;
-    if Segment = '..' then
-    begin
-      AReason := '".." segment is not allowed (no traversal)';
-      Exit(False);
-    end;
-    for C in Segment do
-      if Pos(C, CForbiddenInSegment) > 0 then
-      begin
-        AReason := Format('Path segment contains an invalid character: "%s"', [C]);
-        Exit(False);
-      end;
-  end;
-  Result := True;
 end;
 
 function PresetsIniPath(const ASettingsIniPath: string): string;

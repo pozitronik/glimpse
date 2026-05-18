@@ -58,7 +58,7 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils, uWcxPresetValidation;
 
 constructor TPresetEditorModel.Create;
 begin
