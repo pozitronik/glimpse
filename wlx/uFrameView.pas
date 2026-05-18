@@ -121,6 +121,12 @@ type
     property BaseH: Integer read GetBaseH;
   end;
 
+const
+  {Animation timer interval used by the form's FAnimTimer to advance the
+   placeholder spinner. The animation policy belongs with the view that
+   draws the placeholder; the form just wires the timer to it.}
+  ANIM_INTERVAL_MS = 80;
+
 implementation
 
 uses

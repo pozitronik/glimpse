@@ -82,6 +82,11 @@ const
   CAPTION_COPY_VIEW_LIVE = 'Copy view at view resolution';
   CAPTION_COPY_VIEW_NATIVE = 'Copy view at native size';
 
+  {Form-level layout pixels for toolbar elements that the form sizes
+   directly (not the per-button arithmetic inside CreateToolbar).}
+  FRAME_COUNT_EDIT_W = 40; {width of the frame count edit control}
+  PROGRESSBAR_MIN_W = 40; {minimum width before clamping the embedded progress bar}
+
   {Indices into the toolbar image list (FToolbarImages in uPluginForm).
    The list is loaded by uPluginForm.CreateToolbar from three icon
    resources; the slot order is intentional and shared by both the

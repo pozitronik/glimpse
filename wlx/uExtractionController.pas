@@ -46,6 +46,14 @@ type
     property OnProgress: TNotifyEvent read FOnProgress write FOnProgress;
   end;
 
+const
+  {Resize-drag debounce for the background viewport-refresh timer. Long
+   enough that mid-drag pixel deltas don't trigger ffmpeg spawns, short
+   enough that the user sees the high-res refresh promptly after release.
+   Lives here next to the extraction-pipeline policy it gates; the form
+   wires its FViewportRefreshTimer.Interval from this constant.}
+  VIEWPORT_REFRESH_DEBOUNCE_MS = 500;
+
 implementation
 
 uses

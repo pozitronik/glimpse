@@ -9,7 +9,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
-  uTypes, uSettings, uHotkeys, uHotkeysVcl, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
+  uTypes, uSettings, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
@@ -555,19 +555,10 @@ begin
 end;
 
 const
-  CLR_ERROR_LABEL = TColor($00888888); {error message label}
-  FONT_ERROR_LABEL = 11;
-
-  {UI layout}
-  ANIM_INTERVAL_MS = 80; {placeholder spinner animation tick}
-  MAX_FRAME_COUNT = 99; {upper limit for frame count spin edit}
-  {Resize-drag debounce for the background viewport-refresh timer. Long
-   enough that mid-drag pixel deltas don't trigger ffmpeg spawns, short
-   enough that the user sees the high-res refresh promptly after release.}
-  VIEWPORT_REFRESH_DEBOUNCE_MS = 500;
-  FRAME_COUNT_EDIT_W = 40; {width of the frame count edit control}
-  PROGRESSBAR_H = 14; {desired height of the embedded progress bar}
-  PROGRESSBAR_MIN_W = 40; {minimum width before clamping}
+  {Upper limit for the frame-count spin edit. Data-validation constant,
+   not a layout pixel — stays in uPluginForm because FUpDown.Max is the
+   only consumer and the value is product policy, not visual styling.}
+  MAX_FRAME_COUNT = 99;
 
   {Status bar panel widths are now driven by the template engine in
    uStatusBarRenderer: each token's "width=auto" measurement uses the
