@@ -9,7 +9,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
-  uTypes, uStatusBarLayout, uSettings, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
+  uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
@@ -93,6 +93,11 @@ type
   private
     FFileName: string;
     FSettings: TPluginSettings;
+    {Persists the toolbar / status-bar / timecode visibility toggles
+     back to FSettings. Owned by the form; collapses the historical
+     "set + Save" pair into one named call so the toggle handlers stay
+     focused on UI state.}
+    FSettingsToggle: TSettingsToggleService;
     FFFmpegPath: string;
     FVideoInfo: TVideoInfo;
     FOffsets: TFrameOffsetArray;
@@ -346,6 +351,30 @@ type
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure OnFormKeyPress(Sender: TObject; var Key: Char);
     function ExecuteHotkey(AAction: TPluginAction): Boolean;
+    {Per-action handlers extracted from ExecuteHotkey's case body so
+     ExecuteHotkey degenerates into a dispatch table over named methods.
+     Procedures own actions whose contextual guards always allow firing;
+     functions return False when a contextual guard blocks the action,
+     letting the keystroke fall through to TC's same-key shortcut. See
+     ExecuteHotkey's Result handling for the True/False contract.}
+    {Toggles}
+    procedure DoToggleToolbar;
+    procedure DoToggleStatusBar;
+    procedure DoToggleTimecode;
+    procedure DoToggleMaximize;
+    procedure DoToggleFullScreen;
+    function DoHamburgerMenu: Boolean;
+    procedure DoCloseLister;
+    {Navigation}
+    procedure DoPrevFile;
+    procedure DoNextFile;
+    function DoPrevFrame: Boolean;
+    function DoNextFrame: Boolean;
+    {Frame count}
+    procedure DoFrameCountInc;
+    procedure DoFrameCountDec;
+    {Player}
+    function DoOpenInPlayer: Boolean;
     {Single source of truth for "is this command's gate satisfied right
      now?". DispatchCommand, UpdateToolbarButtons, and OnContextMenuPopup
      all consult it so a policy change (e.g. moving Refresh from
@@ -907,6 +936,7 @@ begin
   Randomize;
 
   FSettings := ASettings;
+  FSettingsToggle := TSettingsToggleService.Create(FSettings);
   FFFmpegPath := AFFmpegPath;
 
   Winapi.Windows.GetClientRect(AParentWin, R);
@@ -1027,6 +1057,7 @@ begin
    Self briefly during finalization.}
   FCommandTable := nil;
   FreeAndNil(FCommandHandlers);
+  FreeAndNil(FSettingsToggle);
   if HandleAllocated then
     RemoveWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID);
   if FParentWnd <> 0 then
@@ -2360,94 +2391,31 @@ var
 begin
   Result := True;
   case AAction of
-    paToggleToolbar:
-      begin
-        FToolbar.Visible := not FToolbar.Visible;
-        {Reclaim focus so TC's subclass sees keystrokes again}
-        if not FToolbar.Visible then
-          Winapi.Windows.SetFocus(Handle);
-        if not FQuickViewMode then
-        begin
-          FSettings.ShowToolbar := FToolbar.Visible;
-          FSettings.Save;
-        end;
-      end;
-    paToggleStatusBar:
-      begin
-        FStatusBar.Visible := not FStatusBar.Visible;
-        if not FQuickViewMode then
-        begin
-          FSettings.ShowStatusBar := FStatusBar.Visible;
-          FSettings.Save;
-        end;
-      end;
-    paToggleTimecode:
-      OnTimecodeButtonClick(nil);
-    paToggleMaximize:
-      ForwardKeyToLister(VK_F11, False);
-    paToggleFullScreen:
-      ForwardKeyToLister(VK_RETURN, True);
-    paHamburgerMenu:
-      if FBtnHamburger.Visible then
-        OnHamburgerClick(FBtnHamburger)
-      else
-        Result := False;
-    paCloseLister:
-      ForwardKeyToLister(VK_ESCAPE, False);
-    paPrevFile:
-      NavigateToAdjacentFile(-1);
-    paNextFile:
-      NavigateToAdjacentFile(1);
-    paPrevFrame:
-      {Frame navigation is only meaningful in single-view mode. Returning
-       False when the guard fails lets the keystroke fall through to any
-       edit that had focus (same as the pre-refactor behaviour).}
-      if FFrameView.ViewMode = vmSingle then
-      begin
-        FFrameView.NavigateFrame(-1);
-        UpdateStatusBar;
-      end
-      else
-        Result := False;
-    paNextFrame:
-      if FFrameView.ViewMode = vmSingle then
-      begin
-        FFrameView.NavigateFrame(1);
-        UpdateStatusBar;
-      end
-      else
-        Result := False;
-    paFrameCountInc:
-      FUpDown.Position := FUpDown.Position + 1;
-    paFrameCountDec:
-      FUpDown.Position := FUpDown.Position - 1;
-    paOpenInPlayer:
-      {Don't consume Enter while the frame-count edit has focus — the
-       edit-focus fallback below commits the value. No file loaded is also
-       a valid no-op: let the key pass through.}
-      if (GetFocus <> FEditFrameCount.Handle) and (FFileName <> '') then
-        ShellExecute(Handle, 'open', PChar(FFileName), nil, nil, SW_SHOWNORMAL)
-      else
-        Result := False;
-    paZoomIn:
-      ZoomBy(ZOOM_IN_FACTOR);
-    paZoomOut:
-      ZoomBy(ZOOM_OUT_FACTOR);
-    paZoomReset:
-      ResetZoom;
+    paToggleToolbar:     DoToggleToolbar;
+    paToggleStatusBar:   DoToggleStatusBar;
+    paToggleTimecode:    DoToggleTimecode;
+    paToggleMaximize:    DoToggleMaximize;
+    paToggleFullScreen:  DoToggleFullScreen;
+    paHamburgerMenu:     Result := DoHamburgerMenu;
+    paCloseLister:       DoCloseLister;
+    paPrevFile:          DoPrevFile;
+    paNextFile:          DoNextFile;
+    paPrevFrame:         Result := DoPrevFrame;
+    paNextFrame:         Result := DoNextFrame;
+    paFrameCountInc:     DoFrameCountInc;
+    paFrameCountDec:     DoFrameCountDec;
+    paOpenInPlayer:      Result := DoOpenInPlayer;
+    paZoomIn:            ZoomBy(ZOOM_IN_FACTOR);
+    paZoomOut:           ZoomBy(ZOOM_OUT_FACTOR);
+    paZoomReset:         ResetZoom;
     {View-mode actions pass the canonical digit to SwitchOrCycleMode so the
      cycle-submodes logic keeps working regardless of what key the user
      bound the action to.}
-    paViewModeSmartGrid:
-      SwitchOrCycleMode(Ord('1'));
-    paViewModeGrid:
-      SwitchOrCycleMode(Ord('2'));
-    paViewModeScroll:
-      SwitchOrCycleMode(Ord('3'));
-    paViewModeFilmstrip:
-      SwitchOrCycleMode(Ord('4'));
-    paViewModeSingle:
-      SwitchOrCycleMode(Ord('5'));
+    paViewModeSmartGrid: SwitchOrCycleMode(Ord('1'));
+    paViewModeGrid:      SwitchOrCycleMode(Ord('2'));
+    paViewModeScroll:    SwitchOrCycleMode(Ord('3'));
+    paViewModeFilmstrip: SwitchOrCycleMode(Ord('4'));
+    paViewModeSingle:    SwitchOrCycleMode(Ord('5'));
   else
     {Table-routed fallback: any remaining TPluginAction maps to a CM_*
      descriptor (Save / Copy / Refresh / Shuffle / Settings /
@@ -2465,6 +2433,123 @@ begin
     else
       Result := False;
   end;
+end;
+
+{Toggles}
+
+procedure TPluginForm.DoToggleToolbar;
+begin
+  FToolbar.Visible := not FToolbar.Visible;
+  {Reclaim focus so TC's subclass sees keystrokes again}
+  if not FToolbar.Visible then
+    Winapi.Windows.SetFocus(Handle);
+  if not FQuickViewMode then
+    FSettingsToggle.PersistToolbarVisible(FToolbar.Visible);
+end;
+
+procedure TPluginForm.DoToggleStatusBar;
+begin
+  FStatusBar.Visible := not FStatusBar.Visible;
+  if not FQuickViewMode then
+    FSettingsToggle.PersistStatusBarVisible(FStatusBar.Visible);
+end;
+
+procedure TPluginForm.DoToggleTimecode;
+begin
+  OnTimecodeButtonClick(nil);
+end;
+
+procedure TPluginForm.DoToggleMaximize;
+begin
+  ForwardKeyToLister(VK_F11, False);
+end;
+
+procedure TPluginForm.DoToggleFullScreen;
+begin
+  ForwardKeyToLister(VK_RETURN, True);
+end;
+
+function TPluginForm.DoHamburgerMenu: Boolean;
+begin
+  if FBtnHamburger.Visible then
+  begin
+    OnHamburgerClick(FBtnHamburger);
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+procedure TPluginForm.DoCloseLister;
+begin
+  ForwardKeyToLister(VK_ESCAPE, False);
+end;
+
+{Navigation}
+
+procedure TPluginForm.DoPrevFile;
+begin
+  NavigateToAdjacentFile(-1);
+end;
+
+procedure TPluginForm.DoNextFile;
+begin
+  NavigateToAdjacentFile(1);
+end;
+
+function TPluginForm.DoPrevFrame: Boolean;
+begin
+  {Frame navigation is only meaningful in single-view mode. Returning
+   False when the guard fails lets the keystroke fall through to any
+   edit that had focus (same as the pre-refactor behaviour).}
+  if FFrameView.ViewMode = vmSingle then
+  begin
+    FFrameView.NavigateFrame(-1);
+    UpdateStatusBar;
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+function TPluginForm.DoNextFrame: Boolean;
+begin
+  if FFrameView.ViewMode = vmSingle then
+  begin
+    FFrameView.NavigateFrame(1);
+    UpdateStatusBar;
+    Result := True;
+  end
+  else
+    Result := False;
+end;
+
+{Frame count}
+
+procedure TPluginForm.DoFrameCountInc;
+begin
+  FUpDown.Position := FUpDown.Position + 1;
+end;
+
+procedure TPluginForm.DoFrameCountDec;
+begin
+  FUpDown.Position := FUpDown.Position - 1;
+end;
+
+{Player}
+
+function TPluginForm.DoOpenInPlayer: Boolean;
+begin
+  {Don't consume Enter while the frame-count edit has focus — the
+   edit-focus fallback below commits the value. No file loaded is also
+   a valid no-op: let the key pass through.}
+  if (GetFocus <> FEditFrameCount.Handle) and (FFileName <> '') then
+  begin
+    ShellExecute(Handle, 'open', PChar(FFileName), nil, nil, SW_SHOWNORMAL);
+    Result := True;
+  end
+  else
+    Result := False;
 end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -2713,8 +2798,7 @@ begin
   FFrameView.ShowTimecode := not FFrameView.ShowTimecode;
   UpdateTimecodeButton;
   UpdateFrameViewSize;
-  FSettings.ShowTimecode := FFrameView.ShowTimecode;
-  FSettings.Save;
+  FSettingsToggle.PersistTimecodeVisible(FFrameView.ShowTimecode);
 end;
 
 procedure TPluginForm.DispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1);

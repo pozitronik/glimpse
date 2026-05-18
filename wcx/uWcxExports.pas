@@ -67,16 +67,23 @@ implementation
 uses
   System.AnsiStrings, System.Classes, System.IOUtils,
   Vcl.Graphics,
-  uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFFmpegExe, uFrameOffsets,
+  uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
-  uBannerInfo, uBannerPainter, uCombinedGrid, uTimecodeOverlay,
-  uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo, uBitmapResize,
-  uWcxPresets, uWcxPresetTemplate, uWcxListing, uWcxProgressBridge, uWcxPresetExtractor,
+  uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo,
+  uWcxPresets, uWcxListing, uWcxEntryExtractors,
   uWcxFrameCache, uPresetExtractReporter;
 
 type
-  {State for one open archive (video file)}
-  TArchiveHandle = class
+  {State for one open archive (video file).
+   Implements IWcxExtractionContext so the polymorphic entry extractors
+   in uWcxEntryExtractors can read every per-session field through one
+   well-typed handle without back-linking into this unit. Descends from
+   TNoRefCountObject (RTL-provided "implements IInterface but does NOT
+   refcount") because the WCX API owns the handle's lifetime: OpenArchive
+   creates, CloseArchive frees. Refcounting via TInterfacedObject would
+   risk freeing the handle out from under TC when a transient interface
+   reference held by an entry extractor went out of scope.}
+  TArchiveHandle = class(TNoRefCountObject, IWcxExtractionContext)
     FileName: string;
     Settings: TWcxSettings;
     FFmpegPath: string;
@@ -89,12 +96,11 @@ type
     TempPaths: TArray<string>;
     EntrySizes: TArray<Int64>;
     {Loaded once at OpenArchive when ShowPresets is on; empty otherwise.
-     Indexed by Listing[I].PresetIndex.}
+     Indexed by TPresetEntry.PresetIndex.}
     Presets: TWcxPresetArray;
-    {Pre-built typed listing: legacy entries first (frames or combined),
-     preset entries appended after. ReadHeaderExW iterates this; ProcessFile
-     dispatches on Listing[CurrentIndex].Kind.}
-    Listing: TWcxListingEntryArray;
+    {Pre-built polymorphic listing. ReadHeaderExW iterates this;
+     ProcessFile dispatches via Entry.Extract — no Kind switch.}
+    Listing: TWcxEntryExtractorArray;
     {TC's progress callbacks. The Wide variant is preferred when set;
      legacy TC builds fall back to the ANSI variant. Either or both may
      be nil — ProcessFile then runs without surfacing progress.}
@@ -105,19 +111,107 @@ type
      using the source size keeps the listing column believable AND gives
      the progress bridge a meaningful denominator).}
     SourceFileSize: Int64;
+    {Per-open-session collaborators. Allocated at OpenArchive (so
+     dependents share one instance per archive rather than reconstruct
+     per call), freed implicitly when the handle is freed. Frame
+     extractor wraps ffmpeg; bitmap saver wraps SaveBitmapToFile. Both
+     are interface-typed so the field lifetime is automatic.}
+    FrameExtractor: IFrameExtractor;
+    BitmapSaver: IBitmapSaver;
+    {IWcxExtractionContext implementation. All trivial — each returns
+     the matching field. Implemented as methods (not direct field
+     reads) because Delphi properties on interfaces require getters.}
+    function GetFileName: string;
+    function GetFFmpegPath: string;
+    function GetSourceFileSize: Int64;
+    function GetSettings: TWcxSettings;
+    function GetOffsets: TFrameOffsetArray;
+    function GetPresets: TWcxPresetArray;
+    function GetVideoInfo: TVideoInfo;
+    function GetTempPaths: TArray<string>;
+    function GetEntrySizes: TArray<Int64>;
+    function GetProcessDataProc: TProcessDataProc;
+    function GetProcessDataProcW: TProcessDataProcW;
+    function GetFrameExtractor: IFrameExtractor;
+    function GetBitmapSaver: IBitmapSaver;
   end;
 
 var
   GIniPath: string;
-  {Failure-UI seam for the preset extractor. Initialised at unit
-   start-up to TMessageBoxFailureReporter; replaced in tests via the
-   exported SetPresetFailureReporter to capture messages without
-   popping a modal dialog.}
-  GPresetFailureReporter: IPresetExtractFailureReporter;
 
 procedure WcxLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
+end;
+
+{ TArchiveHandle: IWcxExtractionContext getters
+  Trivial field forwarders. Methods (not raw field access) because
+  Delphi interface property accessors must be getter functions, not
+  direct fields. }
+
+function TArchiveHandle.GetFileName: string;
+begin
+  Result := FileName;
+end;
+
+function TArchiveHandle.GetFFmpegPath: string;
+begin
+  Result := FFmpegPath;
+end;
+
+function TArchiveHandle.GetSourceFileSize: Int64;
+begin
+  Result := SourceFileSize;
+end;
+
+function TArchiveHandle.GetSettings: TWcxSettings;
+begin
+  Result := Settings;
+end;
+
+function TArchiveHandle.GetOffsets: TFrameOffsetArray;
+begin
+  Result := Offsets;
+end;
+
+function TArchiveHandle.GetPresets: TWcxPresetArray;
+begin
+  Result := Presets;
+end;
+
+function TArchiveHandle.GetVideoInfo: TVideoInfo;
+begin
+  Result := VideoInfo;
+end;
+
+function TArchiveHandle.GetTempPaths: TArray<string>;
+begin
+  Result := TempPaths;
+end;
+
+function TArchiveHandle.GetEntrySizes: TArray<Int64>;
+begin
+  Result := EntrySizes;
+end;
+
+function TArchiveHandle.GetProcessDataProc: TProcessDataProc;
+begin
+  Result := ProcessDataProc;
+end;
+
+function TArchiveHandle.GetProcessDataProcW: TProcessDataProcW;
+begin
+  Result := ProcessDataProcW;
+end;
+
+function TArchiveHandle.GetFrameExtractor: IFrameExtractor;
+begin
+  Result := FrameExtractor;
+end;
+
+function TArchiveHandle.GetBitmapSaver: IBitmapSaver;
+begin
+  Result := BitmapSaver;
 end;
 
 {Builds extraction options from WCX settings.
@@ -168,62 +262,12 @@ begin
   Result := H.Listing[H.CurrentIndex].FileName;
 end;
 
-{Extracts all frames, renders a combined grid with optional banner.
- Caller owns the returned bitmap (nil on failure).}
-function RenderCombinedBitmap(H: TArchiveHandle; const AExtractor: IFrameExtractor): TBitmap;
-var
-  Frames: TArray<TBitmap>;
-  Resized, WithBanner: TBitmap;
-  BannerStyle: TBannerStyle;
-  GridStyle: TCombinedGridStyle;
-  TimestampStyle: TTimestampStyle;
-  I: Integer;
-begin
-  SetLength(Frames, Length(H.Offsets));
-  try
-    for I := 0 to Length(H.Offsets) - 1 do
-      Frames[I] := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, BuildExtractionOptions(H.Settings));
-
-    GridStyle := TCombinedGridStyle.FromFields(
-      H.Settings.CombinedColumns, H.Settings.CellGap, H.Settings.CombinedBorder,
-      H.Settings.Background, H.Settings.BackgroundAlpha);
-
-    TimestampStyle := TTimestampStyle.FromSettings(H.Settings.Timestamp);
-    {WCX combined sheets historically render the timecode bold; FromSettings
-     defaults FontStyles to [] (matches WLX live view), so we override here.}
-    TimestampStyle.FontStyles := [fsBold];
-
-    Result := RenderCombinedImage(Frames, H.Offsets, GridStyle, TimestampStyle);
-
-    {Apply combined size limit BEFORE the banner so the banner stays
-     at full width and is not counted toward the limit}
-    if Result <> nil then
-    begin
-      Resized := DownscaleBitmapToFit(Result, H.Settings.CombinedMaxSide);
-      if Resized <> nil then
-      begin
-        Result.Free;
-        Result := Resized;
-      end;
-    end;
-
-    if (Result <> nil) and H.Settings.ShowBanner then
-    begin
-      BannerStyle := TBannerStyle.FromSettings(H.Settings.Banner);
-      WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(H.FileName, H.VideoInfo)), BannerStyle);
-      Result.Free;
-      Result := WithBanner;
-    end;
-  finally
-    for I := 0 to Length(Frames) - 1 do
-      Frames[I].Free;
-  end;
-end;
-
 {Extracts all frames, renders a combined image, and saves to cache.
  The combined slot is the one immediately after the frames — when frames
  are also being shown the combined image lands at index Length(Offsets);
- when frames are off it lands at index 0.}
+ when frames are off it lands at index 0. RenderCombinedBitmap lives in
+ uWcxEntryExtractors so this pre-extract path and TCombinedEntry.Extract
+ share the same composition rules.}
 procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
   const ASession: TWcxCacheExtractionSession);
 var
@@ -231,7 +275,7 @@ var
   TempPath: string;
   Slot: Integer;
 begin
-  Combined := RenderCombinedBitmap(H, AExtractor);
+  Combined := uWcxEntryExtractors.RenderCombinedBitmap(H, AExtractor);
   if Combined = nil then
     Exit;
   try
@@ -287,7 +331,6 @@ end;
 procedure PreExtractFrames(H: TArchiveHandle);
 var
   Session: TWcxCacheExtractionSession;
-  Extractor: IFrameExtractor;
   EntryCount: Integer;
   TempDir: string;
 begin
@@ -304,13 +347,14 @@ begin
     EntryCount := LegacyEntryCount(H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined);
     TempDir := Session.PrepareFresh(H.FileName, EntryCount);
 
-    Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
     {Each enabled mode populates its own cache slots. Both can run in
-     the same pass when the user has both Show* bits on.}
+     the same pass when the user has both Show* bits on. The frame
+     extractor is the per-session one already on the handle (set at
+     OpenArchive).}
     if H.Settings.ShowFrames then
-      ExtractSeparateToCache(H, Extractor, Session);
+      ExtractSeparateToCache(H, H.FrameExtractor, Session);
     if H.Settings.ShowCombined then
-      ExtractCombinedToCache(H, Extractor, Session);
+      ExtractCombinedToCache(H, H.FrameExtractor, Session);
 
     Session.PublishTo(H.TempPaths, H.EntrySizes);
     WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, TempDir]));
@@ -351,6 +395,12 @@ begin
       H.Free;
       Exit;
     end;
+
+    {Per-session collaborators. Constructed once per OpenArchive so
+     dependents (TFrameEntry / TCombinedEntry / the pre-extract cache
+     path) reuse the same instances across the session.}
+    H.FrameExtractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
+    H.BitmapSaver := TVclBitmapSaver.Create;
 
     ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
     try
@@ -436,15 +486,12 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
-  if H.Listing[H.CurrentIndex].Kind = ekUserPreset then
-    {Source file size as a placeholder — believable in the listing column
-     and gives the bridge a non-zero denominator so the progress bar
-     animates. Output size is unknown in advance.}
-    HeaderData.UnpSize := ClampSizeForAnsiHeader(H.SourceFileSize)
-  else if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
-    {THeaderData.UnpSize is 32-bit signed; clamp so >2 GB combined
-     images surface as MaxInt instead of wrapping into a negative size.}
-    HeaderData.UnpSize := ClampSizeForAnsiHeader(H.EntrySizes[H.CurrentIndex]);
+  {THeaderData.UnpSize is 32-bit signed; clamp so >2 GB sizes surface as
+   MaxInt instead of wrapping into a negative size. The polymorphic
+   ReportedSize subsumes the prior "is this a preset? use source-file
+   size; else use cached EntrySizes" branching — each entry class
+   answers for itself.}
+  HeaderData.UnpSize := ClampSizeForAnsiHeader(H.Listing[H.CurrentIndex].ReportedSize(H, H.CurrentIndex));
   HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
 
@@ -465,218 +512,18 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   StrLCopy(HeaderData.FileName, PChar(Name), Length(HeaderData.FileName) - 1);
-  if H.Listing[H.CurrentIndex].Kind = ekUserPreset then
-  begin
-    Size := H.SourceFileSize;
-    HeaderData.UnpSize := DWORD(Size);
-    HeaderData.UnpSizeHigh := DWORD(Size shr 32);
-  end
-  else if (H.EntrySizes <> nil) and (H.CurrentIndex < Length(H.EntrySizes)) then
-  begin
-    Size := H.EntrySizes[H.CurrentIndex];
-    HeaderData.UnpSize := DWORD(Size);
-    HeaderData.UnpSizeHigh := DWORD(Size shr 32);
-  end;
+  Size := H.Listing[H.CurrentIndex].ReportedSize(H, H.CurrentIndex);
+  HeaderData.UnpSize := DWORD(Size);
+  HeaderData.UnpSizeHigh := DWORD(Size shr 32);
   HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
 
   Result := E_SUCCESS;
 end;
 
-{Tries to satisfy an extract request from the pre-extracted temp file pool
- populated by PreExtractFrames. Returns True when a cached source existed
- and a copy to ADestPath was attempted; AResult then carries E_SUCCESS or
- E_EWRITE. Returns False when no cached source was available, leaving the
- caller to fall through to the ffmpeg extraction path.}
-function TryCopyCachedFrame(const ATempPaths: TArray<string>; AIndex: Integer; const ADestPath: string; out AResult: Integer): Boolean;
-begin
-  if (ATempPaths = nil) or (AIndex < 0) or (AIndex >= Length(ATempPaths)) or (ATempPaths[AIndex] = '') or (not TFile.Exists(ATempPaths[AIndex])) then
-    Exit(False);
-  Result := True;
-  try
-    TFile.Copy(ATempPaths[AIndex], ADestPath, True);
-    AResult := E_SUCCESS;
-  except
-    on E: Exception do
-      AResult := ExceptionToWcxError(E);
-  end;
-end;
-
-{Extracts a single frame at the legacy frame index AFrameIndex.
- Index is decoupled from H.CurrentIndex because the listing now interleaves
- presets after the legacy frames, so the TC iteration position no longer
- matches the offset/temp-path index. ekSeparateFrame entries carry their own
- LegacyIndex, which the dispatch in DoProcessFile passes in here.}
-function DoExtractSeparate(H: TArchiveHandle; AFrameIndex: Integer; const ADestPath, ADestName: string): Integer;
-var
-  Extractor: IFrameExtractor;
-  Bmp: TBitmap;
-  FullPath: string;
-begin
-  if ADestName <> '' then
-    FullPath := ADestName
-  else if ADestPath <> '' then
-    FullPath := IncludeTrailingPathDelimiter(ADestPath) + GenerateFrameFileName(H.FileName, AFrameIndex, H.Offsets[AFrameIndex].TimeOffset, H.Settings.SaveFormat)
-  else
-    Exit(E_ECREATE);
-
-  WcxLog(Format('Extract frame %d -> %s', [AFrameIndex, FullPath]));
-
-  if TryCopyCachedFrame(H.TempPaths, AFrameIndex, FullPath, Result) then
-    Exit;
-
-  Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-  try
-    Bmp := Extractor.ExtractFrame(H.FileName, H.Offsets[AFrameIndex].TimeOffset, BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide));
-    if Bmp = nil then
-      Exit(E_BAD_DATA);
-    try
-      SaveBitmapToFile(Bmp, FullPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
-    finally
-      Bmp.Free;
-    end;
-  except
-    on E: Exception do
-      Exit(ExceptionToWcxError(E));
-  end;
-  Result := E_SUCCESS;
-end;
-
-{Extracts the combined contact sheet to ADestName / ADestPath.
- ACombinedSlot is the cache slot the pre-extraction stage wrote the
- image to (carried via the listing entry's LegacyIndex so the dispatch
- stays decoupled from the slot scheme).}
-function DoExtractCombined(H: TArchiveHandle; ACombinedSlot: Integer; const ADestPath, ADestName: string): Integer;
-var
-  Extractor: IFrameExtractor;
-  Combined: TBitmap;
-  FullPath: string;
-begin
-  if ADestName <> '' then
-    FullPath := ADestName
-  else if ADestPath <> '' then
-    FullPath := IncludeTrailingPathDelimiter(ADestPath) + GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat)
-  else
-    Exit(E_ECREATE);
-
-  WcxLog(Format('Extract combined (%d frames) -> %s', [Length(H.Offsets), FullPath]));
-
-  if TryCopyCachedFrame(H.TempPaths, ACombinedSlot, FullPath, Result) then
-    Exit;
-
-  Extractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-  try
-    Combined := RenderCombinedBitmap(H, Extractor);
-    if Combined = nil then
-      Exit(E_BAD_DATA);
-    try
-      SaveBitmapToFile(Combined, FullPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
-    finally
-      Combined.Free;
-    end;
-    Result := E_SUCCESS;
-  except
-    on E: Exception do
-      Result := ExceptionToWcxError(E);
-  end;
-end;
-
-{Runs a user-defined ffmpeg preset, surfacing progress through TC's
- ProcessDataProc callback and respecting user cancel.
- ADisplayName is the dedupe-resolved listed filename used as the fallback
- when TC supplies only ADestPath; ADestName, when set, is the absolute
- destination TC has already chosen and wins over the fallback.
- Both cancel and error paths map to E_EWRITE because TC handles E_EWRITE
- on cancel by suppressing its error popup, while a real error still
- surfaces via the WcxLog message and the dialog TC shows for E_EWRITE.}
-function DoExtractPreset(H: TArchiveHandle; APresetIndex: Integer; const ADisplayName, ADestPath, ADestName: string): Integer;
-const
-  {Effectively no wall-clock cap: presets are arbitrary user transcodes
-   that may run for hours on long videos. The user's cancel button
-   (which signals the bridge cancel handle) is the intended stop
-   mechanism; a hung ffmpeg can still be killed via Task Manager.}
-  PRESET_EXTRACT_TIMEOUT_MS = INFINITE;
-var
-  Bridge: TWcxProgressBridge;
-  FullPath: string;
-  ExtractResult: TPresetExtractResult;
-  Preset: TWcxPreset;
-begin
-  if (APresetIndex < 0) or (APresetIndex >= Length(H.Presets)) then
-    Exit(E_BAD_DATA);
-
-  Preset := H.Presets[APresetIndex];
-  {Apply template expansion to Args so the same %basename% / %name% /
-   %ext% tokens that work in OutputName also work in Args (e.g.
-   "Args=-metadata title=%basename%"). The local Preset is a value copy,
-   so this does not mutate H.Presets.}
-  Preset.Args := ExpandTemplate(Preset.Args, H.FileName, Preset.Name);
-
-  if ADestName <> '' then
-    FullPath := ADestName
-  else if ADestPath <> '' then
-    FullPath := IncludeTrailingPathDelimiter(ADestPath) + ADisplayName
-  else
-    Exit(E_ECREATE);
-
-  WcxLog(Format('Extract preset "%s" -> %s', [Preset.Name, FullPath]));
-
-  {Total bytes for the bridge mirrors the synthetic UnpSize we reported
-   in ReadHeaderExW so deltas line up with what TC's bar denominator
-   expects. Source file size was captured at OpenArchive time.}
-  Bridge := TWcxProgressBridge.Create(FullPath, H.SourceFileSize, H.ProcessDataProc, H.ProcessDataProcW);
-  try
-    {Up-front ping registers this file with TC's progress UI and gives the
-     user a cancel point before ffmpeg even starts spinning.}
-    if not Bridge.Ping then
-      Exit(E_EWRITE);
-
-    ExtractResult := ExtractPreset(H.FFmpegPath, H.FileName, FullPath, Preset, H.VideoInfo.Duration,
-      function(APercent: Integer): Boolean
-      begin
-        Result := Bridge.ReportPercent(APercent);
-      end,
-      Bridge.CancelHandle, PRESET_EXTRACT_TIMEOUT_MS);
-
-    if ExtractResult.Success then
-      Exit(E_SUCCESS);
-
-    WcxLog(Format('Preset "%s" failed (cancelled=%s exitCode=%d): %s',
-      [Preset.Name, BoolToStr(ExtractResult.Cancelled, True), ExtractResult.ExitCode, ExtractResult.ErrorMessage]));
-
-    if ExtractResult.Cancelled then
-    begin
-      {Cancel: TC suppresses its own dialog when it sees E_EWRITE on a
-       user-initiated cancel, so stay silent on our side too — the user
-       knows they cancelled.}
-      Result := E_EWRITE;
-      Exit;
-    end;
-
-    {Surface the real ffmpeg error. TC's follow-up dialog ("Bad data" /
-     "Write error") is generic and unhelpful for problems like "no audio
-     stream" or "unknown encoder"; this message gives the user the actual
-     reason they need to fix the preset or pick a different source.}
-    GPresetFailureReporter.Report(MakeFailureMessage(Preset.Name, FullPath, ExtractResult));
-
-    {Distinguish the two failure modes in the WCX return code:
-     - ExitCode<>0 means ffmpeg refused (bad codec, no stream, bad args)
-       which is closer to E_BAD_DATA than to a write error.
-     - ExitCode=0 with Success=False means the rename step failed, which
-       IS a real write error.}
-    if ExtractResult.ExitCode <> 0 then
-      Result := E_BAD_DATA
-    else
-      Result := E_EWRITE;
-  finally
-    Bridge.Free;
-  end;
-end;
-
 function DoProcessFile(hArcData: THandle; Operation: Integer; const ADestPath, ADestName: string): Integer;
 var
   H: TArchiveHandle;
-  Entry: TWcxListingEntry;
 begin
   H := TArchiveHandle(hArcData);
 
@@ -697,17 +544,11 @@ begin
 
   if Operation = PK_EXTRACT then
   begin
-    Entry := H.Listing[H.CurrentIndex];
-    case Entry.Kind of
-      ekSeparateFrame:
-        Result := DoExtractSeparate(H, Entry.LegacyIndex, ADestPath, ADestName);
-      ekCombinedSheet:
-        Result := DoExtractCombined(H, Entry.LegacyIndex, ADestPath, ADestName);
-      ekUserPreset:
-        Result := DoExtractPreset(H, Entry.PresetIndex, Entry.FileName, ADestPath, ADestName);
-    else
-      Result := E_NOT_SUPPORTED;
-    end;
+    {Single polymorphic dispatch — TFrameEntry, TCombinedEntry, and
+     TPresetEntry each carry the per-entry state (frame index, combined
+     slot, preset index) they need and implement Extract themselves. A
+     new entry kind becomes one new class, no edits here.}
+    Result := H.Listing[H.CurrentIndex].Extract(H, ADestPath, ADestName);
 
     if Result <> E_SUCCESS then
     begin
@@ -847,7 +688,10 @@ initialization
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 
-GPresetFailureReporter := TMessageBoxFailureReporter.Create;
+{Production reporter. Lives in uPresetExtractReporter as a global so
+ TPresetEntry.Extract can reach it without back-linking into this unit;
+ tests can swap it via SetPresetFailureReporter.}
+SetPresetFailureReporter(TMessageBoxFailureReporter.Create);
 
 {Debug logging is opt-in via the hidden "[debug] LogEnabled=1" key in
  Glimpse.ini. Start silent; DoOpenArchive flips TDebugLog.Configure on
@@ -863,7 +707,7 @@ Randomize;
 
 finalization
 
-GPresetFailureReporter := nil;
+SetPresetFailureReporter(nil);
 TWcxFrameCache.ReleaseInstance;
 
 end.

@@ -98,6 +98,7 @@
         <DCCReference Include="..\src\uHotkeys.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
         <DCCReference Include="..\src\uSettingsDlgUI.pas"/>
+        <DCCReference Include="uWcxEntryExtractors.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

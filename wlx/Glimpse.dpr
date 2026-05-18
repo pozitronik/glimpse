@@ -14,6 +14,7 @@ uses
   uWlxAPI in 'uWlxAPI.pas',
   uPluginExports in 'uPluginExports.pas',
   uSettings in '..\src\uSettings.pas',
+  uSettingsToggleService in '..\src\uSettingsToggleService.pas',
   uFrameOffsets in '..\src\uFrameOffsets.pas',
   uFFmpegLocator in '..\src\uFFmpegLocator.pas',
   uFFmpegExe in '..\src\uFFmpegExe.pas',

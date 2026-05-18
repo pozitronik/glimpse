@@ -57,6 +57,17 @@ function SummarizeFFmpegError(const AErrorMessage: string; AExitCode: Integer): 
 function MakeFailureMessage(const APresetName, AOutputPath: string;
   const AResult: TPresetExtractResult): string;
 
+{Process-global active reporter. uWcxExports initializes it at unit
+ start-up to TMessageBoxFailureReporter (production) and may swap it in
+ tests via SetPresetFailureReporter. Lives here (rather than in
+ uWcxExports) so the entry-extractor classes in uWcxEntryExtractors can
+ reach it without back-linking into the dispatcher unit. Returns nil
+ only during the brief unit-init window before uWcxExports'
+ initialization section runs; callers in that window would themselves
+ be unreachable, so the .Report dereference is safe in practice.}
+function GetPresetFailureReporter: IPresetExtractFailureReporter;
+procedure SetPresetFailureReporter(const AReporter: IPresetExtractFailureReporter);
+
 implementation
 
 uses
@@ -99,5 +110,24 @@ begin
   MessageBox(GetForegroundWindow, PChar(AMsg), 'Glimpse preset extraction failed',
     MB_OK or MB_ICONWARNING);
 end;
+
+var
+  GReporter: IPresetExtractFailureReporter;
+
+function GetPresetFailureReporter: IPresetExtractFailureReporter;
+begin
+  Result := GReporter;
+end;
+
+procedure SetPresetFailureReporter(const AReporter: IPresetExtractFailureReporter);
+begin
+  GReporter := AReporter;
+end;
+
+initialization
+
+finalization
+
+GReporter := nil;
 
 end.

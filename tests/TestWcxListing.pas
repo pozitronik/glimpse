@@ -22,9 +22,8 @@ type
     [Test] procedure TestPresetCollidingWithFrameGetsSuffix;
     [Test] procedure TestPresetVsPresetCollisionStillDedupes;
     { Entry shape contracts that the dispatch code in uWcxExports relies on }
-    [Test] procedure TestFrameEntryHasMatchingLegacyIndex;
-    [Test] procedure TestCombinedEntryHasLegacyIndexZero;
-    [Test] procedure TestPresetEntryHasNegativeLegacyIndex;
+    [Test] procedure TestFrameEntryHasMatchingFrameIndex;
+    [Test] procedure TestCombinedEntryHasCombinedSlotZero;
     [Test] procedure TestPresetEntryPresetIndexMatchesArrayPosition;
     { LegacyEntryCount — slot-numbering invariant shared with uWcxExports }
     [Test] procedure TestLegacyEntryCount_FramesOnly;
@@ -39,7 +38,7 @@ implementation
 uses
   System.SysUtils,
   uBitmapSaver, uFrameOffsets, uFrameFileNames,
-  uWcxPresets, uWcxListing;
+  uWcxPresets, uWcxListing, uWcxEntryExtractors;
 
 { Helpers }
 
@@ -69,7 +68,7 @@ end;
 procedure TTestWcxListing.TestSeparateModeNoPresetsMatchesFrameOnlyListing;
 var
   Offsets: TFrameOffsetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
   I: Integer;
   Expected: string;
 begin
@@ -80,25 +79,25 @@ begin
   begin
     Expected := GenerateFrameFileName('C:\v\Movie.mkv', I, Offsets[I].TimeOffset, sfPNG);
     Assert.AreEqual(Expected, Listing[I].FileName, Format('Frame %d filename mismatch', [I]));
-    Assert.IsTrue(Listing[I].Kind = ekSeparateFrame, 'Frame entries must report ekSeparateFrame');
+    Assert.IsTrue(Listing[I] is TFrameEntry, Format('Entry %d should be a TFrameEntry', [I]));
   end;
 end;
 
 procedure TTestWcxListing.TestCombinedModeNoPresetsSingleEntry;
 var
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
 begin
   Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), False, True, False, sfJPEG, nil);
   Assert.AreEqual(1, Integer(Length(Listing)),
     'Combined mode produces exactly one entry regardless of frame count');
-  Assert.IsTrue(Listing[0].Kind = ekCombinedSheet);
+  Assert.IsTrue(Listing[0] is TCombinedEntry);
   Assert.AreEqual(GenerateCombinedFileName('C:\v\Movie.mkv', sfJPEG), Listing[0].FileName);
 end;
 
 procedure TTestWcxListing.TestUsePresetsFalseIgnoresPresetArray;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
 begin
   { Even when a non-empty preset list is passed in, the master switch off
     must keep the legacy behaviour identical so existing installs see no
@@ -113,7 +112,7 @@ end;
 
 procedure TTestWcxListing.TestEmptyPresetArrayIsBitForBitSameAsOff;
 var
-  ListingOn, ListingOff: TWcxListingEntryArray;
+  ListingOn, ListingOff: TWcxEntryExtractorArray;
   I: Integer;
 begin
   ListingOff := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(4), True, False, False, sfPNG, nil);
@@ -128,7 +127,7 @@ end;
 procedure TTestWcxListing.TestPresetAppendedAfterFrames;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
 begin
   SetLength(Presets, 1);
   Presets[0] := MakePreset('audio', '%basename%_track', 'mp3');
@@ -137,16 +136,16 @@ begin
     'Two frames + one preset = three entries');
   { Preset must be at the END so the legacy frame indices stay where TC and
     any pre-existing scripts expect them. }
-  Assert.IsTrue(Listing[0].Kind = ekSeparateFrame);
-  Assert.IsTrue(Listing[1].Kind = ekSeparateFrame);
-  Assert.IsTrue(Listing[2].Kind = ekUserPreset);
+  Assert.IsTrue(Listing[0] is TFrameEntry);
+  Assert.IsTrue(Listing[1] is TFrameEntry);
+  Assert.IsTrue(Listing[2] is TPresetEntry);
   Assert.AreEqual('Movie_track.mp3', Listing[2].FileName);
 end;
 
 procedure TTestWcxListing.TestMultiplePresetsPreserveDefinitionOrder;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
 begin
   SetLength(Presets, 3);
   Presets[0] := MakePreset('first', 'a', 'mp3');
@@ -162,14 +161,14 @@ end;
 procedure TTestWcxListing.TestCombinedPlusPresetIsTwoEntries;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
 begin
   SetLength(Presets, 1);
   Presets[0] := MakePreset('audio', '', 'mp3');
   Listing := BuildArchiveListing('C:\v\Movie.mkv', MakeOffsets(5), False, True, True, sfJPEG, Presets);
   Assert.AreEqual(2, Integer(Length(Listing)));
-  Assert.IsTrue(Listing[0].Kind = ekCombinedSheet);
-  Assert.IsTrue(Listing[1].Kind = ekUserPreset);
+  Assert.IsTrue(Listing[0] is TCombinedEntry);
+  Assert.IsTrue(Listing[1] is TPresetEntry);
 end;
 
 { Cross-section dedupe }
@@ -177,7 +176,7 @@ end;
 procedure TTestWcxListing.TestPresetCollidingWithFrameGetsSuffix;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
   FrameName: string;
 begin
   { Construct a preset whose final filename matches the first frame name.
@@ -200,7 +199,7 @@ end;
 procedure TTestWcxListing.TestPresetVsPresetCollisionStillDedupes;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
 begin
   SetLength(Presets, 2);
   Presets[0] := MakePreset('p1', 'poster', 'jpg');
@@ -212,58 +211,57 @@ end;
 
 { Entry shape contracts }
 
-procedure TTestWcxListing.TestFrameEntryHasMatchingLegacyIndex;
+procedure TTestWcxListing.TestFrameEntryHasMatchingFrameIndex;
 var
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
+  Frame: TFrameEntry;
   I: Integer;
 begin
-  { LegacyIndex on a frame entry must equal its position in the legacy
-    section, because the extractor uses it to index Offsets and TempPaths. }
+  { FrameIndex on a frame entry must equal its position in the legacy
+    section, because Extract uses it to index Offsets and TempPaths. }
   Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(4), True, False, False, sfPNG, nil);
   for I := 0 to 3 do
-    Assert.AreEqual(I, Listing[I].LegacyIndex);
+  begin
+    Frame := Listing[I] as TFrameEntry;
+    Assert.AreEqual(I, Frame.FrameIndex);
+  end;
 end;
 
-procedure TTestWcxListing.TestCombinedEntryHasLegacyIndexZero;
+procedure TTestWcxListing.TestCombinedEntryHasCombinedSlotZero;
 var
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
+  Combined: TCombinedEntry;
 begin
-  { Combined uses temp-path slot 0; the dispatch code expects LegacyIndex=0
-    so the same TryCopyCachedFrame call works for both ekSeparateFrame and ekCombinedSheet. }
+  { Combined uses temp-path slot 0 when frames are off; the dispatch code
+    expects this so the same TryCopyCachedFrame call works for both
+    frame and combined entries. }
   Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(5), False, True, False, sfPNG, nil);
-  Assert.AreEqual(0, Listing[0].LegacyIndex);
-end;
-
-procedure TTestWcxListing.TestPresetEntryHasNegativeLegacyIndex;
-var
-  Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
-begin
-  { Sentinel -1 traps the "preset routed through the frame extractor" misuse
-    loudly via a bounds error rather than silently picking offset 0. }
-  SetLength(Presets, 1);
-  Presets[0] := MakePreset('p', 'foo', 'mp3');
-  Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(2), True, False, True, sfPNG, Presets);
-  Assert.AreEqual(-1, Listing[2].LegacyIndex);
+  Combined := Listing[0] as TCombinedEntry;
+  Assert.AreEqual(0, Combined.CombinedSlot);
 end;
 
 procedure TTestWcxListing.TestPresetEntryPresetIndexMatchesArrayPosition;
 var
   Presets: TWcxPresetArray;
-  Listing: TWcxListingEntryArray;
+  Listing: TWcxEntryExtractorArray;
+  P0, P1, P2: TPresetEntry;
 begin
-  { PresetIndex is what the extractor will use to fetch the actual TWcxPreset
-    record (Args, OutputExt, etc.). Pinning this contract here means the
-    Step 6 extractor wiring just dereferences APresets[Listing[I].PresetIndex]
-    without re-deriving anything from FileName. }
+  { PresetIndex is what Extract uses to fetch the actual TWcxPreset
+    record (Args, OutputExt, etc.) from the context's Presets array.
+    Pinning this contract here means a preset extractor just
+    dereferences AContext.Presets[PresetIndex] without re-deriving
+    anything from FileName. }
   SetLength(Presets, 3);
   Presets[0] := MakePreset('a', 'a', 'mp3');
   Presets[1] := MakePreset('b', 'b', 'mp3');
   Presets[2] := MakePreset('c', 'c', 'mp3');
   Listing := BuildArchiveListing('C:\v\X.mkv', MakeOffsets(0), True, False, True, sfPNG, Presets);
-  Assert.AreEqual(0, Listing[0].PresetIndex);
-  Assert.AreEqual(1, Listing[1].PresetIndex);
-  Assert.AreEqual(2, Listing[2].PresetIndex);
+  P0 := Listing[0] as TPresetEntry;
+  P1 := Listing[1] as TPresetEntry;
+  P2 := Listing[2] as TPresetEntry;
+  Assert.AreEqual(0, P0.PresetIndex);
+  Assert.AreEqual(1, P1.PresetIndex);
+  Assert.AreEqual(2, P2.PresetIndex);
 end;
 
 { LegacyEntryCount }
