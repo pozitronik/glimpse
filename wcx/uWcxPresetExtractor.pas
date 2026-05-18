@@ -148,16 +148,41 @@ begin
   end;
 end;
 
+{Fixed flags between the exe and the input path. -hide_banner suppresses
+ the ffmpeg version blurb; -nostdin prevents ffmpeg from racing the
+ cancel handle for keyboard input; -loglevel error trims stderr to actual
+ errors; -progress pipe:1 routes the parseable progress stream to stdout;
+ -y silently overwrites the temp output file on retry.}
+const
+  FFMPEG_BASE_FLAGS: array[0..4] of string = (
+    '-hide_banner', '-nostdin', '-loglevel', 'error', '-progress'
+  );
+  FFMPEG_PROGRESS_TARGET = 'pipe:1';
+  FFMPEG_OVERWRITE_FLAG = '-y';
+  FFMPEG_INPUT_FLAG = '-i';
+
 function BuildPresetCmdLine(const AFFmpegPath, AInputPath: string; const APreset: TWcxPreset; const AOutputTempPath: string): string;
 var
   UserTokens: TArray<string>;
-  T: string;
+  Parts: TArray<string>;
+  I: Integer;
 begin
-  Result := QuoteArg(AFFmpegPath) + ' -hide_banner -nostdin -loglevel error -progress pipe:1 -y -i ' + QuoteArg(AInputPath);
   UserTokens := TokenizeArgs(APreset.Args);
-  for T in UserTokens do
-    Result := Result + ' ' + QuoteArg(T);
-  Result := Result + ' ' + QuoteArg(AOutputTempPath);
+  {Layout: <exe> <base flags> pipe:1 -y -i <input> <user tokens...> <output>.
+   Built into a single TArray<string> then joined once with ' ' as the
+   separator, avoiding the O(N^2) repeated-concatenation walk.}
+  SetLength(Parts, 1 + Length(FFMPEG_BASE_FLAGS) + 4 + Length(UserTokens) + 1);
+  Parts[0] := QuoteArg(AFFmpegPath);
+  for I := 0 to High(FFMPEG_BASE_FLAGS) do
+    Parts[1 + I] := FFMPEG_BASE_FLAGS[I];
+  Parts[1 + Length(FFMPEG_BASE_FLAGS)] := FFMPEG_PROGRESS_TARGET;
+  Parts[2 + Length(FFMPEG_BASE_FLAGS)] := FFMPEG_OVERWRITE_FLAG;
+  Parts[3 + Length(FFMPEG_BASE_FLAGS)] := FFMPEG_INPUT_FLAG;
+  Parts[4 + Length(FFMPEG_BASE_FLAGS)] := QuoteArg(AInputPath);
+  for I := 0 to High(UserTokens) do
+    Parts[5 + Length(FFMPEG_BASE_FLAGS) + I] := QuoteArg(UserTokens[I]);
+  Parts[High(Parts)] := QuoteArg(AOutputTempPath);
+  Result := string.Join(' ', Parts);
 end;
 
 function ParseProgressLine(const ALine: string; ADurationSeconds: Double; out APercent: Integer): Boolean;
