@@ -76,7 +76,9 @@
         <DCCReference Include="..\src\uRunProcess.pas"/>
         <DCCReference Include="..\src\uDefaults.pas"/>
         <DCCReference Include="..\src\uFrameExtractor.pas"/>
-        <DCCReference Include="..\src\uCombinedImage.pas"/>
+        <DCCReference Include="..\src\uBannerInfo.pas"/>
+        <DCCReference Include="..\src\uBannerPainter.pas"/>
+        <DCCReference Include="..\src\uCombinedGrid.pas"/>
         <DCCReference Include="..\src\uTimecodeOverlay.pas"/>
         <DCCReference Include="..\src\uRenderDefaults.pas"/>
         <DCCReference Include="..\src\shared\uPluginMessages.pas"/>

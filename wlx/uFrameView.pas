@@ -8,7 +8,7 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  uTypes, uSettings, uDefaults, uFrameOffsets, uViewModeLayout, uCombinedImage, uRenderDefaults;
+  uTypes, uSettings, uDefaults, uFrameOffsets, uViewModeLayout, uTimecodeOverlay, uRenderDefaults;
 
 type
   TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);

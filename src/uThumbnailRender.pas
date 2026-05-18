@@ -68,7 +68,7 @@ implementation
 
 uses
   System.SysUtils, System.Math,
-  uDefaults, uCombinedImage, uRenderDefaults, uBitmapResize;
+  uDefaults, uCombinedGrid, uTimecodeOverlay, uRenderDefaults, uBitmapResize;
 
 function CalcThumbnailOffsets(ADuration: Double; AMode: TThumbnailMode; APositionPercent, AGridFrames, ASkipEdgesPercent: Integer): TFrameOffsetArray;
 var

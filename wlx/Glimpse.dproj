@@ -101,7 +101,9 @@
         <DCCReference Include="uFrameExport.pas"/>
         <DCCReference Include="uExtractionController.pas"/>
         <DCCReference Include="uSaveResolutionExtractor.pas"/>
-        <DCCReference Include="..\src\uCombinedImage.pas"/>
+        <DCCReference Include="..\src\uBannerInfo.pas"/>
+        <DCCReference Include="..\src\uBannerPainter.pas"/>
+        <DCCReference Include="..\src\uCombinedGrid.pas"/>
         <DCCReference Include="..\src\uTimecodeOverlay.pas"/>
         <DCCReference Include="..\src\application\uFrameSelectionPolicy.pas"/>
         <DCCReference Include="..\src\uVideoInfo.pas"/>

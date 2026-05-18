@@ -305,7 +305,7 @@ implementation
 
 uses
   System.IOUtils, Winapi.ShellAPI,
-  uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uCombinedImage,
+  uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uBannerInfo, uTimecodeOverlay,
   uProgressModalForm,
   uPlatformDetect, uDefaults;
 

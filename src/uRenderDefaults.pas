@@ -5,18 +5,18 @@
  records — they have no rendering knowledge. Hoisting them lets the
  renderer be leaf-rendering only and lets test code import "give me a
  default style" without dragging in pf32bit bitmap construction and the
- GDI AlphaBlend stack uCombinedImage carries.
+ GDI AlphaBlend stack the renderers carry.
 
  No internal state; functions are pure. The records returned
- (TBannerStyle, TCombinedGridStyle, TTimestampStyle) are still defined
- in uCombinedImage — moving the types is a separate concern.}
+ (TBannerStyle, TCombinedGridStyle, TTimestampStyle) live in the
+ split-out painter / grid / overlay units; this unit only wires defaults.}
 unit uRenderDefaults;
 
 interface
 
 uses
   Vcl.Graphics,
-  uCombinedImage;
+  uBannerPainter, uCombinedGrid, uTimecodeOverlay;
 
 {Returns the historical defaults (dark bg, light text, Segoe UI, auto size, top).
  Useful for tests and as a fallback when a caller has no configured style.}

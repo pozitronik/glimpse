@@ -229,7 +229,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Types, System.Math, System.IOUtils, System.UITypes,
   Vcl.Forms, Vcl.Controls, Vcl.Graphics,
-  uTypes, uBitmapSaver, uFrameView, uFrameOffsets, uSettings, uFrameExport, uCombinedImage,
+  uTypes, uBitmapSaver, uFrameView, uFrameOffsets, uSettings, uFrameExport, uBannerInfo,
   uBitmapWorkThread;
 
 type

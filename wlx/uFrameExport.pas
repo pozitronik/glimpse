@@ -7,7 +7,8 @@ interface
 uses
   System.SysUtils, System.Classes,
   Vcl.Graphics,
-  uFrameView, uSettings, uBitmapSaver, uCombinedImage, uFrameOffsets,
+  uFrameView, uSettings, uBitmapSaver, uBannerInfo, uBannerPainter,
+  uCombinedGrid, uTimecodeOverlay, uFrameOffsets,
   uBitmapWorkThread;
 
 type
