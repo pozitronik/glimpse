@@ -28,6 +28,10 @@ type
 
     {Construction / lifecycle}
     [Test]
+    procedure TestNilStatusBarRaisesEArgumentNilException;
+    [Test]
+    procedure TestNilResolverRaisesEArgumentNilException;
+    [Test]
     procedure TestEmptyTemplateProducesNoPanels;
     [Test]
     procedure TestSingleTokenProducesOnePanel;
@@ -149,6 +153,29 @@ begin
 end;
 
 {Tests}
+
+procedure TTestStatusBarRenderer.TestNilStatusBarRaisesEArgumentNilException;
+begin
+  {Hard runtime check: Assert would compile out in release. The
+   constructor must raise an explicit exception so a nil-status-bar
+   wiring bug surfaces immediately, not at first method dispatch.}
+  Assert.WillRaise(
+    procedure
+    begin
+      TStatusBarRenderer.Create(nil, ResolverConstant('x')).Free;
+    end,
+    EArgumentNilException);
+end;
+
+procedure TTestStatusBarRenderer.TestNilResolverRaisesEArgumentNilException;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      TStatusBarRenderer.Create(FStatusBar, nil).Free;
+    end,
+    EArgumentNilException);
+end;
 
 procedure TTestStatusBarRenderer.TestEmptyTemplateProducesNoPanels;
 var

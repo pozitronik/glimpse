@@ -134,8 +134,13 @@ constructor TStatusBarRenderer.Create(AStatusBar: TStatusBar;
   AResolver: TStatusBarTokenTextResolver);
 begin
   inherited Create;
-  Assert(AStatusBar <> nil, 'TStatusBarRenderer requires a TStatusBar instance');
-  Assert(Assigned(AResolver), 'TStatusBarRenderer requires a non-nil resolver');
+  {Hard runtime check, not Assert. Assert compiles to nothing in $C-
+   release builds; the constructor would then accept nil and the first
+   FStatusBar / FResolver access would crash with an opaque AV.}
+  if AStatusBar = nil then
+    raise EArgumentNilException.Create('TStatusBarRenderer requires a TStatusBar instance');
+  if not Assigned(AResolver) then
+    raise EArgumentNilException.Create('TStatusBarRenderer requires a non-nil resolver');
   FStatusBar := AStatusBar;
   FResolver := AResolver;
   FAutoWidthLive := False;
