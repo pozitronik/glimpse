@@ -93,6 +93,7 @@ uses
   uFrameNotificationSink in '..\src\uFrameNotificationSink.pas',
   uPluginContext in '..\wlx\uPluginContext.pas',
   TestPluginContext in 'TestPluginContext.pas',
+  uPluginDllPin in '..\wlx\uPluginDllPin.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',

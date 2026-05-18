@@ -100,7 +100,7 @@ type
 implementation
 
 uses
-  Winapi.Windows;
+  uPluginDllPin;
 
 constructor TBitmapWorkThread.Create(ABmp: Vcl.Graphics.TBitmap;
   const AWork: TBitmapWorkProc;
@@ -151,19 +151,11 @@ begin
 end;
 
 procedure TBitmapWorkThread.RequestCancel;
-var
-  ModuleName: array[0..MAX_PATH - 1] of Char;
 begin
-  {Pin this DLL via an extra LoadLibrary refcount so the worker thread
-   can run to completion even if TC unloads the WLX plugin the instant
-   the user closes the Lister. Without the pin, TC's FreeLibrary would
-   unmap our code while the thread is still executing inside it (in
-   SaveBitmapToFile or the clipboard buffer fill) — instant crash. The
-   pin is never released; the OS reclaims the DLL handle on TC exit.
-   One pin per cancelled-and-detached thread, only when the user
-   actually cancels, so the per-session cost is negligible.}
-  GetModuleFileName(HInstance, ModuleName, Length(ModuleName));
-  LoadLibrary(ModuleName);
+  {Pin the DLL so this worker can run to completion even if TC unloads
+   the plugin the instant the user closed the Lister. See uPluginDllPin
+   for the full rationale.}
+  TPluginDllPin.Acquire;
   FCancelled := True;
   {FreeOnTerminate hands the thread's lifetime to the thread itself:
    when Execute returns, TThread.AfterTerminate frees us, our destructor
