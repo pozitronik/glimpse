@@ -38,7 +38,16 @@ type
   TStatusBarTokenTextResolver = reference to function(
     const AToken: TStatusBarToken): string;
 
-  TStatusBarRenderer = class
+  {Inherits TComponent so the host form can pass Self as the owner and
+   let VCL handle the destruction order — the form's `inherited Destroy`
+   iterates its FComponents list and frees each in reverse-creation
+   order. The resolver closure (which captures the form's Self) is
+   released during that pass while the form's fields are still
+   memory-valid; matches the pre-component lifetime contract.
+
+   Tests that don't have a real form pass nil as AOwner and Free the
+   instance manually — TComponent supports unowned construction.}
+  TStatusBarRenderer = class(TComponent)
   private
     FStatusBar: TStatusBar;
     FResolver: TStatusBarTokenTextResolver;
@@ -81,14 +90,17 @@ type
     function ScaledExplicitWidth(ALogicalWidth: Integer): Integer;
     function MapAlignment(A: TStatusBarTokenAlign): TAlignment;
   public
-    {AStatusBar must outlive the renderer; AResolver may not be nil.
-     The 2-arg overload wires a default TBitmapTextMeasurer; tests use
-     the 3-arg overload to inject a stub measurer.}
-    constructor Create(AStatusBar: TStatusBar;
-      AResolver: TStatusBarTokenTextResolver); overload;
-    constructor Create(AStatusBar: TStatusBar;
+    {AOwner is the TComponent that will free the renderer (typically
+     the host form). Pass nil for tests / standalone use; the caller
+     is then responsible for Free. AStatusBar must outlive the
+     renderer; AResolver may not be nil. The 3-arg overload wires a
+     default TBitmapTextMeasurer; tests use the 4-arg overload to
+     inject a stub measurer.}
+    constructor Create(AOwner: TComponent; AStatusBar: TStatusBar;
+      AResolver: TStatusBarTokenTextResolver); reintroduce; overload;
+    constructor Create(AOwner: TComponent; AStatusBar: TStatusBar;
       AResolver: TStatusBarTokenTextResolver;
-      AMeasurer: ITextMeasurer); overload;
+      AMeasurer: ITextMeasurer); reintroduce; overload;
     {Replaces the template. Re-parses, re-measures auto widths against
      the current font, and rebuilds FStatusBar.Panels via Refresh.}
     procedure ApplyTemplate(const ATemplate: string);
@@ -139,19 +151,19 @@ implementation
 uses
   System.SysUtils, Winapi.Windows, Vcl.Graphics;
 
-constructor TStatusBarRenderer.Create(AStatusBar: TStatusBar;
+constructor TStatusBarRenderer.Create(AOwner: TComponent; AStatusBar: TStatusBar;
   AResolver: TStatusBarTokenTextResolver);
 begin
-  {2-arg overload wires the production TBitmapTextMeasurer (lives for
+  {3-arg overload wires the production TBitmapTextMeasurer (lives for
    the renderer's lifetime, reuses a single TBitmap for every
-   measurement). Tests pass an explicit stub via the 3-arg overload.}
-  Create(AStatusBar, AResolver, TBitmapTextMeasurer.Create);
+   measurement). Tests pass an explicit stub via the 4-arg overload.}
+  Create(AOwner, AStatusBar, AResolver, TBitmapTextMeasurer.Create);
 end;
 
-constructor TStatusBarRenderer.Create(AStatusBar: TStatusBar;
+constructor TStatusBarRenderer.Create(AOwner: TComponent; AStatusBar: TStatusBar;
   AResolver: TStatusBarTokenTextResolver; AMeasurer: ITextMeasurer);
 begin
-  inherited Create;
+  inherited Create(AOwner);
   {Hard runtime check, not Assert. Assert compiles to nothing in $C-
    release builds; the constructor would then accept nil and the first
    FStatusBar / FResolver access would crash with an opaque AV.}

@@ -141,6 +141,14 @@ type
      is not yet constructed (defensive — settings can be loaded before
      CreateStatusBar in some lifecycle paths).}
     procedure ApplyStatusBarSettings;
+    {Named replacements for the three anonymous lambdas CreateStatusBar
+     used to construct inline. Same behaviour as the inline closures;
+     extracting them lets the renderer be owned by the form (TComponent)
+     without losing readability — the Self-capture is explicit at the
+     method-name site instead of hidden in a lambda body.}
+    function ResolveStatusBarToken(const AToken: TStatusBarToken): string;
+    function GetStatusBarPanelHint(APanelIndex: Integer): string;
+    function GetStatusBarPanelKind(APanelIndex: Integer): TStatusBarTokenKind;
     {Resolves the pixel height for the status bar given the current
      font's TextHeight, the persisted StatusBarHeight + apply-mode
      settings, and the bar's CurrentPPI. Auto path returns
@@ -720,10 +728,10 @@ begin
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
   FExporter.Free;
-  {The renderer holds the resolver closure, which captures Self via
-   FCachedStatusBarValues. Freeing the renderer drops the closure, the
-   captured ActRec, and every cached UnicodeString it owns.}
-  FStatusBarRenderer.Free;
+  {FStatusBarRenderer is owned by Self (step 59) — inherited TForm.Destroy
+   iterates FComponents and frees it. The resolver method-reference
+   captures Self; release happens during the inherited pass while
+   Self's fields are still memory-valid.}
   inherited;
 end;
 
@@ -1287,27 +1295,13 @@ begin
   {Renderer owns the status bar's panels from here on. The resolver
    reads from FCachedStatusBarValues which UpdateStatusBar refreshes
    once per call — guarantees a coherent snapshot across all tokens
-   in a single Refresh.}
-  FStatusBarRenderer := TStatusBarRenderer.Create(FStatusBar,
-    function(const AToken: TStatusBarToken): string
-    begin
-      {Resolve the platform-specific glyph once per token; the formatter
-       used to call uPlatformDetect itself, but lifting the dependency
-       to the call site keeps uStatusBarFormatters truly pure.}
-      Result := FormatStatusBarToken(AToken, FCachedStatusBarValues,
-        ResolutionTransformGlyph);
-    end);
+   in a single Refresh. Self is passed as the renderer's owner so the
+   form's inherited Destroy frees the renderer automatically; no manual
+   FStatusBarRenderer.Free needed.}
+  FStatusBarRenderer := TStatusBarRenderer.Create(Self, FStatusBar, ResolveStatusBarToken);
 
-  Bar.OnGetPanelHint :=
-    function(APanelIndex: Integer): string
-    begin
-      Result := FStatusBarRenderer.HintForPanel(APanelIndex);
-    end;
-  Bar.OnQueryPanelKind :=
-    function(APanelIndex: Integer): TStatusBarTokenKind
-    begin
-      Result := FStatusBarRenderer.KindForPanel(APanelIndex);
-    end;
+  Bar.OnGetPanelHint := GetStatusBarPanelHint;
+  Bar.OnQueryPanelKind := GetStatusBarPanelKind;
 
   {FSettings is populated before CreateStatusBar (see SetParentAndLoad),
    so push the user's saved template / font / measurement policy in.
@@ -1315,6 +1309,25 @@ begin
    bar is empty until UpdateStatusBar fires for the first opened
    file — matching the pre-template behaviour.}
   ApplyStatusBarSettings;
+end;
+
+function TPluginForm.ResolveStatusBarToken(const AToken: TStatusBarToken): string;
+begin
+  {Resolve the platform-specific glyph once per token; the formatter
+   used to call uPlatformDetect itself, but lifting the dependency to
+   the call site keeps uStatusBarFormatters truly pure.}
+  Result := FormatStatusBarToken(AToken, FCachedStatusBarValues,
+    ResolutionTransformGlyph);
+end;
+
+function TPluginForm.GetStatusBarPanelHint(APanelIndex: Integer): string;
+begin
+  Result := FStatusBarRenderer.HintForPanel(APanelIndex);
+end;
+
+function TPluginForm.GetStatusBarPanelKind(APanelIndex: Integer): TStatusBarTokenKind;
+begin
+  Result := FStatusBarRenderer.KindForPanel(APanelIndex);
 end;
 
 procedure TPluginForm.ApplyStatusBarSettings;

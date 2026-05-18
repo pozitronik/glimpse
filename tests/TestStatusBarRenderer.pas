@@ -183,7 +183,10 @@ end;
 function TTestStatusBarRenderer.MakeRenderer(
   AResolver: TStatusBarTokenTextResolver): TStatusBarRenderer;
 begin
-  Result := TStatusBarRenderer.Create(FStatusBar, AResolver);
+  {nil AOwner: tests manually Free the renderer in their own try/finally
+   blocks (production uses the form as AOwner; that path is exercised
+   indirectly via the actual plugin runtime).}
+  Result := TStatusBarRenderer.Create(nil, FStatusBar, AResolver);
 end;
 
 {Tests}
@@ -196,7 +199,7 @@ begin
   Assert.WillRaise(
     procedure
     begin
-      TStatusBarRenderer.Create(nil, ResolverConstant('x')).Free;
+      TStatusBarRenderer.Create(nil, nil, ResolverConstant('x')).Free;
     end,
     EArgumentNilException);
 end;
@@ -206,7 +209,7 @@ begin
   Assert.WillRaise(
     procedure
     begin
-      TStatusBarRenderer.Create(FStatusBar, nil).Free;
+      TStatusBarRenderer.Create(nil, FStatusBar, nil).Free;
     end,
     EArgumentNilException);
 end;
@@ -216,7 +219,7 @@ begin
   Assert.WillRaise(
     procedure
     begin
-      TStatusBarRenderer.Create(FStatusBar, ResolverConstant('x'), nil).Free;
+      TStatusBarRenderer.Create(nil, FStatusBar, ResolverConstant('x'), nil).Free;
     end,
     EArgumentNilException);
 end;
@@ -232,7 +235,7 @@ begin
    bar's PPI). Pinning the contract that auto widths come from the
    measurer rather than a hidden TBitmap call.}
   Stub := TStubTextMeasurer.Create(10);
-  R := TStatusBarRenderer.Create(FStatusBar, ResolverConstant('xyz'), Stub);
+  R := TStatusBarRenderer.Create(nil, FStatusBar, ResolverConstant('xyz'), Stub);
   try
     R.ApplyTemplate('%duration%');
     Assert.IsTrue(FStatusBar.Panels.Count = 1, 'Expected one panel');
@@ -257,7 +260,7 @@ begin
    per token). Pins that the bitmap-construction cost only scales with
    token count, not panel-refresh count.}
   Stub := TStubTextMeasurer.Create(5);
-  R := TStatusBarRenderer.Create(FStatusBar, ResolverConstant('a'), Stub);
+  R := TStatusBarRenderer.Create(nil, FStatusBar, ResolverConstant('a'), Stub);
   try
     BeforeCalls := Stub.CallCount;
     R.ApplyTemplate('%duration%%fps%%resolution%');
