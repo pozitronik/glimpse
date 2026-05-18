@@ -48,12 +48,14 @@ procedure ApplyInfoParts(APrefixLabel: TLabel; AValueEdit: TEdit; const APrefix,
 
 {Same as PickFontInto but for the banner font, with two extra
  wrinkles:
- - When AChkAutoSize is checked at entry, the dialog seeds the size
- field with ADefaultSize so the user sees a sensible starting value
- instead of whatever stale FBannerFontSize happens to hold.
- - Picking any size signals intent to drop auto-sizing, so the auto
- checkbox is unchecked on accept.}
-procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; AChkAutoSize: TCheckBox; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
+ - When AAutoSize is True at entry, the dialog seeds the size field
+ with ADefaultSize so the user sees a sensible starting value instead
+ of whatever stale FBannerFontSize happens to hold.
+ - Picking any size signals intent to drop auto-sizing: on accept the
+ helper writes AAutoSize := False through the var-param; the caller
+ reflects this onto whichever UI control owns the toggle. On cancel
+ AAutoSize is left unchanged.}
+procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AAutoSize: Boolean; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
 
 implementation
 
@@ -107,10 +109,10 @@ begin
   end;
 end;
 
-procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; AChkAutoSize: TCheckBox; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
+procedure PickBannerFontInto(AFontDialog: TFontDialog; AEdit: TEdit; var AAutoSize: Boolean; var AFontName: string; var AFontSize: Integer; AMinSize, AMaxSize, ADefaultSize: Integer);
 begin
   AFontDialog.Font.Name := AFontName;
-  if AChkAutoSize.Checked then
+  if AAutoSize then
     AFontDialog.Font.Size := ADefaultSize
   else
     AFontDialog.Font.Size := AFontSize;
@@ -118,8 +120,8 @@ begin
   begin
     AFontName := AFontDialog.Font.Name;
     AFontSize := ClampInt(AFontDialog.Font.Size, AMinSize, AMaxSize);
-    AChkAutoSize.Checked := False;
-    RefreshBannerFontEdit(AEdit, AChkAutoSize.Checked, AFontName, AFontSize);
+    AAutoSize := False;
+    RefreshBannerFontEdit(AEdit, AAutoSize, AFontName, AFontSize);
   end;
 end;
 

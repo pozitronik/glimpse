@@ -516,8 +516,12 @@ begin
 end;
 
 procedure TSettingsForm.PickBannerFont;
+var
+  AutoSize: Boolean;
 begin
-  PickBannerFontInto(FontDlg, EdtBannerFont, ChkBannerAutoSize, FBannerFontName, FBannerFontSize, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
+  AutoSize := ChkBannerAutoSize.Checked;
+  PickBannerFontInto(FontDlg, EdtBannerFont, AutoSize, FBannerFontName, FBannerFontSize, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
+  ChkBannerAutoSize.Checked := AutoSize;
 end;
 
 procedure TSettingsForm.BtnTimestampFontClick(Sender: TObject);
