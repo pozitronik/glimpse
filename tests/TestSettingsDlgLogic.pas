@@ -20,14 +20,6 @@ type
     [Test] procedure MaxThreads_AutoZeroPos_FormatsCpuCount;
     [Test] procedure MaxThreads_AutoExplicitPos_ReturnsEmpty;
 
-    { FFmpegInfoLabelText }
-    [Test] procedure FFmpegInfo_NoPath_ReturnsNotFound;
-    [Test] procedure FFmpegInfo_FileMissing_IncludesPath;
-    [Test] procedure FFmpegInfo_Invalid_IncludesPath;
-    [Test] procedure FFmpegInfo_ValidEmptyInput_ShowsDetected;
-    [Test] procedure FFmpegInfo_ValidNonEmptyInput_ShowsVersionOnly;
-    [Test] procedure FFmpegInfo_ValidEmptyInput_IncludesPathAndVersion;
-
     { DecodeTimestampCornerControls / EncodeTimestampCornerControls }
     [Test] procedure DecodeTimestamp_LegacyNone_UnchecksAndSetsDefaultCorner;
     [Test] procedure DecodeTimestamp_NonNone_PreservesShowAndCornerIndex;
@@ -105,48 +97,6 @@ begin
     the visible spin shows the chosen value, no extra text needed. }
   Assert.AreEqual('', MaxThreadsAutoLabel(True, 1, 8));
   Assert.AreEqual('', MaxThreadsAutoLabel(True, 12, 8));
-end;
-
-{ -------- FFmpegInfoLabelText -------- }
-
-procedure TTestSettingsDlgLogic.FFmpegInfo_NoPath_ReturnsNotFound;
-begin
-  Assert.AreEqual('Not found',
-    FFmpegInfoLabelText(fpsNoPath, '', '', True));
-end;
-
-procedure TTestSettingsDlgLogic.FFmpegInfo_FileMissing_IncludesPath;
-begin
-  Assert.AreEqual('Not found: C:\nope\ffmpeg.exe',
-    FFmpegInfoLabelText(fpsFileMissing, 'C:\nope\ffmpeg.exe', '', False));
-end;
-
-procedure TTestSettingsDlgLogic.FFmpegInfo_Invalid_IncludesPath;
-begin
-  Assert.AreEqual('Invalid executable: C:\bin\notffmpeg.exe',
-    FFmpegInfoLabelText(fpsInvalid, 'C:\bin\notffmpeg.exe', '', False));
-end;
-
-procedure TTestSettingsDlgLogic.FFmpegInfo_ValidEmptyInput_ShowsDetected;
-begin
-  { Autodetected path: label leads with 'Detected:' so the user knows
-    the dialog filled it in for them. }
-  Assert.IsTrue(FFmpegInfoLabelText(fpsValid, 'C:\ff\ffmpeg.exe', '6.1', True)
-    .StartsWith('Detected:'),
-    'Empty input + valid must produce a Detected label');
-end;
-
-procedure TTestSettingsDlgLogic.FFmpegInfo_ValidNonEmptyInput_ShowsVersionOnly;
-begin
-  { User-typed path: don't echo the path back, just show the version. }
-  Assert.AreEqual('Version: 6.1',
-    FFmpegInfoLabelText(fpsValid, 'C:\ff\ffmpeg.exe', '6.1', False));
-end;
-
-procedure TTestSettingsDlgLogic.FFmpegInfo_ValidEmptyInput_IncludesPathAndVersion;
-begin
-  Assert.AreEqual('Detected: C:\ff\ffmpeg.exe (6.1.1)',
-    FFmpegInfoLabelText(fpsValid, 'C:\ff\ffmpeg.exe', '6.1.1', True));
 end;
 
 { -------- DecodeTimestampCornerControls / EncodeTimestampCornerControls -------- }

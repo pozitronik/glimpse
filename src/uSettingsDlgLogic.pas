@@ -29,13 +29,6 @@ type
    pure and testable.}
 function MaxThreadsAutoLabel(AOnePerFrame: Boolean; AThreadsPos, ACpuCount: Integer): string;
 
-{Builds the ffmpeg info label text from a probe outcome and inputs.
- AInputWasEmpty distinguishes "user typed a path" (=> 'Version: ...')
- from "fallback autodetection picked one" (=> 'Detected: <path> (...)').
- Branches not relevant to the state (e.g. AVersion when AState is
- fpsFileMissing) are simply ignored.}
-function FFmpegInfoLabelText(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean): string;
-
 {Splits the ffmpeg info text into a fixed-status prefix (e.g. "Detected:")
  and a copy-friendly value (e.g. the path). The dialog pins the prefix in
  a TLabel and the value in a borderless read-only TEdit so users can
@@ -103,25 +96,6 @@ begin
   if AThreadsPos = 0 then
     Exit(Format('(auto: %d cores)', [ACpuCount]));
   Result := '';
-end;
-
-function FFmpegInfoLabelText(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean): string;
-begin
-  case AState of
-    fpsNoPath:
-      Result := 'Not found';
-    fpsFileMissing:
-      Result := Format('Not found: %s', [APath]);
-    fpsInvalid:
-      Result := Format('Invalid executable: %s', [APath]);
-    fpsValid:
-      if AInputWasEmpty then
-        Result := Format('Detected: %s (%s)', [APath, AVersion])
-      else
-        Result := Format('Version: %s', [AVersion]);
-    else
-      Result := '';
-  end;
 end;
 
 procedure FFmpegInfoLabelParts(AState: TFFmpegProbeState; const APath, AVersion: string; AInputWasEmpty: Boolean; out APrefix, AValue: string);
