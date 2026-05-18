@@ -106,6 +106,7 @@
         <DCCReference Include="uHotkeysVcl.pas"/>
         <DCCReference Include="uPluginAppearance.pas"/>
         <DCCReference Include="uTextMeasurement.pas"/>
+        <DCCReference Include="..\src\uFrameNotificationSink.pas"/>
         <DCCReference Include="..\src\uBitmapResize.pas"/>
         <DCCReference Include="..\src\uThumbnailRender.pas"/>
         <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>

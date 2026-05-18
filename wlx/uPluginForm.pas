@@ -9,7 +9,7 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
-  uTypes, uSettings, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI,
+  uTypes, uSettings, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
@@ -654,11 +654,15 @@ begin
 
   FProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
 
-  {Create extraction controller with appropriate cache}
+  {Create extraction controller with appropriate cache. The
+   TWindowMessageSink wraps the form's HWND so worker threads can post
+   WM_FRAME_READY / WM_EXTRACTION_DONE without needing the HWND directly.}
   if FSettings.CacheEnabled then
-    FExtractCtrl := TExtractionController.Create(Handle, TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB))
+    FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
+      TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB))
   else
-    FExtractCtrl := TExtractionController.Create(Handle, TNullFrameCache.Create);
+    FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
+      TNullFrameCache.Create);
   FExtractCtrl.OnFrameDelivered := OnFrameDelivered;
   FExtractCtrl.OnProgress := OnExtractionProgress;
 

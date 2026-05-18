@@ -38,14 +38,42 @@ type
     [Test] procedure TestStartTwiceCleansUpFirstRun;
     [Test] procedure TestExtractorErrorDeliversNilBitmap;
     [Test] procedure TestStopBeforeProcessFreesQueuedBitmaps;
+    {IFrameNotificationSink contract: capture sink records every signal
+     so the worker -> sink wiring is observable headlessly.}
+    [Test] procedure TestSinkReceivesFramesReadyDuringExtraction;
+    [Test] procedure TestSinkReceivesExtractionDoneFromLastWorker;
+    [Test] procedure TestDrainPendingDelegatesToSink;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Math, System.Diagnostics,
+  System.SysUtils, System.SyncObjs, System.IOUtils, System.Math, System.Diagnostics,
   System.Generics.Collections,
-  uTypes, uFrameOffsets, uFrameExtractor, uCache, uExtractionController;
+  uTypes, uFrameOffsets, uFrameExtractor, uCache, uExtractionController,
+  uFrameNotificationSink;
+
+type
+  {Capture-only IFrameNotificationSink: tallies NotifyFramesReady,
+   NotifyExtractionDone, and DrainPending calls. Tracked under a lock
+   because NotifyFramesReady fires from worker threads.}
+  TCaptureSink = class(TInterfacedObject, IFrameNotificationSink)
+  strict private
+    FLock: TCriticalSection;
+    FFramesReadyCount: Integer;
+    FExtractionDoneCount: Integer;
+    FDrainCount: Integer;
+    function ReadInt(var AField: Integer): Integer;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure NotifyFramesReady;
+    procedure NotifyExtractionDone;
+    procedure DrainPending;
+    function FramesReadyCount: Integer;
+    function ExtractionDoneCount: Integer;
+    function DrainCount: Integer;
+  end;
 
 type
   {Stub frame extractor: returns a fresh 4x4 pf24bit bitmap for any
@@ -171,7 +199,7 @@ procedure TTestExtractionController.TestCreateDestroy;
 var
   Ctrl: TExtractionController;
 begin
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Assert.IsNotNull(Ctrl);
   finally
@@ -183,7 +211,7 @@ procedure TTestExtractionController.TestStopWhenNoThreads;
 var
   Ctrl: TExtractionController;
 begin
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     { Stop with no running threads must not crash }
     Ctrl.Stop;
@@ -198,7 +226,7 @@ var
   Ctrl: TExtractionController;
 begin
   { FormHandle=0 skips PeekMessage calls }
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Ctrl.DrainPendingFrameMessages;
     Ctrl.DrainPendingFrameMessages;
@@ -213,7 +241,7 @@ var
   Dir: string;
 begin
   Dir := TPath.Combine(TPath.GetTempPath, 'glimpse_ctrl_test_' + IntToStr(Random(MaxInt)));
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Ctrl.RecreateCache(True, Dir, 100);
     { After recreation, cache should be functional (not null) }
@@ -231,7 +259,7 @@ procedure TTestExtractionController.TestRecreateCacheDisabled;
 var
   Ctrl: TExtractionController;
 begin
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Ctrl.RecreateCache(False, '', 0);
     { Null cache always misses }
@@ -245,7 +273,7 @@ procedure TTestExtractionController.TestInitialFramesLoadedZero;
 var
   Ctrl: TExtractionController;
 begin
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Assert.AreEqual(0, Ctrl.FramesLoaded);
   finally
@@ -257,7 +285,7 @@ procedure TTestExtractionController.TestInitialTotalFramesZero;
 var
   Ctrl: TExtractionController;
 begin
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Assert.AreEqual(0, Ctrl.TotalFrames);
   finally
@@ -273,7 +301,7 @@ var
 begin
   Stub := TStubExtractor.Create;
   StubIface := Stub;
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Ctrl.Start(StubIface, 'fake.mp4', MakeOffsets(7), 2, 1, DefaultOptions);
     Assert.AreEqual(7, Ctrl.TotalFrames,
@@ -295,7 +323,7 @@ var
 begin
   Stub := TStubExtractor.Create;
   StubIface := Stub;
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   Ctrl.OnFrameDelivered := HandleFrame;
   try
     Ctrl.Start(StubIface, 'fake.mp4', MakeOffsets(5), 2, 1, DefaultOptions);
@@ -330,7 +358,7 @@ var
 begin
   Stub := TStubExtractor.Create;
   StubIface := Stub;
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   {OnFrameDelivered must be wired so HandleFrame can free each bitmap;
    without a consumer ProcessPendingFrames leaks every Snapshot entry.}
   Ctrl.OnFrameDelivered := HandleFrame;
@@ -356,7 +384,7 @@ var
 begin
   Stub := TStubExtractor.Create;
   StubIface := Stub;
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   Ctrl.OnFrameDelivered := HandleFrame;
   Ctrl.OnProgress := HandleProgress;
   try
@@ -384,7 +412,7 @@ begin
   StubIface1 := Stub1;
   Stub2 := TStubExtractor.Create;
   StubIface2 := Stub2;
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   Ctrl.OnFrameDelivered := HandleFrame;
   try
     {Start internally calls Stop on any previous run. Two consecutive
@@ -418,7 +446,7 @@ begin
   Stub := TStubExtractor.Create;
   StubIface := Stub;
   Stub.FailAt(2.0); {second offset's TimeOffset; see MakeOffsets}
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   Ctrl.OnFrameDelivered := HandleFrame;
   try
     Ctrl.Start(StubIface, 'fake.mp4', MakeOffsets(3), 1, 1, DefaultOptions);
@@ -449,7 +477,7 @@ begin
    any surviving TBitmap, so a clean test run proves the cleanup path.}
   Stub := TStubExtractor.Create;
   StubIface := Stub;
-  Ctrl := TExtractionController.Create(0, TNullFrameCache.Create);
+  Ctrl := TExtractionController.Create(nil, TNullFrameCache.Create);
   try
     Ctrl.Start(StubIface, 'fake.mp4', MakeOffsets(4), 2, 1, DefaultOptions);
     WaitForExtractionCompletion(Stub, 4, 5000);
@@ -459,6 +487,149 @@ begin
     Ctrl.Free;
   end;
   Assert.Pass('Destructor drained the queue without leaking bitmaps');
+end;
+
+{ TCaptureSink }
+
+constructor TCaptureSink.Create;
+begin
+  inherited Create;
+  FLock := TCriticalSection.Create;
+end;
+
+destructor TCaptureSink.Destroy;
+begin
+  FLock.Free;
+  inherited;
+end;
+
+procedure TCaptureSink.NotifyFramesReady;
+begin
+  FLock.Enter;
+  try
+    Inc(FFramesReadyCount);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TCaptureSink.NotifyExtractionDone;
+begin
+  FLock.Enter;
+  try
+    Inc(FExtractionDoneCount);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+procedure TCaptureSink.DrainPending;
+begin
+  FLock.Enter;
+  try
+    Inc(FDrainCount);
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TCaptureSink.ReadInt(var AField: Integer): Integer;
+begin
+  FLock.Enter;
+  try
+    Result := AField;
+  finally
+    FLock.Leave;
+  end;
+end;
+
+function TCaptureSink.FramesReadyCount: Integer;
+begin
+  Result := ReadInt(FFramesReadyCount);
+end;
+
+function TCaptureSink.ExtractionDoneCount: Integer;
+begin
+  Result := ReadInt(FExtractionDoneCount);
+end;
+
+function TCaptureSink.DrainCount: Integer;
+begin
+  Result := ReadInt(FDrainCount);
+end;
+
+procedure TTestExtractionController.TestSinkReceivesFramesReadyDuringExtraction;
+var
+  Sink: TCaptureSink;
+  SinkRef: IFrameNotificationSink;
+  Ctrl: TExtractionController;
+  Extractor: IFrameExtractor;
+begin
+  Sink := TCaptureSink.Create;
+  SinkRef := Sink; {Hold interface ref for the duration of the test.}
+  Extractor := TStubExtractor.Create;
+  Ctrl := TExtractionController.Create(SinkRef, TNullFrameCache.Create);
+  try
+    Ctrl.Start(Extractor, 'anywhere.mp4', MakeOffsets(3), 1, 1, DefaultOptions);
+    {Wait until the worker has signalled at least once or up to ~1s.}
+    while (Sink.FramesReadyCount = 0) do
+      Sleep(5);
+    Ctrl.Stop;
+    Assert.IsTrue(Sink.FramesReadyCount > 0,
+      'Worker must call NotifyFramesReady at least once during extraction');
+  finally
+    Ctrl.Free;
+  end;
+end;
+
+procedure TTestExtractionController.TestSinkReceivesExtractionDoneFromLastWorker;
+var
+  Sink: TCaptureSink;
+  SinkRef: IFrameNotificationSink;
+  Ctrl: TExtractionController;
+  Extractor: IFrameExtractor;
+  Waited: Integer;
+begin
+  Sink := TCaptureSink.Create;
+  SinkRef := Sink;
+  Extractor := TStubExtractor.Create;
+  Ctrl := TExtractionController.Create(SinkRef, TNullFrameCache.Create);
+  try
+    Ctrl.Start(Extractor, 'anywhere.mp4', MakeOffsets(2), 1, 1, DefaultOptions);
+    {Poll for the signal up to ~1s. The worker thread races with the
+     test thread; waiting on a deterministic signal is more reliable
+     than calling Stop immediately and assuming WaitFor + finally
+     ordering produced the call before the assertion ran.}
+    Waited := 0;
+    while (Sink.ExtractionDoneCount = 0) and (Waited < 1000) do
+    begin
+      Sleep(10);
+      Inc(Waited, 10);
+    end;
+    Ctrl.Stop;
+    Assert.AreEqual(1, Sink.ExtractionDoneCount,
+      'Last worker must signal NotifyExtractionDone exactly once per extraction');
+  finally
+    Ctrl.Free;
+  end;
+end;
+
+procedure TTestExtractionController.TestDrainPendingDelegatesToSink;
+var
+  Sink: TCaptureSink;
+  SinkRef: IFrameNotificationSink;
+  Ctrl: TExtractionController;
+begin
+  Sink := TCaptureSink.Create;
+  SinkRef := Sink;
+  Ctrl := TExtractionController.Create(SinkRef, TNullFrameCache.Create);
+  try
+    Ctrl.DrainPendingFrameMessages;
+    Assert.AreEqual(1, Sink.DrainCount,
+      'DrainPendingFrameMessages must invoke ISink.DrainPending');
+  finally
+    Ctrl.Free;
+  end;
 end;
 
 initialization

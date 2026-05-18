@@ -224,7 +224,7 @@ begin
   try
     ActiveCount := 1;
     Thread := TExtractionThread.Create(AExtractor, 'anywhere.mp4',
-      AOffsets, 0, Queue, Lock, ACache, @ActiveCount, DefaultOptions);
+      AOffsets, nil, Queue, Lock, ACache, @ActiveCount, DefaultOptions);
     try
       Thread.Start;
       Thread.WaitFor;
@@ -492,7 +492,7 @@ begin
   try
     ActiveCount := 1;
     Thread := TExtractionThread.Create(ExtractorRef, 'anywhere.mp4',
-      BuildOffsets([0.0, 1.0]), 0, Queue, Lock, Cache, @ActiveCount,
+      BuildOffsets([0.0, 1.0]), nil, Queue, Lock, Cache, @ActiveCount,
       DefaultOptions);
     try
       Thread.Terminate;

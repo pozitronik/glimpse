@@ -1,19 +1,17 @@
 {Worker thread that extracts video frames via ffmpeg.exe.
- Stores results in a thread-safe queue and posts WM notifications
- to the owner window for UI-thread pickup.}
+ Stores results in a thread-safe queue and calls an injected sink to
+ signal "frame ready" / "extraction done" — the sink decides whether
+ that means PostMessage to a Win32 HWND, an in-memory capture for tests,
+ or something else entirely.}
 unit uExtractionWorker;
 
 interface
 
 uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
-  Winapi.Windows, Winapi.Messages,
   Vcl.Graphics,
-  uFrameOffsets, uFrameExtractor, uCache, uTypes;
-
-const
-  WM_FRAME_READY = WM_USER + 100; {Notification: pending frames available in queue}
-  WM_EXTRACTION_DONE = WM_USER + 101; {Extraction finished}
+  uFrameOffsets, uFrameExtractor, uCache, uTypes,
+  uFrameNotificationSink;
 
 type
   {Extracted frame awaiting delivery to UI thread}
@@ -29,11 +27,11 @@ type
     FExtractor: IFrameExtractor;
     FFileName: string;
     FOffsets: TFrameOffsetArray;
-    FNotifyWnd: HWND;
+    FSink: IFrameNotificationSink;
     FQueue: TList<TPendingFrame>;
     FQueueLock: TCriticalSection;
     FCache: IFrameCache;
-    FActiveWorkerCount: PInteger; {shared counter; last thread posts WM_EXTRACTION_DONE}
+    FActiveWorkerCount: PInteger; {shared counter; last thread calls NotifyExtractionDone}
     FOptions: TExtractionOptions;
     {Signaled from TerminatedSet so a blocking ffmpeg call inside RunProcess
      can be unblocked mid-run instead of waiting for the child to exit.}
@@ -42,19 +40,19 @@ type
     procedure Execute; override;
     procedure TerminatedSet; override;
   public
-    constructor Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
+    constructor Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; const ASink: IFrameNotificationSink; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
     destructor Destroy; override;
   end;
 
-  {Decision rule for posting WM_EXTRACTION_DONE from a worker's finally block.
-   Returns True only for the last worker to decrement the active counter; the
-   ATerminated flag is taken for documentation but is intentionally not used
-   to suppress the post. Earlier the worker checked NOT Terminated before
-   posting, which left the UI without a completion signal whenever all
-   workers had been cancelled at the cancel-edge of natural completion. The
-   controller already calls DrainPendingFrameMessages between extractions so
-   a stale post is harmless; missing the post on the cancel path was the
-   actual hazard.}
+  {Decision rule for calling NotifyExtractionDone from a worker's finally
+   block. Returns True only for the last worker to decrement the active
+   counter; the ATerminated flag is taken for documentation but is
+   intentionally not used to suppress the call. Earlier the worker
+   checked NOT Terminated before notifying, which left the UI without a
+   completion signal whenever all workers had been cancelled at the
+   cancel-edge of natural completion. The controller already drains
+   stale completion messages between extractions so a stale signal is
+   harmless; missing the signal on the cancel path was the actual hazard.}
 function ShouldPostDone(AIsLastWorker, ATerminated: Boolean): Boolean;
 
 implementation
@@ -72,14 +70,14 @@ begin
   DebugLog('Thread', AMsg);
 end;
 
-constructor TExtractionThread.Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; ANotifyWnd: HWND; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
+constructor TExtractionThread.Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; const ASink: IFrameNotificationSink; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
 begin
   inherited Create(True); {suspended}
   FreeOnTerminate := False;
   FExtractor := AExtractor;
   FFileName := AFileName;
   FOffsets := Copy(AOffsets);
-  FNotifyWnd := ANotifyWnd;
+  FSink := ASink;
   FQueue := AQueue;
   FQueueLock := AQueueLock;
   FCache := ACache;
@@ -172,17 +170,21 @@ begin
       finally
         FQueueLock.Leave;
       end;
-      PostMessage(FNotifyWnd, WM_FRAME_READY, 0, 0);
+      if FSink <> nil then
+        FSink.NotifyFramesReady;
     end;
   finally
     {Always decrement; last worker to finish notifies the UI.
-     Post even when Terminated - the controller drains stale completion
+     Signal even when Terminated - the controller drains stale completion
      messages before each new extraction, so the UI is robust against
-     that, and skipping the post on cancel left WMExtractionDone
+     that, and skipping the signal on cancel left WMExtractionDone
      unsignalled in races between Terminate and natural completion.}
-    IsLast := InterlockedDecrement(FActiveWorkerCount^) = 0;
-    if ShouldPostDone(IsLast, Terminated) then
-      PostMessage(FNotifyWnd, WM_EXTRACTION_DONE, 0, 0);
+    {AtomicDecrement is in System and is cross-platform; replaces the
+     prior Winapi.Windows.InterlockedDecrement so the worker unit no
+     longer transitively depends on Win32 after the sink injection.}
+    IsLast := AtomicDecrement(FActiveWorkerCount^) = 0;
+    if ShouldPostDone(IsLast, Terminated) and (FSink <> nil) then
+      FSink.NotifyExtractionDone;
   end;
 end;
 

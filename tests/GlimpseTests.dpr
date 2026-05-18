@@ -90,6 +90,7 @@ uses
   uHotkeysVcl in '..\wlx\uHotkeysVcl.pas',
   TestHotkeysVcl in 'TestHotkeysVcl.pas',
   uTextMeasurement in '..\wlx\uTextMeasurement.pas',
+  uFrameNotificationSink in '..\src\uFrameNotificationSink.pas',
   TestCombinedImage in 'TestCombinedImage.pas',
   uProbeCache in '..\src\uProbeCache.pas',
   TestProbeCache in 'TestProbeCache.pas',
