@@ -1,0 +1,3215 @@
+unit TestSettings;
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TTestPluginSettings = class
+  private
+    FTempDir: string;
+    FTempIniPath: string;
+  public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+
+    [Test]
+    procedure TestDefaultValues;
+    [Test]
+    procedure TestSaveAndReload;
+    [Test]
+    procedure TestInvalidIniValues;
+    [Test]
+    procedure TestFFmpegModeRoundTrip;
+    [Test]
+    procedure TestSetFFmpegPath_EmptyClearsPathAndModeAuto;
+    [Test]
+    procedure TestSetFFmpegPath_NonEmptySetsPathAndModeExe;
+    [Test]
+    procedure TestSetFFmpegPath_PromotesFromAutoOnNonEmpty;
+    [Test]
+    procedure TestSetFFmpegPath_DemotesFromExeOnEmpty;
+    [Test]
+    procedure TestViewModeRoundTrip;
+    [Test]
+    procedure TestZoomModeRoundTrip;
+    [Test]
+    procedure TestSaveFormatRoundTrip;
+    [Test]
+    procedure TestColorRoundTrip;
+    [Test]
+    procedure TestBoundaryValues;
+    [Test]
+    procedure TestClampOutOfRange;
+    [Test]
+    procedure TestFrameSideInvertedRangeNormalised;
+    {Validate enforces cross-field invariants and is invoked from
+     Load/Save/ControlsToSettings; the two contracts pinned here are:
+     (a) it pulls Min down to Max when inverted, (b) it is idempotent.}
+    [Test]
+    procedure TestValidateSwapsMinMaxFrameSize;
+    [Test]
+    procedure TestValidateIsIdempotent;
+    [Test]
+    procedure TestEmptyExtensionListFallback;
+    [Test]
+    procedure TestMissingIniFileUsesDefaults;
+    [Test]
+    procedure TestResetDefaults;
+    [Test]
+    procedure TestPerModeZoomIndependence;
+    [Test]
+    procedure TestPerModeZoomRoundTrip;
+    [Test]
+    procedure TestPerModeZoomDefaultsAllModes;
+    [Test]
+    procedure TestPerModeZoomOldIniBackwardCompat;
+    [Test]
+    procedure TestActiveZoomDelegatesToViewMode;
+    [Test]
+    procedure TestSaveOverwritesPreviousValues;
+    [Test]
+    procedure TestMaxWorkersBoundaryValues;
+    [Test]
+    procedure TestPartialIniPreservesDefaults;
+    [Test]
+    procedure TestDefaultCacheFolderNonEmpty;
+    [Test]
+    procedure TestEffectiveCacheFolderReturnsConfigured;
+    [Test]
+    procedure TestEffectiveCacheFolderReturnsDefaultWhenEmpty;
+    [Test]
+    procedure TestTimecodeBackColorAlphaRoundTrip;
+    [Test]
+    procedure TestTimecodeBackColorAlphaMalformedFallback;
+    [Test]
+    procedure TestTimecodeBackColorAlphaEdgeCases;
+    [Test]
+    procedure TestTimestampTextAlphaDefault;
+    [Test]
+    procedure TestTimestampTextAlphaRoundTrip;
+    [Test]
+    procedure TestTimestampTextAlphaClampedHigh;
+    [Test]
+    procedure TestTimestampTextAlphaClampedLow;
+    [Test]
+    procedure TestTimestampTextColorDefault;
+    [Test]
+    procedure TestTimestampTextColorRoundTrip;
+    [Test]
+    procedure TestTimestampTextColorMalformedFallback;
+    [Test]
+    procedure TestTimestampFontDefaults;
+    [Test]
+    procedure TestTimestampFontRoundTrip;
+    [Test]
+    procedure TestTimestampFontSizeClamped;
+    [Test]
+    procedure TestTimestampFontEmptyFallback;
+    [Test]
+    procedure TestCellGapDefault;
+    [Test]
+    procedure TestCellGapRoundTrip;
+    [Test]
+    procedure TestCellGapHighValuePreserved;
+    [Test]
+    procedure TestCellGapClampedLow;
+    [Test]
+    procedure TestCombinedBorderDefault;
+    [Test]
+    procedure TestCombinedBorderRoundTrip;
+    [Test]
+    procedure TestCombinedBorderHighValuePreserved;
+    [Test]
+    procedure TestCombinedBorderClampedLow;
+    [Test]
+    procedure TestRandomExtractionDefaults;
+    procedure TestRandomExtractionRoundTrip;
+    procedure TestRandomPercentClampedOnLoad;
+    procedure TestSaveAtLiveResolutionDefault;
+    [Test]
+    procedure TestSaveAtLiveResolutionRoundTrip;
+    [Test]
+    procedure TestCopyAtLiveResolutionDefault;
+    [Test]
+    procedure TestCopyAtLiveResolutionRoundTrip;
+    [Test]
+    procedure TestCopyAtLiveResolutionDoesNotMirrorSave;
+    [Test]
+    procedure TestClipboardAsFileReferenceDefault;
+    [Test]
+    procedure TestClipboardAsFileReferenceRoundTrip;
+    [Test]
+    procedure TestClipboardFormatsDefaults;
+    [Test]
+    procedure TestClipboardFormatsRoundTrip;
+    [Test]
+    procedure TestStatusBarTemplateDefault;
+    [Test]
+    procedure TestStatusBarTemplateRoundTrip;
+    [Test]
+    procedure TestStatusBarEmptyTemplateFallsBackToDefault;
+    [Test]
+    procedure TestStatusBarFontDefaults;
+    [Test]
+    procedure TestStatusBarFontRoundTrip;
+    [Test]
+    procedure TestStatusBarEmptyFontNameFallsBackToDefault;
+    [Test]
+    procedure TestStatusBarFontSizeClampedHigh;
+    [Test]
+    procedure TestStatusBarFontSizeClampedLow;
+    [Test]
+    procedure TestStatusBarAutoWidthLiveDefault;
+    [Test]
+    procedure TestStatusBarAutoWidthLiveRoundTrip;
+    [Test]
+    procedure TestStatusBarStretchPanelsDefault;
+    [Test]
+    procedure TestStatusBarStretchPanelsRoundTrip;
+    [Test]
+    procedure TestStatusBarHeightDefault;
+    [Test]
+    procedure TestStatusBarHeightRoundTrip;
+    [Test]
+    procedure TestStatusBarHeightClampedHigh;
+    [Test]
+    procedure TestStatusBarHeightApplyModeDefault;
+    [Test]
+    procedure TestStatusBarHeightApplyModeRoundTrip;
+    [Test]
+    procedure TestStatusBarMissingSectionGetsAllDefaults;
+    [Test]
+    procedure TestCombinedMaxSideDefault;
+    [Test]
+    procedure TestCombinedMaxSideRoundTrip;
+    [Test]
+    procedure TestCombinedMaxSideClampedHigh;
+    [Test]
+    procedure TestCombinedMaxSideClampedLow;
+    [Test]
+    procedure TestTimestampCornerDefault;
+    [Test]
+    procedure TestTimestampCornerRoundTripAllValues;
+    [Test]
+    procedure TestTimestampCornerUnknownFallsBackToDefault;
+    [Test]
+    procedure TestShowBannerDefault;
+    [Test]
+    procedure TestShowBannerRoundTrip;
+    [Test]
+    procedure TestBannerStyleDefaults;
+    [Test]
+    procedure TestBannerStyleRoundTrip;
+    [Test]
+    procedure TestBannerPositionUnknownFallsBackToDefault;
+    [Test]
+    procedure TestBannerFontSizeClampedToRange;
+    [Test]
+    procedure TestCacheMaxSizeBoundaries;
+    [Test]
+    procedure TestTryParseHexRGBValid;
+    [Test]
+    procedure TestTryParseHexRGBInvalid;
+
+    { EffectiveCacheFolder + env var integration }
+    [Test]
+    procedure TestEffectiveCacheFolderExpandsEnvVars;
+
+    { Quick View settings }
+    [Test]
+    procedure TestQVSettingsDefaultsAllTrue;
+    [Test]
+    procedure TestQVSettingsRoundTrip;
+    [Test]
+    procedure TestQVSettingsMissingInIniUsesDefaults;
+
+    { Thumbnail settings }
+    [Test]
+    procedure TestThumbnailSettingsDefaults;
+    [Test]
+    procedure TestThumbnailSettingsRoundTrip;
+    [Test]
+    procedure TestThumbnailSettingsMissingInIniUsesDefaults;
+    [Test]
+    procedure TestThumbnailPositionClampedHigh;
+    [Test]
+    procedure TestThumbnailPositionClampedLow;
+    [Test]
+    procedure TestThumbnailGridFramesClampedHigh;
+    [Test]
+    procedure TestThumbnailGridFramesClampedLow;
+    [Test]
+    procedure TestThumbnailModeUnknownStringFallsBackToSingle;
+    [Test]
+    procedure TestAutoRefreshOnViewportChangeDefault;
+    [Test]
+    procedure TestAutoRefreshOnViewportChangeRoundTrip;
+
+    {Coverage for extraction-group fields not exercised elsewhere;
+     pins the current Load/Save behaviour against silent drift.}
+    [Test]
+    procedure TestFramesCountClampedHigh;
+    [Test]
+    procedure TestFramesCountClampedLow;
+    [Test]
+    procedure TestSkipEdgesPercentClampedHigh;
+    [Test]
+    procedure TestSkipEdgesPercentClampedLow;
+    [Test]
+    procedure TestMaxThreadsRoundTrip;
+    [Test]
+    procedure TestUseBmpPipeRoundTrip;
+    [Test]
+    procedure TestHwAccelRoundTrip;
+    [Test]
+    procedure TestRespectAnamorphicDefault;
+    [Test]
+    procedure TestRespectAnamorphicRoundTrip;
+    [Test]
+    procedure TestBackgroundAlphaDefault;
+    [Test]
+    procedure TestBackgroundAlphaRoundTrip;
+    [Test]
+    procedure TestBackgroundAlphaClampedHigh;
+    [Test]
+    procedure TestBackgroundAlphaClampedLow;
+    [Test]
+    procedure TestUseKeyframesRoundTrip;
+  end;
+
+implementation
+
+uses
+  System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
+  Types, StatusBarLayout, Settings, Defaults, BitmapSaver, PathExpand, ColorConv;
+
+procedure TTestPluginSettings.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_Test_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+  FTempIniPath := TPath.Combine(FTempDir, 'test.ini');
+end;
+
+procedure TTestPluginSettings.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+procedure TTestPluginSettings.TestDefaultValues;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load; { INI does not exist, so all values should be defaults }
+
+    Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode));
+    Assert.AreEqual(DEF_FFMPEG_EXE_PATH, S.FFmpegExePath);
+    Assert.AreEqual(DEF_FFMPEG_AUTO_DL, S.FFmpegAutoDownloaded);
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
+    Assert.AreEqual(DEF_SKIP_EDGES_PERCENT, S.SkipEdgesPercent);
+    Assert.AreEqual(DEF_MAX_WORKERS, S.MaxWorkers);
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
+    Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background));
+    Assert.AreEqual(DEF_SHOW_TIMECODE, S.ShowTimecode);
+    Assert.AreEqual(DEF_SHOW_TOOLBAR, S.ShowToolbar);
+    Assert.AreEqual(DEF_SHOW_STATUS_BAR, S.ShowStatusBar);
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList);
+    Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat));
+    Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+    Assert.AreEqual(DEF_PNG_COMPRESSION, S.PngCompression);
+    Assert.AreEqual(DEF_SAVE_FOLDER, S.SaveFolder);
+    Assert.AreEqual(DEF_CACHE_ENABLED, S.CacheEnabled);
+    Assert.AreEqual(DEF_CACHE_FOLDER, S.CacheFolder);
+    Assert.AreEqual(DEF_CACHE_MAX_SIZE_MB, S.CacheMaxSizeMB);
+    Assert.AreEqual(DEF_QV_DISABLE_NAV, S.QVDisableNavigation);
+    Assert.AreEqual(DEF_QV_HIDE_TOOLBAR, S.QVHideToolbar);
+    Assert.AreEqual(DEF_QV_HIDE_STATUSBAR, S.QVHideStatusBar);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveAndReload;
+var
+  S1, S2: TPluginSettings;
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.FFmpegMode := fmExe;
+    S1.FFmpegExePath := 'C:\ffmpeg\ffmpeg.exe';
+    S1.FFmpegAutoDownloaded := True;
+    S1.FramesCount := 8;
+    S1.SkipEdgesPercent := 5;
+    S1.MaxWorkers := 4;
+    S1.ViewMode := vmScroll;
+    S1.ZoomMode := zmActual;
+    S1.Background := TColor($00FF8040);
+    S1.ShowTimecode := False;
+    S1.ShowToolbar := False;
+    S1.ShowStatusBar := False;
+    S1.TimecodeBackColor := TColor($0055AA00);
+    S1.TimecodeBackAlpha := 200;
+    S1.TimestampTextAlpha := 128;
+    S1.TimestampTextColor := TColor($00336699);
+    S1.ExtensionList := 'mp4,mkv,avi';
+    S1.SaveFormat := sfJPEG;
+    S1.JpegQuality := 75;
+    S1.PngCompression := 9;
+    S1.SaveFolder := 'D:\Screenshots';
+    S1.CacheEnabled := True;
+    S1.CacheFolder := 'C:\Cache';
+    S1.CacheMaxSizeMB := 1000;
+    S1.QVDisableNavigation := False;
+    S1.QVHideToolbar := False;
+    S1.QVHideStatusBar := False;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Ord(fmExe), Ord(S2.FFmpegMode));
+    Assert.AreEqual('C:\ffmpeg\ffmpeg.exe', S2.FFmpegExePath);
+    Assert.IsTrue(S2.FFmpegAutoDownloaded);
+    Assert.AreEqual(8, S2.FramesCount);
+    Assert.AreEqual(5, S2.SkipEdgesPercent);
+    Assert.AreEqual(4, S2.MaxWorkers);
+    Assert.AreEqual(Ord(vmScroll), Ord(S2.ViewMode));
+    Assert.AreEqual(Ord(zmActual), Ord(S2.ZoomMode));
+    Assert.AreEqual(Integer(TColor($00FF8040)), Integer(S2.Background));
+    Assert.IsFalse(S2.ShowTimecode);
+    Assert.IsFalse(S2.ShowToolbar);
+    Assert.IsFalse(S2.ShowStatusBar);
+    Assert.AreEqual(Integer(TColor($0055AA00)), Integer(S2.TimecodeBackColor));
+    Assert.AreEqual(200, Integer(S2.TimecodeBackAlpha));
+    Assert.AreEqual(128, Integer(S2.TimestampTextAlpha));
+    Assert.AreEqual(Integer(TColor($00336699)), Integer(S2.TimestampTextColor));
+    Assert.AreEqual('mp4,mkv,avi', S2.ExtensionList);
+    Assert.AreEqual(Ord(sfJPEG), Ord(S2.SaveFormat));
+    Assert.AreEqual(75, S2.JpegQuality);
+    Assert.AreEqual(9, S2.PngCompression);
+    Assert.AreEqual('D:\Screenshots', S2.SaveFolder);
+    Assert.IsTrue(S2.CacheEnabled);
+    Assert.AreEqual('C:\Cache', S2.CacheFolder);
+    Assert.AreEqual(1000, S2.CacheMaxSizeMB);
+    Assert.IsFalse(S2.QVDisableNavigation);
+    Assert.IsFalse(S2.QVHideToolbar);
+    Assert.IsFalse(S2.QVHideStatusBar);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestInvalidIniValues;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Write intentionally broken values }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('ffmpeg', 'Mode', 'INVALID');
+    Ini.WriteString('view', 'Mode', 'unknown');
+    Ini.WriteString('view', 'ZoomMode', 'WRONG');
+    Ini.WriteString('view', 'Background', 'not_a_color');
+    Ini.WriteString('save', 'Format', 'BMP');
+    Ini.WriteInteger('save', 'JpegQuality', 999);
+    Ini.WriteInteger('save', 'PngCompression', -1);
+    Ini.WriteInteger('cache', 'MaxSizeMB', 5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode), 'Invalid ffmpeg mode should fall back to default');
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode), 'Invalid view mode should fall back to default');
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode), 'Invalid zoom mode should fall back to default');
+    Assert.AreEqual(Integer(DEF_BACKGROUND), Integer(S.Background), 'Invalid color should fall back to default');
+    Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat), 'Unknown format should fall back to default');
+    Assert.AreEqual(100, S.JpegQuality, 'Out-of-range quality should be clamped to 100');
+    Assert.AreEqual(0, S.PngCompression, 'Negative compression should be clamped to 0');
+    Assert.AreEqual(10, S.CacheMaxSizeMB, 'Below-minimum cache size should be clamped to 10');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFFmpegModeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FFmpegMode := fmAuto;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(fmAuto), Ord(S.FFmpegMode));
+
+    S.FFmpegMode := fmExe;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_EmptyClearsPathAndModeAuto;
+var
+  S: TPluginSettings;
+begin
+  {Empty path is the sentinel for "let the plugin pick ffmpeg from
+   bundled/PATH" — must atomically clear the explicit path and drop the
+   mode back to fmAuto, otherwise Load on the next run would silently
+   ignore a stale exe path stored under (fmAuto, '/old/path').}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.SetFFmpegPath('');
+    Assert.AreEqual(Ord(fmAuto), Ord(S.FFmpegMode));
+    Assert.AreEqual('', S.FFmpegExePath);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_NonEmptySetsPathAndModeExe;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.SetFFmpegPath('C:\tools\ffmpeg.exe');
+    Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode));
+    Assert.AreEqual('C:\tools\ffmpeg.exe', S.FFmpegExePath);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_PromotesFromAutoOnNonEmpty;
+var
+  S: TPluginSettings;
+begin
+  {Starting in fmAuto, setting an explicit path must promote mode.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FFmpegMode := fmAuto;
+    S.FFmpegExePath := '';
+    S.SetFFmpegPath('C:\tools\ffmpeg.exe');
+    Assert.AreEqual(Ord(fmExe), Ord(S.FFmpegMode), 'Must promote to fmExe');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSetFFmpegPath_DemotesFromExeOnEmpty;
+var
+  S: TPluginSettings;
+begin
+  {Starting in fmExe with a path, setting empty must demote both.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FFmpegMode := fmExe;
+    S.FFmpegExePath := 'C:\tools\ffmpeg.exe';
+    S.SetFFmpegPath('');
+    Assert.AreEqual(Ord(fmAuto), Ord(S.FFmpegMode), 'Must demote to fmAuto');
+    Assert.AreEqual('', S.FFmpegExePath, 'Must clear path');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestViewModeRoundTrip;
+var
+  S: TPluginSettings;
+
+  procedure Check(AMode: TViewMode; const ALabel: string);
+  begin
+    S.ViewMode := AMode;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(AMode), Ord(S.ViewMode), ALabel);
+  end;
+
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Check(vmGrid, 'Grid');
+    Check(vmScroll, 'Scroll');
+    Check(vmSmartGrid, 'SmartGrid');
+    Check(vmFilmstrip, 'Filmstrip');
+    Check(vmSingle, 'Single');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestZoomModeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.ZoomMode := zmFitWindow;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S.ZoomMode));
+
+    S.ZoomMode := zmFitIfLarger;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S.ZoomMode));
+
+    S.ZoomMode := zmActual;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(zmActual), Ord(S.ZoomMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveFormatRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.SaveFormat := sfPNG;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(sfPNG), Ord(S.SaveFormat));
+
+    S.SaveFormat := sfJPEG;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Ord(sfJPEG), Ord(S.SaveFormat));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestColorRoundTrip;
+var
+  S: TPluginSettings;
+
+  procedure CheckColor(AColor: TColor; const ALabel: string);
+  begin
+    S.Background := AColor;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(Integer(AColor), Integer(S.Background), ALabel);
+  end;
+
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    CheckColor(TColor($001E1E1E), 'Near-black (#1E1E1E)');
+    CheckColor(TColor($00000000), 'Black (#000000)');
+    CheckColor(TColor($00FFFFFF), 'White (#FFFFFF)');
+    CheckColor(TColor($00FF0000), 'Pure red (#0000FF in HTML, stored as $00FF0000)');
+    CheckColor(TColor($000000FF), 'Pure blue (#FF0000 in HTML, stored as $000000FF)');
+    CheckColor(TColor($00F7C34F), 'Arbitrary color');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBoundaryValues;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    { Test minimum N }
+    S.FramesCount := 1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(1, S.FramesCount);
+
+    { Test maximum N }
+    S.FramesCount := 99;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(99, S.FramesCount);
+
+    { Test JPEG quality boundaries }
+    S.JpegQuality := 1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(1, S.JpegQuality);
+
+    S.JpegQuality := 100;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(100, S.JpegQuality);
+
+    { Test PNG compression boundaries }
+    S.PngCompression := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(0, S.PngCompression);
+
+    S.PngCompression := 9;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(9, S.PngCompression);
+
+    { Test SkipEdges boundaries }
+    S.SkipEdgesPercent := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(0, S.SkipEdgesPercent);
+
+    S.SkipEdgesPercent := 49;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(49, S.SkipEdgesPercent);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClampOutOfRange;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 0);
+    Ini.WriteInteger('extraction', 'SkipEdges', 50);
+    Ini.WriteInteger('extraction', 'MaxWorkers', 100);
+    Ini.WriteInteger('save', 'JpegQuality', 0);
+    Ini.WriteInteger('save', 'PngCompression', 10);
+    Ini.WriteInteger('cache', 'MaxSizeMB', 99999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(1, S.FramesCount, 'N below 1 clamped to 1');
+    Assert.AreEqual(49, S.SkipEdgesPercent, 'SkipEdges above 49 clamped to 49');
+    Assert.AreEqual(16, S.MaxWorkers, 'MaxWorkers above 16 clamped to 16');
+    Assert.AreEqual(1, S.JpegQuality, 'Quality below 1 clamped to 1');
+    Assert.AreEqual(9, S.PngCompression, 'Compression above 9 clamped to 9');
+    Assert.AreEqual(10000, S.CacheMaxSizeMB, 'Cache size above 10000 clamped to 10000');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFrameSideInvertedRangeNormalised;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  {Cross-validation: a hand-edited INI (or a dialog that allowed it) with
+   MinFrameSide > MaxFrameSide must not be loaded as-is. EnsureRange clamps
+   each value independently, so without cross-checking, the downstream
+   CalcExtractionMaxSide receives inverted bounds and silently locks
+   extraction to the larger side regardless of viewport.}
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'MinFrameSide', 2000);
+    Ini.WriteInteger('extraction', 'MaxFrameSide', 100);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.MinFrameSide <= S.MaxFrameSide,
+      Format('Inverted range must be normalised, got Min=%d Max=%d',
+        [S.MinFrameSide, S.MaxFrameSide]));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestValidateSwapsMinMaxFrameSize;
+var
+  S: TPluginSettings;
+begin
+  {Property setters write fields directly with no clamping (documented
+   contract); a programmatic mutator can leave Min > Max in memory.
+   Validate is the central normalisation point — assert it pulls Min
+   down to Max so downstream CalcExtractionMaxSide receives valid
+   bounds. Without Validate, the per-setter-writes contract would
+   leak inverted bounds into the render pipeline.}
+  S := TPluginSettings.CreateDefaults;
+  try
+    S.MaxFrameSide := 800;
+    S.MinFrameSide := 2000;
+    Assert.IsTrue(S.MinFrameSide > S.MaxFrameSide,
+      'Sanity: setters write directly without clamping (per the property contract)');
+    S.Validate;
+    Assert.AreEqual<Integer>(800, S.MinFrameSide,
+      'Validate must pull Min down to Max when the two are inverted');
+    Assert.AreEqual<Integer>(800, S.MaxFrameSide,
+      'Validate must leave Max untouched (it is the user''s upper bound)');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestValidateIsIdempotent;
+var
+  S: TPluginSettings;
+  Min1, Max1, Min2, Max2: Integer;
+begin
+  {Validate is called from Load, Save, and ControlsToSettings — possibly
+   multiple times across a single user gesture. Each call must be a
+   no-op after the first one settles the state; otherwise Validate
+   itself becomes a source of drift.}
+  S := TPluginSettings.CreateDefaults;
+  try
+    S.MaxFrameSide := 1500;
+    S.MinFrameSide := 3000;
+    S.Validate;
+    Min1 := S.MinFrameSide;
+    Max1 := S.MaxFrameSide;
+    S.Validate;
+    Min2 := S.MinFrameSide;
+    Max2 := S.MaxFrameSide;
+    Assert.AreEqual<Integer>(Min1, Min2, 'Second Validate must not change MinFrameSide');
+    Assert.AreEqual<Integer>(Max1, Max2, 'Second Validate must not change MaxFrameSide');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestEmptyExtensionListFallback;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('extensions', 'List', '   ');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_EXTENSION_LIST, S.ExtensionList,
+      'Whitespace-only extension list should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestMissingIniFileUsesDefaults;
+var
+  S: TPluginSettings;
+begin
+  { Point to a path that definitely does not exist }
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ZoomMode));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestResetDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FramesCount := 42;
+    S.ViewMode := vmScroll;
+    S.JpegQuality := 10;
+
+    S.ResetDefaults;
+
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount);
+    Assert.AreEqual(Ord(DEF_VIEW_MODE), Ord(S.ViewMode));
+    Assert.AreEqual(DEF_JPEG_QUALITY, S.JpegQuality);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomIndependence;
+var
+  S: TPluginSettings;
+begin
+  { Setting zoom for one view mode must not affect another }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.ModeZoom[vmScroll] := zmActual;
+    S.ModeZoom[vmFilmstrip] := zmFitIfLarger;
+    S.ModeZoom[vmSingle] := zmFitWindow;
+
+    Assert.AreEqual(Ord(zmActual), Ord(S.ModeZoom[vmScroll]), 'Scroll');
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S.ModeZoom[vmFilmstrip]), 'Filmstrip');
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S.ModeZoom[vmSingle]), 'Single');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  { Each mode gets a distinct zoom; verify all survive save/load }
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.ModeZoom[vmSmartGrid] := zmFitWindow;
+    S1.ModeZoom[vmGrid] := zmFitWindow;
+    S1.ModeZoom[vmScroll] := zmActual;
+    S1.ModeZoom[vmFilmstrip] := zmFitIfLarger;
+    S1.ModeZoom[vmSingle] := zmActual;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S2.ModeZoom[vmSmartGrid]), 'SmartGrid');
+    Assert.AreEqual(Ord(zmFitWindow), Ord(S2.ModeZoom[vmGrid]), 'Grid');
+    Assert.AreEqual(Ord(zmActual), Ord(S2.ModeZoom[vmScroll]), 'Scroll');
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S2.ModeZoom[vmFilmstrip]), 'Filmstrip');
+    Assert.AreEqual(Ord(zmActual), Ord(S2.ModeZoom[vmSingle]), 'Single');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomDefaultsAllModes;
+var
+  S: TPluginSettings;
+  VM: TViewMode;
+begin
+  { After Load with missing INI, every mode should have default zoom }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    for VM := Low(TViewMode) to High(TViewMode) do
+      Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ModeZoom[VM]),
+        'Mode ' + IntToStr(Ord(VM)) + ' should default to DEF_ZOOM_MODE');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPerModeZoomOldIniBackwardCompat;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Old INI files have no per-mode zoom sections; all modes should get defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'Mode', 'scroll');
+    { No [view.scroll], [view.filmstrip] etc. sections }
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(vmScroll), Ord(S.ViewMode), 'ViewMode should load');
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ModeZoom[vmScroll]),
+      'Missing per-mode section should fall back to default');
+    Assert.AreEqual(Ord(DEF_ZOOM_MODE), Ord(S.ModeZoom[vmFilmstrip]),
+      'Missing per-mode section should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestActiveZoomDelegatesToViewMode;
+var
+  S: TPluginSettings;
+begin
+  { ZoomMode property should read/write through current ViewMode }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.ViewMode := vmScroll;
+    S.ZoomMode := zmActual;
+    Assert.AreEqual(Ord(zmActual), Ord(S.ModeZoom[vmScroll]),
+      'Writing ZoomMode should update ModeZoom for current ViewMode');
+
+    S.ViewMode := vmFilmstrip;
+    S.ZoomMode := zmFitIfLarger;
+    { Scroll zoom should be unchanged }
+    Assert.AreEqual(Ord(zmActual), Ord(S.ModeZoom[vmScroll]),
+      'Changing mode and zoom should not affect other modes');
+    Assert.AreEqual(Ord(zmFitIfLarger), Ord(S.ModeZoom[vmFilmstrip]),
+      'Filmstrip should have its own zoom');
+
+    { Reading ZoomMode returns zoom for current ViewMode }
+    S.ViewMode := vmScroll;
+    Assert.AreEqual(Ord(zmActual), Ord(S.ZoomMode),
+      'Reading ZoomMode should return ModeZoom for current ViewMode');
+  finally
+    S.Free;
+  end;
+end;
+
+
+
+procedure TTestPluginSettings.TestSaveOverwritesPreviousValues;
+var
+  S: TPluginSettings;
+begin
+  { Save twice with different values; second values should persist }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.FramesCount := 10;
+    S.ViewMode := vmGrid;
+    S.Save;
+
+    S.FramesCount := 20;
+    S.ViewMode := vmFilmstrip;
+    S.Save;
+  finally
+    S.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(20, S.FramesCount, 'Second save should overwrite first');
+    Assert.AreEqual(Ord(vmFilmstrip), Ord(S.ViewMode),
+      'Second save should overwrite first');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestMaxWorkersBoundaryValues;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    { Zero = one per frame mode }
+    S.MaxWorkers := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(0, S.MaxWorkers, 'Zero (one per frame) should round-trip');
+
+    { Minimum fixed boundary }
+    S.MaxWorkers := 1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(1, S.MaxWorkers, 'Min boundary (1) should round-trip');
+
+    { Maximum boundary }
+    S.MaxWorkers := 16;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(16, S.MaxWorkers, 'Max boundary (16) should round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestPartialIniPreservesDefaults;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { INI with only [view] section; other sections should get defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'Mode', 'filmstrip');
+    Ini.WriteBool('view', 'ShowTimecode', False);
+    { No [ffmpeg], [extraction], [save], [cache] sections }
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    { Explicit values should load }
+    Assert.AreEqual(Ord(vmFilmstrip), Ord(S.ViewMode), 'ViewMode should load');
+    Assert.IsFalse(S.ShowTimecode, 'ShowTimecode should load');
+    { Missing sections should use defaults }
+    Assert.AreEqual(Ord(DEF_FFMPEG_MODE), Ord(S.FFmpegMode), 'Missing ffmpeg section');
+    Assert.AreEqual(DEF_FRAMES_COUNT, S.FramesCount, 'Missing extraction section');
+    Assert.AreEqual(Ord(DEF_SAVE_FORMAT), Ord(S.SaveFormat), 'Missing save section');
+    Assert.AreEqual(DEF_CACHE_ENABLED, S.CacheEnabled, 'Missing cache section');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestDefaultCacheFolderNonEmpty;
+var
+  Path: string;
+begin
+  Path := DefaultCacheFolder;
+  Assert.IsNotEmpty(Path, 'DefaultCacheFolder should return a non-empty path');
+  Assert.IsTrue(Path.EndsWith('cache'), 'DefaultCacheFolder should end with "cache"');
+  Assert.IsTrue(Path.Contains('Glimpse'), 'DefaultCacheFolder should contain "Glimpse"');
+end;
+
+procedure TTestPluginSettings.TestEffectiveCacheFolderReturnsConfigured;
+begin
+  Assert.AreEqual('C:\MyCache', EffectiveCacheFolder('C:\MyCache'), 'Should return configured path when non-empty');
+end;
+
+procedure TTestPluginSettings.TestEffectiveCacheFolderReturnsDefaultWhenEmpty;
+begin
+  Assert.AreEqual(DefaultCacheFolder, EffectiveCacheFolder(''), 'Should return DefaultCacheFolder when empty');
+end;
+
+procedure TTestPluginSettings.TestTimecodeBackColorAlphaRoundTrip;
+var
+  S1, S2: TPluginSettings;
+
+  procedure CheckRoundTrip(AColor: TColor; AAlpha: Byte; const ALabel: string);
+  begin
+    S1.TimecodeBackColor := AColor;
+    S1.TimecodeBackAlpha := AAlpha;
+    S1.Save;
+    S2.Load;
+    Assert.AreEqual(Integer(AColor), Integer(S2.TimecodeBackColor), ALabel + ' color');
+    Assert.AreEqual(Integer(AAlpha), Integer(S2.TimecodeBackAlpha), ALabel + ' alpha');
+  end;
+
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    CheckRoundTrip(TColor($002D2D2D), 180, 'Default-like');
+    CheckRoundTrip(TColor($00000000), 0, 'Black fully transparent');
+    CheckRoundTrip(TColor($00FFFFFF), 255, 'White fully opaque');
+    CheckRoundTrip(TColor($00FF0000), 128, 'Red half-transparent');
+    CheckRoundTrip(TColor($000000FF), 1, 'Blue near-transparent');
+  finally
+    S2.Free;
+    S1.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimecodeBackColorAlphaMalformedFallback;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Write various malformed RGBA values; all should fall back to defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimecodeBackground', 'not_a_color');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor),
+      'Malformed string should fall back to default color');
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
+      'Malformed string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimecodeBackColorAlphaEdgeCases;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { 7-char hex (no alpha component) should fall back to defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimecodeBackground', '#FF8040');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor),
+      '7-char hex (missing alpha) should fall back to default color');
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
+      '7-char hex (missing alpha) should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+
+  { Empty string should fall back to defaults }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimecodeBackground', '');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TC_BACK_COLOR), Integer(S.TimecodeBackColor),
+      'Empty string should fall back to default color');
+    Assert.AreEqual(Integer(DEF_TC_BACK_ALPHA), Integer(S.TimecodeBackAlpha),
+      'Empty string should fall back to default alpha');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
+      'Fresh settings should carry the text alpha default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.TimestampTextAlpha := 64;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(64, Integer(S2.TimestampTextAlpha),
+      'Text alpha should survive save/load round trip');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampTextAlpha', 999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(MAX_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
+      'Out-of-range high value should clamp to MAX_TIMESTAMP_TEXT_ALPHA');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextAlphaClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampTextAlpha', -10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(MIN_TIMESTAMP_TEXT_ALPHA), Integer(S.TimestampTextAlpha),
+      'Negative value should clamp to MIN_TIMESTAMP_TEXT_ALPHA');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextColorDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_COLOR), Integer(S.TimestampTextColor),
+      'Fresh settings should carry the text color default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextColorRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  Expected: TColor;
+begin
+  Expected := TColor($00336699);
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.TimestampTextColor := Expected;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(Expected), Integer(S2.TimestampTextColor),
+      'Text color should survive save/load round trip');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampTextColorMalformedFallback;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  {An invalid hex value must leave the default in place rather than produce
+   a corrupted color; HexToColor returns the supplied default on parse failure}
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('view', 'TimestampTextColor', 'not-a-color');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Integer(DEF_TIMESTAMP_TEXT_COLOR), Integer(S.TimestampTextColor),
+      'Malformed hex should fall back to default text color');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(DEF_TIMESTAMP_FONT, S.TimestampFontName);
+    Assert.AreEqual(DEF_TIMESTAMP_FONT_SIZE, S.TimestampFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'font.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.TimestampFontName := 'Consolas';
+    S1.TimestampFontSize := 12;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual('Consolas', S2.TimestampFontName);
+    Assert.AreEqual(12, S2.TimestampFontSize);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontSizeClamped;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontclamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampFontSize', 2);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_TIMESTAMP_FONT_SIZE, S.TimestampFontSize,
+      'Font size below minimum should be clamped');
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'TimestampFontSize', 200);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_TIMESTAMP_FONT_SIZE, S.TimestampFontSize,
+      'Font size above maximum should be clamped');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampFontEmptyFallback;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'fontempty.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('view', 'TimestampFont', '   ');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_TIMESTAMP_FONT, S.TimestampFontName,
+      'Empty/whitespace font name should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(DEF_CELL_GAP, S.CellGap);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cellgap.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CellGap := 12;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(12, S2.CellGap);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapHighValuePreserved;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cellgap_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CellGap', 999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(999, S.CellGap,
+      'CellGap has no upper cap; high values must be preserved');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCellGapClampedLow;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'cellgap_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CellGap', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_CELL_GAP, S.CellGap,
+      'Negative CellGap should be clamped to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(DEF_COMBINED_BORDER, S.CombinedBorder);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CombinedBorder := 42;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(42, S2.CombinedBorder);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderHighValuePreserved;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CombinedBorder', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(9999, S.CombinedBorder,
+      'CombinedBorder has no upper cap; high values must be preserved');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedBorderClampedLow;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'border_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('view', 'CombinedBorder', -100);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_COMBINED_BORDER, S.CombinedBorder,
+      'Negative CombinedBorder should be clamped to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRandomExtractionDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_RANDOM_EXTRACTION, S.RandomExtraction,
+      'RandomExtraction defaults off (existing behaviour preserved)');
+    Assert.AreEqual(DEF_RANDOM_PERCENT, S.RandomPercent,
+      'RandomPercent defaults to mid-strength jitter');
+    Assert.AreEqual(DEF_CACHE_RANDOM_FRAMES, S.CacheRandomFrames,
+      'CacheRandomFrames defaults off ("random means random")');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRandomExtractionRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'random.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.RandomExtraction := not DEF_RANDOM_EXTRACTION;
+    S1.RandomPercent := 75;
+    S1.CacheRandomFrames := not DEF_CACHE_RANDOM_FRAMES;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_RANDOM_EXTRACTION, S2.RandomExtraction);
+    Assert.AreEqual(75, S2.RandomPercent);
+    Assert.AreEqual(not DEF_CACHE_RANDOM_FRAMES, S2.CacheRandomFrames);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRandomPercentClampedOnLoad;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Out-of-range values in the INI must be clamped on load — protects
+   against hand-edited INI files producing impossible percentages.}
+  IniPath := TPath.Combine(FTempDir, 'random_clamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_RANDOM_PERCENT, S.RandomPercent,
+      'Out-of-range high value must clamp to MAX_RANDOM_PERCENT');
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('extraction', 'RandomPercent', -50);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_RANDOM_PERCENT, S.RandomPercent,
+      'Negative value must clamp to MIN_RANDOM_PERCENT');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveAtLiveResolutionDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_SAVE_AT_LIVE_RESOLUTION, S.SaveAtLiveResolution,
+      'Default for SaveAtLiveResolution preserves native-resolution save behaviour');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSaveAtLiveResolutionRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  {Toggle to the non-default value, persist, reload, and verify the
+   non-default value survived. Catches accidental drops in Load/Save.}
+  IniPath := TPath.Combine(FTempDir, 'live_res.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.SaveAtLiveResolution := not DEF_SAVE_AT_LIVE_RESOLUTION;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_SAVE_AT_LIVE_RESOLUTION, S2.SaveAtLiveResolution);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCopyAtLiveResolutionDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_COPY_AT_LIVE_RESOLUTION, S.CopyAtLiveResolution,
+      'Default for CopyAtLiveResolution preserves pre-split native-clipboard behaviour');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCopyAtLiveResolutionRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'copy_live_res.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CopyAtLiveResolution := not DEF_COPY_AT_LIVE_RESOLUTION;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_COPY_AT_LIVE_RESOLUTION, S2.CopyAtLiveResolution);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCopyAtLiveResolutionDoesNotMirrorSave;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Migration policy: an existing INI with [save] AtLiveResolution but no
+   [copy] section must NOT seed CopyAtLiveResolution from save's value.
+   The new key gets the default; users opt in explicitly.}
+  IniPath := TPath.Combine(FTempDir, 'mirror_test.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteBool('save', 'AtLiveResolution', not DEF_COPY_AT_LIVE_RESOLUTION);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_COPY_AT_LIVE_RESOLUTION, S.CopyAtLiveResolution,
+      'CopyAtLiveResolution must use its own default when [copy] section is missing');
+    Assert.AreEqual(not DEF_COPY_AT_LIVE_RESOLUTION, S.SaveAtLiveResolution,
+      'SaveAtLiveResolution must still load from [save]');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardAsFileReferenceDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_CLIPBOARD_AS_FILE_REFERENCE, S.ClipboardAsFileReference,
+      'Off by default — legacy CF_BITMAP / CF_DIB path stays the default; users opt in for the OOM workaround');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardAsFileReferenceRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'clip_fileref.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.ClipboardAsFileReference := not DEF_CLIPBOARD_AS_FILE_REFERENCE;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_CLIPBOARD_AS_FILE_REFERENCE, S2.ClipboardAsFileReference);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardFormatsDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    {All four publish toggles default True so out-of-the-box behaviour
+     matches the historical CF_DIBV5+CF_DIB+CF_BITMAP trio plus the new
+     PNG format. Memory-constrained users opt out via the Clipboard tab.}
+    Assert.IsTrue(S.PublishAlphaAwareBitmap, 'PublishAlphaAwareBitmap default');
+    Assert.IsTrue(S.PublishFlattenedBitmap, 'PublishFlattenedBitmap default');
+    Assert.IsTrue(S.PublishBitmapHandle, 'PublishBitmapHandle default');
+    Assert.IsTrue(S.PublishCompressedPng, 'PublishCompressedPng default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestClipboardFormatsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'clip_formats.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    {Flip every toggle to the opposite of its default so a missing-key
+     fallback during Load would produce a different value than a correct
+     read does — the assertions below would then fail loudly.}
+    S1.PublishAlphaAwareBitmap := not DEF_PUBLISH_ALPHA_AWARE_BITMAP;
+    S1.PublishFlattenedBitmap := not DEF_PUBLISH_FLATTENED_BITMAP;
+    S1.PublishBitmapHandle := not DEF_PUBLISH_BITMAP_HANDLE;
+    S1.PublishCompressedPng := not DEF_PUBLISH_COMPRESSED_PNG;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_PUBLISH_ALPHA_AWARE_BITMAP, S2.PublishAlphaAwareBitmap);
+    Assert.AreEqual(not DEF_PUBLISH_FLATTENED_BITMAP, S2.PublishFlattenedBitmap);
+    Assert.AreEqual(not DEF_PUBLISH_BITMAP_HANDLE, S2.PublishBitmapHandle);
+    Assert.AreEqual(not DEF_PUBLISH_COMPRESSED_PNG, S2.PublishCompressedPng);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarTemplateDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, S.StatusBarTemplate,
+      'Default template reproduces the panel layout used before the template engine landed');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarTemplateRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+const
+  CUSTOM = '%resolution%%fps%%duration align=right%';
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_template.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarTemplate := CUSTOM;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(CUSTOM, S2.StatusBarTemplate);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarEmptyTemplateFallsBackToDefault;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Hand-edited or UI-cleared template must not produce a blank bar; the
+   Load path treats whitespace-only as "use default" so the user always
+   sees something instead of an empty status area.}
+  IniPath := TPath.Combine(FTempDir, 'sb_empty_template.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'Template', '   ');
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, S.StatusBarTemplate);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, S.StatusBarFontName);
+    Assert.AreEqual(DEF_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_font.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarFontName := 'Consolas';
+    S1.StatusBarFontSize := 11;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual('Consolas', S2.StatusBarFontName);
+    Assert.AreEqual(11, S2.StatusBarFontSize);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarEmptyFontNameFallsBackToDefault;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_empty_font.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('statusbar', 'FontName', '   ');
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, S.StatusBarFontName,
+      'Empty font name would resolve to the system default at runtime; pin to a known value instead');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontSizeClampedHigh;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_font_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'FontSize', 999);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarFontSizeClampedLow;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_font_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'FontSize', 1);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarAutoWidthLiveDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_AUTO_WIDTH_LIVE, S.StatusBarAutoWidthLive,
+      'On by default — panel widths track live content rather than worst-case sample text');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarAutoWidthLiveRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_autolive.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarAutoWidthLive := not DEF_STATUSBAR_AUTO_WIDTH_LIVE;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_STATUSBAR_AUTO_WIDTH_LIVE, S2.StatusBarAutoWidthLive);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarStretchPanelsDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_STRETCH_PANELS, S.StatusBarStretchPanels,
+      'Off by default — natural widths leave slack on the right for the progress bar to dock against');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarStretchPanelsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_stretch.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarStretchPanels := not DEF_STATUSBAR_STRETCH_PANELS;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_STATUSBAR_STRETCH_PANELS, S2.StatusBarStretchPanels);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_HEIGHT, S.StatusBarHeight,
+      '0 = auto by default; ApplyStatusBarSettings derives height from the font');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_height.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarHeight := 32;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(32, S2.StatusBarHeight);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightClampedHigh;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_height_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('statusbar', 'Height', 9999);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_STATUSBAR_HEIGHT, S.StatusBarHeight);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightApplyModeDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual<Integer>(Ord(DEF_STATUSBAR_HEIGHT_APPLY_MODE),
+      Ord(S.StatusBarHeightApplyMode),
+      'Default sbhamBoth applies the explicit height in both Lister and Quick View');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarHeightApplyModeRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'sb_height_apply.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.StatusBarHeightApplyMode := sbhamQuickView;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual<Integer>(Ord(sbhamQuickView), Ord(S2.StatusBarHeightApplyMode));
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestStatusBarMissingSectionGetsAllDefaults;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Upgrade from a pre-template INI: the file exists, has unrelated
+   sections, but no [statusbar]. All four keys must end up at their
+   declared defaults so the bar keeps its legacy look.}
+  IniPath := TPath.Combine(FTempDir, 'sb_missing.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('view', 'Mode', 'Grid');
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_STATUSBAR_TEMPLATE, S.StatusBarTemplate);
+    Assert.AreEqual(DEF_STATUSBAR_FONT_NAME, S.StatusBarFontName);
+    Assert.AreEqual(DEF_STATUSBAR_FONT_SIZE, S.StatusBarFontSize);
+    Assert.AreEqual(DEF_STATUSBAR_AUTO_WIDTH_LIVE, S.StatusBarAutoWidthLive);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_COMBINED_MAX_SIDE, S.CombinedMaxSide,
+      'Default CombinedMaxSide caps the rendered Save view / Copy view image to a clipboard-safe size');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+const
+  CustomValue = 4096;
+begin
+  IniPath := TPath.Combine(FTempDir, 'combined_max_side.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.CombinedMaxSide := CustomValue;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(CustomValue, S2.CombinedMaxSide);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideClampedHigh;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Out-of-range high values must clamp to MAX_COMBINED_MAX_SIDE so a typo
+   like "999999" cannot allocate a multi-gigapixel bitmap on save.}
+  IniPath := TPath.Combine(FTempDir, 'combined_max_side_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'CombinedMaxSide', 999999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_COMBINED_MAX_SIDE, S.CombinedMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCombinedMaxSideClampedLow;
+var
+  S: TPluginSettings;
+  IniPath: string;
+  Ini: TIniFile;
+begin
+  {Negative values clamp to 0 (the unlimited sentinel) - keep the load
+   path tolerant of malformed user edits.}
+  IniPath := TPath.Combine(FTempDir, 'combined_max_side_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'CombinedMaxSide', -100);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_COMBINED_MAX_SIDE, S.CombinedMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampCornerDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Ord(DEF_TIMESTAMP_CORNER), Ord(S.TimestampCorner));
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampCornerRoundTripAllValues;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+  Corner: TTimestampCorner;
+begin
+  {Every enum value must survive an INI round-trip; covers all four string
+   codes written by TimestampCornerToStr and parsed by StrToTimestampCorner}
+  for Corner := Low(TTimestampCorner) to High(TTimestampCorner) do
+  begin
+    IniPath := TPath.Combine(FTempDir, Format('corner_%d.ini', [Ord(Corner)]));
+    S1 := TPluginSettings.Create(IniPath);
+    try
+      S1.TimestampCorner := Corner;
+      S1.Save;
+    finally
+      S1.Free;
+    end;
+
+    S2 := TPluginSettings.Create(IniPath);
+    try
+      S2.Load;
+      Assert.AreEqual(Ord(Corner), Ord(S2.TimestampCorner),
+        Format('Corner %d did not round-trip', [Ord(Corner)]));
+    finally
+      S2.Free;
+    end;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTimestampCornerUnknownFallsBackToDefault;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  {Unknown string in INI must fall back to the default rather than throw
+   or produce an undefined enum value}
+  IniPath := TPath.Combine(FTempDir, 'corner_bad.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('view', 'TimestampCorner', 'nonsense');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(DEF_TIMESTAMP_CORNER), Ord(S.TimestampCorner),
+      'Unknown corner string should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestShowBannerDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.IsFalse(S.ShowBanner, 'ShowBanner should default to False');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestShowBannerRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'banner.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.ShowBanner := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsTrue(S2.ShowBanner, 'ShowBanner should persist as True');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBannerStyleDefaults;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    Assert.AreEqual(Integer(DEF_BANNER_BACKGROUND), Integer(S.BannerBackground),
+      'BannerBackground default');
+    Assert.AreEqual(Integer(DEF_BANNER_TEXT_COLOR), Integer(S.BannerTextColor),
+      'BannerTextColor default');
+    Assert.AreEqual(DEF_BANNER_FONT_NAME, S.BannerFontName,
+      'BannerFontName default');
+    Assert.AreEqual(DEF_BANNER_FONT_SIZE, S.BannerFontSize,
+      'BannerFontSize default');
+    Assert.AreEqual(DEF_BANNER_FONT_AUTO_SIZE, S.BannerFontAutoSize,
+      'BannerFontAutoSize default');
+    Assert.AreEqual(Ord(DEF_BANNER_POSITION), Ord(S.BannerPosition),
+      'BannerPosition default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBannerStyleRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'banner_style.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.BannerBackground := TColor($00112233);
+    S1.BannerTextColor := TColor($00AABBCC);
+    S1.BannerFontName := 'Verdana';
+    S1.BannerFontSize := 14;
+    S1.BannerFontAutoSize := False;
+    S1.BannerPosition := bpBottom;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(Integer(TColor($00112233)), Integer(S2.BannerBackground),
+      'BannerBackground round-trip');
+    Assert.AreEqual(Integer(TColor($00AABBCC)), Integer(S2.BannerTextColor),
+      'BannerTextColor round-trip');
+    Assert.AreEqual('Verdana', S2.BannerFontName, 'BannerFontName round-trip');
+    Assert.AreEqual(14, S2.BannerFontSize, 'BannerFontSize round-trip');
+    Assert.IsFalse(S2.BannerFontAutoSize, 'BannerFontAutoSize round-trip');
+    Assert.AreEqual(Ord(bpBottom), Ord(S2.BannerPosition), 'BannerPosition round-trip');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBannerPositionUnknownFallsBackToDefault;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'banner_pos_unknown.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteString('save', 'BannerPosition', 'nonsense');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(Ord(DEF_BANNER_POSITION), Ord(S.BannerPosition),
+      'Unknown banner position should fall back to default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBannerFontSizeClampedToRange;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+  IniPath: string;
+begin
+  { Values outside [MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE] must clamp
+    so that stored pathological values cannot poison layout math. }
+  IniPath := TPath.Combine(FTempDir, 'banner_size_clamp.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'BannerFontSize', 999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_BANNER_FONT_SIZE, S.BannerFontSize,
+      'Oversized font size should clamp to MAX_BANNER_FONT_SIZE');
+  finally
+    S.Free;
+  end;
+
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'BannerFontSize', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_BANNER_FONT_SIZE, S.BannerFontSize,
+      'Negative font size should clamp to MIN_BANNER_FONT_SIZE');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestCacheMaxSizeBoundaries;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { At minimum boundary (10 MB) }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(10, S.CacheMaxSizeMB, 'Min boundary 10 preserved');
+  finally
+    S.Free;
+  end;
+
+  { At maximum boundary (10000 MB) }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 10000);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(10000, S.CacheMaxSizeMB, 'Max boundary 10000 preserved');
+  finally
+    S.Free;
+  end;
+
+  { Below minimum (9) clamped to 10 }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('cache', 'MaxSizeMB', 9);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(10, S.CacheMaxSizeMB, 'Below min clamped to 10');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestTryParseHexRGBValid;
+var
+  C: TColor;
+begin
+  { Standard 6-digit hex with # prefix }
+  Assert.IsTrue(TryParseHexRGB('#FF0000', C), '#FF0000 should parse');
+  Assert.AreEqual(Integer($000000FF), Integer(C), 'Red channel');
+
+  Assert.IsTrue(TryParseHexRGB('#00FF00', C), '#00FF00 should parse');
+  Assert.AreEqual(Integer($0000FF00), Integer(C), 'Green channel');
+
+  Assert.IsTrue(TryParseHexRGB('#0000FF', C), '#0000FF should parse');
+  Assert.AreEqual(Integer($00FF0000), Integer(C), 'Blue channel');
+
+  Assert.IsTrue(TryParseHexRGB('#000000', C), '#000000 should parse');
+  Assert.AreEqual(Integer($00000000), Integer(C), 'Black');
+
+  Assert.IsTrue(TryParseHexRGB('#FFFFFF', C), '#FFFFFF should parse');
+  Assert.AreEqual(Integer($00FFFFFF), Integer(C), 'White');
+end;
+
+procedure TTestPluginSettings.TestTryParseHexRGBInvalid;
+var
+  C: TColor;
+begin
+  { Empty string }
+  Assert.IsFalse(TryParseHexRGB('', C), 'Empty string');
+  { Too short }
+  Assert.IsFalse(TryParseHexRGB('#FF00', C), 'Too short');
+  { Non-hex characters }
+  Assert.IsFalse(TryParseHexRGB('#GGHHII', C), 'Non-hex chars');
+  { Single character }
+  Assert.IsFalse(TryParseHexRGB('#', C), 'Just hash');
+end;
+
+procedure TTestPluginSettings.TestEffectiveCacheFolderExpandsEnvVars;
+var
+  Result: string;
+begin
+  Result := EffectiveCacheFolder('%TEMP%\GlimpseTest');
+  Assert.IsFalse(Result.Contains('%TEMP%'),
+    'EffectiveCacheFolder must expand environment variables');
+  Assert.IsTrue(Result.EndsWith('\GlimpseTest'),
+    'Folder name must be preserved after expansion');
+end;
+
+procedure TTestPluginSettings.TestQVSettingsDefaultsAllTrue;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    { Defaults without loading: all QV overrides should be active }
+    Assert.IsTrue(S.QVDisableNavigation);
+    Assert.IsTrue(S.QVHideToolbar);
+    Assert.IsTrue(S.QVHideStatusBar);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestQVSettingsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.QVDisableNavigation := False;
+    S1.QVHideToolbar := False;
+    S1.QVHideStatusBar := True;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.IsFalse(S2.QVDisableNavigation);
+    Assert.IsFalse(S2.QVHideToolbar);
+    Assert.IsTrue(S2.QVHideStatusBar);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestQVSettingsMissingInIniUsesDefaults;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Write an INI with no [quickview] section }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_QV_DISABLE_NAV, S.QVDisableNavigation);
+    Assert.AreEqual(DEF_QV_HIDE_TOOLBAR, S.QVHideToolbar);
+    Assert.AreEqual(DEF_QV_HIDE_STATUSBAR, S.QVHideStatusBar);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailSettingsDefaults;
+var
+  S: TPluginSettings;
+begin
+  { Fresh instance must match the DEF_* constants — no Load needed }
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    Assert.AreEqual(DEF_THUMBNAILS_ENABLED, S.ThumbnailsEnabled);
+    Assert.IsTrue(S.ThumbnailMode = DEF_THUMBNAIL_MODE,
+      'ThumbnailMode default mismatch');
+    Assert.AreEqual(DEF_THUMBNAIL_POSITION, S.ThumbnailPosition);
+    Assert.AreEqual(DEF_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailSettingsRoundTrip;
+var
+  S1, S2: TPluginSettings;
+begin
+  { Mutate every field, save, reload, verify each value survived }
+  S1 := TPluginSettings.Create(FTempIniPath);
+  try
+    S1.ThumbnailsEnabled := False;
+    S1.ThumbnailMode := tnmGrid;
+    S1.ThumbnailPosition := 25;
+    S1.ThumbnailGridFrames := 9;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(FTempIniPath);
+  try
+    S2.Load;
+    Assert.IsFalse(S2.ThumbnailsEnabled);
+    Assert.IsTrue(S2.ThumbnailMode = tnmGrid, 'Mode did not round-trip');
+    Assert.AreEqual(25, S2.ThumbnailPosition);
+    Assert.AreEqual(9, S2.ThumbnailGridFrames);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailSettingsMissingInIniUsesDefaults;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { An INI without a [thumbnails] section must yield default values for
+    every thumbnail field — no exceptions, no zeroed numerics. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 10);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(DEF_THUMBNAILS_ENABLED, S.ThumbnailsEnabled);
+    Assert.IsTrue(S.ThumbnailMode = DEF_THUMBNAIL_MODE,
+      'Default ThumbnailMode mismatch on missing section');
+    Assert.AreEqual(DEF_THUMBNAIL_POSITION, S.ThumbnailPosition);
+    Assert.AreEqual(DEF_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailPositionClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { A hand-edited INI could supply nonsense like 9999. Load must clamp,
+    not propagate the bad value into the renderer. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'Position', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_THUMBNAIL_POSITION, S.ThumbnailPosition);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailPositionClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'Position', -50);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_THUMBNAIL_POSITION, S.ThumbnailPosition);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailGridFramesClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { Ridiculous frame counts would create absurd extraction work; clamp
+    to MAX so we can never spend minutes on a single thumbnail. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'GridFrames', 9999);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailGridFramesClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { GridFrames < MIN would produce a degenerate grid (1 cell or empty).
+    Clamp upward to keep grid mode meaningful. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('thumbnails', 'GridFrames', 0);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_THUMBNAIL_GRID_FRAMES, S.ThumbnailGridFrames);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestThumbnailModeUnknownStringFallsBackToSingle;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  { An unknown / corrupted Mode value must fall back to single (the
+    safest mode), not raise. Mirrors the StrToThumbnailMode contract. }
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteString('thumbnails', 'Mode', 'banana');
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.IsTrue(S.ThumbnailMode = tnmSingle,
+      'Unknown Mode string should fall back to tnmSingle');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestAutoRefreshOnViewportChangeDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'no_such.ini'));
+  try
+    Assert.IsTrue(S.AutoRefreshOnViewportChange,
+      'Auto-refresh ships enabled so viewport changes transparently upscale');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestAutoRefreshOnViewportChangeRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'viewport_refresh.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.AutoRefreshOnViewportChange := False;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.IsFalse(S2.AutoRefreshOnViewportChange,
+      'Disabled state should round-trip through INI');
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFramesCountClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  {Out-of-range INI values must clamp to MAX_FRAMES_COUNT rather than
+   round-trip verbatim — otherwise a hand-edited file with FramesCount=1000
+   would starve extraction and thrash the cache.}
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 1000);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_FRAMES_COUNT, S.FramesCount,
+      'FramesCount above MAX_FRAMES_COUNT must clamp down');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestFramesCountClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'FramesCount', 0);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_FRAMES_COUNT, S.FramesCount,
+      'FramesCount=0 must clamp up to MIN_FRAMES_COUNT');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSkipEdgesPercentClampedHigh;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    {SkipEdges >= 50% is non-sensical (leaves no room for frames) — clamp
+     to MAX_SKIP_EDGES so the planner still has a usable window.}
+    Ini.WriteInteger('extraction', 'SkipEdges', 80);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_SKIP_EDGES, S.SkipEdgesPercent,
+      'SkipEdges above MAX_SKIP_EDGES must clamp down');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestSkipEdgesPercentClampedLow;
+var
+  Ini: TIniFile;
+  S: TPluginSettings;
+begin
+  Ini := TIniFile.Create(FTempIniPath);
+  try
+    Ini.WriteInteger('extraction', 'SkipEdges', -5);
+  finally
+    Ini.Free;
+  end;
+
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_SKIP_EDGES, S.SkipEdgesPercent,
+      'Negative SkipEdges must clamp up to MIN_SKIP_EDGES');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestMaxThreadsRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  {MaxThreads uses a tri-state convention: -1 = no limit, 0 = auto (CPU count),
+   positive = explicit cap. Each must round-trip so the auto/no-limit UI
+   doesn't silently flip to explicit.}
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.MaxThreads := -1;
+    S.Save;
+    S.Load;
+    Assert.AreEqual<Integer>(-1, S.MaxThreads, '-1 (no limit) must round-trip');
+
+    S.MaxThreads := 0;
+    S.Save;
+    S.Load;
+    Assert.AreEqual<Integer>(0, S.MaxThreads, '0 (auto) must round-trip');
+
+    S.MaxThreads := 8;
+    S.Save;
+    S.Load;
+    Assert.AreEqual<Integer>(8, S.MaxThreads, 'Explicit value must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestUseBmpPipeRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.UseBmpPipe := not DEF_USE_BMP_PIPE;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_USE_BMP_PIPE, S.UseBmpPipe,
+      'Flipped UseBmpPipe must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestHwAccelRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.HwAccel := not DEF_HW_ACCEL;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_HW_ACCEL, S.HwAccel,
+      'Flipped HwAccel must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestUseKeyframesRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.UseKeyframes := not DEF_USE_KEYFRAMES;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_USE_KEYFRAMES, S.UseKeyframes,
+      'Flipped UseKeyframes must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRespectAnamorphicDefault;
+var
+  S: TPluginSettings;
+begin
+  {Default ON: most users expect saved frames to match player display.}
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'fresh.ini'));
+  try
+    Assert.AreEqual(DEF_RESPECT_ANAMORPHIC, S.RespectAnamorphic);
+    Assert.IsTrue(S.RespectAnamorphic, 'Default must be ON');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestRespectAnamorphicRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.RespectAnamorphic := not DEF_RESPECT_ANAMORPHIC;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(not DEF_RESPECT_ANAMORPHIC, S.RespectAnamorphic,
+      'Flipped RespectAnamorphic must round-trip');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaDefault;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'fresh_alpha.ini'));
+  try
+    Assert.AreEqual(DEF_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha));
+    Assert.AreEqual(255, Integer(S.BackgroundAlpha),
+      'Default must be 255 (opaque) so existing users see no behaviour change');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaRoundTrip;
+var
+  S: TPluginSettings;
+begin
+  S := TPluginSettings.Create(FTempIniPath);
+  try
+    S.BackgroundAlpha := 128;
+    S.Save;
+    S.Load;
+    Assert.AreEqual(128, Integer(S.BackgroundAlpha),
+      'BackgroundAlpha must round-trip through INI');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaClampedHigh;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'alpha_high.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'BackgroundAlpha', 9999);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MAX_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha),
+      'Out-of-range high value must clamp to 255');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestBackgroundAlphaClampedLow;
+var
+  S: TPluginSettings;
+  Ini: TIniFile;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'alpha_low.ini');
+  Ini := TIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('save', 'BackgroundAlpha', -42);
+  finally
+    Ini.Free;
+  end;
+  S := TPluginSettings.Create(IniPath);
+  try
+    S.Load;
+    Assert.AreEqual(MIN_BACKGROUND_ALPHA, Integer(S.BackgroundAlpha),
+      'Negative value must clamp to 0');
+  finally
+    S.Free;
+  end;
+end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestPluginSettings);
+
+end.

@@ -36,7 +36,7 @@
         <SanitizedProjectName>Glimpse</SanitizedProjectName>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_DcuOutput>.\$(Platform)\$(Config)\dcu</DCC_DcuOutput>
-        <DCC_UnitSearchPath>..\src;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_UnitSearchPath>Core;Forms;Presenters;Entries;Services;Settings;Util;..\src;..\src\domain;..\src\domain\Frame;..\src\domain\Render;..\src\domain\Settings;..\src\domain\StatusBar;..\src\domain\Hotkeys;..\src\domain\Clipboard;..\src\domain\Video;..\src\domain\Cache;..\src\application;..\src\infrastructure;..\src\shared;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <DCC_AssertionsAtRuntime>false</DCC_AssertionsAtRuntime>
@@ -52,66 +52,66 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="..\src\uTypes.pas"/>
-        <DCCReference Include="..\src\uStatusBarLayout.pas"/>
-        <DCCReference Include="uWcxAPI.pas"/>
-        <DCCReference Include="uWcxExports.pas"/>
-        <DCCReference Include="uWcxSettings.pas"/>
-        <DCCReference Include="uWcxSettingsDlg.pas">
+        <DCCReference Include="..\src\domain\Types.pas"/>
+        <DCCReference Include="..\src\domain\StatusBar\StatusBarLayout.pas"/>
+        <DCCReference Include="Core\WcxAPI.pas"/>
+        <DCCReference Include="Core\WcxExports.pas"/>
+        <DCCReference Include="Settings\WcxSettings.pas"/>
+        <DCCReference Include="Forms\WcxSettingsDlg.pas">
             <Form>WcxSettingsForm</Form>
         </DCCReference>
-        <DCCReference Include="..\src\uFrameOffsets.pas"/>
-        <DCCReference Include="..\src\uFFmpegLocator.pas"/>
-        <DCCReference Include="..\src\uFFmpegExe.pas"/>
-        <DCCReference Include="..\src\shared\uDebugLog.pas"/>
-        <DCCReference Include="..\src\infrastructure\uCacheStorage.pas"/>
-        <DCCReference Include="..\src\infrastructure\uLruEvictionPolicy.pas"/>
-        <DCCReference Include="..\src\uCache.pas"/>
-        <DCCReference Include="..\src\uCacheKey.pas"/>
-        <DCCReference Include="..\src\uProbeCache.pas"/>
-        <DCCReference Include="..\src\uFrameFileNames.pas"/>
-        <DCCReference Include="..\src\uBitmapSaver.pas"/>
-        <DCCReference Include="..\src\uExtractionPlanner.pas"/>
-        <DCCReference Include="..\src\uBitmapResize.pas"/>
-        <DCCReference Include="..\src\uPathExpand.pas"/>
-        <DCCReference Include="..\src\uColorConv.pas"/>
-        <DCCReference Include="..\src\uRunProcess.pas"/>
-        <DCCReference Include="..\src\uDefaults.pas"/>
-        <DCCReference Include="..\src\uFrameExtractor.pas"/>
-        <DCCReference Include="..\src\uBannerInfo.pas"/>
-        <DCCReference Include="..\src\uBannerPainter.pas"/>
-        <DCCReference Include="..\src\uCombinedGrid.pas"/>
-        <DCCReference Include="..\src\uTimecodeOverlay.pas"/>
-        <DCCReference Include="..\src\uRenderDefaults.pas"/>
-        <DCCReference Include="..\src\shared\uPluginMessages.pas"/>
-        <DCCReference Include="..\src\uVideoProbing.pas"/>
-        <DCCReference Include="uWcxFrameCache.pas"/>
-        <DCCReference Include="uPresetExtractReporter.pas"/>
-        <DCCReference Include="uWcxProgressCallback.pas"/>
-        <DCCReference Include="..\src\uVideoInfo.pas"/>
-        <DCCReference Include="..\src\infrastructure\uLineSplitter.pas"/>
-        <DCCReference Include="..\src\infrastructure\uFFmpegProbeParser.pas"/>
-        <DCCReference Include="..\src\infrastructure\uFFmpegCmdLine.pas"/>
-        <DCCReference Include="..\src\infrastructure\uIniEncoding.pas"/>
-        <DCCReference Include="..\src\infrastructure\uIniDocument.pas"/>
-        <DCCReference Include="..\src\uSettingsInterfaces.pas"/>
-        <DCCReference Include="..\src\uSettings.pas"/>
-        <DCCReference Include="..\src\uHotkeys.pas"/>
-        <DCCReference Include="..\src\uHotkeysCodec.pas"/>
-        <DCCReference Include="..\src\uHotkeysDisplay.pas"/>
-        <DCCReference Include="..\src\uSettingsDlgLogic.pas"/>
-        <DCCReference Include="..\src\uSettingsDlgUI.pas"/>
-        <DCCReference Include="uWcxEntryExtractors.pas"/>
-        <DCCReference Include="uWcxArchiveHandle.pas"/>
-        <DCCReference Include="uWcxErrorMapping.pas"/>
-        <DCCReference Include="uWcxExtractionController.pas"/>
-        <DCCReference Include="uWcxArchiveCoordinator.pas"/>
-        <DCCReference Include="uSettingsSaveOrchestrator.pas"/>
-        <DCCReference Include="uWcxSettingsRepository.pas"/>
-        <DCCReference Include="uWcxPresetsRepository.pas"/>
-        <DCCReference Include="uWcxSettingsControlsBundles.pas"/>
-        <DCCReference Include="..\src\uSettingsDialogHelpers.pas"/>
-        <DCCReference Include="uWcxSettingsPresenters.pas"/>
+        <DCCReference Include="..\src\domain\Frame\FrameOffsets.pas"/>
+        <DCCReference Include="..\src\domain\Frame\FFmpegLocator.pas"/>
+        <DCCReference Include="..\src\infrastructure\FFmpegExe.pas"/>
+        <DCCReference Include="..\src\shared\Logging.pas"/>
+        <DCCReference Include="..\src\infrastructure\CacheStorage.pas"/>
+        <DCCReference Include="..\src\infrastructure\LruEvictionPolicy.pas"/>
+        <DCCReference Include="..\src\domain\Cache\Cache.pas"/>
+        <DCCReference Include="..\src\domain\Cache\CacheKey.pas"/>
+        <DCCReference Include="..\src\domain\Cache\ProbeCache.pas"/>
+        <DCCReference Include="..\src\domain\Frame\FrameFileNames.pas"/>
+        <DCCReference Include="..\src\domain\Render\BitmapSaver.pas"/>
+        <DCCReference Include="..\src\domain\Frame\ExtractionPlanner.pas"/>
+        <DCCReference Include="..\src\domain\Render\BitmapResize.pas"/>
+        <DCCReference Include="..\src\shared\PathExpand.pas"/>
+        <DCCReference Include="..\src\domain\Render\ColorConv.pas"/>
+        <DCCReference Include="..\src\infrastructure\ProcessRunner.pas"/>
+        <DCCReference Include="..\src\domain\Settings\Defaults.pas"/>
+        <DCCReference Include="..\src\domain\Frame\FrameExtractor.pas"/>
+        <DCCReference Include="..\src\domain\Render\BannerInfo.pas"/>
+        <DCCReference Include="..\src\domain\Render\BannerPainter.pas"/>
+        <DCCReference Include="..\src\domain\Render\CombinedGrid.pas"/>
+        <DCCReference Include="..\src\domain\Render\TimecodeOverlay.pas"/>
+        <DCCReference Include="..\src\domain\Render\RenderDefaults.pas"/>
+        <DCCReference Include="..\src\shared\PluginMessages.pas"/>
+        <DCCReference Include="..\src\domain\Video\VideoProbing.pas"/>
+        <DCCReference Include="Services\WcxFrameCache.pas"/>
+        <DCCReference Include="Services\PresetExtractReporter.pas"/>
+        <DCCReference Include="Services\WcxProgressCallback.pas"/>
+        <DCCReference Include="..\src\domain\Video\VideoInfo.pas"/>
+        <DCCReference Include="..\src\infrastructure\LineSplitter.pas"/>
+        <DCCReference Include="..\src\infrastructure\FFmpegProbeParser.pas"/>
+        <DCCReference Include="..\src\infrastructure\FFmpegCmdLine.pas"/>
+        <DCCReference Include="..\src\infrastructure\IniEncoding.pas"/>
+        <DCCReference Include="..\src\infrastructure\IniDocument.pas"/>
+        <DCCReference Include="..\src\domain\Settings\SettingsInterfaces.pas"/>
+        <DCCReference Include="..\src\domain\Settings\Settings.pas"/>
+        <DCCReference Include="..\src\domain\Hotkeys\Hotkeys.pas"/>
+        <DCCReference Include="..\src\domain\Hotkeys\HotkeysCodec.pas"/>
+        <DCCReference Include="..\src\domain\Hotkeys\HotkeysDisplay.pas"/>
+        <DCCReference Include="..\src\application\SettingsDlgLogic.pas"/>
+        <DCCReference Include="..\src\application\SettingsDlgUI.pas"/>
+        <DCCReference Include="Entries\WcxEntryExtractors.pas"/>
+        <DCCReference Include="Core\WcxArchiveHandle.pas"/>
+        <DCCReference Include="Util\WcxErrorMapping.pas"/>
+        <DCCReference Include="Services\WcxExtractionController.pas"/>
+        <DCCReference Include="Core\WcxArchiveCoordinator.pas"/>
+        <DCCReference Include="Services\SettingsSaveOrchestrator.pas"/>
+        <DCCReference Include="Settings\WcxSettingsRepository.pas"/>
+        <DCCReference Include="Entries\WcxPresetsRepository.pas"/>
+        <DCCReference Include="Presenters\WcxSettingsControlsBundles.pas"/>
+        <DCCReference Include="..\src\application\SettingsDialogHelpers.pas"/>
+        <DCCReference Include="Presenters\WcxSettingsPresenters.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
