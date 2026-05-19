@@ -184,6 +184,8 @@ uses
   TestEnableRules in 'TestEnableRules.pas',
   uSettingsControlsBundles in '..\wlx\uSettingsControlsBundles.pas',
   TestSettingsControlsBundles in 'TestSettingsControlsBundles.pas',
+  uSettingsDialogHelpers in '..\src\uSettingsDialogHelpers.pas',
+  TestSettingsDialogHelpers in 'TestSettingsDialogHelpers.pas',
   uSettingsPresenters in '..\wlx\uSettingsPresenters.pas',
   TestSettingsPresenters in 'TestSettingsPresenters.pas',
   uWcxSettingsControlsBundles in '..\wcx\uWcxSettingsControlsBundles.pas',

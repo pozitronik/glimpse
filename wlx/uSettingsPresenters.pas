@@ -185,8 +185,8 @@ implementation
 uses
   System.IOUtils,
   uTypes, uStatusBarLayout, uBitmapSaver, uDefaults,
-  uFFmpegExe, uFFmpegCmdLine, uPathExpand, uPluginMessages, uCacheMaintenance,
-  uSettingsDlgLogic, uSettingsDlgUI;
+  uPluginMessages, uCacheMaintenance,
+  uSettingsDlgLogic, uSettingsDlgUI, uSettingsDialogHelpers;
 
 {Helper: the BtnSaveFolderClick and BtnCacheFolderClick paths both
  use BrowseFolderInto. Free function in uSettingsDlgUI; presenters
@@ -229,32 +229,12 @@ begin
 end;
 
 procedure TExtractionPresenter.UpdateFFmpegInfo;
-var
-  Input, Path, Ver, Prefix, Value: string;
-  State: TFFmpegProbeState;
 begin
-  Input := FFFmpegControls.EdtFFmpegPath.Text;
-  if Input <> '' then
-    Path := ExpandEnvVars(Input)
-  else
-    Path := FResolvedFFmpegPath;
-
-  Ver := '';
-  if Path = '' then
-    State := fpsNoPath
-  else if not FileExists(Path) then
-    State := fpsFileMissing
-  else
-  begin
-    Ver := ValidateFFmpeg(Path);
-    if Ver = '' then
-      State := fpsInvalid
-    else
-      State := fpsValid;
-  end;
-
-  FFmpegInfoLabelParts(State, Path, Ver, Input = '', Prefix, Value);
-  ApplyInfoParts(FLblFFmpegInfo, FEdtFFmpegInfo, Prefix, Value);
+  {WLX fallback: a pre-resolved path threaded in at dialog open by
+   ShowSettingsDialog via SetResolvedFFmpegPath. WCX takes the same
+   helper with its own re-probe-on-demand fallback.}
+  DisplayFFmpegInfo(FFFmpegControls.EdtFFmpegPath.Text, FResolvedFFmpegPath,
+    FLblFFmpegInfo, FEdtFFmpegInfo);
 end;
 
 procedure TExtractionPresenter.UpdateRandomPercentLabel;
@@ -268,29 +248,11 @@ begin
 end;
 
 procedure TExtractionPresenter.OnFFmpegPathClick;
-var
-  Dlg: TOpenDialog;
 begin
-  Dlg := TOpenDialog.Create(nil);
-  try
-    Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files (*.*)|*.*';
-    Dlg.Title := 'Locate ffmpeg.exe';
-    if FFFmpegControls.EdtFFmpegPath.Text <> '' then
-      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(FFFmpegControls.EdtFFmpegPath.Text));
-    if Dlg.Execute and FileExists(Dlg.FileName) then
-    begin
-      if ValidateFFmpeg(Dlg.FileName) = '' then
-      begin
-        ShowPluginMessage(FParentWnd, 'The selected file is not a valid ffmpeg executable.', MB_OK or MB_ICONWARNING);
-        Exit;
-      end;
-      FFFmpegControls.EdtFFmpegPath.Text := Dlg.FileName;
-      {OnChange fires automatically and updates the info label via the
-       form's forwarder -> OnFFmpegPathChange.}
-    end;
-  finally
-    Dlg.Free;
-  end;
+  {The Edt's OnChange fires after the helper writes a successful pick;
+   that's wired to the form's EdtFFmpegPathChange handler which
+   forwards to OnFFmpegPathChange -> UpdateFFmpegInfo.}
+  BrowseForFFmpegExe(FFFmpegControls.EdtFFmpegPath, FParentWnd);
 end;
 
 procedure TExtractionPresenter.OnFFmpegPathChange;

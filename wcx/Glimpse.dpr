@@ -68,6 +68,7 @@ uses
   uWcxSettingsRepository in 'uWcxSettingsRepository.pas',
   uWcxPresetsRepository in 'uWcxPresetsRepository.pas',
   uWcxSettingsControlsBundles in 'uWcxSettingsControlsBundles.pas',
+  uSettingsDialogHelpers in '..\src\uSettingsDialogHelpers.pas',
   uWcxSettingsPresenters in 'uWcxSettingsPresenters.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas';
 

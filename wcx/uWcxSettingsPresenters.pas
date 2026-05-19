@@ -170,8 +170,8 @@ implementation
 
 uses
   uTypes, uBitmapSaver, uDefaults,
-  uFFmpegExe, uFFmpegCmdLine, uFFmpegLocator, uPathExpand, uPluginMessages,
-  uSettingsDlgLogic, uSettingsDlgUI;
+  uFFmpegLocator,
+  uSettingsDlgUI, uSettingsDialogHelpers;
 
 {TWcxExtractionPresenter}
 
@@ -210,32 +210,13 @@ begin
 end;
 
 procedure TWcxExtractionPresenter.UpdateFFmpegInfo;
-var
-  Input, Path, Ver, Prefix, Value: string;
-  State: TFFmpegProbeState;
 begin
-  Input := FFFmpegControls.EdtFFmpegPath.Text;
-  if Input <> '' then
-    Path := ExpandEnvVars(Input)
-  else
-    Path := FindFFmpegExe(FApplicationDir, '');
-
-  Ver := '';
-  if Path = '' then
-    State := fpsNoPath
-  else if not FileExists(Path) then
-    State := fpsFileMissing
-  else
-  begin
-    Ver := ValidateFFmpeg(Path);
-    if Ver = '' then
-      State := fpsInvalid
-    else
-      State := fpsValid;
-  end;
-
-  FFmpegInfoLabelParts(State, Path, Ver, Input = '', Prefix, Value);
-  ApplyInfoParts(FLblFFmpegInfo, FEdtFFmpegInfo, Prefix, Value);
+  {WCX fallback: re-probe via FindFFmpegExe on every call (vs WLX
+   which uses a pre-resolved path threaded in at dialog open). Shared
+   DisplayFFmpegInfo helper handles the state classification.}
+  DisplayFFmpegInfo(FFFmpegControls.EdtFFmpegPath.Text,
+    FindFFmpegExe(FApplicationDir, ''),
+    FLblFFmpegInfo, FEdtFFmpegInfo);
 end;
 
 procedure TWcxExtractionPresenter.UpdateRandomPercentLabel;
@@ -244,27 +225,8 @@ begin
 end;
 
 procedure TWcxExtractionPresenter.OnFFmpegPathClick;
-var
-  Dlg: TOpenDialog;
 begin
-  Dlg := TOpenDialog.Create(nil);
-  try
-    Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files (*.*)|*.*';
-    Dlg.Title := 'Locate ffmpeg.exe';
-    if FFFmpegControls.EdtFFmpegPath.Text <> '' then
-      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(FFFmpegControls.EdtFFmpegPath.Text));
-    if Dlg.Execute and FileExists(Dlg.FileName) then
-    begin
-      if ValidateFFmpeg(Dlg.FileName) = '' then
-      begin
-        ShowPluginMessage(FParentWnd, 'The selected file is not a valid ffmpeg executable.', MB_OK or MB_ICONWARNING);
-        Exit;
-      end;
-      FFFmpegControls.EdtFFmpegPath.Text := Dlg.FileName;
-    end;
-  finally
-    Dlg.Free;
-  end;
+  BrowseForFFmpegExe(FFFmpegControls.EdtFFmpegPath, FParentWnd);
 end;
 
 procedure TWcxExtractionPresenter.OnFFmpegPathChange;

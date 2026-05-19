@@ -32,6 +32,7 @@ uses
   uProbeCache in '..\src\uProbeCache.pas',
   uEnableRules in 'uEnableRules.pas',
   uSettingsControlsBundles in 'uSettingsControlsBundles.pas',
+  uSettingsDialogHelpers in '..\src\uSettingsDialogHelpers.pas',
   uSettingsPresenters in 'uSettingsPresenters.pas',
   uSettingsDlg in 'uSettingsDlg.pas',
   uCaptureShortcutDlg in 'uCaptureShortcutDlg.pas',

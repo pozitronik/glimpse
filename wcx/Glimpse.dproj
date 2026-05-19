@@ -109,6 +109,7 @@
         <DCCReference Include="uWcxSettingsRepository.pas"/>
         <DCCReference Include="uWcxPresetsRepository.pas"/>
         <DCCReference Include="uWcxSettingsControlsBundles.pas"/>
+        <DCCReference Include="..\src\uSettingsDialogHelpers.pas"/>
         <DCCReference Include="uWcxSettingsPresenters.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

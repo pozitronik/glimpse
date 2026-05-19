@@ -86,6 +86,7 @@
         <DCCReference Include="..\src\uProbeCache.pas"/>
         <DCCReference Include="uEnableRules.pas"/>
         <DCCReference Include="uSettingsControlsBundles.pas"/>
+        <DCCReference Include="..\src\uSettingsDialogHelpers.pas"/>
         <DCCReference Include="uSettingsPresenters.pas"/>
         <DCCReference Include="uSettingsDlg.pas">
             <Form>SettingsForm</Form>
