@@ -74,6 +74,8 @@
         <DCCReference Include="..\src\uFFmpegExe.pas"/>
         <DCCReference Include="uFrameView.pas"/>
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
+        <DCCReference Include="uStatusBarHostBar.pas"/>
+        <DCCReference Include="uKeyInterceptionSubclass.pas"/>
         <DCCReference Include="uPluginForm.pas"/>
         <DCCReference Include="..\src\shared\uDebugLog.pas"/>
         <DCCReference Include="..\src\infrastructure\uCacheStorage.pas"/>

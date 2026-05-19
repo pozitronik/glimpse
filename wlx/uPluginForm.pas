@@ -423,121 +423,8 @@ uses
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uBannerInfo, uTimecodeOverlay,
   uProgressModalForm,
   uPlatformDetect, uDefaults,
-  uToolbarBuilder;
-
-type
-  {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
-   0-based index of the panel under the cursor, or -1 when the cursor is
-   past the last panel.}
-  TStatusBarHintProvider = reference to function(APanelIndex: Integer): string;
-
-  {Callback the host form supplies so the status bar can ask "what kind
-   of token does the panel at APanelIndex render?" without coupling the
-   subclass to the renderer. Returns tkUnknown for unmapped indices,
-   which the cursor logic treats as "not interactive".}
-  TStatusBarPanelKindProvider = reference to function(APanelIndex: Integer): TStatusBarTokenKind;
-
-  {TStatusBar specialisation that surfaces a per-panel hint instead of a
-   single per-control Hint. Drives the hint mechanism via CMHintShow's
-   CursorRect: setting CursorRect to the panel under the cursor makes the
-   VCL re-issue CMHintShow when the cursor crosses into a different panel,
-   which in turn lets us swap HintStr without the brittle
-   "set Hint + CancelHint" dance that does not always re-pop on the same
-   control. Also intercepts WM_SETCURSOR to paint the hand cursor over
-   panels whose backing token kind is interactive (Save / Copy dim).}
-  TGlimpseStatusBar = class(TStatusBar)
-  private
-    FOnGetPanelHint: TStatusBarHintProvider;
-    FOnQueryPanelKind: TStatusBarPanelKindProvider;
-    procedure CMHintShow(var Msg: TCMHintShow); message CM_HINTSHOW;
-    procedure WMSetCursor(var Msg: TWMSetCursor); message WM_SETCURSOR;
-  public
-    property OnGetPanelHint: TStatusBarHintProvider read FOnGetPanelHint write FOnGetPanelHint;
-    property OnQueryPanelKind: TStatusBarPanelKindProvider read FOnQueryPanelKind write FOnQueryPanelKind;
-  end;
-
-{Walks AStatusBar's panels left-to-right; returns the index of the panel
- under the X coord, or -1 when AX is past the last panel. APanelLeft is
- set to the left edge of the matched panel; when -1 (past-end) it is set
- to the right edge of the last panel so callers can compose a "trailing
- dead zone" rect. Returns -1 for an empty status bar (APanelLeft=0).
- Centralises the arithmetic shared by OnStatusBarDblClick and the per-
- panel hint dispatch in TGlimpseStatusBar.CMHintShow.}
-function StatusBarPanelHitTest(AStatusBar: TStatusBar; AX: Integer; out APanelLeft: Integer): Integer;
-var
-  I: Integer;
-begin
-  Result := -1;
-  APanelLeft := 0;
-  for I := 0 to AStatusBar.Panels.Count - 1 do
-  begin
-    if AX < APanelLeft + AStatusBar.Panels[I].Width then
-      Exit(I);
-    Inc(APanelLeft, AStatusBar.Panels[I].Width);
-  end;
-end;
-
-procedure TGlimpseStatusBar.CMHintShow(var Msg: TCMHintShow);
-var
-  PanelLeft, HitIdx: Integer;
-  HintText: string;
-begin
-  if not Assigned(FOnGetPanelHint) then
-  begin
-    inherited;
-    Exit;
-  end;
-
-  HitIdx := StatusBarPanelHitTest(Self, Msg.HintInfo.CursorPos.X, PanelLeft);
-
-  HintText := FOnGetPanelHint(HitIdx);
-  if HintText = '' then
-  begin
-    {No hint for this region. Suppress the popup but still set a tight
-     CursorRect so the next cross-panel move re-queries us.}
-    Msg.Result := 1;
-  end else begin
-    Msg.HintInfo.HintStr := HintText;
-    Msg.Result := 0;
-  end;
-
-  if HitIdx >= 0 then
-    Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, PanelLeft + Panels[HitIdx].Width, Height)
-  else
-    {Past the last panel: cursor rect is the trailing dead zone, so we
-     stay quiet until the cursor enters a real panel.}
-    Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, ClientWidth, Height);
-end;
-
-procedure TGlimpseStatusBar.WMSetCursor(var Msg: TWMSetCursor);
-var
-  Pt: TPoint;
-  PanelLeft, HitIdx: Integer;
-  Kind: TStatusBarTokenKind;
-begin
-  {Paint the hand cursor over panels whose backing token is interactive.
-   Only intercept hits on the bar's client area — child controls (the
-   embedded TProgressBar) keep their default cursor. We can't rely on
-   Cursor := crHandPoint at the control level because that would apply
-   the cursor uniformly across every panel.}
-  if (Msg.HitTest = HTCLIENT) and Assigned(FOnQueryPanelKind) then
-  begin
-    GetCursorPos(Pt);
-    Pt := ScreenToClient(Pt);
-    HitIdx := StatusBarPanelHitTest(Self, Pt.X, PanelLeft);
-    if HitIdx >= 0 then
-    begin
-      Kind := FOnQueryPanelKind(HitIdx);
-      if Kind in [tkSaveDimension, tkCopyDimension] then
-      begin
-        Winapi.Windows.SetCursor(LoadCursor(0, IDC_HAND));
-        Msg.Result := 1;
-        Exit;
-      end;
-    end;
-  end;
-  inherited;
-end;
+  uToolbarBuilder,
+  uStatusBarHostBar, uKeyInterceptionSubclass;
 
 {Embedded toolbar glyph resources; consumed by TToolbarGlyphLibrary. The
  .res is generated from icons.rc by cgrc as a pre-build step in build.bat
@@ -553,119 +440,6 @@ var
   {Subsystem logger; closure captures the 'Form' tag once at unit
    initialization.}
   FormLog: TProc<string>;
-
-{Closes the active menu on the calling thread}
-function EndMenu: BOOL; stdcall; external user32 name 'EndMenu';
-
-var
-  {Thread-local keyboard hook handle, active only during hamburger popup}
-  GMenuHook: HHOOK;
-
-  {Intercepts VK_OEM_3 (tilde) during popup menu's modal loop to close it}
-function MenuKeyboardProc(nCode: Integer; wParam: wParam; lParam: lParam): LRESULT; stdcall;
-begin
-  if (nCode = HC_ACTION) and (wParam = VK_OEM_3) and (lParam and (1 shl 31) = 0) then
-  begin
-    EndMenu;
-    Result := 1;
-  end
-  else
-    Result := CallNextHookEx(GMenuHook, nCode, wParam, lParam);
-end;
-
-{comctl32 v6 subclass API - lets us monitor the parent window's WM_SIZE}
-function SetWindowSubclass(HWND: HWND; pfnSubclass: Pointer; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): BOOL; stdcall; external 'comctl32.dll' name 'SetWindowSubclass';
-function RemoveWindowSubclass(HWND: HWND; pfnSubclass: Pointer; uIdSubclass: UINT_PTR): BOOL; stdcall; external 'comctl32.dll' name 'RemoveWindowSubclass';
-function DefSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam): LRESULT; stdcall; external 'comctl32.dll' name 'DefSubclassProc';
-
-{Subclass callback on TC's Lister parent window.
- TC may not resize the plugin child for all resize directions;
- this ensures the plugin always fills the parent's client rect.}
-function ParentSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): LRESULT; stdcall;
-var
-  Form: TPluginForm;
-  R: TRect;
-begin
-  Result := DefSubclassProc(HWND, uMsg, wParam, lParam);
-  if uMsg = WM_SIZE then
-  begin
-    Form := TPluginForm(Pointer(dwRefData));
-    if (Form <> nil) and Form.HandleAllocated then
-    begin
-      Winapi.Windows.GetClientRect(HWND, R);
-      Form.SetBounds(0, 0, R.Right, R.Bottom);
-    end;
-  end;
-end;
-
-const
-  {Deferred self-subclass: installed after TC subclasses us so we fire first}
-  FORM_SUBCLASS_ID = 2;
-  WM_DEFERRED_INIT = WM_USER + 102; {Triggers self-subclass installation}
-  WM_PLUGIN_FKEY = WM_USER + 103; {Re-posted key intercepted from TC}
-
-  {Bit flags packed into the re-posted WM_PLUGIN_FKEY's lParam so the form
-   WndProc can reconstruct TShiftState on the other side of the re-post.}
-  FKEY_LPARAM_SHIFT = 1;
-  FKEY_LPARAM_CTRL = 2;
-  FKEY_LPARAM_ALT = 4;
-
-  {True when AKey should flow through to the VCL/OS key pipeline unchanged
-   instead of being swallowed by the plugin's key-interception. These are the
-   keys the plugin cannot own without breaking system behaviour:
-   - Tab: VCL focus cycling relies on the standard WM_KEYDOWN path.
-   - Alt+F4: Windows delivers SC_CLOSE via the normal chain; hijacking it
-   would leave users unable to close the Lister window.
-   - Bare modifier keys: meaningless alone, and we need TranslateMessage to
-   see their down/up transitions for subsequent key combinations to build
-   correct WM_SYSKEYDOWN messages.}
-function ShouldLetKeyPassThrough(AKey: Word): Boolean;
-begin
-  case AKey of
-    VK_TAB, VK_SHIFT, VK_CONTROL, VK_MENU, VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
-      Exit(True);
-  end;
-  {Alt+F4 is a system close shortcut — let the OS deliver its SC_CLOSE.}
-  if (AKey = VK_F4) and (GetKeyState(VK_MENU) < 0) then
-    Exit(True);
-  Result := False;
-end;
-
-{Packs the live modifier-key state into a single LPARAM value so the
- repost target can rebuild TShiftState without another GetKeyState call.}
-function PackShiftIntoLParam: lParam;
-begin
-  Result := 0;
-  if GetKeyState(VK_SHIFT) < 0 then
-    Result := Result or FKEY_LPARAM_SHIFT;
-  if GetKeyState(VK_CONTROL) < 0 then
-    Result := Result or FKEY_LPARAM_CTRL;
-  if GetKeyState(VK_MENU) < 0 then
-    Result := Result or FKEY_LPARAM_ALT;
-end;
-
-{Self-subclass callback on the plugin form window.
- Installed AFTER TC subclasses us (via deferred PostMessage), so it fires
- first in the chain. Claims every key-down message so Lister's built-in
- shortcuts (Escape to close, 1-9 view-mode switch, N/P file navigation,
- letter-key mode toggles, etc.) stay out of the plugin's way and every
- key flows through the plugin's own hotkey dispatcher instead. Excluded
- keys (see ShouldLetKeyPassThrough) flow through unchanged.}
-function FormSubclassProc(HWND: HWND; uMsg: UINT; wParam: wParam; lParam: lParam; uIdSubclass: UINT_PTR; dwRefData: DWORD_PTR): LRESULT; stdcall;
-begin
-  case uMsg of
-    WM_KEYDOWN, WM_SYSKEYDOWN:
-      if not ShouldLetKeyPassThrough(wParam) then
-      begin
-        PostMessage(HWND, WM_PLUGIN_FKEY, wParam, PackShiftIntoLParam);
-        Result := 0;
-        Exit;
-      end;
-    WM_NCDESTROY:
-      RemoveWindowSubclass(HWND, @FormSubclassProc, FORM_SUBCLASS_ID);
-  end;
-  Result := DefSubclassProc(HWND, uMsg, wParam, lParam);
-end;
 
 {Status bar panel widths are now driven by the template engine in
  uStatusBarRenderer: each token's "width=auto" measurement uses the
@@ -1136,18 +910,17 @@ end;
 procedure TPluginForm.OnHamburgerClick(Sender: TObject);
 var
   P: TPoint;
+  Hook: HHOOK;
 begin
   if FHamburgerMenuOpen then
     Exit;
   FHamburgerMenuOpen := True;
-  GMenuHook := SetWindowsHookEx(WH_KEYBOARD, @MenuKeyboardProc, 0, GetCurrentThreadId);
+  Hook := InstallMenuKeyboardHook;
   try
     P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
     FHamburgerMenu.Popup(P.X, P.Y);
   finally
-    if GMenuHook <> 0 then
-      UnhookWindowsHookEx(GMenuHook);
-    GMenuHook := 0;
+    UninstallMenuKeyboardHook(Hook);
     FHamburgerMenuOpen := False;
   end;
 end;

@@ -20,6 +20,8 @@ uses
   uFFmpegExe in '..\src\uFFmpegExe.pas',
   uFrameView in 'uFrameView.pas',
   uExtractionWorker in '..\src\uExtractionWorker.pas',
+  uStatusBarHostBar in 'uStatusBarHostBar.pas',
+  uKeyInterceptionSubclass in 'uKeyInterceptionSubclass.pas',
   uPluginForm in 'uPluginForm.pas',
   uDebugLog in '..\src\shared\uDebugLog.pas',
   uCacheStorage in '..\src\infrastructure\uCacheStorage.pas',

@@ -92,6 +92,9 @@
         <DCCReference Include="TestFFmpegCmdLine.pas"/>
         <DCCReference Include="..\wlx\uFrameView.pas"/>
         <DCCReference Include="..\src\uExtractionWorker.pas"/>
+        <DCCReference Include="..\wlx\uStatusBarHostBar.pas"/>
+        <DCCReference Include="..\wlx\uKeyInterceptionSubclass.pas"/>
+        <DCCReference Include="TestKeyInterceptionSubclass.pas"/>
         <DCCReference Include="..\wlx\uPluginForm.pas"/>
         <DCCReference Include="..\wlx\uCommandDescriptors.pas"/>
         <DCCReference Include="TestCommandDescriptors.pas"/>
