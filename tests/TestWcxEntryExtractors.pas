@@ -45,17 +45,14 @@ type
   strict private
     FCalled: Boolean;
     FPath: string;
-    FFormat: TSaveFormat;
-    FJpegQuality: Integer;
-    FPngCompression: Integer;
+    FOptions: TSaveOptions;
   public
-    procedure Save(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat;
-      AJpegQuality, APngCompression: Integer);
+    procedure Save(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
     property Called: Boolean read FCalled;
     property Path: string read FPath;
-    property Format: TSaveFormat read FFormat;
-    property JpegQuality: Integer read FJpegQuality;
-    property PngCompression: Integer read FPngCompression;
+    property Format: TSaveFormat read FOptions.Format;
+    property JpegQuality: Integer read FOptions.JpegQuality;
+    property PngCompression: Integer read FOptions.PngCompression;
   end;
 
   {Returns a deterministic canned bitmap. Records the request so
@@ -124,13 +121,11 @@ type
 { TFakeBitmapSaverRouter }
 
 procedure TFakeBitmapSaverRouter.Save(ABitmap: TBitmap; const APath: string;
-  AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+  const AOptions: TSaveOptions);
 begin
   FCalled := True;
   FPath := APath;
-  FFormat := AFormat;
-  FJpegQuality := AJpegQuality;
-  FPngCompression := APngCompression;
+  FOptions := AOptions;
 end;
 
 { TFakeFrameExtractor }

@@ -111,14 +111,12 @@ type
    would have been written.}
   IBitmapSaverRouter = interface
     ['{2F1E8D5A-9C4B-47A6-B8E3-5D1F0A6C2E4B}']
-    procedure Save(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat;
-      AJpegQuality, APngCompression: Integer);
+    procedure Save(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
   end;
 
   TVclBitmapSaverRouter = class(TInterfacedObject, IBitmapSaverRouter)
   public
-    procedure Save(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat;
-      AJpegQuality, APngCompression: Integer);
+    procedure Save(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
   end;
 
   {One separately-extracted frame. FrameIndex is the position in
@@ -312,12 +310,12 @@ end;
 { TVclBitmapSaverRouter }
 
 procedure TVclBitmapSaverRouter.Save(ABitmap: TBitmap; const APath: string;
-  AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+  const AOptions: TSaveOptions);
 begin
   {Delegate to the per-format polymorphic family in uBitmapSaver.
    SaveBitmapToFile itself now routes through MakeBitmapSaver, so this
    could call either — going direct keeps one less indirection.}
-  MakeBitmapSaver(AFormat, AJpegQuality, APngCompression).Save(ABitmap, APath);
+  MakeBitmapSaver(AOptions.Format, AOptions.JpegQuality, AOptions.PngCompression).Save(ABitmap, APath);
 end;
 
 { TFrameEntry }
@@ -376,7 +374,7 @@ begin
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try
-      AContext.BitmapSaver.Save(Bmp, FullPath, Settings.SaveFormat, Settings.JpegQuality, Settings.PngCompression);
+      AContext.BitmapSaver.Save(Bmp, FullPath, Settings.SaveOptions);
     finally
       Bmp.Free;
     end;
@@ -441,7 +439,7 @@ begin
     if Combined = nil then
       Exit(E_BAD_DATA);
     try
-      AContext.BitmapSaver.Save(Combined, FullPath, Settings.SaveFormat, Settings.JpegQuality, Settings.PngCompression);
+      AContext.BitmapSaver.Save(Combined, FullPath, Settings.SaveOptions);
     finally
       Combined.Free;
     end;

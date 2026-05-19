@@ -126,6 +126,7 @@ type
     [Test] procedure TestApplyClampsClampsRandomPercentHigh;
     [Test] procedure TestApplyClampsClampsRandomPercentLow;
     [Test] procedure TestApplyClampsRaisesCellGapToMinimum;
+    [Test] procedure TestSaveOptionsBundlesFormatQualityCompression;
   end;
 
 implementation
@@ -2225,6 +2226,29 @@ begin
     S.ApplyClamps;
     Assert.AreEqual(MIN_CELL_GAP, S.CellGap,
       'ApplyClamps must raise CellGap to MIN_CELL_GAP when set below it');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestWcxSettings.TestSaveOptionsBundlesFormatQualityCompression;
+var
+  S: TWcxSettings;
+  Opts: TSaveOptions;
+begin
+  {Pin the three-field bundle contract: SaveOptions must mirror the
+   matching properties exactly. The bundle is the Demeter-friendly
+   form passed to SaveBitmapToFile / IBitmapSaverRouter.Save so the
+   call site doesn't dot-walk through Settings three times.}
+  S := TWcxSettings.Create(TPath.Combine(FTempDir, 'wcx_save_opts.ini'));
+  try
+    S.SaveFormat := sfJPEG;
+    S.JpegQuality := 73;
+    S.PngCompression := 5;
+    Opts := S.SaveOptions;
+    Assert.IsTrue(Opts.Format = sfJPEG, 'Format must mirror SaveFormat');
+    Assert.AreEqual(73, Opts.JpegQuality);
+    Assert.AreEqual(5, Opts.PngCompression);
   finally
     S.Free;
   end;

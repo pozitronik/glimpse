@@ -10,6 +10,18 @@ uses
 type
   TSaveFormat = (sfPNG, sfJPEG);
 
+  {Bundled save knobs for one TBitmap -> file operation. Replaces three
+   separate parameters at call sites that previously read
+   `H.Settings.SaveFormat` / `H.Settings.JpegQuality` /
+   `H.Settings.PngCompression` next to each other (Demeter friction).
+   TWcxSettings.SaveOptions builds it once per archive open; the WCX
+   entry extractors pass it to IBitmapSaverRouter.Save.}
+  TSaveOptions = record
+    Format: TSaveFormat;
+    JpegQuality: Integer;
+    PngCompression: Integer;
+  end;
+
   {Per-format bitmap saver. One implementation per supported file format;
    adding a new format (WEBP, AVIF, ...) is a new class plus one entry
    in MakeBitmapSaver's case — no edits to SaveBitmapToFile or
@@ -72,7 +84,11 @@ procedure EncodeBitmapAsPng(ABitmap: TBitmap; AStream: TStream; APngCompression:
 
 {Saves a bitmap to a file in the specified format.
  AJpegQuality: 1..100, APngCompression: 0..9.}
-procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
+procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer); overload;
+
+{TSaveOptions overload. Unpacks the bundle and routes through the
+ polymorphic family the same way the 5-arg overload does.}
+procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions); overload;
 
 {Converts raw PNG bytes to a TBitmap.
  The returned bitmap is always pf24bit: any alpha channel the source PNG
@@ -248,6 +264,11 @@ end;
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer);
 begin
   MakeBitmapSaver(AFormat, AJpegQuality, APngCompression).Save(ABitmap, APath);
+end;
+
+procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
+begin
+  MakeBitmapSaver(AOptions.Format, AOptions.JpegQuality, AOptions.PngCompression).Save(ABitmap, APath);
 end;
 
 function PngBytesToBitmap(const AData: TBytes): TBitmap;

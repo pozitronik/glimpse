@@ -130,6 +130,10 @@ type
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
+    {Bundled save knobs for one SaveBitmapToFile / IBitmapSaverRouter.Save
+     call. Built on demand; consumers pass it instead of three separate
+     property reads. Cheap (a record copy of three small fields).}
+    function SaveOptions: TSaveOptions;
     property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property CombinedColumns: Integer read FCombinedColumns write FCombinedColumns;
     {ShowTimestamp is the WCX name for the timestamp group's Show toggle;
@@ -284,6 +288,13 @@ begin
     FMode := FMode or MODE_PRESETS
   else
     FMode := FMode and not MODE_PRESETS;
+end;
+
+function TWcxSettings.SaveOptions: TSaveOptions;
+begin
+  Result.Format := FSaveFormat;
+  Result.JpegQuality := FJpegQuality;
+  Result.PngCompression := FPngCompression;
 end;
 
 procedure TWcxSettings.Load;

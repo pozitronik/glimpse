@@ -303,7 +303,7 @@ begin
     Exit;
   try
     TempPath := TPath.Combine(ASession.CachedTempDir, GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
-    SaveBitmapToFile(Combined, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
+    SaveBitmapToFile(Combined, TempPath, H.Settings.SaveOptions);
     if H.Settings.ShowFrames then
       Slot := Length(H.Offsets)
     else
@@ -331,7 +331,7 @@ begin
       Continue;
     try
       TempPath := TPath.Combine(ASession.CachedTempDir, GenerateFrameFileName(H.FileName, I, H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
-      SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveFormat, H.Settings.JpegQuality, H.Settings.PngCompression);
+      SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveOptions);
       ASession.RecordSlot(I, TempPath, TFile.GetSize(TempPath));
     finally
       Bmp.Free;
