@@ -15,30 +15,20 @@ type
     FTempDir: string;
     FPluginDir: string;
     FConfigDir: string;
-    { Creates a dummy ffmpeg.exe in the given directory }
     procedure PlaceDummyExe(const ADir: string);
   public
     [Setup] procedure Setup;
     [TearDown] procedure TearDown;
 
-    { Returns ffmpeg.exe from plugin dir when present }
     [Test] procedure FoundInPluginDir;
-    { Falls back to configured path when plugin dir has no ffmpeg }
     [Test] procedure FoundInConfiguredPath;
-    { Env vars in configured path are expanded }
     [Test] procedure ConfiguredPathExpandsEnvVars;
-    { Plugin dir takes priority over configured path }
     [Test] procedure PluginDirWinsOverConfiguredPath;
-    { Returns empty when neither plugin dir nor configured path has ffmpeg
-      and it is not on the system PATH (assumed for test isolation) }
+    {Test isolation assumes ffmpeg is not on the system PATH.}
     [Test] procedure NotFoundReturnsEmpty;
-    { Empty plugin dir does not crash; falls through to configured path }
     [Test] procedure EmptyPluginDir_FallsToConfigured;
-    { Empty configured path does not crash; falls through to system PATH }
     [Test] procedure EmptyConfiguredPath_SkipsGracefully;
-    { Both inputs empty: relies on system PATH only }
     [Test] procedure BothEmpty_FallsToSystemPath;
-    { Configured path pointing to nonexistent file is skipped }
     [Test] procedure ConfiguredPath_NonexistentFile_Skipped;
   end;
 

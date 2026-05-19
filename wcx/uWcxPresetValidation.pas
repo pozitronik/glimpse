@@ -1,59 +1,23 @@
-{Preset input validators.
-
- ValidatePresetArgs rejects forbidden ffmpeg flags / tokens that would
- collide with the extractor's I/O contract. ValidateOutputName checks a
- path-style template for traversal, illegal characters, and rooted
- paths. ValidateOutputExt + NormalizeOutputExt enforce the
- forbidden-character set on output extensions.
-
- Single source of truth for the forbidden sets — the editor model and
- the file loader both call these instead of growing their own copy.
-
- Imports uCmdLineTokens (for ValidatePresetArgs). Does NOT import
- uWcxPresetTemplate: ValidateOutputName canonicalises '/' to '\\'
- inline (one StringReplace call) so this unit stays standalone and the
- unit graph stays acyclic. The cost is a single line of duplicated
- transform versus a forced import cycle through TWcxPreset.}
+{Preset input validators. Single source of truth for the forbidden
+ sets so the editor model and the file loader stay in lockstep.}
 unit uWcxPresetValidation;
 
 interface
 
-{Validates an Args string against the forbidden-token list.
- Returns True with AReason=''. Returns False with AReason populated when
- the args contain a forbidden token: -i (would override the input the
- extractor injects), -y / -n (would override the tempfile-and-rename
- overwrite policy), pipe:0/pipe:1/pipe:2 (would clash with the -progress
- channel and our disk output target). Tokenisation is whitespace-based
- and respects double-quoted substrings; flag comparison is
- case-insensitive so "-Y" is also rejected.}
+{Rejects -i / -y / -n (would override extractor-managed flags) and
+ pipe:0/1/2 (would clash with -progress and the disk output target).
+ Case-insensitive.}
 function ValidatePresetArgs(const AArgs: string; out AReason: string): Boolean;
 
-{Validates an OutputName template that may contain virtual path segments.
- Returns True with AReason='' on accept; False with AReason populated
- on reject. Empty input is accepted (loader / extractor falls back to
- the default template).
- Reject rules:
-   - Leading separator (rooted virtual path)
-   - "." or ".." segment (path traversal or no-op confusion)
-   - Empty segment (double separator)
-   - Any of :*?"<>| inside any segment (Windows-illegal in filenames)
- Both '/' and '\' are accepted as separators; the validator normalises
- internally so users may type either form.}
+{Empty input is accepted (default template applies). Rejects: leading
+ separator, "." or ".." segments, empty segments, and Windows-illegal
+ chars inside any segment. Accepts both '/' and '\' as separators.}
 function ValidateOutputName(const ATemplate: string; out AReason: string): Boolean;
 
-{Validates an output-extension string (no leading dot, no spaces, no
- Windows path separators or wildcards). Empty or whitespace-only is
- rejected with "OutputExt is required". The first forbidden character
- surfaces as "OutputExt contains an invalid character: '<C>'". Used by
- NormalizeOutputExt internally (which discards the reason) and by
- TPresetEditorModel.ValidateForEditor (which surfaces it to the editor user).
- The single source of truth for the forbidden-character set.}
 function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
 
-{Strips a leading dot from ARaw if present, then validates the result
- via ValidateOutputExt. ANormalized is set to the cleaned form on
- success, empty on failure. Used by LoadPresets to clean editor-style
- ".mp3" input down to "mp3" before storing it in TWcxPreset.OutputExt.}
+{Strips a leading dot then validates, so editor-style ".mp3" cleans to
+ "mp3" for TWcxPreset.OutputExt.}
 function NormalizeOutputExt(const ARaw: string; out ANormalized: string): Boolean;
 
 implementation
@@ -77,8 +41,7 @@ begin
       AReason := Format('forbidden flag "%s" overrides extractor-managed behaviour', [T]);
       Exit(False);
     end;
-    {pipe:N is always lowercase from ffmpeg's own emitters but tolerate
-     uppercase user input by comparing the lowered token.}
+    {Tolerate uppercase user input even though ffmpeg always emits lowercase.}
     if (Lower = 'pipe:0') or (Lower = 'pipe:1') or (Lower = 'pipe:2') then
     begin
       AReason := Format('forbidden token "%s" clashes with extractor stdio channels', [T]);
@@ -89,10 +52,6 @@ begin
 end;
 
 const
-  {Single source of truth for "characters that cannot appear in an output
-   extension". Used by ValidateOutputExt; NormalizeOutputExt and the
-   editor model both go through ValidateOutputExt so neither needs to
-   know this set directly.}
   CForbiddenExtChars = '\/:*?"<>| ' + #9;
 
 function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
@@ -139,10 +98,8 @@ begin
   AReason := '';
   if ATemplate = '' then
     Exit(True);
-  {Canonicalise separators inline rather than importing uWcxPresetTemplate
-   for its NormalizeOutputName helper. The one-line transform is
-   duplicated to keep this unit free of a back-edge to the template unit
-   (which itself needs TWcxPreset and would create a cycle).}
+  {Inlined to avoid a back-edge to uWcxPresetTemplate (which needs
+   TWcxPreset and would create a cycle).}
   Normalized := StringReplace(ATemplate, '/', '\', [rfReplaceAll]);
   if (Length(Normalized) > 0) and (Normalized[1] = '\') then
   begin

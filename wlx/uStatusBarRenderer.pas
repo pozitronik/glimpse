@@ -1,28 +1,10 @@
 {Bridges the parsed token list (uStatusBarTemplate) and the live VCL
- status bar. Holds no domain knowledge of its own — the per-token text
- is supplied through a resolver callback so the renderer can be unit-
- tested with a fake resolver and so plugin state never leaks into this
- unit.
+ status bar. The per-token text comes through a resolver callback so
+ the renderer holds no plugin state.
 
- Responsibilities:
-   - parses the template at ApplyTemplate time and caches the tokens
-   - measures sample-text widths once per font/template change so
-     "auto" panels do not flicker on each Refresh (live mode opt-in)
-   - on Refresh: queries the resolver per token, decides skip vs
-     placeholder for empty results, mirrors the result onto
-     FStatusBar.Panels in declaration order
-   - exposes HintForPanel for the host form's CMHintShow plumbing
-
- Missing-data contract (decided with the user):
-   - resolver returned ''  AND token width is auto: panel is skipped
-     entirely (the bar collapses), so dynamic layouts stay tidy
-   - resolver returned ''  AND token has a fixed pixel width: panel
-     stays at that width and shows '?', so anchored layouts retain
-     their slot count and the user notices the missing datum
-
- The progress bar continues to live outside the template — the host
- form keeps its existing overlay/append logic and reads
- FStatusBar.Panels exactly as before.}
+ Missing-data contract:
+   - resolver = '' AND auto width: panel is skipped (bar collapses).
+   - resolver = '' AND explicit width: panel keeps width and shows '?'.}
 unit uStatusBarRenderer;
 
 interface
@@ -32,53 +14,28 @@ uses
   uStatusBarTokens, uStatusBarTemplate, uTextMeasurement;
 
 type
-  {Lambda the host form supplies to map a token to its current text.
-   Empty result is the explicit signal "data unavailable"; the renderer
-   takes care of skip-vs-placeholder per the missing-data contract.}
+  {Empty result is the "data unavailable" signal; the renderer handles
+   skip-vs-placeholder per the missing-data contract.}
   TStatusBarTokenTextResolver = reference to function(
     const AToken: TStatusBarToken): string;
 
-  {Inherits TComponent so the host form can pass Self as the owner and
-   let VCL handle the destruction order — the form's `inherited Destroy`
-   iterates its FComponents list and frees each in reverse-creation
-   order. The resolver closure (which captures the form's Self) is
-   released during that pass while the form's fields are still
-   memory-valid; matches the pre-component lifetime contract.
-
-   Tests that don't have a real form pass nil as AOwner and Free the
-   instance manually — TComponent supports unowned construction.}
+  {TComponent-based so the host form can pass Self as owner — destruction
+   then runs during the form's inherited Destroy, while the form's fields
+   are still memory-valid (the resolver closure captures Self).}
   TStatusBarRenderer = class(TComponent)
   private
     FStatusBar: TStatusBar;
     FResolver: TStatusBarTokenTextResolver;
-    {Injected text measurer. Production wires TBitmapTextMeasurer (one
-     persistent TBitmap reused for every measurement) so a Refresh pass
-     does not construct a fresh bitmap per panel. Tests inject a stub.}
     FMeasurer: ITextMeasurer;
     FTokens: TStatusBarTokenArray;
-    {Parallel to FTokens. Cached width measured from the token's sample
-     text, used when AutoWidthLive=False and the token has no explicit
-     width. Indexed by token index, not panel index, because tokens may
-     resolve to no panel (skip-on-auto-empty).}
+    {Parallel to FTokens (not panels) — tokens may resolve to no panel.}
     FAutoWidths: TArray<Integer>;
-    {Parallel to the LIVE FStatusBar.Panels. Populated by Refresh in
-     lockstep with panel additions, so HintForPanel(I) always lines up
-     with Panels[I] no matter how many tokens were skipped.}
+    {Parallel to the LIVE FStatusBar.Panels (post-skip).}
     FPanelHints: TArray<string>;
-    {Parallel to the LIVE FStatusBar.Panels. Lets the host form ask
-     "what token does this panel render?" without re-parsing the
-     template — needed by the click-to-toggle handler on the dimension
-     panels and the WM_SETCURSOR hand-cursor handler.}
     FPanelKinds: TArray<TStatusBarTokenKind>;
-    {Parallel to the LIVE FStatusBar.Panels. Marks each panel as
-     auto-width (no explicit width=N in the template) or fixed. Drives
-     the stretch post-pass: only auto-width panels receive a share of
-     the slack so users keep precise control over fixed-width slots.}
+    {Only auto-width panels receive stretch slack — fixed widths are user-precise.}
     FPanelIsAuto: TArray<Boolean>;
-    {Parallel to the LIVE FStatusBar.Panels. The panel's pre-stretch
-     natural width (sample-text-measured for auto, explicit-scaled for
-     fixed). Stored separately from Panel.Width because Panel.Width
-     gets mutated by the stretch pass.}
+    {Pre-stretch natural width (Panel.Width is mutated by RedistributeSlack).}
     FPanelBaseWidth: TArray<Integer>;
     FAutoWidthLive: Boolean;
     FStretchPanels: Boolean;
@@ -90,60 +47,32 @@ type
     function ScaledExplicitWidth(ALogicalWidth: Integer): Integer;
     function MapAlignment(A: TStatusBarTokenAlign): TAlignment;
   public
-    {AOwner is the TComponent that will free the renderer (typically
-     the host form). Pass nil for tests / standalone use; the caller
-     is then responsible for Free. AStatusBar must outlive the
-     renderer; AResolver may not be nil. The 3-arg overload wires a
-     default TBitmapTextMeasurer; tests use the 4-arg overload to
-     inject a stub measurer.}
+    {AOwner nil = caller-owned (tests). 3-arg overload wires
+     TBitmapTextMeasurer; tests use the 4-arg overload to inject a stub.}
     constructor Create(AOwner: TComponent; AStatusBar: TStatusBar;
       AResolver: TStatusBarTokenTextResolver); reintroduce; overload;
     constructor Create(AOwner: TComponent; AStatusBar: TStatusBar;
       AResolver: TStatusBarTokenTextResolver;
       AMeasurer: ITextMeasurer); reintroduce; overload;
-    {Replaces the template. Re-parses, re-measures auto widths against
-     the current font, and rebuilds FStatusBar.Panels via Refresh.}
     procedure ApplyTemplate(const ATemplate: string);
-    {Re-queries the resolver for every token and rewrites
-     FStatusBar.Panels. Token list and font are unchanged.}
     procedure Refresh;
-    {Returns the default tooltip for the panel currently at AIndex,
-     or '' for out-of-range / unknown / unset entries.}
     function HintForPanel(AIndex: Integer): string;
-    {Returns the token kind backing the panel currently at AIndex.
-     tkUnknown for out-of-range (or for an unknown token whose RawText
-     was painted literally). Lets callers route interactive behaviour
-     by panel kind without touching the renderer's internals.}
     function KindForPanel(AIndex: Integer): TStatusBarTokenKind;
-    {Updates FStatusBar.Font to the given face + size, re-measures any
-     cached auto widths, and rebuilds the panels so the new metrics
-     take effect immediately.}
     procedure SetFont(const AFontName: string; AFontSize: Integer);
-    {When True the renderer measures the live resolved text on every
-     Refresh (panel widths track content, with the inevitable layout
-     shift). Default False: auto widths are measured once with the
-     token's representative sample text and then locked.}
+    {True = measure live text on every Refresh (panel widths track content).
+     False (default) = measure once from the token's sample text, then lock.}
     procedure SetAutoWidthLive(AValue: Boolean);
-    {When True, Refresh runs a post-pass that distributes any slack
-     between sum-of-panel-widths and FStatusBar.ClientWidth across the
-     auto-width panels proportionally to their natural widths. The
-     stretch baseline is always the sample-text width (not the live
-     text) so the layout stays stable when AutoWidthLive is also on —
-     stretch is a layout decision, not a content one. No-op when there
-     is no slack or no auto-width panels.}
+    {Stretch baseline is the sample-text width (NOT the live text) so the
+     layout stays stable when AutoWidthLive is also on.}
     procedure SetStretchPanels(AValue: Boolean);
     property AutoWidthLive: Boolean read FAutoWidthLive;
     property StretchPanels: Boolean read FStretchPanels;
   end;
 
 const
-  {Painted into a fixed-width panel when its resolver returned ''.
-   Single character keeps the panel from looking blank-on-purpose.}
   STATUSBAR_MISSING_PLACEHOLDER = '?';
-
-  {Pixel slack added to TextWidth measurements so Tahoma's last
-   character isn't clipped against the panel border. Empirical value
-   matching the inset the common control draws on either side.}
+  {Empirical inset matching the common-control draw — without it Tahoma's
+   last character clips against the panel border.}
   STATUSBAR_AUTO_WIDTH_PADDING = 8;
 
 implementation
@@ -154,9 +83,6 @@ uses
 constructor TStatusBarRenderer.Create(AOwner: TComponent; AStatusBar: TStatusBar;
   AResolver: TStatusBarTokenTextResolver);
 begin
-  {3-arg overload wires the production TBitmapTextMeasurer (lives for
-   the renderer's lifetime, reuses a single TBitmap for every
-   measurement). Tests pass an explicit stub via the 4-arg overload.}
   Create(AOwner, AStatusBar, AResolver, TBitmapTextMeasurer.Create);
 end;
 
@@ -164,9 +90,7 @@ constructor TStatusBarRenderer.Create(AOwner: TComponent; AStatusBar: TStatusBar
   AResolver: TStatusBarTokenTextResolver; AMeasurer: ITextMeasurer);
 begin
   inherited Create(AOwner);
-  {Hard runtime check, not Assert. Assert compiles to nothing in $C-
-   release builds; the constructor would then accept nil and the first
-   FStatusBar / FResolver access would crash with an opaque AV.}
+  {Hard runtime check, not Assert — Assert compiles to nothing in release builds.}
   if AStatusBar = nil then
     raise EArgumentNilException.Create('TStatusBarRenderer requires a TStatusBar instance');
   if not Assigned(AResolver) then
@@ -223,8 +147,7 @@ begin
   for I := 0 to High(FTokens) do
   begin
     if FTokens[I].Kind = tkUnknown then
-      {Unknown tokens always paint their RawText, so size to that
-       directly rather than to a sample (which is empty for tkUnknown).}
+      {Unknown tokens paint their RawText directly (sample is empty).}
       Sample := FTokens[I].RawText
     else
       Sample := StatusBarTokenSampleText(FTokens[I].Kind);
@@ -238,11 +161,7 @@ var
 begin
   if AText = '' then
     Exit(0);
-  {Status bar widths live in the bar's device pixels — on a 150% DPI
-   monitor "100 px" really means 150 device pixels. The injected
-   measurer respects APpi so panel widths track per-monitor DPI
-   correctly. Padding is added here (a status-bar policy) rather than
-   inside the measurer (which is a pure text-width primitive).}
+  {Padding is a status-bar policy, not a text-width primitive — applied here.}
   Ppi := FStatusBar.CurrentPPI;
   if Ppi <= 0 then
     Ppi := 96;
@@ -254,10 +173,7 @@ function TStatusBarRenderer.ScaledExplicitWidth(ALogicalWidth: Integer): Integer
 var
   Ppi: Integer;
 begin
-  {User-typed "width=N" in a template is a logical pixel count (i.e.
-   what the user would have measured on a 100%-scaled monitor). Convert
-   to the bar's device pixels here so explicit panels stay the right
-   visual size on high-DPI displays.}
+  {User-typed "width=N" is a 96-DPI logical pixel count; convert here.}
   Ppi := FStatusBar.CurrentPPI;
   if Ppi <= 0 then
     Ppi := 96;
@@ -298,8 +214,7 @@ begin
       if Text = '' then
       begin
         if not HasExplicitWidth then
-          {Skip-on-auto-empty: a missing datum in an auto-width slot
-           collapses out so the bar stays tidy.}
+          {Skip-on-auto-empty: missing datum collapses out.}
           Continue;
         Text := STATUSBAR_MISSING_PLACEHOLDER;
       end;
@@ -307,11 +222,8 @@ begin
       if HasExplicitWidth then
         EffectiveWidth := ScaledExplicitWidth(ExplicitWidth)
       else if FStretchPanels then
-        {Stretch baseline must be stable: pick the sample-text width
-         (FAutoWidths) regardless of AutoWidthLive so the proportional
-         distribution stays consistent and doesn't jitter as live text
-         changes. The stretch post-pass below expands each auto panel
-         from this baseline.}
+        {Stable baseline so the proportional distribution does not jitter
+         on live-text changes.}
         EffectiveWidth := FAutoWidths[I]
       else if FAutoWidthLive then
         EffectiveWidth := MeasureText(Text)
@@ -332,9 +244,6 @@ begin
       SetLength(FPanelBaseWidth, Length(FPanelBaseWidth) + 1);
       FPanelBaseWidth[High(FPanelBaseWidth)] := EffectiveWidth;
     end;
-    {Stretch is a post-pass so the per-panel build above stays simple;
-     the math only needs the natural totals computed against the live
-     ClientWidth.}
     if FStretchPanels then
       RedistributeSlack;
   finally
@@ -359,9 +268,6 @@ begin
   end;
 
   Slack := FStatusBar.ClientWidth - TotalCur;
-  {No-op when natural widths already overflow the bar (Slack < 0), when
-   the bar is at exact-fit (Slack = 0), or when the template has no
-   auto-width panels to receive the distribution.}
   if (Slack <= 0) or (AutoBaseSum <= 0) then
     Exit;
 
@@ -377,9 +283,7 @@ begin
     LastAuto := I;
   end;
 
-  {Rounding leftover (MulDiv truncates): dump the remainder into the
-   last auto panel so the panels exactly cover ClientWidth and the
-   common control has no trailing slack to inflate.}
+  {Dump MulDiv truncation remainder into the last auto panel.}
   if (LastAuto >= 0) and (Distributed < Slack) then
     FStatusBar.Panels[LastAuto].Width :=
       FStatusBar.Panels[LastAuto].Width + (Slack - Distributed);

@@ -1,30 +1,15 @@
-{Cross-cutting cache-maintenance domain rules for the Glimpse plugin.
-
- The plugin keeps two on-disk caches: the user-configurable frame
- cache (under EffectiveCacheFolder) and a fixed-location probe cache
- (DefaultProbeCacheDir, %TEMP%\Glimpse\probes). User-facing "clear
- every Glimpse cache" and "report total Glimpse cache size" actions
- are domain rules — neither caller (the WLX settings dialog today,
- the WCX dialog when it grows a cache button) should re-encode them.
-
- Extracted from `wlx/uSettingsDlg.pas` per VIOLATIONS.md M16.
- Living under `src/application/` keeps it WLX/WCX-neutral.}
+{Cross-cutting cache-maintenance domain rules. Sums and clears both
+ the user-configurable frame cache and the fixed-location probe cache
+ (%TEMP%\Glimpse\probes) as a single user-facing action.}
 unit uCacheMaintenance;
 
 interface
 
-{Total bytes across every Glimpse-managed on-disk cache. Sums the
- user-configurable frame cache (under AFrameDir, when the directory
- exists) plus the probe cache (always — its fixed directory is
- created on demand by TProbeCache). Returns 0 when nothing has been
- cached yet. Pure read; never raises.}
+{Sums every Glimpse-managed cache (frame + probe). Pure read; never raises.}
 function TotalGlimpseCacheBytes(const AFrameDir: string): Int64;
 
-{Wipes every Glimpse-managed on-disk cache. Clears the frame cache
- under AFrameDir (when the directory exists) and the probe cache
- (always). Best-effort — silently swallows any disk errors so the
- dialog stays responsive. Matches the user intent of a single
- "Clear cache" button: one click removes every byte the plugin keeps.}
+{Wipes every Glimpse-managed cache. Best-effort: swallows disk errors
+ so the dialog stays responsive.}
 procedure ClearAllGlimpseCaches(const AFrameDir: string);
 
 implementation
@@ -45,8 +30,6 @@ begin
     Result := Result + Mgr.GetTotalSize;
   end;
 
-  {Probe cache lives in a separate fixed directory; fold it into the
-   total so the readout reflects every byte the plugin keeps on disk.}
   ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
   try
     Result := Result + ProbeC.GetTotalSize;
@@ -66,9 +49,6 @@ begin
     Mgr.Clear;
   end;
 
-  {Probe cache lives outside the user-configurable cache folder, in
-   %TEMP%\Glimpse\probes. Wiping it alongside the frame cache matches
-   user intent (one Cache button = all of Glimpse's on-disk caches).}
   ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
   try
     ProbeC.Clear;

@@ -1,44 +1,7 @@
-{Cluster presenters for the WCX settings dialog.
-
- Step 99 (C8, part 2): mirrors the WLX-side wlx/uSettingsPresenters
- (step 84). Three presenters by domain:
-
-   - TWcxExtractionPresenter     General + Sampling tabs (extraction,
-                                  ffmpeg path, random sampling)
-   - TWcxOutputPresenter         Output + Combined + Limits tabs
-                                  (mode toggles, format/quality,
-                                  combined-grid layout + timestamp +
-                                  banner sub-clusters, max-side caps)
-   - TWcxPresetEditorPresenter   Presets tab (preset list/edit
-                                  fields, LoadPresetsFromDisk, the
-                                  Add/Remove/Duplicate/Show flow,
-                                  validation-failure navigation)
-
- Each non-preset presenter owns: its bundle(s) (referenced, not owned),
- the update helpers that DON'T toggle enable-state of non-bundle
- controls (UpdateFFmpegInfo, UpdateRandomPercentLabel,
- UpdateTimestampFontDisplay, UpdateBannerFontDisplay), its event
- handlers, and (for Output) its share of the dialog-local font shadow
- fields.
-
- The form keeps:
-
-   - Update*State enable methods (UpdateCombinedState, UpdateRandomState,
-     UpdateMaxWorkersControls): these toggle ~30 labels/buttons that
-     aren't in any bundle; lifting them into presenters would require
-     extra plumbing for unclear win. The WCX dialog has no declarative
-     TEnableRules table (unlike WLX after step 82); converting WCX's
-     imperative Update*State into a table is a separate finding (the
-     "WCX step 82" follow-up) outside this step's scope.
-   - TrySaveAll (already delegates to TSettingsSaveOrchestrator per
-     step 102). The validation-failure navigation block calls into
-     TWcxPresetEditorPresenter.NavigateToValidationFailure.
-   - BtnDefaults / BtnApply / BtnOK / BtnCancel (form-level orchestration).
-   - One-line handlers that only call Update*State (rule adjacency).
-
- DFM event wiring: form's published handlers stay (DFM points at them
- by name); each becomes a one-line forwarder to the matching presenter
- method, optionally followed by an Update*State call.}
+{Cluster presenters for the WCX settings dialog: one per tab domain
+ (Extraction, Output, PresetEditor). Each owns its bundles, helpers,
+ and event handlers; the form keeps Update*State enable methods,
+ TrySaveAll, and OK/Apply/Defaults orchestration.}
 unit uWcxSettingsPresenters;
 
 interface
@@ -52,10 +15,6 @@ uses
   uWcxSettingsControlsBundles;
 
 type
-  {General + Sampling tab logic. Owns the extraction + ffmpeg + random
-   bundles, the ffmpeg-info + random-percent live readout helpers, and
-   the BtnFFmpegPathClick browse dialog. The MaxWorkers/MaxThreads
-   enable toggles stay on the form (UpdateMaxWorkersControls).}
   TWcxExtractionPresenter = class
   strict private
     FExtractionControls: TWcxExtractionControls;
@@ -82,10 +41,6 @@ type
     procedure OnRandomPercentChange;
   end;
 
-  {Output + Combined + Limits tab logic. Owns 6 bundles (mode + output
-   + combined + timestamp + banner + limits), the font shadow fields,
-   the font-display + font-picker helpers. The combined-tab enable
-   toggles (UpdateCombinedState) stay on the form.}
   TWcxOutputPresenter = class
   strict private
     FModeControls: TWcxModeControls;
@@ -118,11 +73,6 @@ type
     procedure OnBannerFontClick;
   end;
 
-  {Presets tab logic. Owns the in-memory editor model, the current-row
-   tracker, the listbox + edit controls, the preset persistence
-   repository (for LoadAll), and every preset-tab event handler. The
-   form's TrySaveAll calls NavigateToValidationFailure when the
-   orchestrator reports a bad row.}
   TWcxPresetEditorPresenter = class
   strict private
     FPresetModel: TPresetEditorModel;
@@ -142,22 +92,12 @@ type
       AEdtPresetName: TEdit; AChkPresetEnabled: TCheckBox;
       AEdtPresetDescription: TEdit; AEdtPresetOutputExt: TEdit;
       AEdtPresetOutputName: TEdit; AMemoPresetArgs: TMemo);
-    {Pulls every preset from the repository into the model and refreshes
-     the listbox. Called once at dialog open and after every successful
-     Apply (so the next edit cycle starts from the persisted state).}
     procedure LoadPresetsFromDisk;
-    {Refreshes the listbox to mirror the model and selects ASelectIndex
-     (clamping to a valid row when out of range).}
     procedure RefreshPresetList(ASelectIndex: Integer);
-    {Loads the preset at AIndex into the edit fields. Pass -1 to clear
-     the panel and disable editing (no rows in the model).}
+    {Pass -1 to clear and disable the panel.}
     procedure ShowPreset(AIndex: Integer);
-    {Saves the edit fields back into the model at FCurrentPresetIndex.
-     No-op when no row is currently displayed.}
     procedure CommitCurrentPreset;
     procedure SetEditFieldsEnabled(AEnabled: Boolean);
-    {Form's TrySaveAll calls this on validation failure: selects the
-     offending row in the listbox and re-shows it.}
     procedure NavigateToValidationFailure(AIndex: Integer);
     procedure OnLbxPresetsClick;
     procedure OnBtnPresetAddClick;
@@ -211,9 +151,8 @@ end;
 
 procedure TWcxExtractionPresenter.UpdateFFmpegInfo;
 begin
-  {WCX fallback: re-probe via FindFFmpegExe on every call (vs WLX
-   which uses a pre-resolved path threaded in at dialog open). Shared
-   DisplayFFmpegInfo helper handles the state classification.}
+  {Re-probe on every call; WLX uses a pre-resolved path threaded in at
+   dialog open, but the WCX flow does not.}
   DisplayFFmpegInfo(FFFmpegControls.EdtFFmpegPath.Text,
     FindFFmpegExe(FApplicationDir, ''),
     FLblFFmpegInfo, FEdtFFmpegInfo);
@@ -440,8 +379,8 @@ begin
   P.Args := FMemoPresetArgs.Text;
   FPresetModel.Update(FCurrentPresetIndex, P);
 
-  {Reflect rename or enabled-toggle in the listbox label without rebuilding
-   the whole list, which would lose the user's selection.}
+  {Patch the label in place rather than rebuild — a full refresh would
+   lose the user's selection.}
   ListCaption := P.Name;
   if not P.Enabled then
     ListCaption := ListCaption + ' (off)';
@@ -477,9 +416,7 @@ begin
     FEdtPresetName.SetFocus;
     FEdtPresetName.SelectAll;
   except
-    {Focus is a UX nicety, not a correctness requirement; some test
-     contexts construct the form without showing it, in which case
-     SetFocus throws.}
+    {SetFocus throws when the form is not shown (test contexts).}
   end;
 end;
 
@@ -490,8 +427,7 @@ begin
   Idx := FLbxPresets.ItemIndex;
   if Idx < 0 then
     Exit;
-  {Skip the commit on remove — the in-flight edits are about to be
-   discarded. Drop the model row directly.}
+  {Skip the commit; in-flight edits are about to be discarded.}
   FCurrentPresetIndex := -1;
   FPresetModel.Remove(Idx);
   RefreshPresetList(Idx);
@@ -513,9 +449,7 @@ begin
       FEdtPresetName.SetFocus;
       FEdtPresetName.SelectAll;
     except
-      {Focus is a UX nicety, not a correctness requirement; some test
-       contexts construct the form without showing it, in which case
-       SetFocus throws.}
+      {SetFocus throws when the form is not shown (test contexts).}
     end;
   end;
 end;

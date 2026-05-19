@@ -1,16 +1,7 @@
 {Command-line tokeniser shared by preset validation and the preset
- extractor.
-
- Tokenises a whitespace-separated argument string into individual
- tokens, treating double-quoted runs as a single token (the surrounding
- quotes are stripped, matching CreateProcess's command-line parser).
- Pure / no I/O / no dependencies beyond the RTL.
-
- Lives in its own unit so the preset validator (uWcxPresetValidation)
- and the future argv builder in uWcxPresetExtractor can share one
- implementation — having both grow their own copy would risk subtle
- parsing drift between what the validator allows and what the
- extractor actually feeds to ffmpeg.}
+ extractor. Splits on whitespace, treats double-quoted runs as one
+ token (quotes stripped), matching CreateProcess's parser so the
+ validator and extractor never drift in what ffmpeg actually sees.}
 unit uCmdLineTokens;
 
 interface
@@ -40,9 +31,7 @@ begin
       C := AArgs[I];
       if C = '"' then
       begin
-        {Toggle quote state without copying the quote into the token —
-         CreateProcess's command-line parser treats the same way, so the
-         token shape we validate matches what ffmpeg eventually sees.}
+        {Quote character is consumed, not appended, matching CreateProcess.}
         InQuote := not InQuote;
       end
       else if (not InQuote) and ((C = ' ') or (C = #9)) then

@@ -1,11 +1,6 @@
-{ffmpeg.exe driver: spawns the subprocess for video probing and
- single-frame extraction.
-
- Slim class wrapper. The parsing of ffmpeg's stderr output lives in
- src/infrastructure/uFFmpegProbeParser; the command-line assembly and
- version-validation helpers live in src/infrastructure/uFFmpegCmdLine.
- This unit's only job is to glue ffmpeg-the-subprocess to the parsed
- results.}
+{ffmpeg.exe driver: spawns the subprocess for probing and single-frame
+ extraction. Parsing lives in uFFmpegProbeParser; command-line assembly
+ in uFFmpegCmdLine.}
 unit uFFmpegExe;
 
 interface
@@ -21,19 +16,10 @@ type
   public
     constructor Create(const AExePath: string);
 
-    {Probes a video file for metadata (duration, resolution, codec).}
     function ProbeVideo(const AFileName: string): TVideoInfo;
 
-    {Extracts a single frame at the given time offset.
-     AUseBmp=True uses BMP pipe (faster, larger); False uses PNG pipe (slower, smaller).
-     AHwAccel=True adds -hwaccel auto for GPU-accelerated decoding.
-     AUseKeyframes=True adds -noaccurate_seek to grab the nearest keyframe (faster).
-     ATimeoutMs caps how long the ffmpeg call may run; default 30s matches the
-     generic RunProcess default. Use a shorter value (e.g. for thumbnail panels)
-     to avoid stalling on broken files.
-     ACancelHandle is an optional Win32 waitable handle (typically TEvent.Handle).
-     When signaled during the call, RunProcess terminates the ffmpeg child process.
-     Returns a new TBitmap on success, nil on failure. Caller owns the returned bitmap.}
+    {ACancelHandle (typically TEvent.Handle) terminates the ffmpeg child
+     when signalled. Returns nil on failure; caller owns the bitmap.}
     function ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): TBitmap;
 
     property ExePath: string read FExePath;
@@ -60,7 +46,7 @@ begin
   Result.Duration := -1;
 
   CmdLine := Format('"%s" -nostdin -hide_banner -i "%s"', [FExePath, AFileName]);
-  {Exit code 1 is expected: "no output file specified"}
+  {ffmpeg exits with 1 ("no output file specified"); we still get -i info on stderr.}
   RunProcess(CmdLine, StdOut, StdErr, 10000);
 
   if Length(StdErr) = 0 then

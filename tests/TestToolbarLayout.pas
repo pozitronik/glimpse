@@ -86,7 +86,7 @@ begin
     Result[I] := ABase + (I + 1) * AStep;
 end;
 
-{ Standard 13-element layout: right edges from 150 to 750 (step 50) }
+{ Standard 13-element layout: right edges from 150 to 750. }
 function StdRights: TArray<Integer>;
 begin
   Result := MakeRights(100, 50, ELEM_TOTAL_COUNT);

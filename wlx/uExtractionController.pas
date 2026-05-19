@@ -1,5 +1,4 @@
-{Extraction worker lifecycle and pending frame queue management.
- Extracted from TPluginForm to isolate thread coordination from UI.}
+{Extraction worker lifecycle and pending frame queue management.}
 unit uExtractionController;
 
 interface
@@ -24,10 +23,7 @@ type
     FPendingFrames: TList<TPendingFrame>;
     FPendingLock: TCriticalSection;
     FCache: IFrameCache;
-    {Injected notification sink — production wires TWindowMessageSink
-     wrapping the form HWND; tests inject an in-memory capture sink.
-     Shared with every worker thread so the controller and worker
-     speak the same transport abstraction.}
+    {Production wires TWindowMessageSink (form HWND); tests inject a capture sink.}
     FSink: IFrameNotificationSink;
     FOnFrameDelivered: TFrameDeliveryEvent;
     FOnProgress: TNotifyEvent;
@@ -50,11 +46,8 @@ type
   end;
 
 const
-  {Resize-drag debounce for the background viewport-refresh timer. Long
-   enough that mid-drag pixel deltas don't trigger ffmpeg spawns, short
-   enough that the user sees the high-res refresh promptly after release.
-   Lives here next to the extraction-pipeline policy it gates; the form
-   wires its FViewportRefreshTimer.Interval from this constant.}
+  {Long enough that mid-drag pixel deltas do not spawn ffmpeg; short enough
+   that the user sees the high-res refresh promptly after release.}
   VIEWPORT_REFRESH_DEBOUNCE_MS = 500;
 
 implementation
@@ -63,9 +56,6 @@ uses
   System.SysUtils, uDebugLog, uSettings, uPathExpand;
 
 var
-  {Subsystem logger; closure captures the 'ExtCtrl' tag once at unit
-   initialization so call sites read as plain CtrlLog('msg') without
-   the tag literal duplicated everywhere.}
   CtrlLog: TProc<string>;
 
 {TExtractionController}

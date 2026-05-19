@@ -1,11 +1,7 @@
-{Tests for wlx/uViewportRefreshDebouncer (step 105 part 2 of 4).
-
- The debouncer uses a TTimer; firing it from a test requires either
- (a) sleeping past the debounce interval while pumping the message
- loop, or (b) test seams that aren't worth the complexity for such a
- tiny class. These tests cover what can be verified synchronously:
- the precondition short-circuit on Schedule, the recorded
- max-side memo round-trip, and the no-callback safety.}
+{Tests for wlx/uViewportRefreshDebouncer. The debouncer uses TTimer
+ so timer firing is not covered here — only what is verifiable
+ synchronously: precondition short-circuit on Schedule, max-side memo
+ round-trip, and no-callback safety.}
 unit TestViewportRefreshDebouncer;
 
 interface

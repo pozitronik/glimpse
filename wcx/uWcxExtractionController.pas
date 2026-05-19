@@ -1,28 +1,11 @@
-{Pre-extraction orchestration for the WCX plugin.
+{Pre-extraction orchestration for the WCX plugin. Drives IFrameExtractor
+ to populate the temp cache that ReadHeaderExW reports sizes from and
+ ProcessFile copies into the user's destination.
 
- Given an opened TArchiveHandle (with Settings / Offsets / Presets
- populated by DoOpenArchive), this controller drives the IFrameExtractor
- to produce the temp-file cache that ReadHeaderExW reports sizes from
- and ProcessFile copies into the user's destination.
-
- Two extraction shapes: combined sheet (one image rendered via
- RenderCombinedBitmap into the cache slot AFTER the per-frame slots)
- and separate frames (one image per offset). PreExtractFrames composes
- them based on H.Settings.ShowFrames / ShowCombined.
-
- Lives in its own unit so the ABI thunks in uWcxExports stay narrow
- and the orchestration is independently testable. The TWcxFrameCache
- session lifecycle is owned by PreExtractFrames here (BeginExtractionSession
- / Free); ExtractCombinedToCache and ExtractSeparateToCache receive an
- active session passed in and just populate its slots.
-
- Security caveat (preserved from the original PreExtractFrames home in
- uWcxExports): the temp directory inherits the parent (user temp) ACL,
- so other processes running as the same user can read the extracted
- frames. Same exposure as ffmpeg's own temp output and as the WLX
- frame cache. Tightening would require an explicit per-directory ACL
- via SetSecurityInfo. Acceptable for a single-user TC session;
- revisit if multi-user or sandboxed contexts ever become a use case.}
+ Security caveat: the temp directory inherits the parent (user temp) ACL,
+ so any process running as the same user can read the extracted frames.
+ Tightening would require an explicit per-directory ACL via
+ SetSecurityInfo; acceptable for a single-user TC session.}
 unit uWcxExtractionController;
 
 interface
@@ -31,35 +14,15 @@ uses
   uFrameExtractor,
   uWcxArchiveHandle, uWcxFrameCache;
 
-{Extracts the combined sheet into the session's temp directory at the
- slot reserved for "the combined image". ARenderCombinedBitmap (in
- uWcxEntryExtractors) produces the bitmap; the saver bundle on
- H.Settings.SaveOptions drives the file format. The combined slot is
- the one immediately after the frames - when frames are also being
- shown the combined image lands at index Length(Offsets); when frames
- are off it lands at index 0. RenderCombinedBitmap lives in
- uWcxEntryExtractors so this pre-extract path and TCombinedEntry.Extract
- share the same composition rules.}
+{Combined slot lands at Length(Offsets) when frames are shown, else 0.}
 procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
   const ASession: TWcxCacheExtractionSession);
 
-{Extracts individual frames and writes each into the session's per-frame
- slot. One file per H.Offsets[I].}
 procedure ExtractSeparateToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
   const ASession: TWcxCacheExtractionSession);
 
-{Top-level entry. Pre-extracts all frames to the module's
- TWcxFrameCache, or reuses an existing cache entry if the same video
- was already extracted.
-
- The session held by BeginExtractionSession owns the cache lock for its
- lifetime - a concurrent OpenArchive on a second thread blocks here
- until this pass finishes, which is intentional: two threads on the
- same video must not both proceed past the cache-hit check.
-
- Calls ExtractSeparateToCache / ExtractCombinedToCache as required by
- H.Settings.ShowFrames / ShowCombined and records the produced
- EntrySizes back on H so ReadHeaderExW can report believable sizes.}
+{Holds the cache lock for the full extraction so two threads opening
+ the same video cannot both proceed past the cache-hit check.}
 procedure PreExtractFrames(H: TArchiveHandle);
 
 implementation
@@ -75,11 +38,8 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
-{Builds extraction options from WCX settings.
- AMaxSide = 0 means no scale limit (combined-mode caller relies on this:
- the assembled grid is shrunk separately after rendering). For
- separate-frame mode, pass H.Settings.FrameMaxSide so ffmpeg's scale
- filter fits the longer dimension to the cap.}
+{AMaxSide = 0 disables ffmpeg's scale filter; combined-mode relies on
+ this since the assembled grid is shrunk separately.}
 function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
 begin
   Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
@@ -146,15 +106,11 @@ begin
       Exit;
     end;
 
-    {Cache arrays size to legacy entries only; preset entries do not
-     pre-extract (they run on demand during ProcessFile).}
+    {Sized to legacy entries only; presets do not pre-extract (they run
+     on demand during ProcessFile).}
     EntryCount := LegacyEntryCount(H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined);
     TempDir := Session.PrepareFresh(H.FileName, EntryCount);
 
-    {Each enabled mode populates its own cache slots. Both can run in
-     the same pass when the user has both Show* bits on. The frame
-     extractor is the per-session one already on the handle (set at
-     OpenArchive).}
     if H.Settings.ShowFrames then
       ExtractSeparateToCache(H, H.FrameExtractor, Session);
     if H.Settings.ShowCombined then

@@ -58,11 +58,10 @@ type
     [Test] procedure ModeModern_WithOpaqueBg_FillsCornerStripWithBackColor;
   end;
 
-  {Direct tests for DrawCellTimecode -- the per-cell overlay helper extracted
-   in the recent refactor. Existing TTestTimecodeOverlay tests exercise it
-   indirectly through the renderers; this fixture pins the early-exit gates
-   (Show=False / Corner=tcNone) at the unit level so a future "always draw"
-   regression cannot slip past the renderer-level smoke tests.}
+  {Direct tests for DrawCellTimecode. Exercised indirectly via the
+   renderers in TTestTimecodeOverlay; this fixture pins the early-exit
+   gates (Show=False / Corner=tcNone) at the unit level so a future
+   "always draw" regression cannot slip past renderer smoke tests.}
   [TestFixture]
   TTestDrawCellTimecode = class
   public
@@ -573,10 +572,10 @@ var
   Style: TTimestampStyle;
   PixelCount: Integer;
 begin
-  {Same shape as the Show=False test, but with Show=True and Corner=tcNone.
-   Pins the second short-circuit gate -- a future contributor who deletes
-   the Corner check would slip past TimestampDisabled_NoTextDrawn (which
-   uses Show=False) but trip this test.}
+  {Same shape as the Show=False test, but with Show=True and
+   Corner=tcNone. Pins the second short-circuit gate; deleting the
+   Corner check would slip past TimestampDisabled_NoTextDrawn
+   (Show=False) but trip this test.}
   Bmp := TBitmap.Create;
   try
     Bmp.PixelFormat := pf24bit;

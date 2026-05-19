@@ -33,10 +33,9 @@ uses
   uClipboardImage, uClipboardFormatStrategies, uSettingsGroups;
 
 {Test-only helper: builds the default all-formats strategy array and
- delegates to CopyBitmapToClipboard with the new 4-arg signature. Lets
- the format-fidelity tests below keep their original 1- and 2-arg call
- shape — the orchestration contract is what they care about, not the
- strategy-assembly mechanics.}
+ delegates to CopyBitmapToClipboard. Lets the format-fidelity tests
+ below keep their original 1- and 2-arg call shape — they care about
+ the orchestration contract, not strategy-assembly mechanics.}
 function CopyAllFormats(ABmp: Vcl.Graphics.TBitmap;
   ABackground: TColor = TColor($000000)): Boolean;
 var
@@ -388,7 +387,7 @@ begin
   end;
 end;
 
-{ -------- TryClipboardOpenWithRetry retry contract -------- }
+{ TryClipboardOpenWithRetry retry contract }
 
 procedure TTestClipboardImage.RetryOpener_SucceedsImmediately_ReturnsTrue;
 var

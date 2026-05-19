@@ -1,40 +1,11 @@
-{Tab-cluster presenters for the WLX settings dialog.
+{Tab-cluster presenters for the WLX settings dialog, split by domain:
+   - TExtractionPresenter: General + Sampling tabs
+   - TStoragePresenter:    Cache + Thumbnails + QuickView tabs
+   - TAppearancePresenter: Appearance + Save tabs (incl. font shadow fields)
 
- Step 84 (C5): the settings form historically owned every event
- handler, update helper, font shadow field, and bundle-binding sequence
- for every tab. This unit splits that ownership into 3 cohesive
- presenters by domain:
-
-   - TExtractionPresenter   General + Sampling tabs (extraction,
-                            ffmpeg path, random sampling)
-   - TStoragePresenter      Cache + Thumbnails + QuickView tabs
-                            (cache folder + size, thumbnails,
-                            quickview chrome)
-   - TAppearancePresenter   Appearance + Save tabs (view chrome,
-                            timestamp/banner/statusbar fonts +
-                            colors, save format + banner)
-
- Each presenter owns: its bundle(s) (referenced, not owned), its
- update helpers, its event-handler methods, and its share of the
- dialog-local font shadow fields (FBannerFontName/Size etc., which
- are not VCL controls and not in any bundle — see uSettingsControlsBundles
- docstring). The form keeps:
-
-   - Enable rules table (BuildEnableRules / RecomputeEnables): a
-     single declarative table that step 82 carefully designed; rules
-     touch labels and group-mates that aren't in any bundle, and
-     splitting them would require additional plumbing for unclear win.
-     Rules stay on the form by deliberate choice.
-   - Hotkeys cluster (the TListView pattern is structurally different
-     from the other tabs).
-   - Generic OnColorSwatchClick (cross-cluster: touches Appearance
-     panels, Save banner panels, etc.).
-   - BtnDefaults, BtnApply, BtnOK, BtnCancel (form-level orchestration).
-   - One-liner handlers that only call RecomputeEnables (the rule
-     adjacency keeps them on the form).
-
- DFM event wiring: the form's published handlers stay (DFM-wired)
- and become one-line forwarders to the matching presenter method.}
+ Stays on the form: enable rules table, Hotkeys cluster, generic
+ OnColorSwatchClick, OK/Apply/Cancel orchestration, single-line
+ handlers that only call RecomputeEnables.}
 unit uSettingsPresenters;
 
 interface
@@ -46,15 +17,8 @@ uses
   uSettings, uSettingsControlsBundles;
 
 type
-  {General + Sampling tab logic. Owns the extraction + ffmpeg + cache
-   bundles' Sampling-side controls, the ffmpeg-info update helper,
-   the random-percent live readout label, and the BtnFFmpegPathClick
-   browse dialog.
-
-   The cache bundle is shared with TStoragePresenter (TCacheControls
-   spans both tabs: Random* on Sampling, CacheEnabled/Folder/MaxSize
-   on Cache). Both presenters hold the same bundle reference — only
-   the methods they call on it differ.}
+  {The cache bundle is shared with TStoragePresenter (Random* on Sampling,
+   CacheEnabled/Folder/MaxSize on Cache).}
   TExtractionPresenter = class
   strict private
     FExtractionControls: TExtractionControls;
@@ -72,31 +36,18 @@ type
       ALblFFmpegInfo: TLabel; AEdtFFmpegInfo: TEdit;
       ALblRandomPercentValue: TLabel;
       const AResolvedFFmpegPath: string; AParentWnd: HWND);
-    {Pushes ASettings into the bundles this presenter owns, refreshes
-     the live percent label and the ffmpeg info panel. Symmetric with
-     SaveTo. The form's SettingsToControls calls this once.}
     procedure LoadFrom(ASettings: TPluginSettings);
-    {Pulls bundle values back into ASettings. Symmetric with LoadFrom.}
     procedure SaveTo(ASettings: TPluginSettings);
     procedure UpdateFFmpegInfo;
     procedure UpdateRandomPercentLabel;
-    {ShowSettingsDialog discovers the live ffmpeg path after the form
-     is constructed. The form pushes it here before calling LoadFrom
-     so UpdateFFmpegInfo's "Input empty falls back to resolved" branch
-     sees the right value.}
+    {Push the resolved ffmpeg path so UpdateFFmpegInfo's "input empty falls
+     back to resolved" branch sees the right value.}
     procedure SetResolvedFFmpegPath(const AValue: string);
-    {Browses for ffmpeg.exe, validates it via ValidateFFmpeg, and on
-     success writes the path into FFFmpegControls.EdtFFmpegPath (the
-     EdtFFmpegPath OnChange fires UpdateFFmpegInfo via the form's
-     forwarder).}
     procedure OnFFmpegPathClick;
     procedure OnFFmpegPathChange;
     procedure OnRandomPercentChange;
   end;
 
-  {Cache + Thumbnails + QuickView tab logic. Owns the cache + thumbnails
-   + quickview bundles, the cache-folder browse + cache-size info
-   helpers, and the BtnClearCacheClick deletion confirmation.}
   TStoragePresenter = class
   strict private
     FCacheControls: TCacheControls;
@@ -123,12 +74,6 @@ type
     procedure OnClearCacheClick;
   end;
 
-  {Appearance + Save tab logic. Owns the view + timestamp + statusbar +
-   banner + save bundles, all three font-shadow field pairs (these are
-   dialog-local state, not VCL controls, see uSettingsControlsBundles
-   docstring), the three Update*FontDisplay helpers, the UpdateStretchLock
-   State helper, the three BtnXxxFontClick handlers, and the BtnSaveFolderClick
-   browse handler.}
   TAppearancePresenter = class
   strict private
     FViewControls: TViewControls;
@@ -168,11 +113,8 @@ type
     procedure UpdateTimestampFontDisplay;
     procedure UpdateBannerFontDisplay;
     procedure UpdateStatusBarFontDisplay;
-    {Enforces the rule that stretch-panels mode implies progress-bar
-     Over panels: when the stretch checkbox is on, the progress bar
-     combo is forced to "Over panels" and disabled (the runtime would
-     override anyway; surfacing the override in the UI lets the user
-     understand what they will get).}
+    {Stretch-panels forces "Over panels" — runtime would override anyway,
+     surfacing it visually keeps the user expectation aligned.}
     procedure UpdateStretchLockState;
     procedure OnTimestampFontClick;
     procedure OnBannerFontClick;
@@ -187,10 +129,6 @@ uses
   uTypes, uStatusBarLayout, uBitmapSaver, uDefaults,
   uPluginMessages, uCacheMaintenance,
   uSettingsDlgLogic, uSettingsDlgUI, uSettingsDialogHelpers;
-
-{Helper: the BtnSaveFolderClick and BtnCacheFolderClick paths both
- use BrowseFolderInto. Free function in uSettingsDlgUI; presenters
- just call it.}
 
 {TExtractionPresenter}
 
@@ -230,9 +168,6 @@ end;
 
 procedure TExtractionPresenter.UpdateFFmpegInfo;
 begin
-  {WLX fallback: a pre-resolved path threaded in at dialog open by
-   ShowSettingsDialog via SetResolvedFFmpegPath. WCX takes the same
-   helper with its own re-probe-on-demand fallback.}
   DisplayFFmpegInfo(FFFmpegControls.EdtFFmpegPath.Text, FResolvedFFmpegPath,
     FLblFFmpegInfo, FEdtFFmpegInfo);
 end;
@@ -249,9 +184,6 @@ end;
 
 procedure TExtractionPresenter.OnFFmpegPathClick;
 begin
-  {The Edt's OnChange fires after the helper writes a successful pick;
-   that's wired to the form's EdtFFmpegPathChange handler which
-   forwards to OnFFmpegPathChange -> UpdateFFmpegInfo.}
   BrowseForFFmpegExe(FFFmpegControls.EdtFFmpegPath, FParentWnd);
 end;
 
@@ -287,9 +219,7 @@ end;
 
 procedure TStoragePresenter.LoadFrom(ASettings: TPluginSettings);
 begin
-  {Cache is also loaded by Extraction (shared bundle); avoid double-bind
-   noise by not re-binding here. Bind only the bundles we exclusively
-   own.}
+  {Cache bundle is loaded by Extraction; skip to avoid double-bind.}
   BindThumbnailsToControls(ASettings, FThumbnailsControls);
   BindQuickViewToControls(ASettings, FQuickViewControls);
   UpdateCacheFolderInfo;
@@ -300,7 +230,7 @@ procedure TStoragePresenter.SaveTo(ASettings: TPluginSettings);
 begin
   BindThumbnailsFromControls(ASettings, FThumbnailsControls);
   BindQuickViewFromControls(ASettings, FQuickViewControls);
-  {Cache save is performed by Extraction's SaveTo via the shared bundle.}
+  {Cache saved by Extraction's SaveTo via the shared bundle.}
 end;
 
 procedure TStoragePresenter.UpdateCacheFolderInfo;
@@ -422,8 +352,6 @@ end;
 
 procedure TAppearancePresenter.UpdateStretchLockState;
 begin
-  {Stretch panels forces "Over panels" progress bar layout; runtime
-   would override otherwise, surface the override visually.}
   if FStatusBarControls.ChkStatusBarStretchPanels.Checked then
   begin
     FCbxProgressBarLayout.ItemIndex := Ord(pblOverPanels);

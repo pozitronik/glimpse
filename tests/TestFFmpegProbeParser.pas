@@ -55,10 +55,8 @@ type
     [Test] procedure TestParseAudioSampleRate48000;
     [Test] procedure TestParseAudioSampleRateFullOutput;
     [Test] procedure TestParseAudioSampleRateNoAudio;
-    {Pins the "tolerates extra whitespace before the token" property
-     that ScanNumberBeforeToken introduced (step 54). The old open-coded
-     parser did NOT skip whitespace for ParseAudioSampleRate and would
-     return 0 for "48000   Hz"; the helper now handles either spacing.}
+    {ParseAudioSampleRate must tolerate extra whitespace before the
+     "Hz" token (e.g. "48000   Hz"), not just a single space.}
     [Test] procedure TestParseAudioSampleRateAllowsExtraSpaces;
     { Audio channels }
     [Test] procedure TestParseAudioChannelsStereo;

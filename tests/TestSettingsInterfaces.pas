@@ -1,16 +1,7 @@
-{Tests for src/uSettingsInterfaces + TPluginSettings's implementation
- of the 5 narrow interfaces (step 109, N3).
-
- The interfaces themselves have no behavior of their own (they're pure
- contracts), so these tests pin the ONE thing that can break silently
- at the seam: TPluginSettings actually satisfies each interface and
- the getter/setter readback matches the underlying flat property.
-
- Per-collaborator behavior (TFrameRenderPipeline, TClipboardPublisher,
- TFrameDimensionPredictor, TSaveDialogPresenter) stays in their
- existing test files — they all pass TPluginSettings (auto-coerced to
- the interface via Delphi's implements clause) and exercise the same
- code paths.}
+{Pins that TPluginSettings actually satisfies each of the 5 narrow
+ settings interfaces and that getter/setter readback matches the
+ underlying flat property. The interfaces are pure contracts, so this
+ is the one seam that can break silently.}
 unit TestSettingsInterfaces;
 
 interface

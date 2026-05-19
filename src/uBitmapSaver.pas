@@ -1,5 +1,4 @@
-﻿{Bitmap saving to PNG and JPEG files.
- Near-pure: depends on VCL imaging classes but has no form or settings dependency.}
+﻿{Bitmap saving to PNG and JPEG files. No form or settings dependency.}
 unit uBitmapSaver;
 
 interface
@@ -10,29 +9,15 @@ uses
 type
   TSaveFormat = (sfPNG, sfJPEG);
 
-  {Bundled save knobs for one TBitmap -> file operation. Replaces three
-   separate parameters at call sites that previously read
-   `H.Settings.SaveFormat` / `H.Settings.JpegQuality` /
-   `H.Settings.PngCompression` next to each other (Demeter friction).
-   TWcxSettings.SaveOptions builds it once per archive open; the WCX
-   entry extractors pass it to IBitmapSaverRouter.Save.}
   TSaveOptions = record
     Format: TSaveFormat;
     JpegQuality: Integer;
     PngCompression: Integer;
   end;
 
-  {Per-format bitmap saver. One implementation per supported file format;
-   adding a new format (WEBP, AVIF, ...) is a new class plus one entry
-   in MakeBitmapSaver's case — no edits to SaveBitmapToFile or
-   SaveFormatExtension. The concrete implementations encapsulate
-   format-specific options (PNG compression level, JPEG quality)
-   passed at construction time so per-call dispatch stays uniform.
-
-   Distinct from `IBitmapSaverRouter` in `wcx/uWcxEntryExtractors.pas`:
-   the router is a multi-format dispatcher (test seam for WCX entry
-   extractors that record what would have been saved); this interface
-   is the per-format polymorphic family used inside the router.}
+  {Per-format polymorphic saver. Adding a format = new class + one
+   entry in MakeBitmapSaver. Distinct from IBitmapSaverRouter in
+   wcx/uWcxEntryExtractors.pas (multi-format dispatcher test seam).}
   IBitmapSaver = interface
     ['{B4F8E2A1-3C5D-4E6F-9A7B-8C9D0E1F2A3B}']
     procedure Save(ABitmap: TBitmap; const APath: string);
@@ -57,46 +42,27 @@ type
     function Extension: string;
   end;
 
-{Enum <-> INI-string conversions for TSaveFormat. Match the
- StrToIntDef convention: StrToSaveFormat falls back to sfPNG (the
- historical default) when AValue is neither 'JPEG' nor 'JPG'.
- Lives here next to the enum so settings layers depending on uBitmapSaver
- do not need to drag in a separate codec unit.}
+{Falls back to sfPNG when AValue is neither 'JPEG' nor 'JPG'.}
 function StrToSaveFormat(const AValue: string): TSaveFormat;
 function SaveFormatToStr(AFormat: TSaveFormat): string;
 
-{Picks the saver implementation matching AFormat. AJpegQuality is
- ignored when AFormat=sfPNG, APngCompression is ignored when
- AFormat=sfJPEG — passing dummy values is fine when the call only
- needs the extension. The single dispatch point that selects the
- concrete class; SaveBitmapToFile and SaveFormatExtension both use it.}
+{Single dispatch point — SaveBitmapToFile and SaveFormatExtension both
+ use it. Dummy values for the unused parameter are fine.}
 function MakeBitmapSaver(AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer): IBitmapSaver;
 
-{Returns the file extension for a save format, including the dot.}
 function SaveFormatExtension(AFormat: TSaveFormat): string;
 
-{Encodes a bitmap as PNG bytes into AStream starting at its current
- position. Used by both the file-save path (SaveBitmapToFile) and the
- clipboard publish path (TCompressedPngStrategy in uClipboardFormatStrategies).
- Routes pf32bit sources through the alpha-aware encoder; other formats
- go via Vcl's TPngImage.Assign. APngCompression: 0..9.}
+{APngCompression: 0..9. Routes pf32bit through the alpha-aware encoder.}
 procedure EncodeBitmapAsPng(ABitmap: TBitmap; AStream: TStream; APngCompression: Integer);
 
-{Saves a bitmap to a file in the specified format.
- AJpegQuality: 1..100, APngCompression: 0..9.}
+{AJpegQuality: 1..100, APngCompression: 0..9.}
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer); overload;
 
-{TSaveOptions overload. Unpacks the bundle and routes through the
- polymorphic family the same way the 5-arg overload does.}
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions); overload;
 
-{Converts raw PNG bytes to a TBitmap.
- The returned bitmap is always pf24bit: any alpha channel the source PNG
- carried is stripped during the TPngImage.Assign step, then PixelFormat
- is set to pf24bit so the result is a plain DIB safe to render from any
- thread without GDI alpha handling. Callers needing the source PNG's
- alpha should decode through Vcl.Imaging.pngimage.TPngImage directly.
- Caller owns the returned bitmap. Raises on invalid data.}
+{Result is always pf24bit (alpha stripped) so the caller can render it
+ from any thread without GDI alpha handling. Caller owns the bitmap.
+ Raises on invalid data.}
 function PngBytesToBitmap(const AData: TBytes): TBitmap;
 
 implementation
@@ -104,21 +70,11 @@ implementation
 uses
   Vcl.Imaging.pngimage, Vcl.Imaging.jpeg;
 
-{Encodes a pf32bit bitmap as a 32-bit PNG with explicit alpha into
- AStream. Vcl's TPngImage.Assign(TBitmap) is unreliable for alpha —
- depending on Delphi version it silently emits a 24-bit PNG or stamps
- alpha=255 over real alpha values. We sidestep that by building a
- COLOR_RGBALPHA PNG of known geometry and writing each scanline
- byte-for-byte.
-
- Implementation note: TPngImage stores COLOR_RGBALPHA at 8 bits per
- channel as a 24-bit BGR DIB scanline plus a separate AlphaScanline
- (verified against TPngImage.SetInfo(24, FALSE) for COLOR_RGBALPHA).
- Source pf32bit DIBs are also BGRA, so for each pixel we copy three
- bytes verbatim to the BGR scanline and the fourth byte to the alpha
- line — no per-pixel TColor packing or property dispatch.
- TestSavePNGAlphaRoundTrip pins both the alpha and the colour ordering;
- a B/R swap regression there would scream "R<->B swap would land here".}
+{TPngImage.Assign(TBitmap) is unreliable for alpha — it can emit 24-bit
+ PNG or stamp alpha=255 depending on Delphi version. We build a
+ COLOR_RGBALPHA PNG and write scanlines byte-for-byte. TPngImage's
+ COLOR_RGBALPHA layout is 24-bit BGR plus a separate AlphaScanline,
+ matching source pf32bit BGRA.}
 procedure EncodeAlphaBitmapAsPng(ABitmap: TBitmap; AStream: TStream; ACompressionLevel: Integer);
 const
   COLOR_RGBALPHA = 6;
@@ -139,7 +95,6 @@ begin
       AlphaLine := Png.AlphaScanline[Y];
       for X := 0 to ABitmap.Width - 1 do
       begin
-        {BGR triple: byte-for-byte from BGRA source. Then peel off A.}
         Move(Src^, Dst^, BGR_BYTES_PER_PIXEL);
         Inc(Src, BGR_BYTES_PER_PIXEL);
         Inc(Dst, BGR_BYTES_PER_PIXEL);
@@ -159,8 +114,6 @@ var
 begin
   if ABitmap.PixelFormat = pf32bit then
   begin
-    {Alpha-aware fast path: bypass TPngImage.Assign which is unreliable
-     for 32-bit sources.}
     EncodeAlphaBitmapAsPng(ABitmap, AStream, APngCompression);
     Exit;
   end;
@@ -255,9 +208,8 @@ end;
 
 function SaveFormatExtension(AFormat: TSaveFormat): string;
 begin
-  {Extension is constant per format and independent of quality /
-   compression, but route through the factory anyway so adding a new
-   format only touches MakeBitmapSaver.}
+  {Route through the factory so adding a new format only touches
+   MakeBitmapSaver.}
   Result := MakeBitmapSaver(AFormat, 0, 0).Extension;
 end;
 
@@ -276,9 +228,6 @@ var
   Stream: TMemoryStream;
   Png: TPngImage;
 begin
-  {Explicit guard: empty input would fall through to a confusing
-   EPNGInvalidFileHeader (when range checks are off) or ERangeError on
-   AData[0] (when on). Fail fast with a clear contract violation instead.}
   if Length(AData) = 0 then
     raise EArgumentException.Create('PngBytesToBitmap: AData is empty');
   Stream := TMemoryStream.Create;

@@ -1,17 +1,12 @@
-{Tests for wlx/uSettingsPresenters (step 84, C5).
+{Tests for wlx/uSettingsPresenters. Per-presenter LoadFrom / SaveTo
+ round-trip through real VCL controls + selected event-handler
+ behaviours. Full per-rule coverage lives in TestEnableRules and
+ per-bundle coverage in TestSettingsControlsBundles; this fixture
+ pins the presenter as a cohesive owner of its slice.
 
- Smoke-test coverage: per-presenter LoadFrom / SaveTo round-trip
- through real VCL controls + selected event-handler behaviours. Full
- per-rule coverage is in TestEnableRules; full per-bundle coverage is
- in TestSettingsControlsBundles; this fixture pins the presenter as a
- cohesive owner of its slice — bundle binds + update helpers fire in
- the right order, font shadow fields round-trip, the storage cache-
- info reflects folder text changes, and the appearance stretch-lock
- enforces its progress-bar-layout override.
-
- Each test owns a hidden TForm.CreateNew (per the step-50 pattern) to
- give every VCL control a parent window — TComboBox.ItemIndex /
- TUpDown.Position need HandleAllocated to apply.}
+ Each test owns a hidden TForm.CreateNew to give every VCL control a
+ parent window — TComboBox.ItemIndex / TUpDown.Position need
+ HandleAllocated to apply.}
 unit TestSettingsPresenters;
 
 interface

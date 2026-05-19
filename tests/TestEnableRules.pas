@@ -1,7 +1,6 @@
-{Tests for the declarative enable-rule table that replaced the cluster
- of UpdateXxxControls methods in TSettingsForm. Exercises ApplyEnableRules
- with synthetic TControl-derived doubles so the assertions are independent
- of any real settings dialog instance.}
+{Tests for the declarative enable-rule table. Exercises
+ ApplyEnableRules with synthetic TControl-derived doubles so the
+ assertions are independent of any real settings dialog instance.}
 unit TestEnableRules;
 
 interface

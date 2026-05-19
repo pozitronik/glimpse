@@ -1,28 +1,13 @@
-{Strategy implementations for the clipboard format publishing pipeline.
+{Per-format strategies for the clipboard publish pipeline.
 
- Each strategy encapsulates one Win32 clipboard format end-to-end:
- allocation of the format-specific payload, publication via
- SetClipboardData, and cleanup on either failure or pre-publish abort.
- uClipboardImage.CopyBitmapToClipboard orchestrates over an array of
- these strategies, produced by BuildClipboardFormatStrategies from the
- user-configured TClipboardFormatsGroup toggles.
+ Lifecycle: Allocate -> (Publish XOR Discard).
+ - Allocate False = GlobalAlloc/encoder failure; strategy is empty.
+ - Publish on success transfers the handle to the OS; on failure the
+   strategy frees its own handle and returns False.
+ - Discard is idempotent.
 
- Adding a new format is one TXxxStrategy class plus one factory branch;
- the orchestrator does not change.
-
- Lifecycle contract (IClipboardFormatStrategy):
-   Allocate -> (Publish XOR Discard)
-   - Allocate: build payload. False means GlobalAlloc / encoder failure;
-     the strategy is "empty" and Discard becomes a no-op.
-   - Publish: SetClipboardData. On success the OS owns the handle and
-     the strategy forgets it. On failure the strategy frees its own
-     handle and returns False; the orchestrator logs and keeps going so
-     other formats can still publish.
-   - Discard: free the allocated payload without publishing. Safe to
-     call repeatedly or on an empty strategy.
-
- The destructor calls Discard so an uncaught exception between Allocate
- and Publish does not leak the OS handle.}
+ The destructor calls Discard so an exception between Allocate and
+ Publish does not leak the OS handle.}
 unit uClipboardFormatStrategies;
 
 interface
@@ -36,44 +21,22 @@ uses
 type
   IClipboardFormatStrategy = interface
     ['{D0B6E5F4-7A8C-9B0D-1E2F-3A4B5C6D7E8F}']
-    {Human-readable name used in error messages and logs. Surfaced to
-     the user in MessageDlg text when allocation fails, so the wording
-     must match the corresponding caption on the Clipboard settings tab.}
+    {Name must match the Clipboard settings tab caption; it surfaces in
+     user-facing error messages.}
     function Name: string;
 
-    {Builds the format payload in memory. Returns True on success; False
-     means GlobalAlloc / CreateDIBitmap / encoder failure and the strategy
-     is "empty". Caller treats False as a fatal abort and calls Discard
-     on every sibling strategy that previously succeeded (reverse order).
-     ABackground is the colour to composite semi-transparent pixels onto
-     for formats that need a flat opaque copy; strategies that carry true
-     alpha (CF_DIBV5, PNG) ignore it.}
+    {ABackground is composited onto semi-transparent pixels for formats
+     that need a flat opaque copy; alpha-aware formats ignore it.}
     function Allocate(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): Boolean;
 
-    {Hands the payload to SetClipboardData. On success the system owns
-     the handle and the strategy forgets it (returns True). On failure
-     the strategy frees its own handle and returns False; the orchestrator
-     logs the per-format failure but keeps going so any siblings still on
-     the array still publish.}
     function Publish: Boolean;
 
-    {Frees the allocated payload without publishing. Used when a sibling
-     strategy's Allocate failed and the orchestrator aborts before opening
-     the clipboard. Idempotent and safe on an empty (post-Publish or
-     pre-Allocate) strategy.}
     procedure Discard;
   end;
 
-{Builds the publish-order strategy array from the user's per-format
- toggles. Order: DIBV5 -> PNG -> DIB -> BITMAP (DIBV5 first because
- modern image editors prefer raw alpha pixels without decode cost;
- PNG second for web/chat apps; legacy formats last). Returns an empty
- array when every toggle is disabled — CopyBitmapToClipboard treats
- that as "silent skip, succeed" per the agreed UX.
-
- APngCompression carries the user's TPluginSettings.PngCompression
- value so the PNG strategy can match the file-save path's compression
- level for paste-as-PNG round-trip fidelity.}
+{Publish order: DIBV5 (alpha-aware editors prefer raw pixels), PNG
+ (web/chat apps), DIB, BITMAP (legacy last). Empty array means every
+ toggle is off; orchestrator silently succeeds.}
 function BuildClipboardFormatStrategies(
   const ASettings: TClipboardFormatsGroup;
   APngCompression: Integer): TArray<IClipboardFormatStrategy>;
@@ -90,22 +53,13 @@ begin
 end;
 
 const
-  {Win32 constants not always exported by Winapi.Windows under that
-   name. LCS_sRGB is the 4-char-code 'sRGB' in big-endian;
-   LCS_GM_GRAPHICS is the GamutMatching graphics rendering intent —
-   both standard for screen bitmaps. Moved from uClipboardImage with
-   the BuildAlphaDIBV5 logic.}
+  {Win32 constants not exported by Winapi.Windows. LCS_sRGB is the
+   4-char-code 'sRGB' big-endian; LCS_GM_GRAPHICS is the GamutMatching
+   rendering intent.}
   LCS_sRGB = $73524742;
   LCS_GM_GRAPHICS = 2;
 
 type
-  {Common base — non-refcounted (returns -1 from _AddRef/_Release) is
-   not appropriate here. Strategies are short-lived interface references
-   in a function scope; refcounted lifetime via TInterfacedObject is
-   the natural fit and lets the destructor cleanup run when the
-   orchestrator's local TArray<IClipboardFormatStrategy> drops out of
-   scope.}
-
   TAlphaAwareBitmapStrategy = class(TInterfacedObject, IClipboardFormatStrategy)
   private
     FHandle: HGLOBAL;
@@ -130,7 +84,7 @@ type
 
   TBitmapHandleStrategy = class(TInterfacedObject, IClipboardFormatStrategy)
   private
-    {HBITMAP, not HGLOBAL — cleanup goes through DeleteObject.}
+    {HBITMAP cleanup is DeleteObject, not GlobalFree.}
     FHandle: HBITMAP;
   public
     destructor Destroy; override;
@@ -154,10 +108,7 @@ type
   end;
 
 var
-  {Cached id returned by RegisterClipboardFormat('PNG'). RegisterClipboardFormat
-   is idempotent (same name returns the same id within a session) so caching
-   only saves the syscall, not correctness. Lazily initialised inside the
-   PNG strategy's Publish path.}
+  {RegisterClipboardFormat is idempotent; caching saves a syscall.}
   GPngClipboardFormatId: UINT = 0;
 
 function GetPngClipboardFormatId: UINT;
@@ -215,8 +166,8 @@ begin
     FillChar(Header^, HeaderSize, 0);
     Header^.bV5Size := HeaderSize;
     Header^.bV5Width := ASrc.Width;
-    {Negative height = top-down DIB; scanline 0 of the source maps to
-     the first row of pixel data right after the header.}
+    {Negative height = top-down DIB so source scanline 0 maps to the
+     first row after the header.}
     Header^.bV5Height := -ASrc.Height;
     Header^.bV5Planes := 1;
     Header^.bV5BitCount := 32;
@@ -250,7 +201,7 @@ begin
     Exit;
   if SetClipboardData(CF_DIBV5, FHandle) <> 0 then
   begin
-    {OS owns it now — release our reference so Discard does not double-free.}
+    {OS owns the handle now; clear so Discard does not double-free.}
     FHandle := 0;
     Result := True;
   end
@@ -272,10 +223,8 @@ begin
   end;
 end;
 
-{TFlattenedBitmapStrategy — CF_DIB. Builds a 24-bit BGR DIB with alpha
- pre-composited onto ABackground using straight-alpha. Bottom-up layout
- (positive biHeight) is the historical CF_DIB convention — conservative
- legacy consumers refuse top-down CF_DIB.}
+{Bottom-up layout (positive biHeight) is required for CF_DIB; some
+ legacy consumers refuse top-down.}
 
 destructor TFlattenedBitmapStrategy.Destroy;
 begin
@@ -301,8 +250,7 @@ begin
   W := ASrc.Width;
   H := ASrc.Height;
   HeaderSize := SizeOf(TBitmapInfoHeader);
-  {24-bit DIB rows are padded to a 4-byte boundary.}
-  RowBytesPadded := ((W * 3 + 3) div 4) * 4;
+  RowBytesPadded := ((W * 3 + 3) div 4) * 4; {4-byte DIB row alignment}
   ImageBytes := RowBytesPadded * H;
   TotalBytes := HeaderSize + ImageBytes;
 
@@ -331,7 +279,7 @@ begin
     FillChar(Header^, HeaderSize, 0);
     Header^.biSize := HeaderSize;
     Header^.biWidth := W;
-    Header^.biHeight := H; {bottom-up — see header comment}
+    Header^.biHeight := H;
     Header^.biPlanes := 1;
     Header^.biBitCount := 24;
     Header^.biCompression := BI_RGB;
@@ -342,7 +290,6 @@ begin
       RowStart := PByte(Header);
       Inc(RowStart, HeaderSize + Y * RowBytesPadded);
       PixelDest := RowStart;
-      {Bottom-up DIB: dest row Y maps to source row (H-1-Y).}
       ScanSrc := PByte(ASrc.ScanLine[H - 1 - Y]);
       for X := 0 to W - 1 do
       begin
@@ -354,9 +301,7 @@ begin
         Inc(ScanSrc);
         SrcA := ScanSrc^;
         Inc(ScanSrc);
-        {out = (src*A + bg*(255-A) + 127) div 255 — rounded straight-alpha
-         composite. Gap pixels carry RGB=ABackground so they reduce to bg
-         regardless of A; frame pixels (A=255) reduce to src.}
+        {Rounded straight-alpha composite: out = (src*A + bg*(255-A) + 127) / 255}
         PixelDest^ := Byte((SrcB * SrcA + BgB * (255 - SrcA) + 127) div 255);
         Inc(PixelDest);
         PixelDest^ := Byte((SrcG * SrcA + BgG * (255 - SrcA) + 127) div 255);
@@ -398,11 +343,6 @@ begin
     FHandle := 0;
   end;
 end;
-
-{TBitmapHandleStrategy — CF_BITMAP. Internally allocates a temp 24-bit
- DIB (same layout as TFlattenedBitmapStrategy) and feeds it to
- CreateDIBitmap. The HBITMAP keeps its own pixel storage; the temp DIB
- is freed inside Allocate.}
 
 destructor TBitmapHandleStrategy.Destroy;
 begin
@@ -511,9 +451,8 @@ begin
     end;
   finally
     GlobalUnlock(Mem);
-    {Temp DIB is no longer needed — CreateDIBitmap copied the pixels into
-     the HBITMAP's own storage. Free unconditionally; either we returned
-     early on failure or we already have the HBITMAP.}
+    {CreateDIBitmap copied the pixels into the HBITMAP's own storage,
+     so we can free the temp DIB unconditionally.}
     GlobalFree(Mem);
   end;
   Result := True;
@@ -546,12 +485,6 @@ begin
     FHandle := 0;
   end;
 end;
-
-{TCompressedPngStrategy — registered "PNG" clipboard format. Encodes
- the source bitmap to PNG bytes via uBitmapSaver.EncodeBitmapAsPng and
- publishes those bytes under the system-registered "PNG" format id.
- Modern image editors, browsers, and chat apps prefer this format and
- it carries true alpha at a fraction of the raw-pixel memory cost.}
 
 constructor TCompressedPngStrategy.Create(APngCompression: Integer);
 begin
@@ -664,8 +597,6 @@ begin
     FHandle := 0;
   end;
 end;
-
-{Factory}
 
 function BuildClipboardFormatStrategies(
   const ASettings: TClipboardFormatsGroup;

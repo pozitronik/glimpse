@@ -1,8 +1,6 @@
-{Worker thread that extracts video frames via ffmpeg.exe.
- Stores results in a thread-safe queue and calls an injected sink to
- signal "frame ready" / "extraction done" — the sink decides whether
- that means PostMessage to a Win32 HWND, an in-memory capture for tests,
- or something else entirely.}
+{Worker thread that extracts video frames via ffmpeg.exe. Results go to
+ a thread-safe queue; an injected sink decides how to notify (Win32
+ PostMessage in production, in-memory capture in tests).}
 unit uExtractionWorker;
 
 interface
@@ -14,14 +12,11 @@ uses
   uFrameNotificationSink;
 
 type
-  {Extracted frame awaiting delivery to UI thread}
   TPendingFrame = record
     Index: Integer;
     Bitmap: TBitmap; {nil = extraction error}
   end;
 
-  {Worker thread that extracts frames sequentially via ffmpeg.exe.
-   Stores results in a thread-safe queue and posts notifications.}
   TExtractionThread = class(TThread)
   private
     FExtractor: IFrameExtractor;
@@ -31,10 +26,11 @@ type
     FQueue: TList<TPendingFrame>;
     FQueueLock: TCriticalSection;
     FCache: IFrameCache;
-    FActiveWorkerCount: PInteger; {shared counter; last thread calls NotifyExtractionDone}
+    {Shared counter; last thread to decrement calls NotifyExtractionDone.}
+    FActiveWorkerCount: PInteger;
     FOptions: TExtractionOptions;
-    {Signaled from TerminatedSet so a blocking ffmpeg call inside RunProcess
-     can be unblocked mid-run instead of waiting for the child to exit.}
+    {Signalled from TerminatedSet so a blocking ffmpeg call can be
+     unblocked mid-run.}
     FCancelEvent: TEvent;
   protected
     procedure Execute; override;
@@ -44,15 +40,10 @@ type
     destructor Destroy; override;
   end;
 
-  {Decision rule for calling NotifyExtractionDone from a worker's finally
-   block. Returns True only for the last worker to decrement the active
-   counter; the ATerminated flag is taken for documentation but is
-   intentionally not used to suppress the call. Earlier the worker
-   checked NOT Terminated before notifying, which left the UI without a
-   completion signal whenever all workers had been cancelled at the
-   cancel-edge of natural completion. The controller already drains
-   stale completion messages between extractions so a stale signal is
-   harmless; missing the signal on the cancel path was the actual hazard.}
+{Returns True for the last worker. ATerminated is documentation only:
+ even cancelled runs must signal completion because the controller
+ drains stale signals on the next extraction, but missing the signal
+ on cancel would hang the UI.}
 function ShouldPostDone(AIsLastWorker, ATerminated: Boolean): Boolean;
 
 implementation
@@ -83,14 +74,14 @@ begin
   FCache := ACache;
   FActiveWorkerCount := AActiveWorkerCount;
   FOptions := AOptions;
-  {Manual-reset so a late check (after the first cancel) still sees it set}
+  {Manual-reset so late checks (after the first cancel) still see it set.}
   FCancelEvent := TEvent.Create(nil, True, False, '');
 end;
 
 destructor TExtractionThread.Destroy;
 begin
-  {inherited Destroy triggers Terminate+WaitFor which runs TerminatedSet and
-   joins Execute; only after that is it safe to free the event.}
+  {inherited runs Terminate+WaitFor and joins Execute; freeing the event
+   any earlier would race with workers reading FCancelEvent.Handle.}
   inherited;
   FCancelEvent.Free;
 end;
@@ -131,7 +122,6 @@ begin
         if Bmp <> nil then
           Source := 'cache';
 
-        {Cache miss: extract via extractor}
         if Bmp = nil then
         begin
           Bmp := FExtractor.ExtractFrame(FFileName, FOffsets[I].TimeOffset, FOptions, FCancelEvent.Handle);
@@ -160,8 +150,7 @@ begin
         Exit;
       end;
 
-      {Enqueue frame for the UI thread; PostMessage is just a notification.
-       Bitmap = nil signals an error placeholder to the UI.}
+      {nil Bitmap signals an error placeholder to the UI.}
       Frame.Index := CellIdx;
       Frame.Bitmap := Bmp;
       FQueueLock.Enter;
@@ -174,14 +163,9 @@ begin
         FSink.NotifyFramesReady;
     end;
   finally
-    {Always decrement; last worker to finish notifies the UI.
-     Signal even when Terminated - the controller drains stale completion
-     messages before each new extraction, so the UI is robust against
-     that, and skipping the signal on cancel left WMExtractionDone
-     unsignalled in races between Terminate and natural completion.}
-    {AtomicDecrement is in System and is cross-platform; replaces the
-     prior Winapi.Windows.InterlockedDecrement so the worker unit no
-     longer transitively depends on Win32 after the sink injection.}
+    {Signal even when Terminated; skipping on cancel left WMExtractionDone
+     unsignalled in races between Terminate and natural completion. The
+     controller drains stale signals before each new extraction.}
     IsLast := AtomicDecrement(FActiveWorkerCount^) = 0;
     if ShouldPostDone(IsLast, Terminated) and (FSink <> nil) then
       FSink.NotifyExtractionDone;

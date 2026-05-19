@@ -13,8 +13,8 @@ unit TestSettingsGroups;
    "callers reset to defaults first" contract).
  - FontName empty-string fallback keeps the current value rather than
    storing the empty string verbatim. This is subtle: TUnicodeIniFile.ReadString
-   returns the default only when the key is absent, but when the key is
-   present with an empty value it returns the empty string -- and the
+   returns the default only when the key is absent; when the key is
+   present with an empty value it returns the empty string, and the
    group code has an explicit Trim() guard for that case.
  - Numeric fields clamp to documented ranges.}
 
@@ -544,9 +544,9 @@ var
   Ini: TUnicodeIniFile;
   G: TBannerSettingsGroup;
 begin
-  {Same fallback for whitespace-only -- the Trim() guard is the actual
-   filter. Pinning this so the dialog cannot accidentally save a
-   whitespace name and lose the user's font.}
+  {Same fallback for whitespace-only — the Trim() guard is the
+   actual filter. Pinning this so the dialog cannot accidentally
+   save a whitespace name and lose the user's font.}
   IniPath := MakeIniPath('banner_ws_font.ini');
   Ini := TUnicodeIniFile.Create(IniPath);
   try

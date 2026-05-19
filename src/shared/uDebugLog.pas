@@ -1,21 +1,6 @@
-{Thread-safe debug logging to file via TDebugLog singleton.
-
- The previous implementation opened/appended/closed the log file on
- every DebugLog call and exposed a mutable global `GDebugLogPath` as
- the on/off switch. That had two costs: per-call file-open/close I/O
- under heavy logging, and an unowned variable that any unit could
- write from anywhere.
-
- The singleton holds the file handle open between writes (TStreamWriter
- + AutoFlush) so successive DebugLog calls just append a line. The
- stream is opened with fmShareDenyWrite so other readers (tests,
- external log viewers) can read the file concurrently. The mutable
- global is gone — Configure(APath) is the only mutator and it is a
- method, not an exported variable.
-
- DebugLog and DebugLogger remain as free-function facades for callers
- that don't need to touch the singleton directly. They are the public
- surface every existing consumer already uses.}
+{Thread-safe debug logging to file via TDebugLog singleton. Holds the
+ stream open between writes (TStreamWriter + AutoFlush) for low-overhead
+ logging. Configure is the only mutator. DebugLog/DebugLogger are facades.}
 unit uDebugLog;
 
 interface
@@ -26,9 +11,8 @@ uses
 type
   TDebugLog = class
   private
-    {Plain `private` (not strict) so the unit's initialization /
-     finalization block can construct and free the singleton. strict
-     private would also block same-unit code per Delphi's scoping rule.}
+    {Plain `private` (not strict) so initialization/finalization can
+     touch the class var.}
     class var FInstance: TDebugLog;
   strict private
     FLock: TCriticalSection;
@@ -41,41 +25,23 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    {Opens APath for append (or creates it if missing) and routes every
-     subsequent Log call to that file. Passing an empty path disables
-     logging. Closes any previously-open handle first. If the open
-     fails (invalid path, permission denied, ...) Log silently no-ops
-     until the next successful Configure; ActivePath still reflects
-     the caller's intent so the failure is diagnosable. Configure
-     never raises — logging must not crash the plugin.}
+    {Empty path disables logging. Never raises; logging must not crash
+     the plugin. A failed open leaves ActivePath set for diagnosability
+     while Log silently no-ops.}
     procedure Configure(const APath: string);
 
-    {Returns the path most recently passed to Configure. Empty when
-     logging is disabled. Note: a non-empty ActivePath does not
-     guarantee the file is writable — only that Configure was called
-     with that path.}
+    {Last path passed to Configure; non-empty does not imply writable.}
     function ActivePath: string;
 
-    {Writes ATag + AMsg as a timestamped line to the held handle.
-     Silently no-ops when Configure was never called, when Configure
-     was called with '', or when the underlying open failed. Never
-     raises.}
     procedure Log(const ATag, AMsg: string);
 
     class function Instance: TDebugLog; static;
   end;
 
-  {Thread-safe debug logging to file. Tag identifies the subsystem.
-   No-op when no log file is configured. Thin facade over
-   TDebugLog.Instance.Log.}
 procedure DebugLog(const ATag, AMsg: string);
 
-{Returns a closure that prepends ATag and forwards to DebugLog. Lets a
- unit declare `Log: TProc<string> := DebugLogger('ExtCtrl')` once and
- call `Log('message')` everywhere, instead of hand-writing a
- tag-prepending wrapper procedure in every unit that does subsystem
- logging. The closure captures ATag by value so it is safe to keep as
- a unit-level constant.}
+{Returns a closure that prepends ATag to every call. ATag is captured
+ by value, safe to keep as a unit-level constant.}
 function DebugLogger(const ATag: string): TProc<string>;
 
 implementation
@@ -104,24 +70,15 @@ end;
 
 procedure TDebugLog.InternalClose;
 begin
-  {FWriter owns FStream via OwnStream — freeing FWriter frees the
-   stream too. Null FStream afterwards so the open-helper sees a
-   clean slate on the next Configure.}
+  {FWriter.OwnStream means freeing FWriter frees FStream too.}
   FreeAndNil(FWriter);
   FStream := nil;
 end;
 
 procedure TDebugLog.InternalOpen(const APath: string);
 begin
-  {fmShareDenyNone (FILE_SHARE_READ | FILE_SHARE_WRITE) lets any other
-   opener read AND write the file while we hold it open. The "any other
-   writer" tolerance is what tests need: TFile.ReadAllLines opens with
-   fmShareDenyWrite which itself refuses to coexist with any active
-   writer; only an fmShareDenyNone-on-both-sides arrangement composes.
-   The previous opens-and-closes-per-write impl also allowed concurrent
-   readers and accepted concurrent writers (interleave-at-line risk),
-   so this is no regression in practice. Append if the file exists;
-   create otherwise.}
+  {fmShareDenyNone is required so tests using TFile.ReadAllLines
+   (fmShareDenyWrite under the hood) can coexist with an active writer.}
   if FileExists(APath) then
   begin
     FStream := TFileStream.Create(APath, fmOpenReadWrite or fmShareDenyNone);
@@ -145,8 +102,8 @@ begin
     try
       InternalOpen(APath);
     except
-      {Open failed; FStream/FWriter stay nil so Log no-ops. FPath stays
-       set so ActivePath shows the attempted path for diagnosability.}
+      {FStream/FWriter stay nil so Log no-ops; FPath stays set for
+       diagnosability via ActivePath.}
       FreeAndNil(FWriter);
       FStream := nil;
     end;
@@ -194,9 +151,6 @@ begin
   Result :=
     procedure(AMsg: string)
     begin
-      {TProc<string> is `reference to procedure(Arg1: string)` — no
-       const-qualifier. The forwarded call uses DebugLog's const-string
-       parameter which accepts the plain string without copy.}
       DebugLog(ATag, AMsg);
     end;
 end;

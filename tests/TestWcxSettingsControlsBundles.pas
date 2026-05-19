@@ -1,11 +1,10 @@
-{Tests for wcx/uWcxSettingsControlsBundles (step 99, part 1).
-
- Per-bundle round-trip coverage. Mirrors the test pattern from
- TestSettingsControlsBundles (WLX, step 50): hidden TForm.CreateNew as
- both owner + parent so TComboBox.ItemIndex / TUpDown.Position have a
- backing window. Focused on the WCX-specific bundles (Mode + Output +
- Combined + Limits) and the WCX shape of the shared concepts (Extraction
- with FrameCount; Timestamp using ShowTimestamp).}
+{Tests for wcx/uWcxSettingsControlsBundles. Per-bundle round-trip
+ coverage, mirroring TestSettingsControlsBundles (WLX). Hidden
+ TForm.CreateNew acts as both owner + parent so TComboBox.ItemIndex /
+ TUpDown.Position have a backing window. Focused on the WCX-specific
+ bundles (Mode + Output + Combined + Limits) and the WCX shape of the
+ shared concepts (Extraction with FrameCount; Timestamp using
+ ShowTimestamp).}
 unit TestWcxSettingsControlsBundles;
 
 interface

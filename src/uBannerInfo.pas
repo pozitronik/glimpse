@@ -1,11 +1,5 @@
-{Pure data + text formatting for the info banner.
-
- No Vcl.Graphics dependency on purpose: the banner record is populated by
- the caller from its own TVideoInfo + file-system data, then converted to
- a plain TArray<string> here. Bitmap construction lives in uBannerPainter,
- which consumes this output. Keeping the two concerns split lets tests of
- the line-formatting logic avoid pulling in the GDI AlphaBlend stack the
- painter carries.}
+{Pure data and text formatting for the info banner. Bitmap construction
+ lives in uBannerPainter; this unit stays VCL-free for testability.}
 unit uBannerInfo;
 
 interface
@@ -14,18 +8,13 @@ uses
   uVideoInfo;
 
 type
-  {Video metadata for the info banner. Populated by the caller from
-   its own TVideoInfo + file system data.}
   TBannerInfo = record
     FileName: string;
     FileSizeBytes: Int64;
     DurationSec: Double;
-    {Storage pixel grid dimensions (what's actually encoded).}
+    {Storage pixel grid; for non-square-pixel sources DisplayWidth/Height
+     differ and FormatBannerLines renders "stored -> displayed".}
     Width, Height: Integer;
-    {Display dimensions (storage * SAR). Equal to Width/Height for
-     non-anamorphic sources. When they differ, FormatBannerLines renders
-     "<sw>x<sh> -> <dw>x<dh>" so the banner reflects both the source's
-     stored geometry and the corrected geometry the saved frames carry.}
     DisplayWidth, DisplayHeight: Integer;
     VideoCodec: string;
     VideoBitrateKbps: Integer;
@@ -36,12 +25,8 @@ type
     AudioBitrateKbps: Integer;
   end;
 
-{Builds a TBannerInfo from a filename and probed video metadata.
- Reads file size from disk; all other fields come from AVideoInfo.}
 function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
 
-{Formats banner info into human-readable text lines.
- Returns an empty array if AInfo has no meaningful data.}
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
 
 implementation
@@ -50,7 +35,6 @@ uses
   System.SysUtils, System.IOUtils,
   uFrameOffsets;
 
-{Formats a file size as a human-readable string}
 function FormatFileSize(ABytes: Int64): string;
 var
   Fmt: TFormatSettings;
@@ -92,12 +76,10 @@ var
   Fmt: TFormatSettings;
 begin
   Fmt := TFormatSettings.Create('en-US');
-  {Line 1: filename and file size}
   Line1 := Format('File: %s', [ExtractFileName(AInfo.FileName)]);
   if AInfo.FileSizeBytes > 0 then
     Line1 := Line1 + Format('  |  Size: %s', [FormatFileSize(AInfo.FileSizeBytes)]);
 
-  {Line 2: duration, resolution, fps}
   Line2 := '';
   if AInfo.DurationSec > 0 then
     Line2 := Format('Duration: %s', [FormatDurationHMS(AInfo.DurationSec)]);
@@ -105,9 +87,8 @@ begin
   begin
     if Line2 <> '' then
       Line2 := Line2 + '  |  ';
-    {Anamorphic: storage and display dimensions diverge. Show both so the
-     banner explains why the saved combined image is wider than the raw
-     "WxH" reported by mediainfo et al.}
+    {Show "storage -> display" for anamorphic so users see why the saved
+     combined image is wider than the raw WxH reported by other tools.}
     if (AInfo.DisplayWidth > 0) and (AInfo.DisplayHeight > 0) and ((AInfo.DisplayWidth <> AInfo.Width) or (AInfo.DisplayHeight <> AInfo.Height)) then
       Line2 := Line2 + Format('%dx%d -> %dx%d', [AInfo.Width, AInfo.Height, AInfo.DisplayWidth, AInfo.DisplayHeight])
     else
@@ -120,7 +101,6 @@ begin
     Line2 := Line2 + Format('%.3f fps', [AInfo.Fps], Fmt);
   end;
 
-  {Line 3: video codec + audio info}
   Line3 := '';
   if AInfo.VideoCodec <> '' then
   begin

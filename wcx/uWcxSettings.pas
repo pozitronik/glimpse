@@ -1,5 +1,5 @@
-﻿{WCX plugin settings backed by an INI file.
- Separate from WLX settings to allow independent configuration.}
+﻿{WCX plugin settings backed by an INI file. Separate from WLX so each
+ plugin can be configured independently.}
 unit uWcxSettings;
 
 interface
@@ -9,9 +9,7 @@ uses
   uBitmapSaver, uTypes, uDefaults, uSettingsGroups, uUnicodeIniFile;
 
 const
-  {Bit values composed into the Mode bitmask. Each independent toggle
-   contributes one bit, so any combination of the three listing sources
-   can be enabled simultaneously.}
+  {Mode bitmask values; any combination of the three sources is valid.}
   MODE_FRAMES   = 1;
   MODE_COMBINED = 2;
   MODE_PRESETS  = 4;
@@ -20,48 +18,28 @@ type
   TWcxSettings = class
   strict private
     FIniPath: string;
-    {[ffmpeg]}
     FFFmpegExePath: string;
-    {[extraction] — shared group record (see uSettingsGroups)}
     FExtraction: TExtractionSettingsGroup;
-    {Frame-position randomness. WCX has no live-view shuffle hotkey, so
-     this only governs whether the on-demand archive render starts from
-     deterministic midpoints (RandomExtraction = False) or randomised
-     per-slice picks (True). No CacheRandomFrames toggle: WCX has no
-     frame cache so the option would be a no-op.}
     FRandomExtraction: Boolean;
     FRandomPercent: Integer;
-    {[output] — Mode is a bitmask of MODE_FRAMES / MODE_COMBINED /
-     MODE_PRESETS. The three Show* properties flip individual bits so
-     callers can manipulate one source at a time without touching the
-     others.}
     FMode: Integer;
     FSaveFormat: TSaveFormat;
     FJpegQuality: Integer;
     FPngCompression: Integer;
     FBackgroundAlpha: Byte;
-    {[combined]}
     FCombinedColumns: Integer;
     FBackground: TColor;
     FCellGap: Integer;
     FCombinedBorder: Integer;
-    {[combined] — timestamp overlay group shared with WLX}
     FTimestamp: TTimestampSettingsGroup;
-    {[combined] — banner group shared with WLX}
     FBanner: TBannerSettingsGroup;
-    {[output]}
     FShowFileSizes: Boolean;
-    {Output size cap in pixels, 0 = no limit. The cap applies to whichever
-     side is longer, so it works regardless of orientation. The frame cap
-     drives ffmpeg's scale filter for separate-mode extraction; the combined
-     cap triggers a post-render HALFTONE downscale of the assembled grid.}
+    {0 = no limit; applies to the longer side. Frame cap drives ffmpeg's
+     scale filter; combined cap triggers a post-render HALFTONE downscale.}
     FFrameMaxSide: Integer;
     FCombinedMaxSide: Integer;
-    {Hidden diagnostic toggle, no UI control. When True, uWcxExports points
-     GDebugLogPath at "<dll>.log" so the WcxLog calls scattered through the
-     plugin start writing to a file next to the DLL. Off by default so a
-     normal session leaves no trace; users opt in by hand-editing the INI
-     when they need to diagnose something.}
+    {Hidden toggle: enable by hand-editing [debug] LogEnabled in the INI.
+     Off by default so a normal session leaves no trace.}
     FDebugLogEnabled: Boolean;
 
   private
@@ -75,23 +53,9 @@ type
     constructor Create(const AIniPath: string);
     procedure Load;
     procedure Save;
-    {Resets every field to its documented default. Called from Create and at
-     the top of Load so a fresh Load always starts from a known baseline,
-     matching TPluginSettings behaviour.}
     procedure ResetDefaults;
-    {Load's three composable stages, public to allow per-stage tests.
-     Production callers should use Load (which orchestrates all three
-     after ResetDefaults). The stages are independent enough to be
-     exercised in isolation:
-       LoadFromIni     reads every simple key from AIni into the matching
-                       field with no transformation beyond a Byte narrowing
-                       where the target field's storage is narrower than the
-                       INI int (FBackgroundAlpha).
-       ParseLegacyFormats reads the string-encoded keys that need
-                       interpretation (Mode bitmask via ParseModeKey,
-                       Format JPEG/PNG enum, Background hex colour).
-       ApplyClamps     enforces the documented min/max ranges on fields
-                       whose values are bounded; safe to call repeatedly.}
+    {Load's three composable stages, public for per-stage tests. Use
+     Load in production (which orchestrates all three after ResetDefaults).}
     procedure LoadFromIni(AIni: TUnicodeIniFile);
     procedure ParseLegacyFormats(AIni: TUnicodeIniFile);
     procedure ApplyClamps;
@@ -106,23 +70,13 @@ type
     property HwAccel: Boolean read FExtraction.HwAccel write FExtraction.HwAccel;
     property UseKeyframes: Boolean read FExtraction.UseKeyframes write FExtraction.UseKeyframes;
     property RespectAnamorphic: Boolean read FExtraction.RespectAnamorphic write FExtraction.RespectAnamorphic;
-    {Read-only view of the whole extraction group. Surfaced so callers
-     can use TExtractionSettingsGroup.ToExtractionOptions instead of
-     rebuilding a TExtractionOptions field-by-field at every export
-     boundary.}
+    {Surfaced so callers can use TExtractionSettingsGroup.ToExtractionOptions
+     instead of rebuilding a TExtractionOptions field-by-field.}
     property Extraction: TExtractionSettingsGroup read FExtraction;
-    {Read-only views of the timestamp + banner groups so callers can use
-     TTimestampStyle.FromSettings / TBannerStyle.FromSettings instead of
-     rebuilding the style records field-by-field.}
     property Timestamp: TTimestampSettingsGroup read FTimestamp;
     property Banner: TBannerSettingsGroup read FBanner;
     property RandomExtraction: Boolean read FRandomExtraction write FRandomExtraction;
     property RandomPercent: Integer read FRandomPercent write FRandomPercent;
-    {Mode bitmask: bitwise OR of MODE_FRAMES, MODE_COMBINED, MODE_PRESETS.
-     0 means an empty archive listing — valid but unusual. The Show*
-     properties below let callers manipulate one bit at a time without
-     touching the others, which matters for the dialog's combo box that
-     only knows about frames-vs-combined.}
     property Mode: Integer read FMode write FMode;
     property ShowFrames: Boolean read GetShowFrames write SetShowFrames;
     property ShowCombined: Boolean read GetShowCombined write SetShowCombined;
@@ -130,14 +84,10 @@ type
     property SaveFormat: TSaveFormat read FSaveFormat write FSaveFormat;
     property JpegQuality: Integer read FJpegQuality write FJpegQuality;
     property PngCompression: Integer read FPngCompression write FPngCompression;
-    {Bundled save knobs for one SaveBitmapToFile / IBitmapSaverRouter.Save
-     call. Built on demand; consumers pass it instead of three separate
-     property reads. Cheap (a record copy of three small fields).}
     function SaveOptions: TSaveOptions;
     property BackgroundAlpha: Byte read FBackgroundAlpha write FBackgroundAlpha;
     property CombinedColumns: Integer read FCombinedColumns write FCombinedColumns;
-    {ShowTimestamp is the WCX name for the timestamp group's Show toggle;
-     WLX exposes the same field as ShowTimecode.}
+    {WLX exposes the same underlying field as ShowTimecode.}
     property ShowTimestamp: Boolean read FTimestamp.Show write FTimestamp.Show;
     property Background: TColor read FBackground write FBackground;
     property CellGap: Integer read FCellGap write FCellGap;
@@ -163,7 +113,6 @@ type
   end;
 
 const
-  {WCX-specific defaults (shared defaults are in uDefaults)}
   WCX_DEF_MODE = MODE_FRAMES;
   WCX_DEF_COMBINED_COLS = 0; {0 = auto}
   WCX_DEF_SHOW_TIMESTAMP = True;
@@ -184,13 +133,8 @@ implementation
 uses
   uPathExpand, uColorConv;
 
-{Parses the [output] Mode= INI value across all supported forms:
-   - Numeric (e.g. "5") → returned as-is when in valid bitmask range
-   - Legacy string "separate" → MODE_FRAMES
-   - Legacy string "combined" → MODE_COMBINED
-   - Anything else (empty, garbage) → ADefault
- Range check accepts 0..7 (the only valid bit combinations); higher
- values fall back to ADefault since they would expose unsupported bits.}
+{Numeric, or the legacy strings "separate" / "combined". Unrecognised
+ input falls back to ADefault. Range 0..7 enforced.}
 function ParseModeKey(const ARawValue: string; ADefault: Integer): Integer;
 var
   AsInt: Integer;
@@ -238,8 +182,7 @@ begin
   FCellGap := WCX_DEF_CELL_GAP;
   FCombinedBorder := DEF_COMBINED_BORDER;
   FTimestamp := TTimestampSettingsGroup.Defaults;
-  {WCX historically uses different timestamp font defaults than WLX. Apply
-   the overrides after the group seed so the shared defaults still travel.}
+  {WCX overrides applied after the shared seed so other defaults travel.}
   FTimestamp.Show := WCX_DEF_SHOW_TIMESTAMP;
   FTimestamp.FontName := WCX_DEF_TIMESTAMP_FONT;
   FTimestamp.FontSize := WCX_DEF_TIMESTAMP_FONT_SIZE;
@@ -301,9 +244,7 @@ procedure TWcxSettings.Load;
 var
   Ini: TUnicodeIniFile;
 begin
-  {Reset-then-read mirrors TPluginSettings so a second Load on the same
-   instance starts from a known baseline instead of inheriting whichever
-   values the previous Load produced.}
+  {Reset-then-read so a second Load starts from a known baseline.}
   ResetDefaults;
   if not FileExists(FIniPath) then
     Exit;
@@ -319,24 +260,16 @@ end;
 
 procedure TWcxSettings.LoadFromIni(AIni: TUnicodeIniFile);
 begin
-  {Pass the current field value as the INI fallback so the post-Reset
-   default propagates through one source of truth (ResetDefaults). The
-   LoadFrom helpers on the group records already follow this pattern;
-   the inline reads here match. Unclamped reads — ApplyClamps enforces
-   the documented bounds in a separate pass, exposing the clamp logic
-   to its own per-step tests.}
+  {Pass current field as INI fallback so the post-Reset default flows
+   through one source of truth. Unclamped — ApplyClamps runs separately.}
   FFFmpegExePath := AIni.ReadString('ffmpeg', 'ExePath', FFFmpegExePath);
   FExtraction.LoadFrom(AIni, 'extraction');
   FRandomExtraction := AIni.ReadBool('extraction', 'RandomExtraction', FRandomExtraction);
   FRandomPercent := AIni.ReadInteger('extraction', 'RandomPercent', FRandomPercent);
   FJpegQuality := AIni.ReadInteger('output', 'JpegQuality', FJpegQuality);
   FPngCompression := AIni.ReadInteger('output', 'PngCompression', FPngCompression);
-  {BackgroundAlpha is a Byte field; the EnsureRange + Byte cast happens
-   inline because narrowing a wider INI int into a Byte is intrinsic
-   to the read (any out-of-range INI value would be truncated by the
-   cast alone — EnsureRange is what makes the truncation meaningful).
-   This stays in LoadFromIni rather than ApplyClamps because the
-   field's storage type, not a logical range limit, drives it.}
+  {EnsureRange+Byte cast here (not in ApplyClamps) because the field's
+   storage type, not a logical range, drives the narrowing.}
   FBackgroundAlpha := Byte(EnsureRange(AIni.ReadInteger('output', 'BackgroundAlpha', FBackgroundAlpha), MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA));
   FCombinedColumns := AIni.ReadInteger('combined', 'Columns', FCombinedColumns);
   FCellGap := AIni.ReadInteger('combined', 'CellGap', FCellGap);
@@ -351,14 +284,9 @@ end;
 
 procedure TWcxSettings.ParseLegacyFormats(AIni: TUnicodeIniFile);
 begin
-  {Mode is a bitmask of MODE_FRAMES / MODE_COMBINED / MODE_PRESETS.
-   Numeric values parse directly; the legacy string forms "separate"
-   and "combined" map to the single-bit equivalent so an INI written
-   by an older Glimpse build still loads. String-parsed enums (Mode,
-   Format) and the hex-encoded Background keep literal/constant
-   fallbacks because converting the current field back to a string
-   just to feed it as a default would add reverse-conversion noise
-   for no benefit.}
+  {Literal/constant fallbacks here (not the current field value)
+   because converting an enum/hex back to string just to feed it as a
+   default would add reverse-conversion noise for no benefit.}
   FMode := ParseModeKey(AIni.ReadString('output', 'Mode', ''), WCX_DEF_MODE);
   if SameText(AIni.ReadString('output', 'Format', 'PNG'), 'JPEG') then
     FSaveFormat := sfJPEG

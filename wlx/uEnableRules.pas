@@ -1,16 +1,6 @@
-{Declarative enable-rule table for VCL form control groups.
-
- Seven hand-written UpdateXxxControls methods in TSettingsForm all
- encoded the same pattern: "enable a group of related controls based on
- a master toggle". This unit collapses that pattern: a TEnableRule pairs
- a Boolean predicate with the controls whose .Enabled property tracks
- it; ApplyEnableRules walks the array.
-
- Predicates are TFunc<Boolean> closures so they can read live control
- state (e.g. `function: Boolean begin Result := ChkX.Checked end`) at
- evaluation time. The table is built once at form construction (after
- the DFM-defined controls exist) and recomputed on every relevant
- user change.}
+{Declarative enable-rule table for VCL form control groups. A TEnableRule
+ pairs a Boolean predicate (closure that reads live control state) with the
+ controls whose .Enabled property tracks it.}
 unit uEnableRules;
 
 interface
@@ -26,10 +16,6 @@ type
 
   TEnableRules = TArray<TEnableRule>;
 
-{Walks the rule array; each rule's predicate is evaluated once and the
- result is written to .Enabled of every listed control. Cost is one
- closure call plus one VCL property write per affected control —
- negligible next to the original per-method overhead.}
 procedure ApplyEnableRules(const ARules: TEnableRules);
 
 implementation

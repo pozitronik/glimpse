@@ -47,11 +47,9 @@ type
     procedure TestClampOutOfRange;
     [Test]
     procedure TestFrameSideInvertedRangeNormalised;
-    {Validate is the home of cross-field invariants extracted from Load
-     in step 49. Pin two contracts: (a) it pulls Min down to Max when
-     they are inverted, and (b) repeated calls are no-ops. Validate is
-     called from Load/Save/ControlsToSettings, so the in-memory state
-     is always self-consistent regardless of which entry point ran.}
+    {Validate enforces cross-field invariants and is invoked from
+     Load/Save/ControlsToSettings; the two contracts pinned here are:
+     (a) it pulls Min down to Max when inverted, (b) it is idempotent.}
     [Test]
     procedure TestValidateSwapsMinMaxFrameSize;
     [Test]
@@ -252,9 +250,8 @@ type
     [Test]
     procedure TestAutoRefreshOnViewportChangeRoundTrip;
 
-    {Gap-fill: extraction-group fields that had no dedicated coverage
-     before the uSettings group-record refactor. These pin the current
-     Load/Save behaviour so the refactor can't silently change it.}
+    {Coverage for extraction-group fields not exercised elsewhere;
+     pins the current Load/Save behaviour against silent drift.}
     [Test]
     procedure TestFramesCountClampedHigh;
     [Test]

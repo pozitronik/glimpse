@@ -119,9 +119,10 @@ type
     [Test]
     procedure TestCacheManagerGetTotalSize;
 
-    {Orphan-temp sweep: Put writes <CacheDir>\<guid>.tmp and renames it.
-     If the process crashed mid-write the .tmp survived forever -- Evict
-     only walked .png. Construction now sweeps top-level *.tmp.}
+    {Orphan-temp sweep: Put writes <CacheDir>\<guid>.tmp and renames
+     it. If the process crashed mid-write the .tmp survived forever
+     since Evict only walked .png. Construction now sweeps top-level
+     *.tmp.}
     [Test]
     procedure TestConstructorSweepsOrphanTempFiles;
     [Test]

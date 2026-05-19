@@ -1,20 +1,4 @@
-{ffmpeg command-line assembly + version probing.
-
- Two related concerns extracted from uFFmpegExe so the command-line
- string-building (which is pure and easy to unit-test) lives
- independently of the TFFmpegExe class that spawns the subprocess:
-
- - BuildExtractCmdLine: assembles the `ffmpeg -i ... -frames:v 1 pipe:1`
-   command for a single-frame extraction, honouring the user's
-   HwAccel / UseKeyframes / RespectAnamorphic / MaxSide options.
-
- - ParseFFmpegVersion: extracts the version token (e.g. "6.1.1") from
-   the first line of `ffmpeg -version` output.
-
- - ValidateFFmpeg: runs `ffmpeg -version` and returns the parsed
-   version string — empty string means "this exe is not a valid
-   ffmpeg" (wrong tool, broken install, etc.). Used by uFFmpegLocator
-   to qualify auto-discovered candidates.}
+{ffmpeg command-line assembly and version probing.}
 unit uFFmpegCmdLine;
 
 interface
@@ -23,20 +7,14 @@ uses
   System.SysUtils,
   uTypes;
 
-{Builds the ffmpeg command line that TFFmpegExe.ExtractFrame executes.
- Pure function: no I/O, no globals. Exposed so the option-to-filter
- mapping (HwAccel, UseKeyframes, MaxSide cap, RespectAnamorphic SAR
- scale) can be verified independently of the actual extraction.}
 function BuildExtractCmdLine(const AExePath, AFileName: string; ATimeOffset: Double;
   const AOptions: TExtractionOptions): string;
 
-{Parses version string from `ffmpeg -version` output.
- Expects first line like "ffmpeg version 6.1.1 ...".
- Returns version string (e.g. "6.1.1") or empty if not recognized.}
+{Returns the version token (e.g. "6.1.1") or empty when AText is not
+ recognizable ffmpeg -version output.}
 function ParseFFmpegVersion(const AText: string): string;
 
-{Runs `ffmpeg -version` and returns the version string.
- Returns empty string if the executable is not a valid ffmpeg.}
+{Returns empty string if the executable is not a valid ffmpeg.}
 function ValidateFFmpeg(const AExePath: string): string;
 
 implementation
@@ -56,26 +34,15 @@ begin
 
   ChainFilters := '';
 
-  {SAR correction goes first: scale=iw*sar:ih turns the storage pixel grid
-   into square-pixel display dimensions; setsar=1 stamps SAR=1:1 on the
-   output so any downstream stage doesn't double-correct. No-op when the
-   source already has SAR=1:1.}
+  {SAR correction must be applied before MaxSide cap so the cap operates
+   on display dims. setsar=1 prevents downstream double-correction.}
   if AOptions.RespectAnamorphic then
     ChainFilters := 'scale=iw*sar:ih,setsar=1';
 
-  {MaxSide cap: act as a one-way ceiling — sources whose longer side already
-   fits pass through at native size; oversized sources get downscaled with
-   aspect preserved. The expression min(iw,MAX) caps each target dimension
-   at the input's actual size, so when both iw and ih are below MAX the
-   filter is a no-op (no upscale). When the source is larger,
-   force_original_aspect_ratio=decrease then trims one of the MAX-sized
-   target dimensions to preserve aspect.
-   The bare 'scale=MAX:MAX:force_original_aspect_ratio=decrease' form would
-   upscale smaller sources (e.g. 720x576 anamorphic -> 1920x1080) because
-   force_original_aspect_ratio=decrease is about preserving aspect, not
-   limiting scale direction. Commas inside the expressions need backslash
-   escaping so the filter-graph parser does not split the chain on them.
-   Applied after SAR correction so the cap operates on display dims.}
+  {One-way cap: min(iw,MAX) prevents upscale when source already fits.
+   Bare scale=MAX:MAX:force_original_aspect_ratio=decrease would upscale
+   smaller sources. Commas inside expressions need backslash escaping so
+   the filter-graph parser does not split the chain on them.}
   if AOptions.MaxSide > 0 then
   begin
     if ChainFilters <> '' then
@@ -112,7 +79,6 @@ begin
   if AText = '' then
     Exit;
 
-  {Take first line only}
   P := Pos(#10, AText);
   if P > 0 then
     Line := Copy(AText, 1, P - 1)
@@ -124,7 +90,6 @@ begin
   if not Line.StartsWith(Prefix, True) then
     Exit;
 
-  {Extract version token (everything up to the next space or dash)}
   P := Length(Prefix) + 1;
   Start := P;
   while (P <= Length(Line)) and not CharInSet(Line[P], [' ', '-']) do

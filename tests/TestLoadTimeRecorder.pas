@@ -1,10 +1,7 @@
-{Tests for wlx/uLoadTimeRecorder (step 105 part 2 of 4).
-
- The recorder uses GetTickCount under the hood; tests that measure
- actual elapsed time would need a Sleep + tolerance band. Instead
- these pin the contract bits that are independent of wall-clock
- timing: the empty-before-Finalize property, the idempotent Finalize
- guard, and the Start-clears-formatted contract.}
+{Tests for wlx/uLoadTimeRecorder. Pins the contract bits that are
+ independent of wall-clock timing: empty-before-Finalize, idempotent
+ Finalize guard, and Start clears the previously formatted string.
+ Avoids Sleep + tolerance bands since GetTickCount is the source.}
 unit TestLoadTimeRecorder;
 
 interface

@@ -1,9 +1,7 @@
-{Tests for TProductionWcxPresetsRepository (step 103, M24).
-
- The repository is a thin seam over LoadAllPresets / SavePresets; the
- production contract under test is: "LoadAll returns what was last
- SaveAll-ed at the path captured at construction, and an empty path
- is a defined no-op for both."}
+{Tests for TProductionWcxPresetsRepository — a thin seam over
+ LoadAllPresets / SavePresets. Pins the contract that LoadAll returns
+ what was last SaveAll-ed at the construction-captured path, and
+ that an empty path is a defined no-op for both.}
 unit TestWcxPresetsRepository;
 
 interface

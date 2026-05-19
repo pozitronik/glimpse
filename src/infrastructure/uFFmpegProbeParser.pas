@@ -1,22 +1,6 @@
-{ffmpeg stderr-output parsing primitives.
-
- Stateless pure functions that scan ffmpeg's `-i` stderr output and
- extract individual metadata fields (duration, resolution, codec,
- bitrates, audio properties, SAR). Lifted out of uFFmpegExe so the
- parsing surface lives independently of the process orchestration
- (uFFmpegExe owns the ffmpeg subprocess; this unit owns "given a
- stderr text blob, what does it say").
-
- Every function is a pure projection of a text string to a typed
- value. No I/O. No globals. Easy to test against canned strings.
-
- Implementation helpers (ScanNumberBefore, SkipSpacesBack,
- ScanNumberBeforeToken, ParseStreamBitrate) stay private — callers
- should reach for the higher-level Parse* functions.
-
- LenientUTF8Decode also lives here because every Parse* caller needs
- to convert the raw stderr TBytes to a string first; bundling the
- decoder removes the cross-unit hop.}
+{Stateless pure parsers for ffmpeg stderr metadata (duration, resolution,
+ codecs, bitrates, audio properties, SAR). Plus LenientUTF8Decode for
+ the raw TBytes conversion every caller needs first.}
 unit uFFmpegProbeParser;
 
 interface
@@ -24,48 +8,34 @@ interface
 uses
   System.SysUtils;
 
-{Decodes bytes as UTF-8, replacing invalid sequences instead of raising.
- ffmpeg may embed legacy-encoded metadata (e.g. CP1251 titles) that is
+{ffmpeg may embed legacy-encoded metadata (e.g. CP1251 titles) that is
  not valid UTF-8; strict decoding would raise EEncodingError.}
 function LenientUTF8Decode(const ABytes: TBytes): string;
 
-{Parses duration from ffmpeg stderr output. Returns seconds, or -1 if not found.}
 function ParseDuration(const AText: string): Double;
 
-{Parses video resolution from ffmpeg stderr output.}
 function ParseResolution(const AText: string; out AWidth, AHeight: Integer): Boolean;
 
-{Parses sample aspect ratio (SAR) numerator and denominator from ffmpeg
- stderr output. Looks for the "[SAR <N>:<D> ..." marker on the Video: line.
- When the marker is missing or the values are zero/invalid, AN/AD are set
- to 1:1 (square pixels) and the function returns False.}
+{Returns False with AN/AD=1:1 when the [SAR N:D] marker is missing or
+ invalid.}
 function ParseSampleAspect(const AText: string; out AN, AD: Integer): Boolean;
 
-{Parses video codec name from ffmpeg stderr output.}
 function ParseVideoCodec(const AText: string): string;
 
-{Parses overall bitrate from ffmpeg stderr Duration line. Returns kb/s, or 0.}
 function ParseBitrate(const AText: string): Integer;
 
-{Parses video framerate from ffmpeg stderr Video stream line. Returns fps, or 0.}
 function ParseFps(const AText: string): Double;
 
-{Parses video stream bitrate from ffmpeg stderr. Returns kb/s, or 0.}
 function ParseVideoBitrate(const AText: string): Integer;
 
-{Parses audio codec from ffmpeg stderr Audio stream line.}
 function ParseAudioCodec(const AText: string): string;
 
-{Parses audio sample rate from ffmpeg stderr. Returns Hz, or 0.}
 function ParseAudioSampleRate(const AText: string): Integer;
 
-{Parses audio channel layout from ffmpeg stderr (mono, stereo, 5.1, etc.).}
 function ParseAudioChannels(const AText: string): string;
 
-{Parses audio bitrate from ffmpeg stderr Audio stream line. Returns kb/s, or 0.}
 function ParseAudioBitrate(const AText: string): Integer;
 
-{Extracts the first line containing APrefix from ffmpeg output.}
 function ExtractStreamLine(const AText, APrefix: string): string;
 
 implementation
@@ -104,11 +74,9 @@ begin
     Exit;
   P := P + Length('Duration:');
 
-  {Skip whitespace}
   while (P <= Length(AText)) and (AText[P] = ' ') do
     Inc(P);
 
-  {Read until comma, newline, or end}
   TimeStr := '';
   while (P <= Length(AText)) and not CharInSet(AText[P], [',', #13, #10]) do
   begin
@@ -120,7 +88,6 @@ begin
   if (TimeStr = '') or SameText(TimeStr, 'N/A') then
     Exit;
 
-  {Expected: HH:MM:SS.ff}
   Parts := TimeStr.Split([':']);
   if Length(Parts) <> 3 then
     Exit;
@@ -162,19 +129,16 @@ begin
   if VideoPos = 0 then
     Exit;
 
-  {Scan for NNNxNNN pattern after "Video:"}
   P := VideoPos + 6;
   while P < Length(AText) do
   begin
     if (AText[P] = 'x') and CharInSet(AText[P - 1], ['0' .. '9']) and CharInSet(AText[P + 1], ['0' .. '9']) then
     begin
-      {Walk backwards for width digits}
       I := P - 1;
       while (I > VideoPos) and CharInSet(AText[I], ['0' .. '9']) do
         Dec(I);
       WidthStr := Copy(AText, I + 1, P - I - 1);
 
-      {Walk forwards for height digits}
       I := P + 1;
       while (I <= Length(AText)) and CharInSet(AText[I], ['0' .. '9']) do
         Inc(I);
@@ -183,7 +147,7 @@ begin
       AWidth := StrToIntDef(WidthStr, 0);
       AHeight := StrToIntDef(HeightStr, 0);
 
-      {Require at least 2-digit width and height to avoid false matches like "0x1A"}
+      {Require 2+ digits to avoid false matches like "0x1A"}
       if (Length(WidthStr) >= 2) and (Length(HeightStr) >= 2) and (AWidth > 0) and (AHeight > 0) then
       begin
         Result := True;
@@ -212,7 +176,6 @@ begin
   if MarkerPos = 0 then
     Exit;
 
-  {Walk digits up to ':' starting after the marker}
   NumStart := MarkerPos + Length(Marker);
   ColonPos := NumStart;
   while (ColonPos <= Length(AText)) and CharInSet(AText[ColonPos], ['0' .. '9']) do
@@ -221,7 +184,6 @@ begin
     Exit;
   AN := StrToIntDef(Copy(AText, NumStart, ColonPos - NumStart), 0);
 
-  {Walk digits after ':'}
   EndPos := ColonPos + 1;
   while (EndPos <= Length(AText)) and CharInSet(AText[EndPos], ['0' .. '9']) do
     Inc(EndPos);
@@ -253,11 +215,9 @@ begin
     Exit;
   P := P + Length('Video:');
 
-  {Skip whitespace}
   while (P <= Length(AText)) and (AText[P] = ' ') do
     Inc(P);
 
-  {Read word characters}
   Start := P;
   while (P <= Length(AText)) and CharInSet(AText[P], ['a' .. 'z', 'A' .. 'Z', '0' .. '9', '_']) do
     Inc(P);
@@ -272,7 +232,6 @@ var
   NumStr: string;
 begin
   Result := 0;
-  {Look for "bitrate:" on the Duration line (before any Stream lines)}
   P := Pos('bitrate:', AText);
   if P = 0 then
     Exit;
@@ -289,7 +248,6 @@ begin
   end;
 end;
 
-{Extracts the first line containing APrefix from multi-line ffmpeg output}
 function ExtractStreamLine(const AText, APrefix: string): string;
 var
   P, LineEnd: Integer;
@@ -304,8 +262,6 @@ begin
   Result := Copy(AText, P, LineEnd - P);
 end;
 
-{Scans backward from position P through characters in ADigitChars,
- returning the extracted number string. P is unchanged.}
 function ScanNumberBefore(const ALine: string; P: Integer; const ADigitChars: TSysCharSet): string;
 var
   Start: Integer;
@@ -319,7 +275,6 @@ begin
     Result := Copy(ALine, Start, P - Start + 1);
 end;
 
-{Skips whitespace backward from position P, returns updated position}
 function SkipSpacesBack(const ALine: string; P: Integer): Integer;
 begin
   while (P > 0) and (ALine[P] = ' ') do
@@ -327,14 +282,8 @@ begin
   Result := P;
 end;
 
-{Composite helper used by the "value AToken" parsers (ParseFps, ParseAudioSampleRate):
- find AToken in ALine, skip any whitespace immediately before it, then scan
- backward for digits (or AAllowedChars) and return the literal in AValue.
- Returns True on a non-empty digit run.
-
- Does NOT fit ParseStreamBitrate — that one needs the LAST occurrence of
- 'kb/s' (codec metadata can mention bitrates earlier on the same line),
- so it keeps its own right-to-left walk.}
+{ParseStreamBitrate cannot use this — it needs the LAST occurrence of
+ 'kb/s' because codec metadata can mention bitrates earlier on the line.}
 function ScanNumberBeforeToken(const ALine, AToken: string;
   const AAllowedChars: TSysCharSet; out AValue: string): Boolean;
 var
@@ -362,14 +311,12 @@ begin
     Result := StrToFloatDef(NumStr, 0, TFormatSettings.Invariant);
 end;
 
-{Parses bitrate (kb/s) from a single stream line}
 function ParseStreamBitrate(const ALine: string): Integer;
 var
   P: Integer;
   NumStr: string;
 begin
   Result := 0;
-  {Find last occurrence of "kb/s" on the line}
   P := Length(ALine);
   while P > 4 do
   begin
@@ -431,8 +378,6 @@ begin
   Line := ExtractStreamLine(AText, 'Audio:');
   if Line = '' then
     Exit;
-  {Audio line format: "Audio: codec (profile) (fourcc), rate Hz, channels, fmt, bitrate"
-   Channel layout is a comma-separated field: mono, stereo, 5.1, 7.1, etc.}
   Parts := Line.Split([',']);
   for I := 0 to High(Parts) do
   begin

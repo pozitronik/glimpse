@@ -117,10 +117,10 @@ type
     [Test] procedure TestDebugLogEnabledDefault;
     [Test] procedure TestDebugLogEnabledRoundTrip;
     [Test] procedure TestDebugLogEnabledAbsentKeyKeepsDefault;
-    { Per-stage tests for the Load decomposition: LoadFromIni reads raw
-      values without clamping, ParseLegacyFormats interprets the
-      string-encoded keys, ApplyClamps enforces bounds. Each stage is
-      exercised in isolation so a regression in one is localised. }
+    { Per-stage Load tests: LoadFromIni reads raw values without
+      clamping, ParseLegacyFormats interprets string-encoded keys,
+      ApplyClamps enforces bounds. Each stage in isolation so a
+      regression in one is localised. }
     [Test] procedure TestLoadFromIniReadsRawValuesWithoutClamping;
     [Test] procedure TestParseLegacyFormatsAcceptsLegacyModeString;
     [Test] procedure TestApplyClampsClampsRandomPercentHigh;
@@ -577,8 +577,7 @@ begin
   try
     RawMode := Ini.ReadString('output', 'Mode', '');
     Assert.AreEqual('5', RawMode, 'Mode is written as integer 1|4=5');
-    { UsePresets is no longer written; if present it would be a
-      migration leftover, never written by the new code path. }
+    { Save must not emit the legacy UsePresets key. }
     Assert.IsFalse(Ini.ValueExists('output', 'UsePresets'),
       'Save must not emit the legacy UsePresets key');
   finally
@@ -2110,7 +2109,7 @@ begin
   end;
 end;
 
-{ Per-stage tests for the Load decomposition }
+{ Per-stage Load tests }
 
 procedure TTestWcxSettings.TestLoadFromIniReadsRawValuesWithoutClamping;
 var

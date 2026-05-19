@@ -1,10 +1,10 @@
 unit TestSettingsDlgUI;
 
-{Tests for uSettingsDlgUI -- the VCL-touching helpers shared by the WLX
- and WCX settings dialogs. Coverage is intentionally limited to the two
- readout formatters (RefreshFontEdit / RefreshBannerFontEdit)
- because the Pick* helpers call AFontDialog.Execute / AColorDialog.Execute,
- which open real Windows dialogs and cannot be driven headlessly.}
+{Tests for uSettingsDlgUI — the VCL-touching helpers shared by the
+ WLX and WCX settings dialogs. Coverage is limited to the readout
+ formatters (RefreshFontEdit / RefreshBannerFontEdit) because the
+ Pick* helpers call AFontDialog.Execute / AColorDialog.Execute,
+ which open real Windows dialogs and cannot run headlessly.}
 
 interface
 
@@ -54,9 +54,9 @@ var
   Edit: TEdit;
 begin
   {Empty name is not a valid font but the formatter has no business
-   rejecting it -- it renders whatever the caller hands in. Pinning this
-   contract so a future "validate name" change does not silently break
-   the read-only display path.}
+   rejecting it — it renders whatever the caller hands in. Pinning
+   this contract so a future "validate name" change does not
+   silently break the read-only display path.}
   Form := TForm.CreateNew(nil);
   try
     Edit := TEdit.Create(Form);
@@ -106,8 +106,9 @@ var
   Edit: TEdit;
 begin
   {Size 0 is sentinel for "unset" inside the dialog. With auto on the
-   formatter must not show "0 pt" -- it must use the auto-suffix instead.
-   Pinning the contract that auto wins over size when both are present.}
+   formatter must not show "0 pt" — it must use the auto-suffix
+   instead. Pinning the contract that auto wins over size when both
+   are present.}
   Form := TForm.CreateNew(nil);
   try
     Edit := TEdit.Create(Form);

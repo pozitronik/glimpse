@@ -1,8 +1,5 @@
-{Persistent disk cache for video probe results (TVideoInfo).
- Eliminates the 0.5-2s ffmpeg probe on re-opens by reading cached metadata
- from a small text file instead of spawning a subprocess.
- Stored separately from the frame cache so clearing frames does not
- invalidate probe data. Always enabled, no user-facing toggle.}
+{Persistent disk cache for TVideoInfo. Always enabled; stored separately
+ from the frame cache so clearing frames does not invalidate probes.}
 unit uProbeCache;
 
 interface
@@ -14,38 +11,24 @@ type
   TProbeCache = class
   strict private
     FCacheDir: string;
-    {Optional injected prober. When nil (the 1-arg constructor path),
-     TryGetOrProbe constructs a per-call TFFmpegExe from its AFFmpegPath
-     argument — the historical behaviour. When non-nil (the 2-arg
-     constructor), TryGetOrProbe delegates to it and ignores AFFmpegPath.}
+    {nil = per-call TFFmpegExe from AFFmpegPath; non-nil = test seam,
+     AFFmpegPath ignored.}
     FProber: IVideoProber;
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string; static;
     function ProbeKey(const AFilePath: string): string;
   public
     constructor Create(const ACacheDir: string); overload;
-    {Test-seam constructor: injected prober is the source of truth for
-     ProbeVideo calls (AFFmpegPath in TryGetOrProbe is then ignored).
-     Production callers can also use it to share one TFFmpegProber across
-     the cache's lifetime instead of constructing one per probe.}
     constructor Create(const ACacheDir: string; const AProber: IVideoProber); overload;
-    {Returns True and populates AInfo if a valid cached probe exists for AFilePath.
-     Returns False on cache miss (file not cached, stale, or unreadable).}
     function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
-    {Stores a successful probe result for AFilePath. Only caches valid results.}
+    {Only caches valid results.}
     procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
-    {Convenience: cache look-up, fall back to ffmpeg probe on miss, repopulate.
-     Consolidates the cache-then-probe policy so WLX/WCX/thumbnail paths share it.}
+    {Cache-then-probe convenience shared by WLX/WCX/thumbnail paths.}
     function TryGetOrProbe(const AFilePath, AFFmpegPath: string): TVideoInfo;
-    {Total bytes used by every .probe file under the cache dir. Used by the
-     settings dialog to fold the probe cache into the displayed cache size.}
     function GetTotalSize: Int64;
-    {Removes every cached probe. Best-effort: directory locks are swallowed.
-     Used by the settings dialog's Clear cache button so probe entries are
-     wiped alongside frame cache entries.}
+    {Best-effort: directory locks are swallowed.}
     procedure Clear;
   end;
 
-  {Default probe cache directory, separate from the frame cache.}
 function DefaultProbeCacheDir: string;
 
 implementation
@@ -130,13 +113,7 @@ begin
     AInfo.SampleAspectD := StrToIntDef(Lines.Values['SampleAspectD'], 1);
     AInfo.DisplayWidth := StrToIntDef(Lines.Values['DisplayWidth'], 0);
     AInfo.DisplayHeight := StrToIntDef(Lines.Values['DisplayHeight'], 0);
-    {Cache entries written before the SAR-aware probe was added lack
-     explicit DisplayWidth/Height keys (StrToIntDef returned 0).
-     RecalcDisplayDimensions re-derives them from Width/Height +
-     SampleAspect, matching what ProbeVideo would have written. Newer
-     entries get their explicit values overwritten by the same
-     derivation, which is a no-op for SAR=1:1 and a self-consistency
-     check for anamorphic sources — same answer either way.}
+    {Pre-SAR cache entries lack explicit DisplayWidth/Height; rederive.}
     if (AInfo.DisplayWidth <= 0) or (AInfo.DisplayHeight <= 0) then
       AInfo.RecalcDisplayDimensions;
     AInfo.VideoCodec := Lines.Values['VideoCodec'];
@@ -170,7 +147,6 @@ begin
       FFmpeg.Free;
     end;
   end;
-  {Put is a no-op for invalid results, so we can call it unconditionally}
   Put(AFilePath, Result);
 end;
 
@@ -238,12 +214,8 @@ begin
     Lines.Add('AudioSampleRate=' + IntToStr(AInfo.AudioSampleRate));
     Lines.Add('AudioChannels=' + AInfo.AudioChannels);
     Lines.Add('AudioBitrateKbps=' + IntToStr(AInfo.AudioBitrateKbps));
-    {Atomic write: SaveToFile straight to Path could leave a half-written
-     .probe if the process crashed mid-write, and TryGet treats a file
-     with just a Duration line as valid (poisoning the cache for that
-     entry until the next clear or file-mtime change). Mirror the frame
-     cache pattern: write to a unique sibling .tmp, then MoveFileEx with
-     MOVEFILE_REPLACE_EXISTING for an atomic rename on NTFS.}
+    {Atomic write via sibling .tmp + MoveFileEx so a crash mid-write
+     cannot leave a partial .probe that poisons future TryGets.}
     TempPath := Path + '.' + TGUID.NewGuid.ToString + '.tmp';
     try
       TDirectory.CreateDirectory(Dir);

@@ -1,42 +1,21 @@
-{Finds the next or previous supported file in the same directory,
- and reports the current file's 1-based position among the supported
- siblings. Sorted alphabetically, case-insensitive, with wrap-around
- at boundaries for navigation.
-
- Step 111 (S12): an in-memory cache keyed by (dir, mtime, extensions)
- amortises the per-keypress TDirectory.GetFiles + sort across runs of
- navigations in the same directory. Cache invalidates automatically
- when the directory's mtime changes (file create/delete in NTFS bumps
- the parent's mtime). Cache is bounded by CACHE_CAPACITY and uses
- round-robin eviction. Single TCriticalSection guards the cache;
- production callers are single-threaded (UI thread) but the lock is
- defensive against future use from a background thread.}
+{Sibling-file navigation with an in-memory listing cache keyed by
+ (dir, mtime, extensions). NTFS mtime invalidation is automatic.
+ Round-robin eviction at CACHE_CAPACITY. Single lock for thread safety.}
 unit uFileNavigator;
 
 interface
 
-{Returns the path of the adjacent supported file in the same directory
- as ACurrentFile. ADelta = +1 for next, -1 for previous. AExtensions is
- a comma-separated list (e.g. 'mp4,mkv,avi'). Returns empty string if
- fewer than two supported files exist. Wraps around at first/last file.}
+{ADelta=+1 next, -1 previous. AExtensions is comma-separated. Empty
+ string when fewer than two siblings; wraps around at boundaries.}
 function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
 
-{Reports the 1-based position (AIndex) of ACurrentFile within the sorted
- list of supported files in its directory, plus the total count (ATotal).
- Returns True on success. Returns False with both out params at 0 when
- the directory is unreadable, no supported files are present, or
- ACurrentFile itself isn't in the sorted list.}
+{1-based AIndex within sorted siblings, plus total. False with zeros
+ when directory unreadable or current file not in list.}
 function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
 
-{Drops every cache entry. Tests call this in Setup to start from a
- known state. Production code does not need to call this; entries
- expire automatically when the directory's mtime changes.}
+{Test-only; production never needs to call this.}
 procedure ClearDirectoryCache;
 
-{Number of cached directory listings currently held. Tests use this to
- verify cache hits vs misses (a second call with identical arguments
- should not grow the count; a call with a different directory or
- extension set should).}
 function DirectoryCacheSize: Integer;
 
 implementation
@@ -47,10 +26,7 @@ uses
   System.SyncObjs;
 
 const
-  {Holds the most recently scanned directory listings. 8 covers TC's
-   typical workflow (left + right panels plus a handful of recent
-   navigations). Round-robin eviction; the oldest entry is overwritten
-   when the table is full.}
+  {8 covers TC's typical left + right panel + recent-navigation pattern.}
   CACHE_CAPACITY = 8;
 
 type
@@ -65,11 +41,7 @@ var
   GCacheCount: Integer;
   GCacheNext: Integer;
 
-{Builds a normalized comma-separated string from AExtensions: trimmed,
- lowercased, sorted, deduplicated. Empty entries are dropped. Used as
- part of the cache key so two callers with semantically-equivalent
- extension lists (different whitespace, different case, different
- order) hit the same cache row.}
+{Trimmed, lowercased, sorted, deduplicated for stable cache key.}
 function NormalizedExtKey(const AExtensions: string): string;
 var
   ExtList: TArray<string>;
@@ -94,11 +66,8 @@ begin
   end;
 end;
 
-{Locale-independent string form of the directory's last-write time.
- Used in the cache key so mtime equality is a string compare. On any
- failure (dir missing, access denied) returns '0' — the key then never
- matches a successful entry, so the cache effectively bypasses until
- the dir is readable again.}
+{'0' on failure means the cache key never matches a successful entry,
+ so the cache bypasses until the directory is readable again.}
 function DirMTimeKey(const ADir: string): string;
 var
   DT: TDateTime;
@@ -167,10 +136,7 @@ begin
   end;
 end;
 
-{Enumerates supported files in ADir and returns their base names sorted
- case-insensitively. Shared by FindAdjacentFile and GetFilePosition so
- both use the exact same ordering. Step 111 adds the cache wrapper;
- the underlying scan logic is unchanged.}
+{Shared by FindAdjacentFile and GetFilePosition so ordering matches.}
 function CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
 var
   Key, Ext: string;
@@ -214,7 +180,6 @@ begin
         if ExtSet.ContainsKey(Ext) then
           Sorted.Add(ExtractFileName(RawFiles[I]));
       end;
-      {Case-insensitive sort, same as TC's default alphabetical order}
       Sorted.Sort(TComparer<string>.Construct(
         function(const A, B: string): Integer
         begin
@@ -261,8 +226,8 @@ begin
   CurIdx := IndexOfName(Files, CurName);
   if CurIdx < 0 then
     Exit;
-  {Double-mod keeps the result non-negative even for large negative deltas;
-   plain Delphi mod preserves the dividend's sign.}
+  {Double-mod keeps the result non-negative for negative deltas;
+   Delphi's mod preserves the dividend's sign.}
   NewIdx := ((CurIdx + ADelta) mod Length(Files) + Length(Files)) mod Length(Files);
   Result := Dir + Files[NewIdx];
 end;

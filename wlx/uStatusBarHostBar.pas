@@ -1,7 +1,7 @@
-{TStatusBar specialisation used by the plugin form. Hoisted from
- uPluginForm so the per-panel hint plumbing and the hit-test arithmetic
- stay independently inspectable from the host form and its many other
- concerns. Self-contained: no back reference to the form is needed.}
+{TStatusBar specialisation that surfaces per-panel hints and a hand cursor
+ over interactive tokens. The hint mechanism drives CMHintShow's CursorRect
+ so the VCL re-issues CMHintShow on cross-panel moves, avoiding the
+ unreliable "set Hint + CancelHint" dance.}
 unit uStatusBarHostBar;
 
 interface
@@ -13,25 +13,12 @@ uses
   uStatusBarTokens;
 
 type
-  {Per-panel hint provider used by TGlimpseStatusBar. APanelIndex is the
-   0-based index of the panel under the cursor, or -1 when the cursor is
-   past the last panel.}
+  {APanelIndex is 0-based; -1 when past the last panel.}
   TStatusBarHintProvider = reference to function(APanelIndex: Integer): string;
 
-  {Callback the host form supplies so the status bar can ask "what kind
-   of token does the panel at APanelIndex render?" without coupling the
-   subclass to the renderer. Returns tkUnknown for unmapped indices,
-   which the cursor logic treats as "not interactive".}
+  {Returns tkUnknown for unmapped indices (cursor logic treats as non-interactive).}
   TStatusBarPanelKindProvider = reference to function(APanelIndex: Integer): TStatusBarTokenKind;
 
-  {TStatusBar specialisation that surfaces a per-panel hint instead of a
-   single per-control Hint. Drives the hint mechanism via CMHintShow's
-   CursorRect: setting CursorRect to the panel under the cursor makes the
-   VCL re-issue CMHintShow when the cursor crosses into a different panel,
-   which in turn lets us swap HintStr without the brittle
-   "set Hint + CancelHint" dance that does not always re-pop on the same
-   control. Also intercepts WM_SETCURSOR to paint the hand cursor over
-   panels whose backing token kind is interactive (Save / Copy dim).}
   TGlimpseStatusBar = class(TStatusBar)
   private
     FOnGetPanelHint: TStatusBarHintProvider;
@@ -43,13 +30,9 @@ type
     property OnQueryPanelKind: TStatusBarPanelKindProvider read FOnQueryPanelKind write FOnQueryPanelKind;
   end;
 
-{Walks AStatusBar's panels left-to-right; returns the index of the panel
- under the X coord, or -1 when AX is past the last panel. APanelLeft is
- set to the left edge of the matched panel; when -1 (past-end) it is set
- to the right edge of the last panel so callers can compose a "trailing
- dead zone" rect. Returns -1 for an empty status bar (APanelLeft=0).
- Centralises the arithmetic shared by OnStatusBarDblClick and the per-
- panel hint dispatch in TGlimpseStatusBar.CMHintShow.}
+{Returns the panel index under AX, or -1 when past the last panel.
+ APanelLeft = left edge of the matched panel, or the right edge of the
+ last panel for past-end (so callers can compose a "trailing dead zone").}
 function StatusBarPanelHitTest(AStatusBar: TStatusBar; AX: Integer; out APanelLeft: Integer): Integer;
 
 implementation
@@ -84,8 +67,7 @@ begin
   HintText := FOnGetPanelHint(HitIdx);
   if HintText = '' then
   begin
-    {No hint for this region. Suppress the popup but still set a tight
-     CursorRect so the next cross-panel move re-queries us.}
+    {Suppress popup but keep a tight CursorRect so cross-panel moves re-query.}
     Msg.Result := 1;
   end else begin
     Msg.HintInfo.HintStr := HintText;
@@ -95,8 +77,7 @@ begin
   if HitIdx >= 0 then
     Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, PanelLeft + Panels[HitIdx].Width, Height)
   else
-    {Past the last panel: cursor rect is the trailing dead zone, so we
-     stay quiet until the cursor enters a real panel.}
+    {Past-last: cursor rect is the trailing dead zone.}
     Msg.HintInfo.CursorRect := Rect(PanelLeft, 0, ClientWidth, Height);
 end;
 
@@ -106,11 +87,9 @@ var
   PanelLeft, HitIdx: Integer;
   Kind: TStatusBarTokenKind;
 begin
-  {Paint the hand cursor over panels whose backing token is interactive.
-   Only intercept hits on the bar's client area — child controls (the
-   embedded TProgressBar) keep their default cursor. We can't rely on
-   Cursor := crHandPoint at the control level because that would apply
-   the cursor uniformly across every panel.}
+  {Hand cursor only over interactive-token panels. Cursor := crHandPoint
+   at the control level would apply uniformly across every panel, so we
+   intercept per-panel here. Skip child controls (embedded TProgressBar).}
   if (Msg.HitTest = HTCLIENT) and Assigned(FOnQueryPanelKind) then
   begin
     GetCursorPos(Pt);

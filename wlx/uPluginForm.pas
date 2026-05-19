@@ -18,48 +18,20 @@ uses
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
 
 type
-  {Forward declaration: TPluginCommandHandlers needs to reference the
-   form via constructor parameter, and the form needs to hold one as a
-   field. Resolved in the class declaration below.}
   TPluginForm = class;
 
-  {Owns one named method per CM_* command in the dispatch table.
-   Lives in the same unit as TPluginForm so the named handlers can
-   reach the form's private collaborators (FExporter, FFrameView,
-   FSettings, FFileName) via Delphi same-unit access.
-
-   Constructed once by TPluginForm.CreateForPlugin and held alongside
-   FCommandTable. The handlers and the table together form the data
-   side of the command dispatch — DispatchCommand /
-   UpdateToolbarButtons / OnContextMenuPopup / ExecuteHotkey all read
-   the table instead of running their own CM_* case ladders.
-
-   Per-invocation context (the right-click cell index for Copy frame)
-   is threaded through FNextContextCellIndex: DispatchCommand calls
-   SetContextCellIndex before invoking the executor, the executor
-   reads the field. This keeps the executor closures parameterless so
-   the TCommandDescriptor.Executor type stays a bare TProc.}
+  {One named method per CM_* command in TPluginForm's dispatch table.
+   Per-invocation context (right-click cell index) is threaded via
+   FNextContextCellIndex so the Executor closures stay parameterless.}
   TPluginCommandHandlers = class
   strict private
     FForm: TPluginForm;
-    {Per-invocation cell index supplied by DispatchCommand before each
-     Executor call. -1 means "no context cell" (toolbar button, hotkey,
-     TC lc_Copy) and only Copy frame consults it; every other handler
-     ignores it. Reset by SetContextCellIndex; the field exists so the
-     executor closures can stay parameterless.}
+    {Only CopyFrame consults this; -1 = no context cell.}
     FNextContextCellIndex: Integer;
-    {Wraps FForm.WithReExtract in a TReExtractAction reference. Built
-     fresh per handler call rather than cached so it captures the
-     current FForm Self only (no aliasing concerns) and stays trivially
-     cheap. Used by every Save/Copy handler.}
     function MakeReExtract: TReExtractAction;
   public
     constructor Create(AForm: TPluginForm);
     procedure SetContextCellIndex(AValue: Integer);
-    {Named handlers — one per command in the table. Each performs the
-     same work that the corresponding CM_* case branch in the original
-     DispatchCommand did, reading FForm's collaborators directly.
-     Same-unit access keeps the data flow obvious at the call sites.}
     procedure SaveFrame;
     procedure SaveFrames;
     procedure SaveView;
@@ -74,18 +46,9 @@ type
     procedure Refresh;
     procedure Shuffle;
     procedure Settings;
-    {Materialises the dispatch table by pairing each CM_* tag with its
-     matching TPluginAction enum (for hotkey lookup), its enable policy
-     (consulted by DispatchCommand / UpdateToolbarButtons /
-     OnContextMenuPopup before firing), and a closure that forwards to
-     the named handler on this instance. The table is built once and
-     held by TPluginForm.FCommandTable for the form's lifetime.
-
-     Built programmatically (SetLength + index-assign) rather than via
-     a const-aggregate array literal because nested anonymous-method
-     fields inside `(Tag: ...; Executor: procedure begin ... end)`
-     rows hit a Delphi const-aggregate limit (same surprise that bit
-     campaign step 77). The longer form is uglier but reliable.}
+    {Built programmatically (SetLength + index-assign), NOT as a const
+     aggregate — Delphi hits a limit on anonymous-method fields inside
+     array-literal rows.}
     function BuildTable: TCommandTable;
   end;
 
@@ -94,22 +57,13 @@ type
   private
     FFileName: string;
     FSettings: TPluginSettings;
-    {Persists the toolbar / status-bar / timecode visibility toggles
-     back to FSettings. Owned by the form; collapses the historical
-     "set + Save" pair into one named call so the toggle handlers stay
-     focused on UI state.}
     FSettingsToggle: TSettingsToggleService;
     FFFmpegPath: string;
     FVideoInfo: TVideoInfo;
     FOffsets: TFrameOffsetArray;
     FParentWnd: HWND;
-    {Toolbar — step 105 (C1) extracted the orchestration (build,
-     layout, hamburger click, button-enable updates) into
-     TToolbarController. The widget pointer-cache fields below are
-     non-owning aliases populated from the controller's Build result;
-     the widget components themselves are owned by the form (passed
-     as the TComponent owner). Kept as fields to avoid rewriting ~90
-     call sites that read FToolbar / FToolbarButtons / etc. directly.}
+    {Widget fields below are non-owning aliases populated from
+     FToolbarController.Build; widgets are owned by the form (TComponent).}
     FToolbarController: TToolbarController;
     FToolbar: TPanel;
     FLblFrames: TLabel;
@@ -122,82 +76,40 @@ type
     FToolbarButtons: TArray<TButton>;
     FBtnHamburger: TButton;
     FHamburgerMenu: TPopupMenu;
-    {Drop-down attached to the Refresh toolbar button: offers
-     "Refresh" (same as primary click) and "Shuffle" items so the
-     random-extraction trigger has a visible affordance, mirroring the
-     view-mode split-button pattern.}
     FRefreshPopup: TPopupMenu;
     FSaveViewPopup: TPopupMenu;
     FCopyViewPopup: TPopupMenu;
-    {Back-compat alias: points at FToolbarController.GlyphLibrary.Images.
-     Several form sites reference FToolbarImages directly; CreateToolbar
-     assigns this field after the controller builds the glyph library
-     so those sites stay unchanged. The image list itself is owned by
-     the controller (via TToolbarGlyphLibrary's TComponent ownership).}
+    {Alias of FToolbarController.GlyphLibrary.Images; image list is owned by the controller.}
     FToolbarImages: TImageList;
-    {Step 105 (C1, part 3): progress widget lifted into TProgressIndicator.
-     FProgressBar stays as a non-owning alias populated from
-     FProgressIndicator.ProgressBar after the indicator is built — direct
-     .Style / .Max / .Position writes from WithReExtract / UpdateProgress /
-     InitializeExtractionStack's modal-runner lambda keep compiling without
-     wrapper churn.}
     FProgressIndicator: TProgressIndicator;
+    {Alias of FProgressIndicator.ProgressBar so direct .Style/.Max/.Position writes keep working.}
     FProgressBar: TProgressBar;
-    {Status bar}
     FStatusBar: TStatusBar;
-    {Owns parsing of the user template, panel build-out, and per-panel
-     hint lookup. Lives for the form's lifetime; ApplyTemplate /
-     SetFont / Refresh drive it. The bar's panels are written through
-     this object exclusively.}
     FStatusBarRenderer: TStatusBarRenderer;
-    {Snapshot of plugin state, refreshed once per UpdateStatusBar call.
-     The renderer's resolver lambda reads this rather than hitting
-     collaborators per-token, so a Refresh emits a coherent view of
-     state instead of racing changes mid-iteration.}
+    {Snapshot refreshed once per UpdateStatusBar so a render emits a
+     coherent view instead of racing live changes mid-iteration.}
     FCachedStatusBarValues: TStatusBarValues;
-    {Content}
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
     FLblError: TLabel;
-    {Export}
     FExporter: TFrameExporter;
-    {Cell index under the cursor at the moment the right-click context
-     menu opens; -1 when the cursor wasn't over a cell. Captured in
-     OnContextMenuPopup and consumed by OnContextMenuClick to give the
-     "Copy frame" item context-cell semantics (the item copies the cell
-     the user right-clicked, not the selected one). Other entry points
-     for Copy frame (toolbar button, hotkey, TC lc_Copy) deliberately do
-     not pass a context cell, so they keep the selection-first rule that
-     PickActionCell falls back to.}
+    {Right-click cell index captured by OnContextMenuPopup so "Copy frame"
+     acts on the right-clicked cell. Other entry points pass -1 to keep
+     PickActionCell's selection-first fallback.}
     FContextCellIndex: Integer;
-    {Extraction}
     FExtractCtrl: TExtractionController;
-    {DI container received in CreateForPlugin. Holds the cache + extractor
-     factories the extraction stack delegates to, plus the per-instance
-     TProbeCache (form takes ownership; destructor frees it via
-     FServices.ProbeCache.Free). Replaces the standalone FProbeCache field
-     and the inline TFrameCache / TFFmpegFrameExtractor constructions
-     that lived in InitializeExtractionStack / StartExtraction /
-     WithReExtract.}
+    {Form takes ownership of FServices.ProbeCache and frees it in Destroy.}
     FServices: TPluginServices;
-    {Animation}
     FAnimTimer: TTimer;
-    {Step 105 (C1, part 2): viewport-refresh debounce + last-extraction-
-     size memo lifted into TViewportRefreshDebouncer. The form supplies
-     the precondition check + max-side computer + refresh callback;
-     the helper owns the timer.}
     FViewportRefreshDebouncer: TViewportRefreshDebouncer;
-    {True when FOffsets currently holds randomly-picked positions (either
-     because Settings.RandomExtraction was on at build time, or the user
-     invoked Shuffle as a one-shot override). Drives cache-override
-     selection so CacheRandomFrames=False suppresses cache writes only
-     for the random path, leaving deterministic extractions cacheable.}
+    {Drives cache-override selection so CacheRandomFrames=False suppresses
+     writes for random extractions only.}
     FCurrentExtractionIsRandom: Boolean;
-    {Layout guard: prevents re-entrant UpdateFrameViewSize during zoom}
+    {Re-entrancy guard against zoom-driven UpdateFrameViewSize.}
     FUpdatingLayout: Boolean;
-    {True when the plugin is hosted in TC's Quick View panel (Ctrl+Q)}
+    {True when hosted in TC's Quick View panel (Ctrl+Q).}
     FQuickViewMode: Boolean;
-    {Suppresses WM_CHAR after OnKeyDown consumed the keystroke}
+    {Suppresses WM_CHAR after OnKeyDown consumed the keystroke.}
     FKeyConsumed: Boolean;
     {Step 105 (C1, part 2): load-time bookkeeping lifted into
      TLoadTimeRecorder. Start in StartExtraction, Finalize in
@@ -269,32 +181,12 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
-    {Walks the items of the given popup and rewrites Save/Copy view
-     dropdown captions with their current predicted-size suffix. Called
-     from each popup's OnPopup so the suffix tracks live cell size,
-     view-mode changes, and CombinedMaxSide edits without per-event
-     wiring.}
     procedure UpdateResolutionMenuLabels(AMenu: TPopupMenu);
     procedure OnViewDropdownPopup(Sender: TObject);
-    {Returns the zoom mode that should actually be applied for the
-     current FFrameView.ViewMode. View modes that have no zoom-selector
-     popup (vmGrid, vmSmartGrid - see CreateModePopup) are always-fit
-     by design, so any requested zoom is clamped to zmFitWindow. Use
-     this anywhere external state (persisted settings, TC's lister
-     params) tries to push a zoom mode onto FFrameView, otherwise the
-     unsupported value sticks and the renderer enters a degenerate
-     branch (e.g. vmGrid+zmActual+NativeW>=BaseW collapses to 1 column,
-     visually identical to vmScroll).}
+    {Clamps requested zoom to zmFitWindow for modes with no zoom popup
+     (vmGrid, vmSmartGrid) so persisted/Lister-supplied values cannot push
+     the renderer into a degenerate branch.}
     function ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;
-    {Constructor's four init phases. CreateForPlugin invokes them in
-     order so a future partial-construction failure mode localises to
-     one phase. Each phase reads from earlier phases via form fields:
-     Windowing sets FParentWnd / FQuickViewMode and forces the form's
-     Handle (needed by ExtractionStack's TWindowMessageSink); UI builds
-     every TControl and runs ApplySettings; ExtractionStack constructs
-     FExtractCtrl / FExporter via FServices factories (FServices.ProbeCache
-     is supplied by the caller); Services wires the settings-toggle
-     service, timers, command handlers + table.}
     procedure InitializeWindowing(AParentWin: HWND);
     procedure InitializeUI;
     procedure InitializeExtractionStack;
@@ -309,10 +201,7 @@ type
     procedure SyncZoomMenuChecks(AMode: TViewMode; AZoom: TZoomMode);
     procedure UpdateTimecodeButton;
     procedure UpdateToolbarButtons;
-    {True only when the loaded set is stable (no placeholders) and at
-     least one cell is actually loaded. Save / copy entry points (toolbar,
-     context menu, hotkeys) gate on this so they cannot fire against an
-     in-flight extraction or an empty / all-errored result.}
+    {True only when the loaded set is stable and at least one cell is loaded.}
     function CanExportFrames: Boolean;
     procedure OnToolbarButtonClick(Sender: TObject);
     procedure ActivateMode(AMode: TViewMode);
@@ -324,31 +213,17 @@ type
     procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
     procedure SoftRefreshExtraction;
-    {Builds FOffsets from the current FVideoInfo.Duration / frame count /
-     skip-edges. AForceRandom = True overrides Settings.RandomExtraction
-     for the current build only (used by Shuffle); otherwise the
-     setting decides between deterministic midpoints and per-slice
-     random picks. Sets FCurrentExtractionIsRandom accordingly.}
+    {AForceRandom overrides Settings.RandomExtraction for this build only.
+     Sets FCurrentExtractionIsRandom accordingly.}
     procedure RebuildFrameOffsets(AForceRandom: Boolean = False);
-    {Cache override appropriate for the current extraction. Returns
-     TReadOnlyFrameCache when extracting random offsets with
-     CacheRandomFrames disabled (read existing entries, drop new
-     writes); nil otherwise so the controller's normal cache applies.}
+    {Returns TReadOnlyFrameCache for random extractions with
+     CacheRandomFrames off; nil otherwise so the controller's normal cache applies.}
     function RandomCacheOverride: IFrameCache;
-    {Re-rolls FOffsets with random positions and starts a fresh
-     extraction immediately. Independent of Settings.RandomExtraction:
-     when "Start from random positions" is off, this is a one-shot
-     override that lasts until the next event triggering a deterministic
-     rebuild (file reload, frame-count change, settings re-apply).}
+    {One-shot random reroll, independent of Settings.RandomExtraction; lasts
+     until the next event triggering a deterministic rebuild.}
     procedure ShuffleExtraction;
     procedure StartExtraction(const ACacheOverride: IFrameCache = nil);
-    {Wraps an exporter save/copy action with re-extraction at save
-     resolution when the live-resolution toggle is off and the live
-     cells are not already at the desired size. Delegates the heavy
-     lifting (cache lookup + ffmpeg) to TSaveResolutionExtractor; this
-     method only owns the policy gate, the override-frame plumbing on
-     FExporter, and the bitmap-cleanup. AIndices lists cells the action
-     will actually consume, so re-extraction is scoped to what is needed.}
+    {AIndices scopes re-extraction to cells the action will actually consume.}
     procedure WithReExtract(const AIndices: TArray<Integer>; AAction: TProc);
     procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
     procedure OnExtractionProgress(Sender: TObject);

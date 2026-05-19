@@ -1,5 +1,4 @@
-{Frame filename generation for save operations.
- Pure string computation: no I/O, no UI.}
+{Pure filename generation for save operations.}
 unit uFrameFileNames;
 
 interface
@@ -7,11 +6,10 @@ interface
 uses
   uBitmapSaver;
 
-{Generates a frame filename from video path, frame index, time offset, and format.
- Pattern: <basename>_frame_<index+1:02d>_<HH-MM-SS.mmm>.<ext>}
+{Pattern: <basename>_frame_<index+1:02d>_<HH-MM-SS.mmm>.<ext>}
 function GenerateFrameFileName(const AVideoFileName: string; AFrameIndex: Integer; ATimeOffset: Double; AFormat: TSaveFormat): string;
 
-{Generates combined image filename: <basename>_combined.<ext>}
+{<basename>_combined.<ext>}
 function GenerateCombinedFileName(const AVideoFileName: string; AFormat: TSaveFormat): string;
 
 implementation

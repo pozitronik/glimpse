@@ -1,18 +1,6 @@
-{INI codec for THotkeyChord values.
-
- Pure-Pascal serialiser/deserialiser pair separated out of uHotkeys so the
- core value type and its mutable binding collection don't carry the parser
- table or the VKToName / NameToVK helpers. The display formatter
- (uHotkeysDisplay) imports this unit for VKToName — VKToName / NameToVK
- are intentionally public here so the display path doesn't need a
- duplicate copy.
-
- Future-proofing: the chord-level functions (ChordToIniStr /
- ChordFromIniStr) are kept separate from the display equivalents even
- though they produce identical output today. A localised display string
- ('Strg+Umschalt+F1' for German UIs) would diverge from the INI form,
- and keeping the two formatters on independent code paths avoids that
- future change rippling through the codec.}
+{INI codec for THotkeyChord values. Kept separate from the display
+ formatter so a future localised display would not churn the on-disk
+ INI format.}
 unit uHotkeysCodec;
 
 interface
@@ -20,37 +8,24 @@ interface
 uses
   uHotkeys;
 
-{Maps a VK_* code to the textual token used in INI / display strings.
- Returns '' for keys outside the curated set; callers treat that as
- "this chord has no representation" and skip rendering.}
+{Returns '' for keys outside the curated set; callers skip rendering.}
 function VKToName(AKey: Word): string;
 
-{Inverse of VKToName: reads a token (case-insensitive, trimmed) and
- returns the VK_* code, or 0 when the token does not match any known
- key. Letter/digit one-char tokens are converted directly.}
+{Returns 0 when the token does not match any known key. Single-char
+ letter/digit tokens are converted directly.}
 function NameToVK(const AName: string): Word;
 
-{Joins AChords with CHORD_SEPARATOR ('|') for INI storage. Empty chord
- list renders as ''. Skips unassigned chords so a sentinel
- THotkeyChord.None in the array does not produce an empty segment like
- 'F2||F3' that would round-trip asymmetrically.}
+{Joins with CHORD_SEPARATOR. Skips unassigned chords so a None sentinel
+ does not yield 'F2||F3' that round-trips asymmetrically.}
 function ChordsToIniStr(const AChords: THotkeyChordArray): string;
 
-{Parses AValue ('|'-joined) into a list of chords. Unparseable segments
- are skipped rather than rejecting the whole value — partial-parse
- tolerance survives a hand-edited INI with one typo.}
+{Unparseable segments are skipped (tolerant of hand-edited typos).}
 function ChordsFromIniStr(const AValue: string): THotkeyChordArray;
 
-{Converts a single chord to its INI form ('Ctrl+Shift+F1', 'F2', '+',
- ...). Unassigned chord renders as ''. Equivalent today to the chord's
- display string but kept on its own function so a future INI-vs-display
- divergence (e.g. localised display) doesn't churn the codec.}
 function ChordToIniStr(const AChord: THotkeyChord): string;
 
-{Parses a single INI-form chord. Returns THotkeyChord.None on empty or
- unparseable input. Order of modifier tokens does not matter; the
- 'Shift++' / 'Ctrl++' / 'Alt++' tail trick recovers the OEM '+' key
- paired with a modifier.}
+{Returns None on empty/unparseable. The 'Shift++' / 'Ctrl++' tail trick
+ recovers the OEM '+' key paired with a modifier.}
 function ChordFromIniStr(const AValue: string): THotkeyChord;
 
 implementation
@@ -66,7 +41,7 @@ type
   end;
 
 const
-  {Fixed named keys. Letter/digit keys are handled separately (single char).}
+  {Letter/digit keys are handled by the VKToName/NameToVK fast paths.}
   KEY_NAMES: array [0 .. 20] of TKeyName = (
     (Key: VK_RETURN; Name: 'Enter'),
     (Key: VK_ESCAPE; Name: 'Escape'),
@@ -164,11 +139,9 @@ begin
   if Body = '' then
     Exit;
   KeyCode := 0;
-  {OEM '+' key paired with modifiers serialises as 'Shift++' / 'Ctrl++' /
-   'Alt++'. Splitting on '+' would yield two empty trailing tokens and the
-   chord would silently disappear on round-trip. Strip the '++' tail here so
-   the modifier prefix can be parsed normally. Single trailing '+' without a
-   preceding one (e.g. 'Ctrl+') is still a broken input that returns None.}
+  {Strip '++' tail before split: 'Shift++' / 'Ctrl++' / 'Alt++' would
+   otherwise split into empty trailing tokens and the chord would
+   disappear on round-trip.}
   if (Length(Body) >= 2)
     and (Body[Length(Body)] = '+')
     and (Body[Length(Body) - 1] = '+') then
@@ -190,7 +163,7 @@ begin
     else if (Token <> '') and (KeyCode = 0) then
       KeyCode := NameToVK(Token);
   end;
-  {Bare '+' gets split into two empty tokens; recover it from the raw input.}
+  {Bare '+' splits into two empty tokens; recover from the raw input.}
   if (KeyCode = 0) and (AValue.Trim = '+') then
     KeyCode := VK_OEM_PLUS;
   if KeyCode = 0 then

@@ -1,9 +1,4 @@
-{VCL adapter for THotkeyChord. uHotkeys advertises itself as pure
- Pascal (no VCL); the chord-to-TShortCut conversion needed for
- TMenuItem.ShortCut wiring lives here so the pure unit stays pure.
-
- Single consumer today is uPluginForm.PopulateHamburgerMenu, which
- mirrors the user-configured chord onto each menu item.}
+{VCL adapter for THotkeyChord — keeps the pure uHotkeys unit free of VCL deps.}
 unit uHotkeysVcl;
 
 interface
@@ -13,9 +8,8 @@ uses
   Vcl.Menus,
   uHotkeys;
 
-{Converts AChord to a VCL TShortCut Word suitable for TMenuItem.ShortCut.
- Returns 0 when the chord is unbound, which TMenuItem renders as "no
- shortcut" — so callers can assign unconditionally without guarding.}
+{Returns 0 for unassigned chords; TMenuItem renders 0 as "no shortcut",
+ so callers can assign unconditionally without guarding.}
 function ToShortCut(const AChord: THotkeyChord): TShortCut;
 
 implementation

@@ -1,17 +1,8 @@
-{Tests for src/uSettingsDialogHelpers (step 104, M25).
-
- Covers DisplayFFmpegInfo's path-classification logic across the
- probe-state branches that don't require actually launching ffmpeg
- (fpsNoPath / fpsFileMissing). fpsInvalid and fpsValid both require
- invoking the file as a process via ValidateFFmpeg, which is slow and
- has Windows side effects; covered transitively via the integration
- path (ValidateFFmpeg has its own tests in TestFFmpegExe).
-
- BrowseForFFmpegExe is intentionally not covered — TOpenDialog is not
- driveable headlessly.
-
- Fixture uses the now-standard hidden TForm + child controls pattern
- (step-50 onward) for label + edit so handles allocate.}
+{Tests for src/uSettingsDialogHelpers. Covers DisplayFFmpegInfo path
+ classification across the probe-state branches that don't actually
+ launch ffmpeg (fpsNoPath / fpsFileMissing); fpsInvalid and fpsValid
+ are covered transitively by TestFFmpegExe. BrowseForFFmpegExe is
+ not covered — TOpenDialog is not driveable headlessly.}
 unit TestSettingsDialogHelpers;
 
 interface

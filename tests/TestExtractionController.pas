@@ -144,13 +144,14 @@ begin
   Result.UseBmpPipe := True;
 end;
 
-{Polls AStub.CallCount until it reaches AExpected or ATimeoutMs elapses,
- sleeping 5 ms between checks. Without this synchronisation, calling
- Stop right after Start can Terminate the workers before they have run
- their full chunk -- they exit at the next Terminated check, leaving
- some offsets unenqueued. After CallCount = expected, every offset has
- been pulled from the stub and the worker has already pushed the frame
- onto FPendingFrames; Stop after that point is a clean join.}
+{Polls AStub.CallCount until it reaches AExpected or ATimeoutMs
+ elapses, sleeping 5 ms between checks. Without this synchronisation,
+ calling Stop right after Start can Terminate the workers before
+ they have run their full chunk; they exit at the next Terminated
+ check, leaving some offsets unenqueued. Once CallCount = expected,
+ every offset has been pulled from the stub and the worker has
+ already pushed the frame onto FPendingFrames; Stop after that
+ point is a clean join.}
 procedure WaitForExtractionCompletion(AStub: TStubExtractor; AExpected, ATimeoutMs: Integer);
 var
   SW: TStopwatch;

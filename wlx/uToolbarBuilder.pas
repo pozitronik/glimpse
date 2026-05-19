@@ -1,28 +1,6 @@
-{Toolbar construction extracted from TPluginForm.CreateToolbar.
-
- The builder takes a parent panel host (the form whose Canvas measures
- captions and whose lifetime owns the resulting controls) plus the
- glyph library that supplies the shared TImageList. Click handlers
- (mode button click, timecode toggle, generic action, sizing menu,
- hamburger button, hamburger popup, context-menu click, view dropdown
- popup) come in as TNotifyEvent constructor parameters so the form's
- private handlers stay private — the builder never sees the form's
- internals beyond Canvas + ownership.
-
- Returns a TToolbarHandles record bundling every TControl the form
- needs to keep referencing; the form's CreateToolbar wrapper copies
- each Handles field into its own private field. This keeps the form's
- existing consumer sites (UpdateToolbarButtons, LayoutToolbar, etc.)
- unchanged after the extraction.
-
- The legacy-Windows split-button tweak (BS_SPLITBUTTON does not render
- on XP/2003, the spare dropdown-arrow width would leave a dead gap)
- is consulted in two places: the mode buttons' SPLIT_ARROW_W reservation
- and the action buttons' REFRESH/SAVE/COPY_DROPDOWN_EXTRA reservation.
-
- Width calculations use AForm.Canvas.TextWidth — caller's responsibility
- to call Build only after the form has a valid Canvas (i.e. after
- HandleNeeded equivalent has run, which is the case from CreateToolbar).}
+{Toolbar construction for TPluginForm. Build measures captions via
+ AForm.Canvas.TextWidth, so caller MUST ensure a valid Canvas first
+ (handle allocated).}
 unit uToolbarBuilder;
 
 interface
@@ -35,17 +13,6 @@ uses
   uToolbarGlyphLibrary;
 
 type
-  {Bundle of every TControl produced by Build. The form's
-   CreateToolbar wrapper assigns each field into its same-named
-   private member so the rest of the form (UpdateToolbarButtons,
-   LayoutToolbar, OnHamburgerMenuPopup, ...) keeps reading from
-   FToolbar / FEditFrameCount / etc. without further changes.
-
-   ElementRights / FrameCountRight feed LayoutToolbar's collapse
-   calculation. ModePopups / RefreshPopup / SaveViewPopup /
-   CopyViewPopup carry the dropdown menus that the form's
-   UpdateResolutionMenuLabels and OnHamburgerMenuPopup share with
-   the toolbar surface.}
   TToolbarHandles = record
     Toolbar: TPanel;
     EditFrameCount: TEdit;
@@ -68,9 +35,6 @@ type
   strict private
     FForm: TForm;
     FGlyphs: TToolbarGlyphLibrary;
-    {Click handlers wired into the toolbar controls. All point at
-     methods on the form; held as TNotifyEvent so the builder does
-     not need to know the form's concrete type beyond TForm.}
     FOnModeButtonClick: TNotifyEvent;
     FOnSizingMenuClick: TNotifyEvent;
     FOnTimecodeButtonClick: TNotifyEvent;
@@ -161,21 +125,14 @@ end;
 
 function TToolbarBuilder.CreateSaveViewPopup: TPopupMenu;
 begin
-  {Two explicit-resolution Save view variants. Their job is mainly to
-   give legacy Windows users a way to pick the resolution at all (the
-   modern file dialog's checkbox is unavailable on XP), but they also
-   work as a faster path on modern Windows: one click chooses the
-   resolution and opens the dialog with that as the seed. The item set
-   lives in uToolbarLayout.SAVE_VIEW_VARIANTS so the hamburger overflow
-   and the resolution-suffix updater stay in lockstep with this menu.}
+  {Variants live in uToolbarLayout.SAVE_VIEW_VARIANTS — hamburger overflow
+   and the resolution-suffix updater read the same constant.}
   Result := BuildViewVariantsMenu(FForm, SAVE_VIEW_VARIANTS,
     FOnViewDropdownPopup, FOnContextMenuClick);
 end;
 
 function TToolbarBuilder.CreateCopyViewPopup: TPopupMenu;
 begin
-  {Mirror of CreateSaveViewPopup. No dialog follows so the COPY captions
-   omit the trailing ellipsis - the action commits immediately.}
   Result := BuildViewVariantsMenu(FForm, COPY_VIEW_VARIANTS,
     FOnViewDropdownPopup, FOnContextMenuClick);
 end;
@@ -186,15 +143,10 @@ const
   CTRL_GAP = 8; {Gap between control groups}
   BTN_GAP = 2; {Gap between adjacent buttons in a group}
   BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
-  {Extra horizontal width reserved for the dropdown arrow on the
-   Refresh split button. The view-mode buttons use the same allowance
-   by virtue of the IDX_ICON_ARROW glyph; Refresh has no glyph so the
-   space is added explicitly to match the visual weight.}
+  {Refresh has no glyph, so reserve dropdown-arrow width explicitly.}
   REFRESH_DROPDOWN_EXTRA = 14;
-  {Save view / Copy view captions are longer than Refresh, so the
-   bsSplitButton arrow pinches the rendered text when only
-   REFRESH_DROPDOWN_EXTRA is reserved. Add a small buffer on top so the
-   full caption stays visible.}
+  {Save/Copy captions are longer than Refresh; extra buffer keeps the
+   bsSplitButton arrow from pinching the text.}
   VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
   SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
   ICON_W = 16; {Toolbar icon width}
@@ -256,12 +208,8 @@ begin
     Result.ModeButtons[VM] := TButton.Create(Result.Toolbar);
     Result.ModeButtons[VM].Parent := Result.Toolbar;
 
-    {Auto-width: measure caption text and add padding. Scroll/Filmstrip
-     also reserve space for a directional arrow icon to the left of the
-     caption. The split-arrow reservation is skipped on legacy Windows
-     (XP/2003) because BS_SPLITBUTTON does not render there — keeping
-     the extra width would leave a dead gap between the caption and the
-     iaRight icon.}
+    {Skip split-arrow reservation on legacy Windows: BS_SPLITBUTTON does
+     not render there and the extra width would leave a dead gap.}
     BW := FForm.Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
     if (Result.ModePopups[VM] <> nil) and not IsLegacyWindows then
       Inc(BW, SPLIT_ARROW_W);
@@ -279,24 +227,16 @@ begin
     begin
       Result.ModeButtons[VM].Images := FGlyphs.Images;
       Result.ModeButtons[VM].ImageIndex := MODE_GLYPH_INDEX[VM];
-      {Qualified — TIconArrangement (Vcl.ComCtrls) also defines iaRight.
-       Icon sits to the right of the caption, matching the original
-       arrow-glyph position.}
+      {Qualify because Vcl.ComCtrls also defines iaRight.}
       Result.ModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end;
 
-    {Legacy Windows pulls the iaRight icon flush against the button's
-     right edge; modern Windows leaves a small visual margin courtesy of
-     the themed button paint. Add the missing inset manually on XP so the
-     glyph doesn't touch the border.}
+    {Legacy Windows pulls iaRight icons flush to the edge; add inset manually.}
     if (VM in [vmScroll, vmFilmstrip]) and IsLegacyWindows then
       Result.ModeButtons[VM].ImageMargins.Right := 2;
 
-    {Split button: click activates mode, arrow shows submodes. PopupMenu
-     duplicates the same menu on right-click for every OS so the submodes
-     stay reachable on legacy Windows (where the split arrow does not
-     render) and gives modern users a discoverable alternative to the
-     small arrow glyph.}
+    {PopupMenu duplicates DropDownMenu for right-click so the submodes
+     stay reachable on legacy Windows (no split-arrow rendering).}
     if Result.ModePopups[VM] <> nil then
     begin
       Result.ModeButtons[VM].Style := bsSplitButton;
@@ -324,9 +264,7 @@ begin
   Result.ElementRights[ELEM_TIMECODE_INDEX] := X + BW;
   Inc(X, BW + CTRL_GAP);
 
-  {Action buttons matching context menu (except selection-dependent commands).
-   The Refresh button is upgraded to a split button so the dropdown
-   exposes Shuffle as a peer action (primary click stays Refresh).}
+  {Refresh becomes a split button so the dropdown exposes Shuffle as a peer.}
   SetLength(Result.ToolbarButtons, 0);
   Result.RefreshPopup := nil;
   Result.SaveViewPopup := nil;
@@ -336,9 +274,6 @@ begin
     Btn := TButton.Create(Result.Toolbar);
     Btn.Parent := Result.Toolbar;
     BW := FForm.Canvas.TextWidth(TB_ACTIONS[I].Caption) + BTN_PAD;
-    {Skip the dropdown-arrow reservation on legacy Windows for the same
-     reason as the mode buttons above: BS_SPLITBUTTON does not render on
-     XP/2003 and the spare width would leave a dead gap.}
     if not IsLegacyWindows then
       case TB_ACTIONS[I].Tag of
         CM_REFRESH:
@@ -357,17 +292,10 @@ begin
       Result.RefreshPopup := CreateRefreshPopup;
       Btn.Style := bsSplitButton;
       Btn.DropDownMenu := Result.RefreshPopup;
-      {Right-click pops the same Refresh / Shuffle menu — see the mode
-       buttons above for why this duplicates DropDownMenu.}
       Btn.PopupMenu := Result.RefreshPopup;
     end
     else if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
     begin
-      {Save view dropdown: explicit "...at view resolution" and "...at
-       native size" entry points. On modern Windows the file dialog's
-       checkbox is still authoritative; on legacy Windows (no checkbox)
-       this is the only way to pick the resolution per save without
-       opening the settings dialog first.}
       Result.SaveViewPopup := CreateSaveViewPopup;
       Btn.Style := bsSplitButton;
       Btn.DropDownMenu := Result.SaveViewPopup;
@@ -375,13 +303,6 @@ begin
     end
     else if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
     begin
-      {Copy view dropdown: same idea as Save view but commits immediately
-       (no dialog), so the variants are the only way to override the
-       persisted SaveAtLiveResolution setting for a single Copy view.
-       The native variant also re-extracts at native resolution before
-       publishing to the clipboard, which the default Copy view used to
-       skip - the dropdown thus also fixes the long-standing "Copy view
-       at native resolution copies low-res cells" surprise.}
       Result.CopyViewPopup := CreateCopyViewPopup;
       Btn.Style := bsSplitButton;
       Btn.DropDownMenu := Result.CopyViewPopup;
@@ -393,15 +314,10 @@ begin
     Result.ToolbarButtons[High(Result.ToolbarButtons)] := Btn;
   end;
 
-  {Hamburger overflow button: hidden until toolbar is too narrow. Glyph
-   comes from the shared glyph library (loaded with the mode-button arrow
-   icons) so the toolbar does not depend on the runtime font's coverage
-   of U+2261.}
   Result.HamburgerMenu := TPopupMenu.Create(FForm);
   Result.HamburgerMenu.OnPopup := FOnHamburgerMenuPopup;
-  {Sharing the toolbar's image list lets MI.ImageIndex paint the same arrow
-   glyphs next to the Scroll/Filmstrip menu items that the toolbar buttons
-   show — necessary because both modes share the textual caption.}
+  {Share the toolbar's image list so menu items can paint the same arrow
+   glyphs next to Scroll/Filmstrip entries (both share a textual caption).}
   Result.HamburgerMenu.Images := FGlyphs.Images;
 
   Result.BtnHamburger := TButton.Create(Result.Toolbar);

@@ -171,7 +171,7 @@ begin
   LogCall('Discard');
 end;
 
-{ -------- Factory tests -------- }
+{ Factory tests }
 
 procedure TTestClipboardFormatStrategies.Factory_AllTogglesOn_ReturnsFourStrategiesInDocumentedOrder;
 var
@@ -233,7 +233,7 @@ begin
   Assert.AreEqual('Flattened bitmap for legacy apps', Strategies[1].Name);
 end;
 
-{ -------- PNG strategy specifics -------- }
+{ PNG strategy specifics }
 
 procedure TTestClipboardFormatStrategies.PngStrategy_AllocateForPf32Bit_Succeeds;
 var
@@ -385,7 +385,7 @@ begin
   end;
 end;
 
-{ -------- Orchestrator behaviour via mock strategies -------- }
+{ Orchestrator behaviour via mock strategies }
 
 procedure TTestClipboardFormatStrategies.Orchestrator_EmptyStrategyArray_ReturnsTrueAndEmptyError;
 var
@@ -525,7 +525,7 @@ begin
   end;
 end;
 
-{ -------- Strategy name pinning -------- }
+{ Strategy name pinning }
 
 procedure TTestClipboardFormatStrategies.StrategyNames_MatchClipboardTabCaptions;
 var

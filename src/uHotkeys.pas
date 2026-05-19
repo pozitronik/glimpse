@@ -1,17 +1,7 @@
-{Configurable-hotkey machinery for the WLX plugin.
-
- Each plugin action can be bound to any number of chords (a "chord" is a
- VK_* key plus a modifier set). Multiple chords let a single action — say
- "previous file" — be invoked by several shorthand keys at once: Left,
- PageUp, Backspace, Z all navigate backward out of the box.
-
- Numpad digits and symbol aliases (VK_NUMPAD0..9, VK_ADD, VK_SUBTRACT,
- VK_DECIMAL) are collapsed to their letter-row equivalents at Lookup
- time so a single binding "Zoom reset = 0" matches both top-row 0 and
- numpad 0 without the UI having to show two entries.
-
- Pure: no VCL, no form references. TestHotkeys covers the record, the
- binding table, and the INI round-trip end-to-end.}
+{Configurable-hotkey machinery. Each action can hold many chords (key +
+ modifiers). Numpad keys (VK_NUMPAD0..9, VK_ADD/SUBTRACT/DECIMAL) are
+ collapsed onto their letter-row equivalents at Lookup time so a single
+ binding handles both.}
 unit uHotkeys;
 
 interface
@@ -21,9 +11,7 @@ uses
   uUnicodeIniFile;
 
 type
-  {Command-style actions the user can assign hotkeys to. Tab (VCL focus
-   cycling) is intentionally not listed — it's a system-level shortcut
-   that isn't user-configurable.}
+  {Tab is intentionally not listed; it is reserved for VCL focus cycling.}
   TPluginAction = (paNone,
     {Window / view}
     paSettings, paToggleToolbar, paToggleStatusBar, paToggleTimecode,
@@ -46,7 +34,7 @@ type
     paViewModeFilmstrip, paViewModeSingle);
 
   THotkeyChord = record
-    Key: Word;               {VK_* code; 0 means unbound}
+    Key: Word;               {VK_* code; 0 = unbound}
     Modifiers: TShiftState;  {subset of [ssCtrl, ssShift, ssAlt]}
     function IsAssigned: Boolean;
     function Matches(AKey: Word; AShift: TShiftState): Boolean;
@@ -60,20 +48,9 @@ type
 
   THotkeyChordArray = TArray<THotkeyChord>;
 
-  {Descriptor row in the ACTIONS table. Each row pins the [hotkeys] INI
-   key and the display caption shown in the settings dialog.
-   Initialising the table as a positional aggregate
-   `array[TPluginAction] of TActionDescriptor` forces the Delphi
-   compiler to flag a missing entry — replacing the prior parallel case
-   ladders that silently returned '' (which THotkeyBindings.Load /
-   Save would then use as an INI key, causing silent data loss).
-
-   Default chord lists are NOT in this table: Delphi's const aggregate
-   syntax does not accept nested record-literals inside dynamic-array
-   fields (the inner `[...]` parses as a set, not an array). Defaults
-   live in DefaultBinding's case ladder; the silent-data-loss class is
-   not present there because a missing default just produces nil — the
-   action has no shortcut, which is benign and obvious in the dialog.}
+  {Positional aggregate `array[TPluginAction] of TActionDescriptor`
+   forces a compile error on a missing entry; the prior case ladder
+   silently returned '' and caused INI data loss.}
   TActionDescriptor = record
     IniKey: string;
     Caption: string;
@@ -84,47 +61,24 @@ type
     FBindings: array [TPluginAction] of THotkeyChordArray;
   public
     constructor Create;
-    {Returns a copy of the chord list for AAction; callers mutate through
-     the Put / Add / Remove API rather than editing the returned array.}
+    {Returns a copy; callers mutate through the Put/Add/Remove API.}
     function Get(AAction: TPluginAction): THotkeyChordArray;
-    {Replaces the chord list for AAction wholesale. Empty list means unbound.}
     procedure Put(AAction: TPluginAction; const AChords: THotkeyChordArray);
-    {Appends AChord to AAction's list if it's not already present (silent
-     no-op on duplicate). Returns True when a new chord was actually added.}
+    {Returns False when AChord is already present.}
     function AddChord(AAction: TPluginAction; const AChord: THotkeyChord): Boolean;
-    {Removes the first chord equal to AChord from AAction's list. Returns
-     True when a chord was removed.}
     function RemoveChord(AAction: TPluginAction; const AChord: THotkeyChord): Boolean;
-    {Scans every action's chord list and returns the first action whose
-     chord matches the incoming key + modifiers. Numpad aliases are
-     normalised before matching. Returns paNone on no match.}
+    {Normalises numpad aliases before matching. paNone on no match.}
     function Lookup(AKey: Word; const AShift: TShiftState): TPluginAction;
-    {Load / Save read and write the [hotkeys] section with '|' as the
-     between-chords separator, e.g. PrevFile=Left|PageUp|Backspace|Z.}
+    {Section [hotkeys], chord separator '|'.}
     procedure Load(AIni: TUnicodeIniFile);
     procedure Save(AIni: TUnicodeIniFile);
     procedure ResetToDefaults;
-    {Overwrites every action's chord list with AOther's (deep copy of the
-     arrays). Used by the settings dialog to snapshot/restore.}
     procedure Assign(const AOther: THotkeyBindings);
-    {First action (other than AExcept) that contains a chord equal to
-     AChord. Returns paNone when no conflict.}
     function FindActionByChord(const AChord: THotkeyChord;
       AExcept: TPluginAction = paNone): TPluginAction;
-    {Reassigns AAction's chord list to AChords, taking ownership of any
-     chord currently held by another action. Replaces the assign-then-
-     reconcile dance the dialog used to do inline: for each chord in
-     AChords, every other action that contains it has it removed
-     (handles pathological INI-edited duplicates by stripping until
-     gone); AAction is then Put to the full new list.
-
-     Returns the deduplicated list of actions whose chord lists were
-     mutated by eviction — the dialog uses it to refresh those rows in
-     the visible table. AAction itself is excluded from the result even
-     though AAction's row will of course also need refreshing.
-
-     Idempotent in the no-conflict case: if no other action owns any
-     chord in AChords, the result is empty and only AAction is touched.}
+    {Takes ownership of any chord currently held by another action.
+     Returns the list of evicted actions (excluding AAction itself) so
+     the settings dialog can refresh their rows.}
     function ReassignExclusive(AAction: TPluginAction;
       const AChords: THotkeyChordArray): TArray<TPluginAction>;
   end;
@@ -133,13 +87,10 @@ const
   HOTKEYS_SECTION = 'hotkeys';
   CHORD_SEPARATOR = '|';
 
-{Default chord list (possibly empty) for an action.}
 function DefaultBinding(AAction: TPluginAction): THotkeyChordArray;
 
-{Short INI key used to serialise the action (without the 'pa' enum prefix).}
 function ActionIniKey(AAction: TPluginAction): string;
 
-{Human-readable caption for the action, used by the settings dialog UI.}
 function ActionCaption(AAction: TPluginAction): string;
 
 implementation
@@ -158,14 +109,9 @@ begin
     VK_SUBTRACT:
       Result := VK_OEM_MINUS;
     VK_DECIMAL:
-      {Locale caveat: VK_DECIMAL is collapsed onto VK_OEM_PERIOD so
-       numpad-decimal and the top-row '.' share a single binding.
-       European numpads where the decimal key produces ',' would
-       prefer VK_OEM_COMMA, but Windows does not expose layout-aware
-       VK mapping at this layer. Acceptable - worst case the user
-       binds the top-row key separately and gets the layout they
-       expect; current behaviour matches WLX's existing one-binding
-       contract.}
+      {Locale caveat: collapsed onto VK_OEM_PERIOD. European numpads
+       producing ',' would prefer VK_OEM_COMMA but Windows does not
+       expose layout-aware VK mapping at this layer.}
       Result := VK_OEM_PERIOD;
   else
     Result := AKey;
@@ -206,9 +152,9 @@ end;
 
 class function THotkeyChord.Make(AKey: Word; const AModifiers: TShiftState): THotkeyChord;
 begin
-  {Normalise at construction so numpad/OEM aliases captured from the shortcut
-   editor round-trip through INI. Without this, VK_NUMPAD0..9 and VK_ADD /
-   VK_SUBTRACT / VK_DECIMAL would hit VKToName as unknown and serialise empty.}
+  {Normalise at construction so numpad/OEM aliases captured from the
+   shortcut editor survive INI round-trip (VKToName would otherwise
+   serialise them as empty).}
   Result.Key := NormalizeKey(AKey);
   Result.Modifiers := NormalizeShift(AModifiers);
 end;
@@ -301,9 +247,8 @@ var
   A: TPluginAction;
   Raw: string;
 begin
-  {Start from defaults so any key missing from the INI retains its default
-   binding rather than becoming unbound. Users can explicitly disable a
-   default by writing an empty value (e.g. "Settings=").}
+  {Defaults first so missing keys keep their default. An explicit empty
+   value ("Settings=") disables the default.}
   ResetToDefaults;
   for A := Succ(paNone) to High(TPluginAction) do
   begin
@@ -375,8 +320,7 @@ begin
   for I := 0 to High(AChords) do
   begin
     Conflict := FindActionByChord(AChords[I], AAction);
-    {Loop because a single chord could (in pathological INI-edited data)
-     appear in more than one action's list; keep stripping until gone.}
+    {Loop handles pathological INI-edited duplicates across actions.}
     while Conflict <> paNone do
     begin
       RemoveChord(Conflict, AChords[I]);
@@ -391,15 +335,7 @@ begin
       Result := Result + [A];
 end;
 
-{Unit-level helpers}
-
 const
-  {Single source of truth for every TPluginAction's INI key + caption.
-   Indexed by enum value: Delphi enforces one entry per TPluginAction
-   at compile time, so adding a new action without an entry here
-   produces an incomplete-initialization error rather than a silent ''
-   INI key at runtime (which the original ladder did via its else
-   branch, causing data loss in THotkeyBindings.Load/Save).}
   ACTIONS: array[TPluginAction] of TActionDescriptor = (
     (IniKey: '';                  Caption: ''),                                                          {paNone}
     (IniKey: 'Settings';          Caption: 'Settings'),                                                  {paSettings}
@@ -451,18 +387,9 @@ end;
 
 function DefaultBinding(AAction: TPluginAction): THotkeyChordArray;
 begin
-  {Default-chord assignments still ride a case ladder because Delphi
-   const aggregates cannot nest record literals inside dynamic-array
-   fields. The bug class the violation flagged (silent '' INI key) is
-   gone via the ACTIONS table; a missing branch here returns nil which
-   is observable in the dialog (action has no shortcut) rather than
-   silently corrupting INI data.
-
-   Bare Left/Right bind to frame navigation so the single-view
-   "slideshow" feel is the default. paPrevFrame/paNextFrame have a
-   vmSingle guard in the dispatcher — in other modes the action's
-   ExecuteHotkey returns False and the keystroke quietly does nothing.
-   Ctrl+Left/Ctrl+Right are kept as a modifier-qualified alias.}
+  {Case ladder is required: Delphi const aggregates cannot nest record
+   literals inside dynamic-array fields. A missing branch yields nil
+   (action has no shortcut) which is harmless and visible in the dialog.}
   case AAction of
     paSettings:           Result := [THotkeyChord.Make(VK_F2, [])];
     paToggleToolbar:      Result := [THotkeyChord.Make(VK_F4, [])];
@@ -488,15 +415,14 @@ begin
     paFrameCountDec:      Result := [THotkeyChord.Make(VK_DOWN, [ssCtrl])];
     paSaveFrame:          Result := [THotkeyChord.Make(Ord('S'), [ssCtrl])];
     paSaveView:           Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssShift])];
-    {Save side: Shift modifier. Mnemonics L=Live (view-resolution),
-     N=Native (source pixel dimensions).}
+    {Save: Shift modifier. L=Live (view resolution), N=Native (source).}
     paSaveViewLive:       Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssShift])];
     paSaveViewNative:     Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssShift])];
     paSaveFrames:         Result := [THotkeyChord.Make(Ord('S'), [ssCtrl, ssAlt, ssShift])];
     paSelectAllFrames:    Result := [THotkeyChord.Make(Ord('A'), [ssCtrl])];
     paCopyFrame:          Result := [THotkeyChord.Make(Ord('C'), [ssCtrl])];
     paCopyView:           Result := [THotkeyChord.Make(Ord('C'), [ssCtrl, ssShift])];
-    {Copy side: Alt modifier (Shift was already taken by Save side).}
+    {Copy: Alt modifier (Shift is taken by Save).}
     paCopyViewLive:       Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssAlt])];
     paCopyViewNative:     Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssAlt])];
     paZoomIn:             Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];

@@ -30,9 +30,8 @@ type
      with ABytesRead=0 on a non-blocking pipe with no data; the
      splitter must accept that without raising or losing state.}
     [Test] procedure TestZeroBytesIsNoOp;
-    {UTF-8 multi-byte sequence (e.g. a non-ASCII character) must round-
-     trip through the decoder. Was previously implicit in the production
-     UTF8Encoding setup; now pinned.}
+    {UTF-8 multi-byte sequence (e.g. a non-ASCII character) must
+     round-trip through the decoder.}
     [Test] procedure TestUtf8MultiByteSequence;
     {Invalid UTF-8 bytes (a lone 0xFF) do NOT raise; the decoder emits
      the replacement char and keeps going. The splitter is fed

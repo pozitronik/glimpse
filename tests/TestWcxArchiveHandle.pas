@@ -1,9 +1,7 @@
-{Tests for TArchiveHandle's cursor management — the behavioural lift
- that replaced scattered `Inc(H.CurrentIndex)` / `H.CurrentIndex >=
- GetEntryCount(H)` patterns across uWcxExports. Each test pins one
- cursor invariant; populating Listing uses a tiny no-op entry stub so
- the assertions stay focused on the cursor and not on extraction
- behaviour (covered separately by TestWcxEntryExtractors).}
+{Tests for TArchiveHandle's cursor management. Each test pins one
+ cursor invariant; populating Listing uses a no-op entry stub so the
+ assertions stay focused on the cursor, not on extraction (covered
+ in TestWcxEntryExtractors).}
 unit TestWcxArchiveHandle;
 
 interface

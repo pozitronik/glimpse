@@ -1,22 +1,6 @@
-{Singleton container for the WLX plugin's process-wide state.
-
- The five fields (Settings, PluginDir, FFmpegPath, ThumbnailCache,
- ProbeCache) used to live as module-level globals in uPluginExports.
- That made the exports unit both an ABI surface and a service
- container — tests / alternative hosts could not construct one without
- the other. With the singleton:
- - Production: TC calls ListSetDefaultParams once per session, which
- populates Instance via the setters.
- - Tests: instantiate TPluginContext directly, drive DoListLoad-like
- paths against the instance, then call ReleaseInstance to clean up.
-
- Settings is created eagerly in the constructor so any path that runs
- before ListSetDefaultParams (e.g. DoListLoad coming in early on some
- TC startups) still sees a usable defaults snapshot rather than nil.
-
- The two setters (Settings, ProbeCache) free the previous instance
- atomically — matches the historical "GSettings.Free; GSettings := New"
- pattern from the module globals.}
+{Singleton container for the WLX plugin's process-wide state. Settings is
+ created eagerly in the constructor so any path running before
+ ListSetDefaultParams still sees a usable defaults snapshot.}
 unit uPluginContext;
 
 interface
@@ -39,23 +23,16 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    {Lazy singleton accessor — creates Instance on first call with an
-     empty defaults Settings snapshot. The matching teardown is the
-     class procedure ReleaseInstance.}
+    {Lazy accessor — creates Instance with an empty defaults Settings on first call.}
     class function Instance: TPluginContext;
-    {Frees the singleton (idempotent). Called from the host's finalization
-     section in production; tests call it in TearDown.}
+    {Idempotent. Called from host finalization in production; tests call it in TearDown.}
     class procedure ReleaseInstance;
-    {Settings setter frees the previous instance before storing the new
-     one so the historical "replace wholesale" pattern from ListSetDefaultParams
-     stays a single assignment at the call site.}
+    {Setter frees the previous instance so callers can assign wholesale.}
     property Settings: TPluginSettings read FSettings write SetSettings;
     property PluginDir: string read FPluginDir write FPluginDir;
     property FFmpegPath: string read FFFmpegPath write FFFmpegPath;
-    {ThumbnailCache is an interface — assignment refcounts and the old
-     instance is released automatically.}
     property ThumbnailCache: IFrameCache read FThumbnailCache write FThumbnailCache;
-    {ProbeCache setter frees the previous instance like Settings.}
+    {Setter frees the previous instance like Settings.}
     property ProbeCache: TProbeCache read FProbeCache write SetProbeCache;
   end;
 

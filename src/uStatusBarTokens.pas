@@ -1,26 +1,12 @@
-{Single source of truth for the status-bar token catalogue. Lists every
- token kind the user may reference from the configurable template and
- carries the per-kind metadata the parser and renderer need:
-
-   - canonical lowercase name (matched against template identifiers)
-   - default tooltip text shown when hovering the panel
-   - representative text used to size the panel when width=auto and the
-     "recalculate auto-width panels on every update" toggle is OFF
-
- Live values (e.g. the resolution string for the current file) are
- produced by the renderer from plugin state. This unit is value-free
- and VCL-free so it can be exercised by DUnitX in a console process
- without pulling Forms / Graphics into the test harness.}
+{Status-bar token catalogue: every token kind the user can reference
+ from the configurable template, plus per-kind name / tooltip / sample
+ text. Value-free and VCL-free so tests can run without Forms / Graphics.}
 unit uStatusBarTokens;
 
 interface
 
 type
-  {Recognised status-bar token kinds. Order is incidental; the canonical
-   name from StatusBarTokenName is what the user types and what the
-   parser matches against.
-
-   tkUnknown is reserved for tokens the user typed but the parser did
+  {tkUnknown is reserved for tokens the user typed but the parser did
    not recognise. The renderer paints them literally so typos surface
    instead of vanishing.}
   TStatusBarTokenKind = (
@@ -42,46 +28,33 @@ type
     tkZoom);
 
 const
-  {Reserved attribute name shared by every token. Value is either an
-   integer (panel pixel width) or 'auto' (width derived from text).}
+  {Panel width: integer pixels or 'auto'.}
   ATTR_WIDTH = 'width';
   ATTR_WIDTH_AUTO = 'auto';
 
-  {Token-specific attribute consumed by tkSaveDimension / tkCopyDimension.
-   'true' shows the post-cap dimensions after the transform glyph;
-   'false' shows just the predicted pre-cap dimensions.}
+  {tkSaveDimension / tkCopyDimension: 'true' shows post-cap dimensions
+   after the transform glyph; 'false' shows just the predicted pre-cap.}
   ATTR_CAP = 'cap';
 
-  {Reserved attribute name shared by every token. Drives panel text
-   alignment. Recognised values: 'left' (default), 'right', 'center'.}
+  {Panel text alignment: 'left' (default), 'right', 'center'.}
   ATTR_ALIGN = 'align';
   ATTR_ALIGN_LEFT = 'left';
   ATTR_ALIGN_RIGHT = 'right';
   ATTR_ALIGN_CENTER = 'center';
 
-{Canonical lowercase name for AKind. tkUnknown returns ''.}
 function StatusBarTokenName(AKind: TStatusBarTokenKind): string;
 
-{Tooltip shown when the user hovers the panel that holds the token.
- Empty for tkUnknown — the literally-painted raw text already conveys
- the typo.}
 function StatusBarTokenHint(AKind: TStatusBarTokenKind): string;
 
-{Representative text used to size the panel when width=auto and the
- "recalculate auto-width panels on every update" toggle is OFF. The
- width is measured once with this string at template / font apply time;
- a real value never exceeds it for typical inputs (e.g. resolutions up
- to 9999x9999).}
+{Used to size the panel when width=auto and the recalculate-on-every-update
+ toggle is OFF. The width is measured once at template / font apply time;
+ a real value never exceeds this for typical inputs.}
 function StatusBarTokenSampleText(AKind: TStatusBarTokenKind): string;
 
-{Looks up AName (case-insensitive) against the canonical name table.
- Returns False on no match; AKind is set to tkUnknown in that case.}
+{Returns False on no match; AKind is set to tkUnknown in that case.}
 function StatusBarTokenKindByName(const AName: string;
   out AKind: TStatusBarTokenKind): Boolean;
 
-{All recognised kinds in declaration order (excluding tkUnknown). Used
- by the settings dialog to render the legend list under the template
- field.}
 function AllStatusBarTokenKinds: TArray<TStatusBarTokenKind>;
 
 implementation

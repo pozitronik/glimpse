@@ -71,13 +71,10 @@ type
     [Test] procedure TestNilOverrideEntryFallsBackToLive;
     [Test] procedure TestClearOverrideFramesRestoresLive;
     [Test] procedure TestShorterOverrideArrayFallsBackToLive;
-    {M11 contract: the renderer's live-resolution intent travels as a
-     parameter and does NOT read FSettings.SaveAtLiveResolution. The
-     test sets the persisted setting opposite to the intent it passes
-     and asserts the renderer follows the intent (the persisted setting
-     is ignored). Previously the render path read FSettings directly
-     and CopyFrame/CopyView temp-flipped that field — a cross-cutting
-     hazard fixed by this step.}
+    {Contract: the renderer's live-resolution intent travels as a
+     parameter and does NOT read FSettings.SaveAtLiveResolution. Test
+     sets the persisted setting opposite to the passed intent and
+     asserts the renderer follows the intent.}
     [Test] procedure TestRenderIntentIgnoresPersistedSetting_LiveIntentOff;
     [Test] procedure TestRenderIntentIgnoresPersistedSetting_LiveIntentOn;
   end;
@@ -1199,9 +1196,9 @@ var
   Exporter: TFrameExporter;
   Indices: TArray<Integer>;
 begin
-  {When at least one cell is selected, only loaded selected cells must
-   be returned -- mirrors TFrameExporter.SaveFrames selection-aware
-   semantics.}
+  {When at least one cell is selected, only loaded selected cells
+   must be returned — mirrors TFrameExporter.SaveFrames selection-
+   aware semantics.}
   Form := TForm.CreateNew(nil);
   try
     View := CreateTestFrameView(Form, 5, [0, 1, 2, 3, 4]);
@@ -2408,7 +2405,7 @@ begin
       try
         Exporter.TestSaveFramesToDir(FTempDir, sfPNG, True, 'video.mp4');
         Assert.AreEqual(0, CountFiles('*.png'),
-          'ASelectedOnly with no selection writes nothing -- production callers gate with SelectedCount>0 first');
+          'ASelectedOnly with no selection writes nothing; production callers gate with SelectedCount>0 first');
       finally
         Exporter.Free;
       end;
@@ -2476,11 +2473,9 @@ begin
     View.ViewMode := AMode;
     Settings := CreateSettingsWithBanner(False);
     try
-      {Both predictor and renderer take live-resolution intent as a
-       parameter (post step 48); the settings field is no longer read by
-       the render path. Keeping Settings.SaveAtLiveResolution in sync
-       is harmless and documents the intent in case a future test
-       wants to verify dialog seeding too.}
+      {Predictor and renderer both take live-resolution intent as a
+       parameter; the settings field is no longer read by the render
+       path. Keeping it in sync documents intent for dialog-seeding tests.}
       Settings.SaveAtLiveResolution := AForceLive;
       Exporter := TTestableExporter.Create(View, Settings);
       try

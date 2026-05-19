@@ -1,22 +1,5 @@
-{Failure reporter for the preset-extraction code path.
-
- DoExtractPreset (in uWcxExports) used to call MessageBox directly when
- a preset failed. That coupling made the failure path untestable —
- every test would have popped a modal dialog. This unit provides:
-
- 1. IPresetExtractFailureReporter, a one-method interface that
-    decouples the "tell the user something went wrong" action from
-    its medium (MessageBox in production, a captured-string list in
-    tests).
-
- 2. TMessageBoxFailureReporter, the production adapter that wraps
-    MessageBox with the foreground window as parent (so the dialog
-    lands in front of TC on multi-monitor setups).
-
- 3. SummarizeFFmpegError + MakeFailureMessage, the pure string
-    composition that used to live inline in ShowPresetExtractError.
-    Exposed because the composed message is the unit's externally
-    visible contract and worth pinning with unit tests.}
+{Failure reporter for preset extraction. Decouples user notification from
+ its medium (MessageBox in production, captured strings in tests).}
 unit uPresetExtractReporter;
 
 interface
@@ -27,44 +10,27 @@ uses
 type
   IPresetExtractFailureReporter = interface
     ['{C7A4F1B8-3E2D-4B95-9A6F-2E8D7C1B5A4E}']
-    {Surfaces a composed user-visible message about a failed preset
-     extraction. Implementations decide the delivery medium; production
-     MessageBoxes, tests capture.}
     procedure Report(const AMsg: string);
   end;
 
-  {Production reporter. Pops a MessageBox parented to GetForegroundWindow
-   with the title "Glimpse preset extraction failed" and a warning icon.
-   Foreground window as parent (rather than 0) keeps the dialog in front
-   of TC's panel on multi-monitor setups — passing 0 occasionally landed
-   the dialog behind the active TC window.}
+  {Parents to GetForegroundWindow rather than 0; passing 0 occasionally
+   landed the dialog behind the active TC window on multi-monitor setups.}
   TMessageBoxFailureReporter = class(TInterfacedObject, IPresetExtractFailureReporter)
   public
     procedure Report(const AMsg: string);
   end;
 
-{Trims the ffmpeg stderr down to the most signal-rich one-liner for a
- dialog box. ffmpeg often emits a multi-line preamble before the actual
- error; the LAST non-empty line is preferred because the immediate
- cause is typically last (e.g. "Output file does not contain any
- stream"). When ffmpeg said nothing useful, falls back to the exit code
- so the user still has a handle for searching docs.}
+{Picks the LAST non-empty line from ffmpeg stderr because the immediate
+ cause typically appears last (e.g. "Output file does not contain any
+ stream"). Falls back to the exit code when stderr is empty.}
 function SummarizeFFmpegError(const AErrorMessage: string; AExitCode: Integer): string;
 
-{Composes the user-visible failure message. Format is stable so users
- (and tests) can rely on it; if it ever needs to change, update both
- the production reporter's expectations and the message tests.}
 function MakeFailureMessage(const APresetName, AOutputPath: string;
   const AResult: TPresetExtractResult): string;
 
-{Process-global active reporter. uWcxExports initializes it at unit
- start-up to TMessageBoxFailureReporter (production) and may swap it in
- tests via SetPresetFailureReporter. Lives here (rather than in
- uWcxExports) so the entry-extractor classes in uWcxEntryExtractors can
- reach it without back-linking into the dispatcher unit. Returns nil
- only during the brief unit-init window before uWcxExports'
- initialization section runs; callers in that window would themselves
- be unreachable, so the .Report dereference is safe in practice.}
+{Process-global active reporter, swappable in tests. Lives here rather
+ than in uWcxExports so uWcxEntryExtractors can reach it without
+ back-linking into the dispatcher unit.}
 function GetPresetFailureReporter: IPresetExtractFailureReporter;
 procedure SetPresetFailureReporter(const AReporter: IPresetExtractFailureReporter);
 

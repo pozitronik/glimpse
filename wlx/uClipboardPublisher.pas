@@ -1,20 +1,6 @@
-{Clipboard publish leaves: takes a finalised TBitmap and pushes it to
- the system clipboard either as CF_HDROP (file-reference; the bitmap is
- first encoded to a temp PNG and the path is published) or as the
- strategy-array of in-memory formats configured under
- FSettings.ClipboardFormats (CF_DIBV5 + CF_PNG + CF_DIB + CF_BITMAP by
- default).
-
- Extracted from TFrameExporter so the clipboard plumbing (modal runner,
- per-format strategy assembly, temp-file bookkeeping) lives apart from
- the render pipeline and the save-to-file paths. The publisher owns the
- "last temp file we published" handle so successive CF_HDROP copies can
- delete the previous artefact without dragging that bookkeeping back
- into the facade.
-
- Lifetime: the host-form callback (TAsyncTaskRunner) must remain valid
- for the duration of any Publish* call. The publisher does not own the
- callback; the caller wires it via the OnAsyncTaskRun property.}
+{Pushes a finished TBitmap to the system clipboard, either as CF_HDROP
+ (PNG to %TEMP%, then publish the path) or as the in-memory format
+ strategies configured in IClipboardPolicy.GetClipboardFormats.}
 unit uClipboardPublisher;
 
 interface
@@ -25,12 +11,7 @@ uses
   uSettings, uSettingsInterfaces, uBitmapWorkThread;
 
 type
-  {Re-aliases from uBitmapWorkThread where these types and the
-   RunBitmapWorkInModal function moved in step 108. Kept in the
-   publisher's interface section because both TClipboardPublisher's
-   public method signatures and the uFrameExport facade's re-aliases
-   reference them by uClipboardPublisher's name — the move is meant
-   to be transparent to existing callers.}
+  {Re-aliased so existing imports of uClipboardPublisher resolve these names.}
   TClipboardPublishResult = uBitmapWorkThread.TClipboardPublishResult;
   TAsyncTaskRunner = uBitmapWorkThread.TAsyncTaskRunner;
 
@@ -39,10 +20,8 @@ const
   cprFailed = uBitmapWorkThread.cprFailed;
   cprCancelled = uBitmapWorkThread.cprCancelled;
 
-{Re-export of the function moved to uBitmapWorkThread in step 108.
- Defined as a delegating interface function so existing callers
- (uFrameExport.pas, TestFrameExport's TTestRunBitmapWorkInModal) keep
- compiling without import changes.}
+{Delegates to uBitmapWorkThread.RunBitmapWorkInModal; kept here so existing
+ callers that import uClipboardPublisher do not need import changes.}
 function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const AStatusText: string;
   const AWork: TBitmapWorkProc;
@@ -50,66 +29,34 @@ function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const ARunner: TAsyncTaskRunner;
   out AOutcome: TBitmapWorkOutcome): TClipboardPublishResult;
 
-{Composes the user-facing message dialog text shown when
- PublishBitmapToClipboardAsImage returns cprFailed. AFailedFormat is the
- strategy name supplied by CopyBitmapToClipboard (empty when failure was
- not a per-strategy allocation, e.g. clipboard-open exhausted retries).
- AIsCombinedView changes the remedy guidance: combined-view callers can
- also lower the Scale target / reduce frame count, single-frame callers
- cannot. Exposed in the interface section so tests can pin the message
- text without needing the full WLX form harness.}
+{Composes user-facing dialog text for PublishAsImage failures.
+ AFailedFormat empty = failure at clipboard-open stage. AIsCombinedView
+ changes the remedy guidance (combined view has more knobs to lower).}
 function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
   AIsCombinedView: Boolean): string;
 
 type
-  {Publishes a bitmap to the system clipboard via two complementary
-   paths (CF_HDROP file reference + in-memory format strategies).}
   TClipboardPublisher = class
   strict private
-    {Step 109 (N3, ISP): publisher only needs the clipboard-publish
-     slice of TPluginSettings (ClipboardFormats + PngCompression for
-     the in-memory CF_PNG path). Constructor takes IClipboardPolicy
-     instead of the whole god object.}
     FClipboardPolicy: IClipboardPolicy;
     FOnAsyncTaskRun: TAsyncTaskRunner;
-    {Path of the temp PNG we most recently wrote for the CF_HDROP
-     "paste as file reference" toggle, or '' when nothing has been
-     written this session. Tracked so the next copy can delete the
-     previous file (at most one Glimpse clipboard temp exists at a
-     time). NOT deleted on destructor: closing the Lister must not
-     invalidate a CF_HDROP entry the user has not pasted yet - the
-     system's %TEMP% cleanup catches the file later.}
+    {Tracked so the next CF_HDROP copy can delete the previous file.
+     NOT cleared on destruction: closing the Lister must not invalidate
+     a CF_HDROP entry the user has not pasted yet — %TEMP% cleanup later.}
     FLastClipboardTempFile: string;
   public
     constructor Create(const AClipboardPolicy: IClipboardPolicy);
-    {Saves ABitmap to a fresh %TEMP%\glimpse_clip_*.png and publishes
-     its path as CF_HDROP. Deletes the previous temp file if any.
+    {OWNERSHIP: takes ABitmap unconditionally (var; set to nil on entry).
+     Callers MUST NOT touch ABitmap after the call.
 
-     OWNERSHIP: takes ABitmap unconditionally. The parameter is a var
-     ref so the function sets it to nil on entry; callers must NOT
-     touch ABitmap after this call (a trailing ABitmap.Free is safe -
-     Free on nil is a no-op).
-
-     Returns cprSuccess on the happy path, cprCancelled when the user
-     dismissed the modal progress dialog (silent - clipboard unchanged
-     but no error to surface), cprFailed on bitmap save / clipboard
-     publish failure (caller should MessageDlg).}
+     cprCancelled = silent; clipboard unchanged. cprFailed = caller should MessageDlg.}
     function PublishAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
-    {Sibling of PublishAsFileReference for the in-memory clipboard
-     path. Builds the per-format strategy array from
-     FSettings.ClipboardFormats and feeds it to
-     uClipboardImage.CopyBitmapToClipboard. Runs inside the same modal
-     progress dialog so the lister stays responsive while large HGLOBAL
-     buffers are being allocated and populated. Same ownership contract:
-     takes ABitmap unconditionally, sets it to nil on entry. Same
-     tri-state result. On cprFailed AErrorMsg names the failing strategy
-     (when allocation failed) or is empty when the failure was at the
-     clipboard-open stage; callers compose a richer MessageDlg from it.}
+    {Same ownership/tri-state contract as PublishAsFileReference. On cprFailed
+     AErrorMsg names the failing strategy (empty = clipboard-open stage).}
     function PublishAsImage(var ABitmap: TBitmap;
       ABackground: TColor; out AErrorMsg: string): TClipboardPublishResult;
-    {Optional host-form hook that runs a worker thread inside a modal
-     progress dialog. Wire to uProgressModalForm.RunWithProgress. Leave
-     nil to fall back to synchronous, no-UI execution (tests / standalone).}
+    {Nil = synchronous no-UI (tests / standalone). Production wires to
+     uProgressModalForm.RunWithProgress.}
     property OnAsyncTaskRun: TAsyncTaskRunner read FOnAsyncTaskRun write FOnAsyncTaskRun;
   end;
 
@@ -133,8 +80,7 @@ var
 begin
   if AFailedFormat = '' then
   begin
-    {Failure was at the clipboard-open stage (system clipboard locked by
-     another process); format name does not apply.}
+    {Clipboard-open stage failure (system clipboard locked); no format name.}
     Exit('Clipboard write failed - could not open the system clipboard.' +
       sLineBreak + sLineBreak +
       'Try closing other clipboard-using apps and retry.');
@@ -156,8 +102,6 @@ function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const ARunner: TAsyncTaskRunner;
   out AOutcome: TBitmapWorkOutcome): TClipboardPublishResult;
 begin
-  {Step-108 thin re-export. Real implementation now lives in
-   uBitmapWorkThread alongside the TBitmapWorkThread class it constructs.}
   Result := uBitmapWorkThread.RunBitmapWorkInModal(ABitmap, AStatusText,
     AWork, APostWork, ARunner, AOutcome);
 end;
@@ -176,10 +120,8 @@ var
   Outcome: TBitmapWorkOutcome;
   WorkResult: TClipboardPublishResult;
 begin
-  {Fresh GUID-based name per call so concurrent TC lister windows do
-   not collide on a single fixed filename. The previous file (if any)
-   is deleted after the new one is successfully published, so at most
-   one Glimpse clipboard temp lives in %TEMP% at a time.}
+  {GUID-based name so concurrent TC lister windows do not collide.
+   Previous file is deleted on success — at most one Glimpse temp lives at a time.}
   NewPath := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetTempPath) +
     'glimpse_clip_' + TGuid.NewGuid.ToString + '.png';
 
@@ -191,10 +133,7 @@ begin
     end,
     procedure(const AOut: TBitmapWorkOutcome; ACancelled: Boolean)
     begin
-      {User cancelled while we were encoding. The file is on disk but
-       nobody will ever paste it - delete now so the temp folder stays
-       tidy. SysUtils.DeleteFile silently no-ops if something else
-       already removed the file.}
+      {Encode succeeded but user cancelled — nobody will paste, so delete.}
       if AOut.Success and ACancelled then
         System.SysUtils.DeleteFile(NewPath);
     end,
@@ -211,10 +150,8 @@ begin
     Exit(cprFailed);
   end;
 
-  {Work succeeded - now publish the on-disk file as CF_HDROP. Reset
-   Result to cprFailed; the success path below promotes it back to
-   cprSuccess only after the clipboard publish AND the temp-file
-   bookkeeping have both completed.}
+  {Reset to cprFailed; promote to cprSuccess only after publish AND
+   temp-file bookkeeping both complete.}
   Result := cprFailed;
   if not PutFilePathOnClipboard(NewPath) then
   begin
@@ -236,11 +173,7 @@ var
   PngCompression: Integer;
 begin
   AErrorMsg := '';
-  {Capture the settings snapshot by value before crossing into the
-   worker thread; the anonymous method below will reference these locals.
-   Reading the interface directly inside the worker would also work
-   today (the values are immutable for the duration of the call) but
-   the local snapshot makes the lifetime contract explicit.}
+  {Snapshot settings before crossing into the worker — keeps the lifetime contract explicit.}
   FormatSettings := FClipboardPolicy.GetClipboardFormats;
   PngCompression := FClipboardPolicy.GetPngCompression;
   Result := RunBitmapWorkInModal(ABitmap, 'Copying image to clipboard...',
@@ -252,9 +185,7 @@ begin
       Strategies := BuildClipboardFormatStrategies(FormatSettings, PngCompression);
       AOut.Success := uClipboardImage.CopyBitmapToClipboard(ABmp, ABackground,
         Strategies, FailedFormat);
-      {Carry the failed-format name back to the main thread via the
-       existing ErrorMsg channel; empty when success or when failure was
-       not a per-strategy allocation (clipboard open exhausted retries).}
+      {Carry failing-strategy name back to the main thread via ErrorMsg.}
       if not AOut.Success then
         AOut.ErrorMsg := FailedFormat;
     end,

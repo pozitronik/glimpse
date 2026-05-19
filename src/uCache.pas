@@ -1,12 +1,6 @@
-{Disk cache for extracted video frames.
- Composes:
-   - ICacheStorage  (atomic byte-keyed storage, see uCacheStorage)
-   - TLruEvictionPolicy (uLruEvictionPolicy)
-   - PNG encoding/decoding (uBitmapSaver)
- TFrameCache itself only owns the lock, the bitmap<->bytes encoding, and
- the hash-key computation from file metadata. The disk layout and the
- LRU algorithm live in their own units so each can be tested in
- isolation against a memory-backed storage fake.}
+{Disk cache for extracted video frames. Composes ICacheStorage,
+ TLruEvictionPolicy, and PNG encoding. TFrameCache owns only the lock,
+ the bitmap-to-bytes encoding, and the hash-key computation.}
 unit uCache;
 
 interface
@@ -17,38 +11,27 @@ uses
   uCacheStorage, uLruEvictionPolicy;
 
 type
-  {Lookup identity for a cached frame. Bundles the four fields that made the
-   old IFrameCache.TryGet / Put signatures a 4-arity parade and lets call
-   sites compute the key once, reuse it for both get and put.}
   TFrameCacheKey = record
-    {Video file path. Lowercased before hashing so case-insensitive Windows
-     paths don't produce divergent cache entries.}
+    {Lowercased before hashing so case-insensitive Windows paths do not
+     produce divergent cache entries.}
     FilePath: string;
-    {Frame offset in seconds (accurate-seek or keyframe-snap time).}
     TimeOffset: Double;
-    {Longest-side scale cap. 0 means the original (unscaled) entry.}
+    {0 means the original (unscaled) entry.}
     MaxSide: Integer;
-    {True for keyframe-only seek (faster, coarser). Keyframe and accurate
-     entries live side-by-side — this flag disambiguates them.}
+    {Keyframe and accurate-seek entries coexist; this flag disambiguates.}
     UseKeyframes: Boolean;
 
     class function Create(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): TFrameCacheKey; static;
   end;
 
-  {Core cache contract: retrieve and store video frames by file identity
-   and time offset. Implementations decide whether caching actually occurs.}
   IFrameCache = interface
     ['{A7E3B2C1-4D5F-6E7A-8B9C-0D1E2F3A4B5C}']
-    {Loads a cached frame matching AKey.
-     Returns nil on miss or if caching is not supported. Caller owns the bitmap.}
+    {Caller owns the returned bitmap.}
     function TryGet(const AKey: TFrameCacheKey): TBitmap;
-    {Stores a frame bitmap under AKey. Implementations may copy the bitmap
-     to disk; the caller retains ownership of ABitmap.}
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
   end;
 
-  {Cache management operations: size queries, eviction, clearing.
-   Separated from IFrameCache so read/write callers don't see admin ops.}
+  {Separate from IFrameCache so read/write callers do not see admin ops.}
   ICacheManager = interface
     ['{B8F4C3D2-5E6A-7F8B-9C0D-1E2F3A4B5C6D}']
     procedure Clear;
@@ -56,17 +39,14 @@ type
     function GetTotalSize: Int64;
   end;
 
-  {Abstract base providing the IFrameCache contract for concrete implementations.}
   TFrameCacheBase = class(TInterfacedObject, IFrameCache)
   public
     function TryGet(const AKey: TFrameCacheKey): TBitmap; virtual; abstract;
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); virtual; abstract;
   end;
 
-  {No-op cache: always misses, never stores. Used when caching is disabled
-   so callers don't need nil checks. Admin ops are no-ops (Clear/Evict do
-   nothing, GetTotalSize is 0) so a TNullFrameCache substitutes uniformly
-   in either contract.}
+  {No-op cache for the disabled-caching case so callers do not need nil
+   checks. Implements ICacheManager so substitution stays uniform.}
   TNullFrameCache = class(TFrameCacheBase, ICacheManager)
   public
     function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
@@ -76,12 +56,8 @@ type
     function GetTotalSize: Int64;
   end;
 
-  {Decorator that skips cache reads but delegates writes to the inner cache.
-   Used for forced re-extraction (Refresh) where we want fresh frames
-   but still want to update the cache with the new results.
-   Admin ops (Clear/Evict/GetTotalSize) propagate to the inner if it
-   exposes ICacheManager, so wrapping in TBypassFrameCache does not
-   silently drop admin capability.}
+  {Used for forced re-extraction (Refresh): skip reads, still write.
+   Admin ops propagate to the inner.}
   TBypassFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FInner: IFrameCache;
@@ -95,12 +71,8 @@ type
     function GetTotalSize: Int64;
   end;
 
-  {Decorator that delegates reads but drops writes. Used for random
-   extraction when the user has CacheRandomFrames disabled: a previously
-   cached random pick can still hit (cheap), but new picks do not
-   pollute the cache. Mirror image of TBypassFrameCache; the two narrow
-   types are easier to reason about than one configurable wrapper.
-   Admin ops propagate to the inner identically to TBypassFrameCache.}
+  {Used for random extraction with CacheRandomFrames disabled: serve
+   already-cached random picks but never write fresh ones back.}
   TReadOnlyFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FInner: IFrameCache;
@@ -114,33 +86,20 @@ type
     function GetTotalSize: Int64;
   end;
 
-  {Real disk cache. Thin composition over ICacheStorage + TLruEvictionPolicy.
-   Owns the lock that serialises every public op; the storage and policy
-   collaborators are non-thread-safe and trust the cache to call them
-   from inside the critical section.}
+  {Owns the lock that serialises every public op; storage and policy
+   collaborators are non-thread-safe and rely on the cache calling them
+   inside the critical section.}
   TFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
     FCacheDir: string;
     FStorage: ICacheStorage;
     FPolicy: TLruEvictionPolicy;
-    {Serialises every public operation. NTFS rename is atomic, so a
-     concurrent TryGet during a Put already sees old-or-new but never
-     partial; the lock additionally guards Evict's directory walk
-     against a Put adding new entries mid-scan and the GetTotalSize /
-     Clear admin paths against in-flight reads. Lock is held across the
-     PNG encode + storage write inside Put; workers therefore serialise
-     on cache writes, which is acceptable given typical frame sizes and
-     the disk being the real bottleneck anyway.}
     FLock: TCriticalSection;
   public
     constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
     destructor Destroy; override;
 
-    {Generates a cache key hash string for a frame by reading file metadata
-     from disk. Returns empty string if the file cannot be stat'd.
-     Kept with the 4-param signature (not TFrameCacheKey) because it's a
-     low-level utility used by tests and exposed independently of the
-     interface — call sites there don't benefit from the record form.}
+    {Returns empty when the file cannot be stat'd.}
     class function FrameKey(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string; static;
 
     function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
@@ -153,8 +112,6 @@ type
     property CacheDir: string read FCacheDir;
   end;
 
-  {Creates an ICacheManager backed by disk cache.
-   Callers use the interface for admin ops without depending on TFrameCache.}
 function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICacheManager;
 
 implementation
@@ -164,9 +121,7 @@ uses
   Vcl.Imaging.pngimage,
   uDebugLog, uCacheKey, uBitmapSaver;
 
-{Test- and cache-internal helper: encode a bitmap to PNG bytes using
- fast compression (CompressionLevel=1 matches the previous behaviour
- of writing cache PNGs directly via TPngImage).}
+{CompressionLevel=1 keeps cache writes fast at the cost of disk size.}
 function EncodeBitmapToPngBytes(ABitmap: TBitmap): TBytes;
 var
   Stream: TBytesStream;
@@ -225,10 +180,8 @@ constructor TBypassFrameCache.Create(const AInner: IFrameCache);
 begin
   inherited Create;
   FInner := AInner;
-  {Cache the inner's admin facet so the per-call Supports query happens
-   once. FInnerMgr stays nil if the inner doesn't expose ICacheManager;
-   admin ops then become no-ops, preserving the previous "decorator
-   silently swallows admin" semantics for that case.}
+  {Cache the inner's admin facet so Supports runs once. nil = inner has
+   no ICacheManager and admin ops become no-ops.}
   Supports(FInner, ICacheManager, FInnerMgr);
 end;
 
@@ -278,9 +231,7 @@ end;
 
 procedure TReadOnlyFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
 begin
-  {Intentional no-op: random extractions with CacheRandomFrames=False
-   read from the disk cache when an offset happens to be cached, but
-   never write fresh picks back.}
+  {Intentional no-op.}
 end;
 
 procedure TReadOnlyFrameCache.Clear;
@@ -318,7 +269,6 @@ end;
 destructor TFrameCache.Destroy;
 begin
   FPolicy.Free;
-  {FStorage is an interface; refcount drops to zero with the field clearing}
   FLock.Free;
   inherited;
 end;
@@ -390,9 +340,8 @@ begin
   finally
     FLock.Leave;
   end;
-  {Observations were captured inside the critical section; emit log
-   lines after the lock is released so concurrent workers are not
-   serialised on the DebugLog file-open/append/close round-trip.}
+  {Log outside the critical section so workers do not serialise on
+   DebugLog I/O.}
   if ReadFailed then
     DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s', [Key, ExceptionMsg]))
   else if PngSize = 0 then
@@ -418,9 +367,6 @@ begin
   Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes);
   if Key = '' then
     Exit;
-  {Pre-lock log: bitmap dimensions are caller-owned and stable for the
-   duration of the call, so emitting before acquiring the lock costs
-   nothing.}
   DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
   PngSize := 0;
   WriteFailed := False;

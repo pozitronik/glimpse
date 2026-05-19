@@ -22,18 +22,11 @@ function ModeHasZoomSubmodes(AMode: TViewMode): Boolean;
 {Maps Total Commander Lister parameter flags to a zoom mode.}
 function ListerParamsToZoomMode(AParams: Integer): TZoomMode;
 
-{Number of frames that share the viewport at once under a given mode.
- Single-view, scroll and filmstrip all display at most one frame at
- viewport scale at a time (scroll stacks them vertically at full viewport
- width; filmstrip lays them horizontally at full viewport height), so
- scaled extraction must size against 1 for all three. Only the grid
- layouts tile multiple frames into shared cells, so the full queue
- length is the right divisor there.}
+{Number of frames sharing the viewport under AMode. Single/Scroll/Filmstrip
+ size at most one frame at viewport scale; grid layouts tile the full queue.}
 function ViewportFrameCount(AMode: TViewMode; ATotalFrames: Integer): Integer;
 
-{User-facing display labels for the view-mode and zoom-mode enums.
- Surfaced via the status bar's %viewmode% / %zoommode% tokens; returns
- '' for unhandled enum values (defensive against future enum growth).}
+{Returns '' for unhandled enum values — defensive against future enum growth.}
 function ViewModeDisplayName(AMode: TViewMode): string;
 function ZoomModeDisplayName(AMode: TZoomMode): string;
 

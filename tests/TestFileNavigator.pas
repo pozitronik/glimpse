@@ -37,7 +37,6 @@ type
     [Test] procedure TestGetFilePositionMixedExtensionsMatchesOnlyCount;
     [Test] procedure TestGetFilePositionCurrentNotInList;
     [Test] procedure TestGetFilePositionEmptyDirReturnsFalse;
-    {Cache tests (step 111).}
     [Test] procedure Cache_ClearedInSetup_SizeIsZero;
     [Test] procedure Cache_FirstCall_GrowsSizeToOne;
     [Test] procedure Cache_SecondCallSameArgs_DoesNotGrow;

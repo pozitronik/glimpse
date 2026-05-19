@@ -9,11 +9,9 @@ type
   [TestFixture]
   TTestVideoInfoIsValid = class
   public
-    {IsValid is now a derived method (Duration > 0) rather than a stored
-     field. The two former writers (ProbeVideo, TProbeCache.TryGet)
-     used to set it explicitly; the methodisation removes the drift
-     hazard. Tests pin the contract: positive duration is valid, every
-     other case is invalid.}
+    {IsValid is a derived method (Duration > 0), not a stored field.
+     Pins the contract: positive duration is valid, every other case
+     is invalid.}
     [Test] procedure ZeroDuration_IsInvalid;
     [Test] procedure NegativeDuration_IsInvalid;
     [Test] procedure PositiveDuration_IsValid;

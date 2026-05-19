@@ -1,29 +1,13 @@
 {Per-cell timecode overlay painters.
 
- The combined-image renderer supports two visually distinct timecode
- algorithms:
+ Two algorithms:
+ - Modern: flush-to-corner rect with optional translucent background
+   block and centred text (matches WLX live view).
+ - Legacy: free-standing text inset 4px with 1px black drop shadow
+   (pixel-exact back-compat with WLX 1.0.x saved grids).
 
- - The "modern" path renders a flush-to-corner rectangle with an
-   optional translucent background block and centred text. Matches what
-   the WLX live view paints, so a saved combined sheet looks the same
-   as the on-screen preview.
-
- - The "legacy" path renders the timecode as free-standing text inset
-   by 4px from the cell edge with a 1px black drop shadow. Preserved
-   pixel-exact for back-compat with WLX 1.0.x saved grids.
-
- Earlier code dispatched between the two paths by inspecting BackAlpha
- (treating 0 as a sentinel for "use legacy"). That conflated two
- distinct intents - "no background block on the modern path" versus
- "render the legacy algorithm entirely" - and meant a future fourth
- option (e.g. drop-shadow only on the modern path) would need yet
- another sentinel encoding. Mode now carries the choice explicitly;
- the painters are picked through this unit's factory.
-
- The two painter instances are cached unit-level so DrawCellTimecode
- does not allocate a fresh TInterfacedObject per cell on each render.
- The painters are stateless; sharing one instance across all callers
- is safe.}
+ Painters are stateless TInterfacedObject instances cached unit-level
+ so DrawCellTimecode does not allocate per cell on every render.}
 unit uTimecodeOverlay;
 
 interface
@@ -34,23 +18,14 @@ uses
   uTypes, uSettingsGroups;
 
 type
-  {Explicit selector between the two timecode rendering algorithms. Was
-   previously inferred from BackAlpha (0 -> legacy, >0 -> modern) which
-   conflated "user wanted no background block" with "render legacy
-   shadow-only" - two distinct intents. Mode now carries the choice
-   directly; BackAlpha controls only the background-block opacity within
-   the modern path.
-
-   - tsmModern: flush-to-corner rect with optional bg block + centred
-     text (matches live view).
-   - tsmLegacy: free-standing shadowed text inset by 4px (pixel-exact
-     back-compat with WLX 1.0.x saved grids; ignores BackColor /
-     BackAlpha).}
+  {tsmModern: flush-to-corner rect with optional bg block + centred text.
+   tsmLegacy: free-standing shadowed text inset 4px (ignores BackColor
+   and BackAlpha).}
   TTimecodeStyleMode = (tsmModern, tsmLegacy);
 
-  {Overlay style for per-cell timecodes. When Show=False nothing is drawn
-   and the other fields are ignored. Mode picks the rendering
-   algorithm; BackAlpha controls only the modern-path background block.}
+  {When Show=False nothing is drawn and other fields are ignored. Mode
+   picks the algorithm; BackAlpha controls only the modern-path
+   background block.}
   TTimestampStyle = record
     Show: Boolean;
     Corner: TTimestampCorner;
@@ -62,75 +37,42 @@ type
     TextColor: TColor;
     TextAlpha: Byte;
     Mode: TTimecodeStyleMode;
-    {Builds the rendering style from the persisted settings group.
-     FontStyles is set to [] (WLX live-view convention); callers that
-     want bold (WCX combined sheet) override Result.FontStyles := [fsBold]
-     after the call. Mode is derived from BackAlpha via the historical
-     sentinel-mapping helper. Show comes from the group; callers wanting
-     to gate on a live-view toggle (WLX FFrameView.ShowTimecode) override
-     Result.Show.}
+    {FontStyles defaults to [] (WLX live-view convention); callers that
+     want bold (WCX combined sheet) override after the call. Mode is
+     derived from BackAlpha via TimecodeStyleModeFor. Callers wanting to
+     gate on a live-view toggle override Result.Show.}
     class function FromSettings(const AGroup: TTimestampSettingsGroup): TTimestampStyle; static;
   end;
 
   ITimecodeOverlayPainter = interface
     ['{4E8A1F3D-6B2C-49A7-B05E-C12F7D3A8B6E}']
-    {Paints the timecode AText into ACellRect on ACanvas using AStyle.
-     Implementations interpret ACellRect according to their algorithm:
-     the modern painter derives a flush-to-corner sub-rectangle; the
-     legacy painter positions text inset from the cell edge.}
+    {The modern painter derives a flush-to-corner sub-rectangle from
+     ACellRect; the legacy painter positions text inset from the cell edge.}
     procedure Paint(ACanvas: TCanvas; const ACellRect: TRect;
       const AText: string; const AStyle: TTimestampStyle);
   end;
 
-{Computes the historical Mode from a user-configured BackAlpha. Used
- by settings-driven construction sites to preserve the pre-Mode-field
- contract: BackAlpha=0 historically meant "render legacy"; any
- non-zero value meant "render modern". A future user-facing Mode
- setting would let this derivation be deleted.}
+{Historical sentinel-mapping: BackAlpha=0 means legacy, anything else
+ means modern.}
 function TimecodeStyleModeFor(ABackAlpha: Byte): TTimecodeStyleMode;
 
-{Draws the "modern-path" timecode overlay (flush-rect background block plus
- centred text) into ACanvas at ARect using AStyle. Handles every combination
- of opaque/partial background and opaque/partial text alpha required by both
- the WLX live view and the WCX combined-image renderer.
-
+{Modern-path overlay: flush-rect background block plus centred text.
  Optional scratch bitmaps let callers reuse persistent buffers across
- repeated calls (the live view repaints every cell on every frame). When
- nil, the helper allocates local buffers for the duration of the call.
- ABgScratch needs to be a 1x1 pf24bit bitmap (or may start empty; the
- helper resizes on demand). ATextScratch is grown to fit the rect.
-
- The legacy shadow-only rendering (BackAlpha = 0) is handled by
- DrawLegacyTimecodeOverlay - its geometry (4px margin, non-centered
- text) diverges from the live view.}
+ repeated calls (the live view repaints every cell every frame); when
+ nil, the helper allocates local buffers for the call.}
 procedure DrawTimecodeOverlay(ACanvas: TCanvas; const ARect: TRect; const AText: string; const AStyle: TTimestampStyle; ABgScratch: TBitmap = nil; ATextScratch: TBitmap = nil);
 
-{Draws the "legacy-path" timecode overlay (black 1px drop shadow plus
- coloured text inset by 4px from the cell edge) into ACanvas using AStyle.
- Used by the combined-image renderer when AStyle.BackAlpha = 0 - a mode
- kept for pixel-exact back-compat with WLX 1.0.x saved grids.
-
- ACellRect is the cell the text should be positioned inside; the helper
- computes the exact text origin from AStyle.Corner. Set font/size/style
- is done internally so callers don't need to prime the canvas first.
-
- Opaque text (TextAlpha = 255) goes straight to ACanvas. Partial text
- opacity blits the shadow+text onto an offscreen bitmap and AlphaBlends
- the result back, preserving underlying pixel content that shadows would
- otherwise overwrite.}
+{Legacy-path overlay: 1px black drop shadow plus coloured text inset
+ 4px from the cell edge. Used when BackAlpha=0 — pixel-exact back-compat
+ with WLX 1.0.x. Partial text opacity blits shadow+text onto an offscreen
+ bitmap and AlphaBlends back so underlying pixels survive.}
 procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect; const AText: string; const AStyle: TTimestampStyle);
 
-{Renders the per-cell timecode overlay for a combined-image cell. Picks
- between the modern path (flush-to-corner rect with background block, when
- AStyle.BackAlpha > 0) and the legacy path (free-standing shadowed text).
- Centralises the corner-rect math so the uniform-grid and smart-grid
- renders stay in lockstep.
- No-op when AStyle.Show is False or AStyle.Corner is tcNone - callers
- don't have to repeat that gating themselves.}
+{No-op when AStyle.Show is False or AStyle.Corner is tcNone — callers
+ don't need to repeat that gate.}
 procedure DrawCellTimecode(ACanvas: TCanvas; const ACellRect: TRect; ATimeOffset: Double; const AStyle: TTimestampStyle);
 
-  {Returns the painter responsible for AMode. The same instance is
-   handed out across calls; never Free the result.}
+{Same instance per mode across calls; never Free the result.}
 function GetTimecodePainter(AMode: TTimecodeStyleMode): ITimecodeOverlayPainter;
 
 implementation
@@ -140,10 +82,9 @@ uses
   uFrameOffsets;
 
 type
-  {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
-   AlphaBlend / GDI calls) declares its own TBITMAP record alias that
-   would otherwise shadow Vcl.Graphics.TBitmap throughout this
-   implementation.}
+  {Re-bind TBitmap to the VCL class. Winapi.Windows declares a TBITMAP
+   alias that would otherwise shadow Vcl.Graphics.TBitmap throughout
+   this implementation.}
   TBitmap = Vcl.Graphics.TBitmap;
 
 type
@@ -160,8 +101,9 @@ type
   end;
 
 const
-  TC_PADDING_H = 8; {horizontal padding inside the modern-path timecode rect}
-  TC_MIN_H = 20;    {minimum height for the modern-path rect - live-view parity for small fonts}
+  TC_PADDING_H = 8;
+  {Minimum modern-path rect height for live-view parity at small fonts.}
+  TC_MIN_H = 20;
 
 var
   GModernPainter: ITimecodeOverlayPainter;
@@ -206,8 +148,7 @@ var
   OwnsBg, OwnsText: Boolean;
   DrawR, LocalR: TRect;
 begin
-  {Background block: opaque => FillRect; partial => stretch a 1x1 color
-   bitmap via AlphaBlend; zero => skip (used when only text is desired)}
+  {Opaque -> FillRect; partial -> AlphaBlend a 1x1 colour bitmap; zero -> skip.}
   if AStyle.BackAlpha = 255 then
   begin
     ACanvas.Brush.Color := AStyle.BackColor;
@@ -247,7 +188,6 @@ begin
 
   if AStyle.TextAlpha = 255 then
   begin
-    {Fast path: opaque text painted straight onto ACanvas.}
     ACanvas.Font.Color := AStyle.TextColor;
     ACanvas.Brush.Style := bsClear;
     DrawR := ARect;
@@ -256,8 +196,8 @@ begin
   end;
 
   {Partial text opacity: blit the rect into an offscreen bitmap, DrawText
-   onto it, then AlphaBlend it back with SourceConstantAlpha so the text
-   blends with pixels already painted underneath (frame, background block).}
+   onto it, then AlphaBlend back so the text blends with pixels painted
+   underneath (frame, background block).}
   OwnsText := ATextScratch = nil;
   if OwnsText then
     TextBmp := TBitmap.Create
@@ -288,7 +228,8 @@ end;
 
 procedure DrawLegacyTimecodeOverlay(ACanvas: TCanvas; const ACellRect: TRect; const AText: string; const AStyle: TTimestampStyle);
 const
-  TC_MARGIN = 4; {inset from the cell edge - historical WLX 1.0.x value}
+  {Historical WLX 1.0.x inset from cell edge.}
+  TC_MARGIN = 4;
 var
   TW, TH, TX, TY: Integer;
   X, Y, CellW, CellH: Integer;
@@ -335,7 +276,6 @@ begin
 
   if AStyle.TextAlpha = 255 then
   begin
-    {Opaque fast path: shadow then foreground, 1px offset.}
     ACanvas.Brush.Style := bsClear;
     ACanvas.Font.Color := clBlack;
     ACanvas.TextOut(TX + 1, TY + 1, AText);
@@ -344,9 +284,8 @@ begin
     Exit;
   end;
 
-  {Partial opacity: render shadow + text onto an offscreen snapshot of the
-   text region, then AlphaBlend the result back. R spans one extra pixel
-   on the bottom-right to include the shadow offset, clipped to the cell.}
+  {R spans one extra pixel bottom-right to include the shadow offset,
+   clipped to the cell.}
   R := Rect(TX, TY, TX + TW + 2, TY + TH + 2);
   if R.Left < X then
     R.Left := X;
@@ -396,15 +335,14 @@ var
   R: TRect;
 begin
   {Prime the canvas font so TextWidth/TextHeight match the rect the
-   leaf overlay will then DrawText into.}
+   leaf overlay will DrawText into.}
   ACanvas.Font.Name := AStyle.FontName;
   ACanvas.Font.Size := AStyle.FontSize;
   ACanvas.Font.Style := AStyle.FontStyles;
 
   TW := ACanvas.TextWidth(AText) + TC_PADDING_H;
-  {Rect height floors at TC_MIN_H for live-view parity at small font
-   sizes, but grows to fit when larger fonts would otherwise be clipped
-   by DT_VCENTER inside a fixed rect.}
+  {Floors at TC_MIN_H for live-view parity at small fonts, but grows to
+   fit when larger fonts would otherwise be clipped by DT_VCENTER.}
   TH := Max(ACanvas.TextHeight(AText) + 4, TC_MIN_H);
   case AStyle.Corner of
     tcTopLeft:

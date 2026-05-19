@@ -1,35 +1,7 @@
-{Polymorphic archive-entry extractors for the WCX plugin.
-
- Replaces the prior `case Entry.Kind of ekSeparateFrame / ekCombinedSheet /
- ekUserPreset` dispatch ladder in uWcxExports with a single
- `Entry.Extract(...)` / `Entry.ReportedSize(...)` virtual call. The three
- concrete classes (TFrameEntry / TCombinedEntry / TPresetEntry) each
- carry the per-archive-entry state they need (frame index, combined
- cache slot, preset index) and implement the IWcxEntryExtractor
- contract. BuildArchiveListing in uWcxListing now allocates instances of
- these instead of populating a record + enum + index triple.
-
- Adding a new archive-entry kind becomes one new class implementing the
- interface — no edits to DoProcessFile or ReadHeader/ReadHeaderExW.
-
- Two narrow seams live alongside for test isolation:
-   - IFrameExtractor (already exported by uFrameExtractor) lets frame /
-     combined Extract tests run without launching ffmpeg.
-   - IBitmapSaverRouter is the multi-format dispatcher seam: entry
-     classes call its single Save(ABitmap, APath, AFormat, AJpegQuality,
-     APngCompression) method so the per-archive Settings.SaveFormat can
-     vary. Production wiring (TVclBitmapSaverRouter) delegates to
-     uBitmapSaver.MakeBitmapSaver internally; test fakes record what
-     would have been written without touching disk. Distinct from the
-     per-format `IBitmapSaver` polymorphic family in uBitmapSaver — the
-     router selects the right per-format saver, the family encapsulates
-     the format-specific encoding.
-
- The preset path (TPresetEntry.Extract) uses concrete dependencies
- (TWcxProgressBridge / ExtractPreset / GPresetFailureReporter) because
- the bulk of its testable behaviour already lives under
- TestWcxPresetExtractor; this unit only pins its structural contract
- (FileName / ReportedSize / constructor wiring).}
+{Polymorphic archive-entry extractors for the WCX plugin. Each kind
+ (frame, combined sheet, user preset) is one class implementing
+ IWcxEntryExtractor; DoProcessFile dispatches via Entry.Extract.
+ Adding a new entry kind = one new class implementing the interface.}
 unit uWcxEntryExtractors;
 
 interface
@@ -37,8 +9,8 @@ interface
 uses
   uWcxAPI, uWcxSettings, uBitmapSaver, uFrameExtractor, uFrameOffsets,
   uVideoInfo, uWcxPresets, uTypes,
-  {Vcl.Graphics last so its TBitmap shadows the Winapi.Windows.tagBITMAP
-   that uWcxAPI transitively imports — otherwise TBitmap is ambiguous.}
+  {Vcl.Graphics last so its TBitmap shadows Winapi.Windows.tagBITMAP
+   pulled in transitively by uWcxAPI; otherwise TBitmap is ambiguous.}
   Vcl.Graphics;
 
 type
@@ -46,14 +18,9 @@ type
   IWcxEntryExtractor = interface;
   IBitmapSaverRouter = interface;
 
-  {Abstracts what one entry extractor reads from the open archive handle.
-   TArchiveHandle in uWcxExports implements it directly; tests pass a
-   lightweight stub. The interface is intentionally wide because
-   per-open-session state (file path, settings, ffmpeg path, frame
-   offsets, temp cache slots, presets, progress callbacks) all flows
-   through here. ISP would fragment this into many narrow facets per
-   concrete extractor, but the cohesion (one archive open = one context)
-   is high enough that one interface is the pragmatic shape.}
+  {Wide on purpose: one archive open = one context, so the cohesion is
+   high enough that splitting into per-extractor facets would add
+   ceremony without buying isolation. Tests pass a lightweight stub.}
   IWcxExtractionContext = interface
     ['{8C5B2E1A-4F7D-49A8-B6C3-1E2D5F4A9B7C}']
     function GetFileName: string;
@@ -85,13 +52,9 @@ type
     property BitmapSaver: IBitmapSaverRouter read GetBitmapSaver;
   end;
 
-  {One archive entry. The dispatch in DoProcessFile collapses to
-   `Entry.Extract(...)` and the size logic in ReadHeader/ReadHeaderExW
-   to `Entry.ReportedSize(AContext, AListingIndex)`. AListingIndex is
-   passed because EntrySizes is keyed by the listing position (TC's
-   iteration index), not by the per-entry slot; lifting that into the
-   call signature keeps the cache layout decoupled from the per-class
-   identity.}
+  {AListingIndex is passed (rather than read from the extractor) because
+   EntrySizes is keyed by TC's iteration index, not by the per-entry
+   slot — that keeps the cache layout decoupled from per-class identity.}
   IWcxEntryExtractor = interface
     ['{7A3E9B4C-1D52-4E8F-9A0B-3C2D7E5F1A6B}']
     function GetFileName: string;
@@ -103,12 +66,8 @@ type
 
   TWcxEntryExtractorArray = TArray<IWcxEntryExtractor>;
 
-  {Multi-format bitmap-saving seam so frame/combined Extract tests do
-   not write real files. TVclBitmapSaverRouter is the production wiring
-   — it delegates to uBitmapSaver.MakeBitmapSaver (the per-format
-   polymorphic family), so adding a new format only requires touching
-   MakeBitmapSaver; the router stays the same. Test fakes record what
-   would have been written.}
+  {Test seam so frame/combined Extract paths do not write real files.
+   Production wiring delegates to uBitmapSaver.MakeBitmapSaver.}
   IBitmapSaverRouter = interface
     ['{2F1E8D5A-9C4B-47A6-B8E3-5D1F0A6C2E4B}']
     procedure Save(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
@@ -119,10 +78,9 @@ type
     procedure Save(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
   end;
 
-  {One separately-extracted frame. FrameIndex is the position in
-   AContext.Offsets (and in AContext.TempPaths when ShowFileSizes is on).
-   ReportedSize returns the cached on-disk size when available; the
-   ANSI ReadHeader path is responsible for clamping into Int32.}
+  {FrameIndex is the position in AContext.Offsets and in
+   AContext.TempPaths when ShowFileSizes is on. ANSI ReadHeader clamps
+   ReportedSize into Int32 at the call site.}
   TFrameEntry = class(TInterfacedObject, IWcxEntryExtractor)
   strict private
     FFileName: string;
@@ -135,11 +93,9 @@ type
     property FrameIndex: Integer read FFrameIndex;
   end;
 
-  {The contact-sheet image. CombinedSlot is the cache slot the
-   pre-extraction stage wrote the image to — immediately after the
-   frames when ShowFrames is on, slot 0 when frames are off. Carried so
-   the dispatch in Extract stays decoupled from the slot-numbering
-   scheme.}
+  {CombinedSlot is the cache slot the pre-extraction stage wrote the
+   image to; carried so Extract is decoupled from the slot-numbering
+   scheme (after the frames when ShowFrames is on, slot 0 otherwise).}
   TCombinedEntry = class(TInterfacedObject, IWcxEntryExtractor)
   strict private
     FFileName: string;
@@ -152,14 +108,10 @@ type
     property CombinedSlot: Integer read FCombinedSlot;
   end;
 
-  {One user-defined ffmpeg preset. PresetIndex points into
-   AContext.Presets. Unlike the frame / combined entries, presets do not
-   pre-extract — Extract runs the full ffmpeg pipeline on demand and
-   reports progress through TWcxProgressBridge. ReportedSize returns the
-   source-file size as a placeholder because the output size is not
-   predictable in advance; using the source size keeps the listing
-   column believable AND gives the progress bridge a meaningful
-   denominator.}
+  {Runs the full ffmpeg pipeline on demand (no pre-extract). Progress is
+   reported through TWcxProgressBridge. ReportedSize uses the source
+   file size as a placeholder so TC's progress bar has a meaningful
+   denominator — output size is not predictable in advance.}
   TPresetEntry = class(TInterfacedObject, IWcxEntryExtractor)
   strict private
     FFileName: string;
@@ -172,11 +124,9 @@ type
     property PresetIndex: Integer read FPresetIndex;
   end;
 
-{Renders the combined contact sheet bitmap by extracting each offset
- through AExtractor and composing the grid. Caller owns the returned
- bitmap (nil on failure). Exported so the pre-extract cache path in
- uWcxExports can share the same composition without duplicating the
- style logic; TCombinedEntry.Extract calls it on cache-miss as well.}
+{Caller owns the returned bitmap (nil on failure). Exported so the
+ pre-extract cache path can share composition; TCombinedEntry.Extract
+ calls it on cache-miss too.}
 function RenderCombinedBitmap(const AContext: IWcxExtractionContext;
   const AExtractor: IFrameExtractor): TBitmap;
 
@@ -188,30 +138,22 @@ uses
   uBitmapResize, uDebugLog,
   uWcxPresetTemplate, uWcxPresetExtractor, uWcxProgressBridge,
   uPresetExtractReporter, uWcxErrorMapping;
-{Note: Winapi.Windows is in scope transitively via uWcxAPI (interface
- uses), but Vcl.Graphics is listed AFTER it in this unit's interface
- uses so the unqualified TBitmap resolves to Vcl.Graphics.TBitmap, not
- to Winapi.Windows.tagBITMAP. INFINITE (from Winapi.Windows) is
- available via the same transitive path.}
 
 procedure WcxEntryLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
 end;
 
-{Builds extraction options from WCX settings.
- AMaxSide = 0 means no scale limit (combined-mode caller relies on
- this: the assembled grid is shrunk separately after rendering).}
+{AMaxSide = 0 means no scale limit; combined-mode relies on this since
+ the assembled grid is shrunk separately after rendering.}
 function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
 begin
   Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
 end;
 
-{Tries to satisfy an extract request from the pre-extracted temp file
- pool populated by PreExtractFrames. Returns True when a cached source
- existed and a copy to ADestPath was attempted; AResult then carries
- E_SUCCESS or the mapped error. Returns False when no cached source was
- available, leaving the caller to fall through to the ffmpeg path.}
+{Returns True when a cached source existed and a copy was attempted
+ (AResult holds E_SUCCESS or the mapped error). Returns False to let
+ the caller fall through to the ffmpeg path.}
 function TryCopyCachedFrame(const ATempPaths: TArray<string>; AIndex: Integer;
   const ADestPath: string; out AResult: Integer): Boolean;
 begin
@@ -252,15 +194,14 @@ begin
       Settings.Background, Settings.BackgroundAlpha);
 
     TimestampStyle := TTimestampStyle.FromSettings(Settings.Timestamp);
-    {WCX combined sheets historically render the timecode bold; FromSettings
-     defaults FontStyles to [] (matches WLX live view), so we override
-     here.}
+    {WCX combined sheets render the timecode bold; FromSettings defaults
+     to [] to match the WLX live view, so override here.}
     TimestampStyle.FontStyles := [fsBold];
 
     Result := RenderCombinedImage(Frames, Offsets, GridStyle, TimestampStyle);
 
-    {Apply combined size limit BEFORE the banner so the banner stays at
-     full width and is not counted toward the limit.}
+    {Resize BEFORE the banner so the banner stays at full width and is
+     not counted toward the limit.}
     if Result <> nil then
     begin
       Resized := DownscaleBitmapToFit(Result, Settings.CombinedMaxSide);
@@ -289,9 +230,6 @@ end;
 procedure TVclBitmapSaverRouter.Save(ABitmap: TBitmap; const APath: string;
   const AOptions: TSaveOptions);
 begin
-  {Delegate to the per-format polymorphic family in uBitmapSaver.
-   SaveBitmapToFile itself now routes through MakeBitmapSaver, so this
-   could call either — going direct keeps one less indirection.}
   MakeBitmapSaver(AOptions.Format, AOptions.JpegQuality, AOptions.PngCompression).Save(ABitmap, APath);
 end;
 
@@ -320,12 +258,9 @@ begin
     Result := 0;
 end;
 
-{Extracts a single frame. The frame index is the entry's own
- FFrameIndex — decoupled from H.CurrentIndex because the listing
- interleaves presets after the legacy frames, so the TC iteration
- position no longer matches the offset/temp-path index. ekSeparateFrame
- entries carry their own FrameIndex, which is set at construction by
- BuildArchiveListing.}
+{Uses FFrameIndex (not the iteration position) because the listing
+ interleaves presets after the frames, so TC's index does not match
+ the offset/temp-path index.}
 function TFrameEntry.Extract(const AContext: IWcxExtractionContext;
   const ADestPath, ADestName: string): Integer;
 var
@@ -387,10 +322,6 @@ begin
     Result := 0;
 end;
 
-{Extracts the combined contact sheet to ADestName / ADestPath.
- FCombinedSlot is the cache slot the pre-extraction stage wrote the
- image to (set at construction by BuildArchiveListing so the dispatch
- stays decoupled from the slot scheme).}
 function TCombinedEntry.Extract(const AContext: IWcxExtractionContext;
   const ADestPath, ADestName: string): Integer;
 var
@@ -441,33 +372,24 @@ begin
   Result := FFileName;
 end;
 
-{Synthetic UnpSize for preset entries: the source file size. Output
- size is unknown in advance (the user can compress or transcode to
- anything), and reporting 0 would freeze TC's progress bar at 0%
- forever. Using the source size makes the listing column believable
- and gives the progress bridge a meaningful denominator. Independent
- of the cache (AListingIndex is unused here).}
+{Reporting 0 would freeze TC's progress bar at 0% forever; the source
+ file size is the best available denominator since output size is
+ unknown until ffmpeg finishes.}
 function TPresetEntry.ReportedSize(const AContext: IWcxExtractionContext; AListingIndex: Integer): Int64;
 begin
   Result := AContext.SourceFileSize;
 end;
 
-{Runs a user-defined ffmpeg preset, surfacing progress through TC's
- ProcessDataProc callback and respecting user cancel.
- Both cancel and error paths map to E_EWRITE because TC handles E_EWRITE
- on cancel by suppressing its error popup, while a real error still
- surfaces via the WcxLog message and the dialog TC shows for E_EWRITE.
- The reporter dependency is the unit-level GPresetFailureReporter in
- uWcxExports — keeping it static here avoids the test-only wiring this
- path does not need; preset extraction's behaviour is already covered
- by TestWcxPresetExtractor.}
+{Cancel maps to E_EWRITE because TC suppresses its own dialog on
+ E_EWRITE-from-cancel, leaving us silent. Real errors also map to
+ E_EWRITE so TC shows its generic write-error dialog after we have
+ already surfaced the specific cause via GetPresetFailureReporter.}
 function TPresetEntry.Extract(const AContext: IWcxExtractionContext;
   const ADestPath, ADestName: string): Integer;
 const
-  {Effectively no wall-clock cap: presets are arbitrary user transcodes
-   that may run for hours on long videos. The user's cancel button
-   (which signals the bridge cancel handle) is the intended stop
-   mechanism; a hung ffmpeg can still be killed via Task Manager.}
+  {Presets are arbitrary user transcodes that may run for hours; the
+   user's cancel button is the intended stop mechanism. A hung ffmpeg
+   can still be killed via Task Manager.}
   PRESET_EXTRACT_TIMEOUT_MS = INFINITE;
 var
   Bridge: TWcxProgressBridge;
@@ -481,10 +403,9 @@ begin
     Exit(E_BAD_DATA);
 
   Preset := Presets[FPresetIndex];
-  {Apply template expansion to Args so the same %basename% / %name% /
-   %ext% tokens that work in OutputName also work in Args (e.g.
-   "Args=-metadata title=%basename%"). The local Preset is a value
-   copy, so this does not mutate AContext.Presets.}
+  {%basename% / %name% / %ext% tokens are expanded in Args too, not just
+   OutputName (e.g. "Args=-metadata title=%basename%"). Preset is a
+   value copy so AContext.Presets is not mutated.}
   Preset.Args := ExpandTemplate(Preset.Args, AContext.FileName, Preset.Name);
 
   if ADestName <> '' then
@@ -496,13 +417,12 @@ begin
 
   WcxEntryLog(Format('Extract preset "%s" -> %s', [Preset.Name, FullPath]));
 
-  {Total bytes for the bridge mirrors the synthetic UnpSize we reported
-   in ReadHeaderExW so deltas line up with what TC's bar denominator
-   expects. Source file size was captured at OpenArchive time.}
+  {Bridge total mirrors the synthetic UnpSize from ReadHeaderExW so
+   deltas line up with TC's bar denominator.}
   Bridge := TWcxProgressBridge.Create(FullPath, AContext.SourceFileSize,
     AContext.ProcessDataProc, AContext.ProcessDataProcW);
   try
-    {Up-front ping registers this file with TC's progress UI and gives
+    {Up-front ping registers the file with TC's progress UI and gives
      the user a cancel point before ffmpeg even starts spinning.}
     if not Bridge.Ping then
       Exit(E_EWRITE);
@@ -522,25 +442,19 @@ begin
 
     if ExtractResult.Cancelled then
     begin
-      {Cancel: TC suppresses its own dialog when it sees E_EWRITE on a
-       user-initiated cancel, so stay silent on our side too — the user
-       knows they cancelled.}
+      {Stay silent on cancel — the user knows they cancelled and TC
+       suppresses its dialog when it sees E_EWRITE-from-cancel.}
       Result := E_EWRITE;
       Exit;
     end;
 
-    {Surface the real ffmpeg error. TC's follow-up dialog ("Bad data" /
-     "Write error") is generic and unhelpful for problems like "no
-     audio stream" or "unknown encoder"; this message gives the user
-     the actual reason they need to fix the preset or pick a different
-     source.}
+    {TC's own follow-up dialog is generic ("Bad data" / "Write error");
+     surface the actual ffmpeg cause so the user can fix the preset.}
     GetPresetFailureReporter.Report(MakeFailureMessage(Preset.Name, FullPath, ExtractResult));
 
-    {Distinguish the two failure modes in the WCX return code:
-     - ExitCode<>0 means ffmpeg refused (bad codec, no stream, bad
-       args) which is closer to E_BAD_DATA than to a write error.
-     - ExitCode=0 with Success=False means the rename step failed,
-       which IS a real write error.}
+    {ExitCode<>0 means ffmpeg refused (bad codec, no stream) — closer to
+     bad data. ExitCode=0 with Success=False means the rename step
+     failed, which IS a real write error.}
     if ExtractResult.ExitCode <> 0 then
       Result := E_BAD_DATA
     else

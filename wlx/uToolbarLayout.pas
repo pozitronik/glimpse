@@ -20,27 +20,16 @@ type
     Hint: string;
   end;
 
-  {Full description of a Save/Copy view dropdown variant. The toolbar
-   dropdown (via uPluginForm) and the hamburger overflow (via
-   PopulateHamburgerMenu) build their items from arrays of these so a
-   future third variant lands in both surfaces from a single
-   const-array edit. The richer fields (ForceLive, IsCopy, Action)
-   drive UpdateResolutionMenuLabels' radio-bullet, predicted-size
-   suffix, and hotkey-chord lookup; BuildViewVariantsMenu only reads
-   Caption + Tag and ignores the rest.}
+  {Description of a Save/Copy view dropdown variant. The toolbar dropdown
+   and hamburger overflow read from arrays of these so a future third
+   variant lands in both surfaces from a single const-array edit.}
   TViewVariantDef = record
     Caption: string;
     Tag: Integer;
-    {True for the "at view resolution" variant, False for the "at native
-     size" variant. Used to seed FormatPredictedSize and to match
-     against the persisted SaveAtLiveResolution / CopyAtLiveResolution
-     setting for the radio-bullet display.}
+    {True = "at view resolution"; False = "at native size".}
     ForceLive: Boolean;
-    {True for Copy items (track CopyAtLiveResolution), False for Save
-     items (track SaveAtLiveResolution).}
+    {True = Copy variant (tracks CopyAtLiveResolution); False = Save.}
     IsCopy: Boolean;
-    {The hotkey action this menu item corresponds to. Used to mirror
-     the user's configured chord onto the menu item's ShortCut field.}
     Action: TPluginAction;
   end;
 
@@ -48,9 +37,7 @@ const
   {Command tags shared by toolbar buttons, context menu, and keyboard handler}
   CM_SAVE_FRAME = 1;
   CM_SAVE_FRAMES = 2;
-  {Tags 3 and 4 were the historical CM_SAVE_ALL and CM_SAVE_COMBINED.
-   They are intentionally left as gaps after the action consolidation
-   into Save frame / Save frames / Save view.}
+  {Tags 3 and 4 are intentionally left as gaps.}
   CM_SAVE_VIEW = 11;
   CM_COPY_FRAME = 5;
   CM_COPY_VIEW = 6;
@@ -59,50 +46,30 @@ const
   CM_SETTINGS = 9;
   CM_REFRESH = 10;
   CM_SHUFFLE = 12;
-  {Save view variants: explicit "use these dimensions" entry points used
-   by the toolbar / hamburger Save view dropdown. CM_SAVE_VIEW (above)
-   uses the persisted SaveAtLiveResolution setting as the dialog's
-   initial state; the two below seed the dialog with the named choice
-   instead. The user can still flip the dialog checkbox on modern
-   Windows; on legacy Windows (no checkbox) the seed is the final value.}
+  {Save view variants seed the dialog with the named choice instead of
+   the persisted SaveAtLiveResolution setting.}
   CM_SAVE_VIEW_LIVE = 13;
   CM_SAVE_VIEW_NATIVE = 14;
-  {Copy view variants: same dropdown idea as Save view, but with no
-   dialog the user cannot revisit the choice mid-flight, so the named
-   choice is the final resolution for that single Copy view (the
-   persisted SaveAtLiveResolution setting is not touched).}
+  {Copy view variants are the final resolution (no dialog).}
   CM_COPY_VIEW_LIVE = 15;
   CM_COPY_VIEW_NATIVE = 16;
 
-  {Base captions for the Save/Copy view dropdown variants. Centralised
-   so the toolbar dropdown, the hamburger overflow, and the runtime
-   resolution-suffix updater all start from the same string.}
   CAPTION_SAVE_VIEW_LIVE = 'Save view at view resolution...';
   CAPTION_SAVE_VIEW_NATIVE = 'Save view at native size...';
   CAPTION_COPY_VIEW_LIVE = 'Copy view at view resolution';
   CAPTION_COPY_VIEW_NATIVE = 'Copy view at native size';
 
-  {Form-level layout pixels for toolbar elements that the form sizes
-   directly (not the per-button arithmetic inside CreateToolbar).}
-  FRAME_COUNT_EDIT_W = 40; {width of the frame count edit control}
-  PROGRESSBAR_MIN_W = 40; {minimum width before clamping the embedded progress bar}
+  FRAME_COUNT_EDIT_W = 40;
+  PROGRESSBAR_MIN_W = 40;
 
-  {Indices into the toolbar image list (FToolbarImages in uPluginForm).
-   The list is loaded by uPluginForm.CreateToolbar from three icon
-   resources; the slot order is intentional and shared by both the
-   toolbar buttons and the hamburger overflow menu.}
   IDX_ICON_HAMBURGER = 0;
   IDX_ICON_ARROW_W = 1; {Vertical arrow for vmScroll}
   IDX_ICON_ARROW_H = 2; {Horizontal arrow for vmFilmstrip}
 
-  {Toolbar buttons differentiate the two scroll modes via icons (see
-   uPluginForm.CreateToolbar); both modes share the textual caption.}
+  {Both Scroll modes share the textual caption; icons differentiate them.}
   MODE_CAPTIONS: array [TViewMode] of string = ('Smart', 'Grid', 'Scroll', 'Scroll', 'Single');
 
-  {Per-mode glyph index in FToolbarImages. -1 means "no glyph". Used by
-   CreateToolbar to set the mode button image and by OnHamburgerMenuPopup
-   to set the corresponding menu item image. Previously these mappings
-   were duplicated literal assignments in both call sites.}
+  {-1 = no glyph.}
   MODE_GLYPH_INDEX: array [TViewMode] of Integer = (
     {vmSmartGrid}-1,
     {vmGrid}-1,
@@ -110,8 +77,6 @@ const
     {vmFilmstrip}IDX_ICON_ARROW_H,
     {vmSingle}-1);
 
-  {Tooltip text per view mode. Disambiguates the two modes that share the
-   "Scroll" caption (vmScroll = vertical, vmFilmstrip = horizontal).}
   MODE_HINTS: array [TViewMode] of string = (
     {vmSmartGrid}'Smart grid: auto-arranged grid sized to fit the viewport.',
     {vmGrid}'Grid: fixed-cell grid of frames.',
@@ -119,7 +84,6 @@ const
     {vmFilmstrip}'Filmstrip: full-height frames laid out left to right.',
     {vmSingle}'Single frame: one frame at a time, navigate with arrow keys.');
 
-  {Per-mode sizing submode labels}
   SIZING_LABELS: array [TViewMode, TZoomMode] of string = (
     {vmSmartGrid}('', '', ''),
     {vmGrid}('', '', ''),
@@ -127,10 +91,8 @@ const
     {vmFilmstrip}('Fit height', 'Fit if larger', 'Original size'),
     {vmSingle}('Fit', 'Fit if larger', 'Original size'));
 
-  {Toolbar action buttons.
-   "Save frames" is selection-aware at runtime (the context menu
-   updates its caption with the selected count); on the toolbar it
-   keeps a stable caption.}
+  {"Save frames" caption is stable on the toolbar; the context menu
+   updates with the selected count at runtime.}
   TB_ACTIONS: array [0 .. 6] of TToolbarActionDef = (
     (Caption: 'Save frame'; Tag: CM_SAVE_FRAME; Hint: 'Save the focused frame to a file.'),
     (Caption: 'Save frames'; Tag: CM_SAVE_FRAMES; Hint: 'Save the currently selected frames to files.'),
@@ -140,67 +102,45 @@ const
     (Caption: 'Refresh'; Tag: CM_REFRESH; Hint: 'Re-extract frames at the current settings. Click the arrow for Shuffle.'),
     (Caption: 'Settings'; Tag: CM_SETTINGS; Hint: 'Open the plugin settings dialog.'));
 
-  {Save view dropdown items: explicit "use these dimensions" choices
-   that bypass the persisted SaveAtLiveResolution setting for one
-   action. Order matches the on-screen menu order.}
+  {Order matches on-screen menu order.}
   SAVE_VIEW_VARIANTS: array[0..1] of TViewVariantDef = (
     (Caption: CAPTION_SAVE_VIEW_LIVE;   Tag: CM_SAVE_VIEW_LIVE;
      ForceLive: True;  IsCopy: False; Action: paSaveViewLive),
     (Caption: CAPTION_SAVE_VIEW_NATIVE; Tag: CM_SAVE_VIEW_NATIVE;
      ForceLive: False; IsCopy: False; Action: paSaveViewNative));
 
-  {Copy view dropdown items: same shape as SAVE_VIEW_VARIANTS but for
-   the in-memory copy path (no dialog follows).}
   COPY_VIEW_VARIANTS: array[0..1] of TViewVariantDef = (
     (Caption: CAPTION_COPY_VIEW_LIVE;   Tag: CM_COPY_VIEW_LIVE;
      ForceLive: True;  IsCopy: True;  Action: paCopyViewLive),
     (Caption: CAPTION_COPY_VIEW_NATIVE; Tag: CM_COPY_VIEW_NATIVE;
      ForceLive: False; IsCopy: True;  Action: paCopyViewNative));
 
-  {Element indices within the ordered collapsible element array.
-   Order: mode buttons, timecodes toggle, action buttons (left to right).}
+  {Element order: mode buttons, timecodes, actions (left to right).}
   ELEM_TIMECODE_INDEX = Ord(High(TViewMode)) + 1; {5}
   ELEM_ACTION_FIRST = ELEM_TIMECODE_INDEX + 1; {6}
   ELEM_TOTAL_COUNT = ELEM_ACTION_FIRST + Length(TB_ACTIONS); {13}
 
-  {Determines which toolbar elements are visible given the current width.
-   AElementRights contains the right pixel edge of each collapsible element
-   (mode buttons, timecodes, action buttons) in left-to-right order.
-   Elements collapse from right to left as the toolbar shrinks.}
+{AElementRights = right pixel edge of each collapsible element, L-to-R.
+ Elements collapse right-to-left as the toolbar shrinks.}
 function ComputeToolbarLayout(AToolbarWidth: Integer; const AElementRights: array of Integer; AFrameCountRight, AHamburgerWidth, ACtrlGap: Integer): TToolbarLayoutResult;
 
 type
-  {Snapshot of form state needed to populate the hamburger menu}
   THamburgerMenuState = record
     VisibleCount: Integer;
     ActiveMode: TViewMode;
     ModeZooms: array [TViewMode] of TZoomMode;
     ModeHasSubmenu: array [TViewMode] of Boolean;
-    {Image-list slot for each mode's glyph; -1 = no glyph. Caller owns the
-     image list and is expected to assign it to the menu before calling
-     PopulateHamburgerMenu so MI.ImageIndex resolves correctly.}
+    {-1 = no glyph. Caller assigns the image list to the menu before calling.}
     ModeImageIndex: array [TViewMode] of Integer;
     ShowTimecode: Boolean;
     HasFrames: Boolean;
   end;
 
-  {Clears AMenu and rebuilds it with only the hidden elements.
-   Event handlers are attached to the created menu items.}
 procedure PopulateHamburgerMenu(AMenu: TPopupMenu; const AState: THamburgerMenuState; AOnModeClick, AOnZoomClick, AOnTimecodeClick, AOnActionClick: TNotifyEvent);
 
-{Builds a fresh popup menu populated with the supplied view-variant
- items. The same OnClick handler fires for every item; the source-of-
- truth Tag tells the handler which variant was picked. AOnPopup runs
- when the menu pops up (typically to refresh the resolution suffix on
- each caption). Returns a TPopupMenu owned by AOwner — the caller does
- not Free it directly. Reads only AItems[I].Caption and AItems[I].Tag.}
+{Reads only Caption + Tag from AItems. Returned menu is owned by AOwner.}
 function BuildViewVariantsMenu(AOwner: TComponent; const AItems: array of TViewVariantDef; AOnPopup, AOnClick: TNotifyEvent): TPopupMenu;
 
-{Looks up the view-variant definition matching ATag in the union of
- SAVE_VIEW_VARIANTS + COPY_VIEW_VARIANTS. Returns False (with ADef
- untouched on failed paths) when ATag is not a known view-variant
- command tag — used by UpdateResolutionMenuLabels to skip menu items
- that do not correspond to one of the four resolution variants.}
 function FindViewVariantByTag(ATag: Integer; out ADef: TViewVariantDef): Boolean;
 
 implementation
@@ -325,10 +265,7 @@ begin
     end;
     AMenu.Items.Add(MI);
 
-    {Shuffle is the dropdown peer of Refresh on the toolbar; when
-     Refresh collapses into the hamburger we inject Shuffle next to it
-     so the action stays reachable for users who do not know the Ctrl+R
-     hotkey. Caption mirrors the Refresh popup.}
+    {Inject Shuffle next to Refresh in the overflow — Refresh's dropdown peer.}
     if TB_ACTIONS[I].Tag = CM_REFRESH then
     begin
       MI := TMenuItem.Create(AMenu);
@@ -339,10 +276,7 @@ begin
       AMenu.Items.Add(MI);
     end;
 
-    {Save view's two explicit-resolution variants are the dropdown peers
-     of Save view; mirror the Refresh/Shuffle pattern so they stay
-     reachable when Save view collapses into the hamburger. Captions
-     match the toolbar dropdown.}
+    {Inject Save view's variants alongside it in the overflow.}
     if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
     begin
       MI := TMenuItem.Create(AMenu);
@@ -360,7 +294,7 @@ begin
       AMenu.Items.Add(MI);
     end;
 
-    {Copy view dropdown peers, mirroring Save view.}
+    {Inject Copy view's variants, mirroring Save view.}
     if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
     begin
       MI := TMenuItem.Create(AMenu);

@@ -1,46 +1,13 @@
 {Per-group control bundles + bind helpers for the WLX settings dialog.
+ Each bundle pairs the VCL controls for one TXxxSettingsGroup with paired
+ BindXxxToControls / BindXxxFromControls free procedures.
 
- Step 50 (M22): the dialog's 100-line `SettingsToControls` and 90-line
- `ControlsToSettings` used to spell out every property-control copy
- inline. This unit decomposes that into 11 named bundles (one per
- `TXxxSettingsGroup` in uSettingsGroups) plus paired
- `BindXxxFromControls` / `BindXxxToControls` free procedures. The
- dialog now hands each bundle to its bind procedure; adding a new
- field in a covered group is two edits (group record + bundle record),
- not three.
+ NOT covered (stays inline in the dialog): font fields, the Hotkeys
+ collection, cross-field invariants (ASettings.Validate), the enable-rule
+ sweep, and dialog-side UI refresh side effects (UpdateFFmpegInfo etc.).
 
- Design notes:
-
- - WLX-only. Lives in `wlx/` rather than alongside the groups in
-   `src/uSettingsGroups.pas` so the shared-with-WCX groups unit
-   stays leaf (no VCL dependency). WCX has a different dialog layout
-   and would need its own bundle unit when its dialog gets the same
-   treatment.
-
- - The bind procedures take `TPluginSettings` (the dialog's existing
-   contract) rather than the group records directly. They reach into
-   the flat per-field properties — same surface the dialog has been
-   using all along, so the bind body reads as a 1:1 translation of
-   the legacy inline code.
-
- - Decode/encode helpers (DecodeMaxWorkersControls, DecodeMaxThreadsControl,
-   DecodeTimestampCornerControls + their Encode pairs, ProgressBarLayout
-   ord-cast) are folded inside the relevant bind procedure. Tested via
-   uSettingsDlgLogic's own existing test suite; the bundle tests pin the
-   end-to-end round-trip through them.
-
- - **Not covered** (stays inline in the dialog):
-   * Font shadow fields (FBannerFontName/Size, FTimestampFontName/Size,
-     FStatusBarFontName/Size): these are dialog-local state, NOT VCL
-     controls. The actual UI is a read-only EdtXxxFont that the dialog
-     updates via UpdateXxxFontDisplay. The dialog copies the font fields
-     to/from `ASettings.XxxFontName`/`Size` itself, then calls
-     UpdateXxxFontDisplay after the bind.
-   * `Hotkeys`: a TPluginHotkeys collection, one-line Assign each way.
-   * Cross-field invariants (`ASettings.Validate`), enable-rule sweep
-     (`RecomputeEnables`), and the UI-refresh side effects (UpdateFFmpegInfo,
-     UpdateCacheFolderInfo, UpdateCacheSizeInfo, PopulateHotkeyList,
-     UpdateStretchLockState): the dialog calls these after the bind.}
+ Lives under wlx/ rather than src/uSettingsGroups.pas so the
+ shared-with-WCX groups unit stays VCL-free.}
 unit uSettingsControlsBundles;
 
 interface
@@ -50,9 +17,8 @@ uses
   uSettings;
 
 type
-  {Extraction tab: Sampling + parallelism + decoder toggles.
-   MaxWorkers and MaxThreads are encoded across the auto-checkbox /
-   spin-control pair via uSettingsDlgLogic.}
+  {MaxWorkers/MaxThreads are encoded across an auto-checkbox + spin pair
+   via uSettingsDlgLogic.}
   TExtractionControls = record
     UdSkipEdges: TUpDown;
     ChkMaxWorkersAuto: TCheckBox;
@@ -64,10 +30,6 @@ type
     ChkRespectAnamorphic: TCheckBox;
   end;
 
-  {Save tab: bitmap-output + scaled-extraction + clipboard-as-file +
-   extensions. Spans 14 TPluginSettings properties (TSaveSettingsGroup
-   intentionally clusters output knobs that historically lived in
-   different INI sections — see the group docstring).}
   TSaveControls = record
     CbxSaveFormat: TComboBox;
     UdJpegQuality: TUpDown;
@@ -85,10 +47,8 @@ type
     EdtExtensions: TEdit;
   end;
 
-  {Cache tab + Sampling tab's random trio. Same group on the model side
-   (TCacheSettingsGroup historically clustered the random toggles next
-   to the cache — RandomExtraction lives under [extraction] in the INI
-   but is read/written by the cache group). The bundle mirrors that.}
+  {Cache + the random trio (RandomExtraction lives under [extraction] in
+   the INI but is read/written by the cache group).}
   TCacheControls = record
     ChkCacheEnabled: TCheckBox;
     EdtCacheFolder: TEdit;
@@ -98,18 +58,12 @@ type
     ChkCacheRandomFrames: TCheckBox;
   end;
 
-  {General tab's ffmpeg-path edit. The bind-from procedure uses
-   `ASettings.SetFFmpegPath` (not direct property assignment) because
-   the setter has extra validation/normalisation behaviour.
-   Mode + AutoDownloaded fields on the group are not user-edited in
-   the dialog (auto-downloader writes them); they're untouched by the
-   bind.}
+  {Bind-from uses ASettings.SetFFmpegPath (not direct assignment) so the
+   setter's validation/normalisation runs.}
   TFFmpegControls = record
     EdtFFmpegPath: TEdit;
   end;
 
-  {View tab: chrome toggles + grid layout + progress-bar placement.
-   Mode + ModeZoom on the group are runtime state, not dialog-edited.}
   TViewControls = record
     PnlBackground: TPanel;
     ChkShowToolbar: TCheckBox;
@@ -119,10 +73,7 @@ type
     CbxProgressBarLayout: TComboBox;
   end;
 
-  {Appearance tab's timestamp/timecode cluster. Show + Corner are
-   encoded across ChkShowTimecode + CbxTimestampCorner via
-   uSettingsDlgLogic. Font fields (FontName/FontSize) are NOT here —
-   see the unit docstring.}
+  {Show + Corner are encoded across ChkShowTimecode + CbxTimestampCorner via uSettingsDlgLogic.}
   TTimestampControls = record
     ChkShowTimecode: TCheckBox;
     CbxTimestampCorner: TComboBox;
@@ -132,8 +83,6 @@ type
     UdTCTextAlpha: TUpDown;
   end;
 
-  {Save tab's banner cluster. Font fields are NOT here — see the unit
-   docstring.}
   TBannerControls = record
     ChkShowBanner: TCheckBox;
     PnlBannerBackground: TPanel;
@@ -142,7 +91,6 @@ type
     CbxBannerPosition: TComboBox;
   end;
 
-  {Clipboard tab: 4 per-format publish toggles.}
   TClipboardFormatsControls = record
     ChkPublishAlphaAwareBitmap: TCheckBox;
     ChkPublishCompressedPng: TCheckBox;
@@ -150,9 +98,7 @@ type
     ChkPublishBitmapHandle: TCheckBox;
   end;
 
-  {Appearance tab's status-bar cluster. Font fields are NOT here — see
-   the unit docstring. HeightApplyMode is encoded via ord/cast against
-   the combo's ItemIndex.}
+  {HeightApplyMode is encoded via ord/cast against the combo's ItemIndex.}
   TStatusBarControls = record
     EdtStatusBarTemplate: TEdit;
     ChkStatusBarAutoWidthLive: TCheckBox;
@@ -161,15 +107,12 @@ type
     CbxStatusBarHeightApply: TComboBox;
   end;
 
-  {QuickView tab: 3 chrome-gate toggles.}
   TQuickViewControls = record
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
     ChkQVHideStatusBar: TCheckBox;
   end;
 
-  {Thumbnails tab. Mode is encoded via ord/cast against the combo's
-   ItemIndex.}
   TThumbnailsControls = record
     ChkThumbnailsEnabled: TCheckBox;
     CbxThumbnailMode: TComboBox;
@@ -177,10 +120,8 @@ type
     UdThumbnailGridFrames: TUpDown;
   end;
 
-{Settings -> controls. Each procedure copies the relevant
- TPluginSettings properties into AControls' VCL components. No side
- effects beyond VCL property writes; the dialog runs UI refreshes
- (RecomputeEnables, UpdateFFmpegInfo, etc.) after the binds.}
+{Settings -> controls. Dialog runs RecomputeEnables / UpdateFFmpegInfo
+ / etc. AFTER the binds — these procedures only write VCL properties.}
 procedure BindExtractionToControls(ASettings: TPluginSettings; const AControls: TExtractionControls);
 procedure BindSaveToControls(ASettings: TPluginSettings; const AControls: TSaveControls);
 procedure BindCacheToControls(ASettings: TPluginSettings; const AControls: TCacheControls);
@@ -193,10 +134,8 @@ procedure BindStatusBarToControls(ASettings: TPluginSettings; const AControls: T
 procedure BindQuickViewToControls(ASettings: TPluginSettings; const AControls: TQuickViewControls);
 procedure BindThumbnailsToControls(ASettings: TPluginSettings; const AControls: TThumbnailsControls);
 
-{Controls -> settings. Symmetric with the Bind...ToControls family;
- reads AControls' VCL state and writes back to TPluginSettings. The
- FFmpeg variant uses ASettings.SetFFmpegPath (not direct property
- assignment) because the setter has extra normalisation logic.}
+{Controls -> settings, symmetric. FFmpeg variant uses SetFFmpegPath
+ for normalisation.}
 procedure BindExtractionFromControls(ASettings: TPluginSettings; const AControls: TExtractionControls);
 procedure BindSaveFromControls(ASettings: TPluginSettings; const AControls: TSaveControls);
 procedure BindCacheFromControls(ASettings: TPluginSettings; const AControls: TCacheControls);

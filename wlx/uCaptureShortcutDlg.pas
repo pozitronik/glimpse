@@ -1,13 +1,5 @@
-﻿{Multi-chord shortcut editor used by the Hotkeys settings tab.
-
- Each action in the Hotkeys tab can hold any number of chords. This modal
- lets the user view, add, and remove them for a single action. Chords are
- added by pressing keys inside the dialog; conflicts with other actions
- are resolved right at the moment of capture via a confirm prompt.
-
- DFM-driven so the layout can be tweaked in the Delphi designer. Escape
- always cancels (same trade-off as the single-chord capture had — users
- are unlikely to want to rebind Escape itself).}
+﻿{Multi-chord shortcut editor for the Hotkeys settings tab. Conflicts with
+ other actions are resolved at capture time via a confirm prompt.}
 unit uCaptureShortcutDlg;
 
 interface
@@ -37,16 +29,14 @@ type
     procedure UpdateButtonStates;
     function OfferChord(const AChord: uHotkeys.THotkeyChord): Boolean;
   public
-    {Must be called before ShowModal. Seeds the dialog with the current
-     chord list for AAction; ABindings is used read-only for conflict
-     detection against other actions.}
+    {Must be called before ShowModal. ABindings is read-only, used for
+     conflict detection against other actions.}
     procedure Initialize(AAction: uHotkeys.TPluginAction; const ABindings: uHotkeys.THotkeyBindings);
     property Chords: uHotkeys.THotkeyChordArray read FChords;
   end;
 
-  {Runs the shortcut editor modally. Returns True when the user pressed OK;
-   AResult then carries the edited chord list. Returns False on Cancel /
-   Escape (AResult is left untouched).}
+  {Returns True on OK (AResult carries the edited chord list); False on
+   Cancel/Escape leaves AResult untouched.}
 function EditShortcuts(AOwner: TWinControl; AAction: uHotkeys.TPluginAction; const ABindings: uHotkeys.THotkeyBindings; out AResult: uHotkeys.THotkeyChordArray): Boolean;
 
 implementation
@@ -108,8 +98,7 @@ begin
   begin
     if MessageBox(Handle, PChar(Format('This shortcut is already assigned to "%s". Reassign?', [uHotkeys.ActionCaption(Conflict)])), 'Glimpse', MB_YESNO or MB_ICONQUESTION) <> IDYES then
       Exit(False);
-    {The caller (settings dialog) will reconcile by removing the chord
-     from the conflicting action after we return OK.}
+    {Caller reconciles by removing the chord from the conflicting action after OK.}
   end;
 
   N := Length(FChords);
@@ -122,10 +111,9 @@ procedure TShortcutEditorForm.FormKeyDown(Sender: TObject; var Key: Word; Shift:
 var
   Chord: uHotkeys.THotkeyChord;
 begin
-  {Bare modifier keys are dropped — we want a terminal non-modifier key
-   to finish the chord. Escape is deliberately NOT special-cased so it can
-   be captured and bound like any other key; users cancel the dialog via
-   the Cancel button or the window-frame close.}
+  {Drop bare modifier keys — chord needs a terminal non-modifier. Escape is
+   NOT special-cased so it can be bound like any other key; users cancel via
+   the Cancel button or close box.}
   case Key of
     VK_SHIFT, VK_CONTROL, VK_MENU, VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU:
       begin

@@ -3,11 +3,7 @@ unit uFFmpegLocator;
 
 interface
 
-{Searches for ffmpeg.exe in order:
- 1. Plugin directory (next to the DLL)
- 2. Configured path from INI
- 3. System PATH
- Returns the full validated path, or empty string if not found.}
+{Search order: plugin dir, configured path, system PATH.}
 function FindFFmpegExe(const APluginDir, AConfiguredPath: string): string;
 
 implementation
@@ -32,7 +28,6 @@ end;
 
 function FindFFmpegExe(const APluginDir, AConfiguredPath: string): string;
 begin
-  {1. Plugin directory}
   if APluginDir <> '' then
   begin
     Result := TPath.Combine(APluginDir, FFMPEG_EXE_NAME);
@@ -40,7 +35,6 @@ begin
       Exit;
   end;
 
-  {2. Configured path from INI (expand %commander_path% etc.)}
   if AConfiguredPath <> '' then
   begin
     Result := ExpandEnvVars(AConfiguredPath);
@@ -48,7 +42,6 @@ begin
       Exit;
   end;
 
-  {3. System PATH}
   Result := FindOnSystemPath(FFMPEG_EXE_NAME);
 end;
 

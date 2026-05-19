@@ -1,16 +1,5 @@
-{Toggle-persistence service for visibility toggles in TPluginSettings.
-
- The form's hotkey/click handlers (DoToggleToolbar, DoToggleStatusBar,
- OnTimecodeButtonClick) used to do "FSettings.ShowX := Y; FSettings.Save"
- inline — mixing the VCL visibility flip with persistence. The service
- collapses the set+save pair into one atomic call so the form handlers
- stay focused on UI state and side effects live behind a named service
- boundary.
-
- Quick-view mode (paToggleToolbar / paToggleStatusBar): the handler
- still checks FQuickViewMode and skips persistence; the service has
- no quick-view awareness because the policy is "should we persist?"
- not "what to persist".}
+{Persists visibility toggles to TPluginSettings. Collapses set+save into
+ one atomic call so form handlers stay focused on UI state.}
 unit uSettingsToggleService;
 
 interface

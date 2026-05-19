@@ -1,22 +1,7 @@
-{In-memory INI document model.
-
- Holds the parsed line list, preserves comments / blank lines /
- original section ordering across read-modify-write, and exposes the
- ReadString / WriteString / ReadSection / EraseSection-style API
- callers expect from a settings store. No file I/O — uUnicodeIniFile
- wraps this class with the disk read/write side. No encoding logic —
- callers pass already-decoded strings to ParseFromText and consume
- the emitted text from RenderToText.
-
- Lifted out of uUnicodeIniFile (M18 split) so the in-memory parse +
- mutate + emit machinery is testable without touching disk, and so
- the encoding decisions (uIniEncoding) and the file-I/O facade
- (uUnicodeIniFile) each own one concern.
-
- Duplicate sections (case-insensitive name match against an earlier
- section header) and duplicate keys (within the same section) are
- dropped during ParseFromText with a debug-log entry — first
- occurrence wins. Lenient ReadBool accepts True/False/Yes/No/On/Off/0/1.}
+{In-memory INI document. Preserves comments, blanks, and section order
+ across read-modify-write. No file I/O; no encoding logic. Duplicate
+ sections and keys are dropped on parse (first wins) with a debug log
+ entry. Lenient ReadBool accepts True/False/Yes/No/On/Off/0/1.}
 unit uIniDocument;
 
 interface
@@ -29,24 +14,17 @@ type
 
   TIniLine = record
     Kind: TIniLineKind;
-    {For ilkSection: the section name (no brackets).
-     For ilkKeyValue: the section the key belongs to (case preserved
-     as the section header was originally written).}
     SectionName: string;
     Key: string;
     Value: string;
-    {For ilkComment / ilkBlank: the verbatim line text (without the
-     trailing line terminator). For ilkSection / ilkKeyValue, unused
-     because the line is reconstructed from the parsed fields on save.}
+    {Verbatim line text for ilkComment/ilkBlank; unused for section/key
+     which are reconstructed on save.}
     RawText: string;
   end;
 
   TIniDocument = class
   strict private
     FLines: TList<TIniLine>;
-    {Set by every mutating method; cleared by callers via ClearDirty.
-     uUnicodeIniFile reads this in its destructor's auto-flush check
-     and clears it after a successful UpdateFile.}
     FDirty: Boolean;
 
     function FindSectionHeaderIndex(const ASection: string): Integer;
@@ -56,19 +34,11 @@ type
     constructor Create;
     destructor Destroy; override;
 
-    {Parses AText into the line list. Splits on CR / LF / CRLF
-     uniformly. Replaces any prior content via Clear.}
     procedure ParseFromText(const AText: string);
-    {Emits the current line list as a CRLF-terminated string suitable
-     for the file writer. Reconstructs section headers and key=value
-     lines from the parsed fields; comments and blank lines pass
-     through verbatim.}
     function RenderToText: string;
 
     function ReadString(const ASection, AKey, ADefault: string): string;
     function ReadInteger(const ASection, AKey: string; ADefault: Integer): Integer;
-    {Lenient ReadBool: True/Yes/On/1 -> True; False/No/Off/0 -> False;
-     anything else -> ADefault. Case-insensitive.}
     function ReadBool(const ASection, AKey: string; ADefault: Boolean): Boolean;
 
     procedure WriteString(const ASection, AKey, AValue: string);
@@ -81,11 +51,9 @@ type
     function SectionExists(const ASection: string): Boolean;
     procedure DeleteKey(const ASection, AKey: string);
     procedure EraseSection(const ASection: string);
-    {Discards every line, leaving an empty document.}
     procedure Clear;
 
     property Dirty: Boolean read FDirty;
-    {Cleared by uUnicodeIniFile.UpdateFile on successful flush.}
     procedure ClearDirty;
   end;
 
@@ -114,12 +82,6 @@ begin
   inherited;
 end;
 
-{Splits AText on any line terminator, classifies each line into one of
- the four kinds, and appends to FLines. Tracks the current section so
- ilkKeyValue lines carry their owning section name. Duplicate sections
- (case-insensitive name match against an earlier section header) and
- duplicate keys (within the same section) are dropped with a debug log
- entry — first occurrence wins.}
 procedure TIniDocument.ParseFromText(const AText: string);
 var
   Lines: TStringList;
@@ -134,7 +96,6 @@ begin
   Lines := TStringList.Create;
   KnownSections := TDictionary<string, Boolean>.Create;
   try
-    {TStringList.Text splits on CR / LF / CRLF uniformly.}
     Lines.Text := AText;
     for I := 0 to Lines.Count - 1 do
     begin
@@ -161,9 +122,8 @@ begin
         if KnownSections.ContainsKey(AnsiLowerCase(SectionName)) then
         begin
           IniLog(Format('Duplicate section "%s" ignored', [SectionName]));
-          {Subsequent keys inside this duplicate section are also ignored
-           by routing CurSection to a sentinel that no real section can
-           equal, so FindKeyIndex never matches them.}
+          {Sentinel CurSection so keys inside this duplicate section are
+           also ignored — no real section can equal #1+name.}
           CurSection := #1 + SectionName;
           Continue;
         end;
@@ -177,8 +137,7 @@ begin
       EqPos := Pos('=', Raw);
       if EqPos < 2 then
       begin
-        {No '=' or '=' at column 1: not a key. Preserve as a comment so
-         round-trip leaves the line intact.}
+        {Preserve malformed lines as comments so round-trip stays intact.}
         Line.Kind := ilkComment;
         Line.RawText := Raw;
         FLines.Add(Line);
@@ -186,8 +145,7 @@ begin
       end;
       Key := Trim(Copy(Raw, 1, EqPos - 1));
       Value := Copy(Raw, EqPos + 1, MaxInt);
-      {Trim leading whitespace from value (TIniFile does the same) but
-       preserve trailing whitespace as data — TIniFile preserves it too.}
+      {Match TIniFile: trim leading, preserve trailing whitespace.}
       while (Length(Value) > 0) and CharInSet(Value[1], [' ', #9]) do
         Delete(Value, 1, 1);
       if (CurSection <> '') and (CurSection[1] <> #1) and (FindKeyIndex(CurSection, Key) >= 0) then
@@ -256,9 +214,6 @@ begin
   Result := -1;
 end;
 
-{Returns the index of the LAST line belonging to ASection (header or
- key). Used by WriteString to know where to insert a new key. Returns
- -1 when the section does not exist.}
 function TIniDocument.FindSectionEndIndex(const ASection: string): Integer;
 var
   I, Header: Integer;
@@ -332,9 +287,8 @@ begin
   EndIdx := FindSectionEndIndex(ASection);
   if EndIdx < 0 then
   begin
-    {Section does not exist; append a new section header followed by
-     the key. Insert a blank line before the new header for visual
-     separation, but only when the file already has content.}
+    {Blank line before new header for visual separation, only when file
+     already has content.}
     PrependBlank := FLines.Count > 0;
     if PrependBlank then
     begin
@@ -355,8 +309,6 @@ begin
     Exit;
   end;
 
-  {Section exists, key does not: insert the new key right after the
-   last existing line of the section.}
   Line := Default(TIniLine);
   Line.Kind := ilkKeyValue;
   Line.SectionName := ASection;
@@ -428,9 +380,6 @@ begin
   if Header < 0 then
     Exit;
   FDirty := True;
-  {Walk forward from the header collecting every line that belongs to
-   this section (header itself + key-value lines). Remove them in
-   reverse so indices stay valid during deletion.}
   I := Header + 1;
   while I < FLines.Count do
   begin

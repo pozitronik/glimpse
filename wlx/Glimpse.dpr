@@ -114,9 +114,8 @@ exports
   ListGetPreviewBitmapW;
 
 begin
-  {Surface forgotten Free calls as a Delphi-builtin leak dialog when TC unloads
-   the DLL. Debug-only: the report runs at finalization and would be noise for
-   end users in release builds.}
+  {Surface forgotten Free calls as a leak dialog when TC unloads the DLL.
+   Debug-only so release end users do not see the report.}
   {$IFDEF DEBUG}
   ReportMemoryLeaksOnShutdown := True;
   {$ENDIF}

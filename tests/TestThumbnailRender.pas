@@ -71,22 +71,19 @@ begin
 end;
 
 {Returns a TThumbnailParams with Enabled=True so the pipeline reaches
- past its early-disabled guard. Other fields stay at Default (which is
- what production callers' "no override" path would do too). Tests that
- want a specific field override do so on the returned record before
- passing it to RenderThumbnail / BuildThumbnailExtractionOptions.
-
- The post-step-58 Default(TThumbnailParams) gives Enabled=False (record
- zero-init), unlike a fresh TPluginSettings which has ThumbnailsEnabled
- := DEF_THUMBNAILS_ENABLED (True). This helper preserves the pre-58
- "enabled by default" convention for the existing tests.}
+ past its early-disabled guard. Default(TThumbnailParams) zero-inits
+ to Enabled=False, unlike a fresh TPluginSettings which seeds
+ ThumbnailsEnabled := DEF_THUMBNAILS_ENABLED (True); this helper
+ keeps the historical "enabled by default" convention for these
+ tests. Tests that want a specific field override do so on the
+ returned record before passing it on.}
 function MakeEnabledThumbnailParams: TThumbnailParams;
 begin
   Result := Default(TThumbnailParams);
   Result.Enabled := True;
 end;
 
-{ -------- CalcThumbnailOffsets — single mode -------- }
+{ CalcThumbnailOffsets — single mode }
 
 procedure TTestThumbnailRender.SingleMode_PositionMiddle_ReturnsHalfDuration;
 var
@@ -153,7 +150,7 @@ begin
   Assert.AreEqual(1, Offsets[0].Index);
 end;
 
-{ -------- CalcThumbnailOffsets — grid mode -------- }
+{ CalcThumbnailOffsets — grid mode }
 
 procedure TTestThumbnailRender.GridMode_ReturnsRequestedFrameCount;
 var
@@ -200,7 +197,7 @@ begin
       Format('Offsets not strictly ascending at index %d', [I]));
 end;
 
-{ -------- error cases -------- }
+{ error cases }
 
 procedure TTestThumbnailRender.InvalidDuration_Raises;
 begin
@@ -220,7 +217,7 @@ begin
     EArgumentException);
 end;
 
-{ -------- PickThumbnailExtractionMaxSide -------- }
+{ PickThumbnailExtractionMaxSide }
 
 procedure TTestThumbnailRender.ExtractionMaxSide_ZeroRequest_FallsBackToBucket;
 begin
@@ -257,7 +254,7 @@ begin
   Assert.AreEqual(SCALE_BUCKET * 2, PickThumbnailExtractionMaxSide(50, 300));
 end;
 
-{ -------- BuildThumbnailExtractionOptions -------- }
+{ BuildThumbnailExtractionOptions }
 
 procedure TTestThumbnailRender.BuildOptions_UseBmpPipeAlwaysTrue;
 var
@@ -327,7 +324,7 @@ begin
     'MaxSide must come from the requested cell size, not MaxFrameSide');
 end;
 
-{ -------- RenderThumbnail guards -------- }
+{ RenderThumbnail guards }
 
 procedure TTestThumbnailRender.RenderThumbnail_NilFFmpeg_ReturnsNil;
 var

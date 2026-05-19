@@ -1,5 +1,4 @@
-{WCX plugin API types and constants.
- Based on Total Commander WCX plugin interface specification.}
+{Total Commander WCX plugin interface: types and constants.}
 unit uWcxAPI;
 
 interface
@@ -117,7 +116,6 @@ type
   TProcessDataProc = function(FileName: PAnsiChar; Size: Integer): Integer; stdcall;
   TProcessDataProcW = function(FileName: PWideChar; Size: Integer): Integer; stdcall;
 
-  {Default params structure passed by TC}
   TWcxDefaultParams = record
     Size: Integer;
     PluginInterfaceVersionLow: DWORD;

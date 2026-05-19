@@ -28,11 +28,8 @@ uses
   uDebugLog, uThumbnailRender, uToolbarLayout, uPluginContext;
 
 var
-  {Subsystem logger; closure captures the 'Plugin' tag once at unit
-   initialization.}
   Log: TProc<string>;
 
-{Resolves a TC-provided window handle to our plugin form, or nil.}
 function FindPluginForm(ListWin: HWND): TPluginForm;
 var
   Ctrl: TWinControl;
@@ -44,7 +41,6 @@ begin
     Result := nil;
 end;
 
-{Internal handler shared by ListLoad and ListLoadW.}
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
 var
   Form: TPluginForm;
@@ -56,24 +52,15 @@ begin
   Log(Format('DoListLoad: ParentWin=$%s File=%s Flags=%d', [IntToHex(ParentWin), AFileName, ShowFlags]));
   try
     Log(Format('DoListLoad: ffmpegPath=%s', [TPluginContext.Instance.FFmpegPath]));
-    {Build the DI container BEFORE constructing the form. The form
-     takes ownership of Services.ProbeCache once CreateForPlugin
-     returns - so any exception thrown during construction leaves the
-     ProbeCache unowned, hence the defensive Free in the except branch.
-     Factory fields are refcounted interfaces and self-clean when
-     Services goes out of scope.}
+    {Form takes ownership of Services.ProbeCache once CreateForPlugin returns;
+     a constructor failure before that assignment leaves the ProbeCache ours,
+     hence the defensive Free in the outer except branch.}
     Services := CreateProductionServices;
     try
       Form := TPluginForm.CreateForPlugin(ParentWin, AFileName,
         TPluginContext.Instance.Settings, TPluginContext.Instance.FFmpegPath, Services);
       ServicesPassed := True;
     except
-      {Construction failed AFTER the record copy crossed the constructor
-       boundary is impossible: Delphi const-record parameters are passed
-       by reference and the constructor's first act under our control is
-       FServices := AServices. If the constructor fails before that
-       assignment (e.g. CreateNew), the ProbeCache is still ours to free
-       here. Once ServicesPassed flips True, ownership has transferred.}
       raise;
     end;
     Form.ApplyListerParams(ShowFlags);
@@ -92,12 +79,8 @@ end;
 
 function ListLoad(ParentWin: HWND; FileToLoad: PAnsiChar; ShowFlags: Integer): HWND; stdcall;
 begin
-  {Encoding caveat: the ANSI exports below convert via the system code
-   page (string(AnsiString(...))). File paths containing characters not
-   representable in the local CP_ACP are corrupted at this boundary.
-   The Unicode siblings (ListLoadW etc.) are the supported path; modern
-   TC builds always call the W variants. The ANSI shims exist for ABI
-   completeness only.}
+  {ANSI shim for ABI completeness only — path chars outside CP_ACP are
+   corrupted at the AnsiString conversion. Modern TC always calls W variants.}
   Log('ListLoad (ANSI)');
   Result := DoListLoad(ParentWin, string(AnsiString(FileToLoad)), ShowFlags);
 end;
@@ -108,7 +91,6 @@ begin
   Result := DoListLoad(ParentWin, string(FileToLoad), ShowFlags);
 end;
 
-{Reuses an existing plugin window for a new file (smoother navigation).}
 function DoListLoadNext(ParentWin: HWND; ListWin: HWND; const AFileName: string; ShowFlags: Integer): Integer;
 var
   Form: TPluginForm;
@@ -195,9 +177,7 @@ begin
   case Command of
     lc_Copy:
       begin
-        {TC's "copy current selection" command. Forward to the same
-         dispatcher the keyboard hotkey and context menu use, so all
-         three Copy-frame paths share one wrapping.}
+        {Forward to the shared command dispatcher so all Copy-frame entry points share one path.}
         if Form <> nil then
           Form.DispatchCommand(CM_COPY_FRAME);
         Result := LISTPLUGIN_OK;
@@ -223,23 +203,16 @@ begin
   GetModuleFileName(HInstance, ModulePath, MAX_PATH);
   Ctx.PluginDir := ExtractFilePath(string(ModulePath));
 
-  {Load settings before the first Log call so the [debug] LogEnabled
-   toggle decides whether the log file gets created at all. The default
-   for that toggle is build-dependent (True in DEBUG, False in Release;
-   see DEF_DEBUG_LOG_ENABLED) so a fresh dev install still logs out of
-   the box, while a release install stays silent until the user sets
-   LogEnabled=1 in Glimpse.ini.}
+  {Load settings BEFORE the first Log call so [debug] LogEnabled controls
+   whether the log file is created at all.}
   NewSettings := TPluginSettings.Create(Ctx.PluginDir + 'Glimpse.ini');
   NewSettings.Load;
-  {Setter frees the previous Settings instance atomically.}
   Ctx.Settings := NewSettings;
 
   if Ctx.Settings.DebugLogEnabled then
   begin
-    {Start fresh log each TC session whenever logging is on, so a single
-     repro spans one self-contained file. Delete BEFORE Configure so the
-     singleton opens a freshly-created file rather than seeking to the
-     end of a stale one.}
+    {Fresh log each TC session — delete BEFORE Configure or the singleton
+     would seek to the end of the stale file.}
     if FileExists(Ctx.PluginDir + 'glimpse_debug.log') then
       DeleteFile(Ctx.PluginDir + 'glimpse_debug.log');
     TDebugLog.Instance.Configure(Ctx.PluginDir + 'glimpse_debug.log');
@@ -254,14 +227,11 @@ begin
   Ctx.FFmpegPath := FindFFmpegExe(Ctx.PluginDir, Ctx.Settings.FFmpegExePath);
   Log(Format('  FFmpegPath=%s', [Ctx.FFmpegPath]));
 
-  {Probe cache is always enabled (no user-facing toggle); create once here
-   so repeat thumbnail calls share probe results across the TC session.}
   if Ctx.ProbeCache = nil then
     Ctx.ProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
 
-  {Run cache eviction once per session.
-   Evict enumerates files and exits early if within budget, so no pre-check needed.
-   Wrapped in try/except: invalid or inaccessible cache folder must not crash TC.}
+  {Run cache eviction once per session. Wrapped in try/except: an invalid
+   cache folder must not crash TC.}
   if Ctx.Settings.CacheEnabled then
   begin
     var
@@ -269,8 +239,7 @@ begin
     try
       CreateCacheManager(CacheDir, Ctx.Settings.CacheMaxSizeMB).Evict;
       Log(Format('  CacheDir=%s', [CacheDir]));
-      {Long-lived thumbnail cache: same directory + budget as the main
-       cache so the two paths share evicted entries}
+      {Same directory + budget as the main cache so eviction is shared.}
       Ctx.ThumbnailCache := TFrameCache.Create(CacheDir, Ctx.Settings.CacheMaxSizeMB);
     except
       on E: Exception do
@@ -284,9 +253,7 @@ begin
     Ctx.ThumbnailCache := TNullFrameCache.Create;
 end;
 
-{Returns a preview bitmap for the TC thumbnail panel.
- Runs synchronously on TC's worker thread. Failures are swallowed
- (returning 0) so TC falls back to its default icon.}
+{Runs on TC's worker thread. Failures return 0 so TC falls back to its default icon.}
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 var
   Ctx: TPluginContext;
@@ -311,9 +278,7 @@ begin
         TThumbnailParams.FromSettings(Ctx.Settings), Ctx.ThumbnailCache, Ctx.ProbeCache);
       if Bmp <> nil then
         try
-          {TC takes ownership of the returned HBITMAP; ReleaseHandle
-           detaches it from the TBitmap so destruction below doesn't
-           free it out from under TC.}
+          {TC takes ownership of the returned HBITMAP — detach so Bmp.Free does not free it.}
           Result := Bmp.ReleaseHandle;
         finally
           Bmp.Free;
@@ -343,8 +308,6 @@ end;
 initialization
 
 Log := DebugLogger('Plugin');
-{TPluginContext.Instance lazy-creates with a default Settings snapshot on
- first access; no eager construction needed here.}
 
 finalization
 

@@ -1,24 +1,8 @@
-{Module-level pre-extraction cache for the WCX plugin.
-
- The cache survives across OpenArchive calls so that a TC user clicking
- between three frames of the same video does not re-spawn ffmpeg each
- time. Total Commander may dispatch OpenArchive / ConfigurePacker /
- finalization on different threads, so every read and write goes through
- the instance's TCriticalSection — concurrency safety is a class
- invariant, not a discipline the caller must remember.
-
- The pre-extraction itself is long (seconds to minutes per video), and
- the lock is intentionally held for its full duration so that two
- threads opening the same video cannot both race past the cache-hit
- check. Callers obtain a TWcxCacheExtractionSession via
- BeginExtractionSession, which owns the lock for its lifetime; Exit
- inside the orchestrating procedure still works because the session is
- a real object rather than an anonymous-method closure.
-
- Single-instance lifecycle via class var FInstance + Instance / ReleaseInstance
- — exactly one cache per loaded DLL. ReleaseInstance is finalization-safe:
- it calls Invalidate first, which swallows directory-delete failures so
- the DLL unload never crashes the host.}
+{Module-level pre-extraction cache, one per loaded DLL. Survives across
+ OpenArchive calls so clicking between frames of the same video does
+ not re-spawn ffmpeg. TC may dispatch OpenArchive / ConfigurePacker /
+ finalization on different threads, so every access goes through the
+ instance's TCriticalSection.}
 unit uWcxFrameCache;
 
 interface
@@ -27,30 +11,17 @@ uses
   System.SysUtils, System.SyncObjs;
 
 type
-  {Test-only injection point for the recursive directory delete used by
-   Invalidate. Defaults to TDirectory.Delete(_, True). Tests swap in a
-   thrower via SetDeleteDirectoryProc to exercise the
-   exception-swallowing path that production needs at DLL unload.}
+  {Test seam for the recursive directory delete; tests swap in a thrower
+   to exercise the exception-swallowing path that production needs at
+   DLL unload.}
   TWcxDeleteDirectoryProc = reference to procedure(const APath: string);
 
   TWcxFrameCache = class;
 
-  {Held-lock context for one pre-extraction pass. Constructed by
-   TWcxFrameCache.BeginExtractionSession (which enters the lock); the
-   destructor releases the lock. Mutators below assume the lock is held
-   — that invariant is structural, not asserted, because the session is
-   the only construction path.
-
-   Typical use:
-     Sess := Cache.BeginExtractionSession;
-     try
-       if Sess.TryHit(...) then Exit;  // Exit returns from the outer
-       TempDir := Sess.PrepareFresh(...);
-       ... do extraction, calling Sess.RecordSlot(I, ...) per slot ...
-       Sess.PublishTo(H.TempPaths, H.EntrySizes);
-     finally
-       Sess.Free;
-     end;}
+  {Held-lock context for one pre-extraction pass. Constructor enters the
+   lock; destructor releases it. Mutators assume the lock is held —
+   structural invariant because BeginExtractionSession is the only
+   construction path.}
   TWcxCacheExtractionSession = class
   strict private
     FCache: TWcxFrameCache;
@@ -58,40 +29,25 @@ type
     constructor Create(ACache: TWcxFrameCache);
     destructor Destroy; override;
 
-    {On a same-video cache hit, copies the cached arrays into the var
-     parameters and returns True. The caller's Exit ends the session;
-     the destructor releases the lock.}
     function TryHit(const AFileName: string; var ATempPaths: TArray<string>;
       var AEntrySizes: TArray<Int64>): Boolean;
 
-    {Wipes any prior cache, creates a fresh GUID-named subdirectory of
-     the user temp, stores AFileName as the cached video, and sizes the
-     internal arrays to AEntryCount. Returns the new temp directory
-     path; callers write per-slot files into it and call RecordSlot.}
     function PrepareFresh(const AFileName: string; AEntryCount: Integer): string;
 
-    {Records the per-slot output of the extraction pass.}
     procedure RecordSlot(AIndex: Integer; const ATempPath: string; ASize: Int64);
 
-    {Copies the currently held arrays into the caller's var slots.
-     Mirrors the historical "H.TempPaths := GCachedTempPaths" at the
-     end of PreExtractFrames.}
     procedure PublishTo(var ATempPaths: TArray<string>; var AEntrySizes: TArray<Int64>);
 
-    {Convenience: the current session's temp directory (for the
-     extraction helpers that need to compose per-slot paths).}
     function CachedTempDir: string;
   end;
 
   TWcxFrameCache = class
   strict private
     class var FInstance: TWcxFrameCache;
-  {Plain `private` (not `strict`) so TWcxCacheExtractionSession in the
-   same unit can read/write these directly under the held lock — without
-   adding a parallel set of accessors that exist only to let one
-   collaborator class reach in. The repeated visibility section also
-   resets the scope from `class var` above back to instance-level (same
-   gotcha as TPluginContext).}
+  {Plain private (not strict) so TWcxCacheExtractionSession in the same
+   unit can read/write directly under the held lock without a parallel
+   accessor surface. Repeated visibility section also resets the scope
+   from "class var" above back to instance-level.}
   private
     FLock: TCriticalSection;
     FCachedVideoFile: string;
@@ -107,28 +63,17 @@ type
     class function Instance: TWcxFrameCache;
     class procedure ReleaseInstance;
 
-    {Drops the cache. Public so the settings-dialog apply callback and
-     the DoOpenArchive failure path can both invoke it; the recursive
-     directory delete is wrapped in try/except because Invalidate runs
-     from finalization where an unhandled exception would crash TC.}
+    {Wraps the directory delete in try/except so finalization never
+     crashes TC with an unhandled exception.}
     procedure Invalidate;
 
-    {PRODUCTION CODE MUST NOT CALL THESE.
-
-     SeedForTesting populates the video-file + temp-dir fields so a
-     regression test can mimic PreExtractFrames partial state and then
-     verify Invalidate wipes it. CachedVideoFile / CachedTempDir expose
-     the seeded values for assertion. SetDeleteDirectoryProc / Reset...
-     swap the directory-delete primitive so a test can force the
-     try/except path that production relies on at DLL unload.}
+    {Test seams. PRODUCTION CODE MUST NOT CALL THESE.}
     procedure SeedForTesting(const AVideoFile, ATempDir: string);
     function CachedVideoFile: string;
     function CachedTempDir: string;
     procedure SetDeleteDirectoryProc(const AProc: TWcxDeleteDirectoryProc);
     procedure ResetDeleteDirectoryProc;
 
-    {Locks the cache for an extraction pass. Caller must Free the
-     returned session (the destructor releases the lock).}
     function BeginExtractionSession: TWcxCacheExtractionSession;
   end;
 
@@ -319,10 +264,9 @@ initialization
 
 finalization
 
-{Owns the singleton lifecycle. uWcxExports also calls ReleaseInstance
- (FreeAndNil is idempotent) but consumers that link uWcxFrameCache
- without uWcxExports — e.g., the test executable — still get a clean
- shutdown.}
+{Consumers that link uWcxFrameCache without uWcxExports (the test exe)
+ still get a clean shutdown; FreeAndNil is idempotent so the
+ uWcxExports finalization call later is harmless.}
 TWcxFrameCache.ReleaseInstance;
 
 end.

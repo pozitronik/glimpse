@@ -1,25 +1,6 @@
-{Progress-bar widget controller for TPluginForm.
-
- Step 105 (C1, part 3 of 4): focused mini-extraction of the
- progress-bar widget that floats over the status bar during extraction
- + clipboard-write operations. Same honest scope as part 2 — the
- status-bar controller envisioned by the plan resists clean extraction
- because BuildStatusBarValues / ApplyStatusBarSettings / UpdateStatusBar
- reach into ~25 form fields. This helper extracts only the progress-
- bar concern, which has clean boundaries: own a TProgressBar parented
- on the status bar, manage its visibility flag, recompute its bounds
- via the pure uStatusBarLayout.ResolveProgressBarBounds helper, and
- surface a tiny API the form drives explicitly.
-
- The form retains UpdateProgress (its body mixes progress-bar updates
- with toolbar-button updates and the FrameView animation timer — too
- cross-cluster to lift cleanly). UpdateProgress calls into this helper
- for the progress-bar bits only.
-
- Lifetime: helper is owned by the form (TComponent ownership). The
- TProgressBar inside the helper is in turn owned by the status bar
- (TComponent parent ownership) so VCL handles its release. Show/Hide
- are reentrancy-safe.}
+{Progress-bar widget controller for TPluginForm. Owns a TProgressBar
+ parented on the status bar and recomputes its bounds via
+ uStatusBarLayout.ResolveProgressBarBounds.}
 unit uProgressIndicator;
 
 interface
@@ -30,15 +11,11 @@ uses
   uStatusBarLayout;
 
 type
-  {Returns whether the status bar should be visible AFTER a Hide call.
-   The form computes ShowStatusBar AND NOT (QuickView AND QVHide) at
-   call time so the helper doesn't need to know about the form's
-   quick-view mode or the QVHideStatusBar setting.}
+  {Returns whether the status bar should stay visible AFTER a Hide call.}
   TStatusBarVisibilityCallback = reference to function: Boolean;
 
-  {Returns the current (stretch, layout) pair the form's settings
-   expose. Read at every Reposition so a settings change between
-   Show and the next Reposition takes effect immediately.}
+  {Read on every Reposition so settings changes between Show and the next
+   Reposition take effect immediately.}
   TStatusBarLayoutCallback = reference to function(out AStretch: Boolean;
     out ALayout: TProgressBarLayout): Boolean;
 
@@ -53,24 +30,11 @@ type
     constructor Create(AStatusBar: TStatusBar;
       const AOnPostHideVisibility: TStatusBarVisibilityCallback;
       const AOnQueryLayout: TStatusBarLayoutCallback);
-    {Forces the status bar visible, marks the indicator visible,
-     repositions the progress bar inside the status bar, then makes
-     the progress bar itself visible. Idempotent: a second Show on
-     an already-visible indicator just re-runs the reposition.}
+    {Idempotent — re-Show on a visible indicator just re-runs Reposition.}
     procedure Show;
-    {Hides the progress bar, clears the visible flag, then lets the
-     post-hide callback decide whether the status bar itself should
-     stay visible (depends on the user's ShowStatusBar setting and
-     whether the form is in Quick View mode).}
     procedure Hide;
-    {Recomputes the progress-bar bounds against the status bar's
-     current dimensions + the form's stretch/layout settings. No-op
-     when the indicator is not visible.}
+    {No-op when the indicator is not visible.}
     procedure Reposition;
-    {Direct accessor for callers that need to set Style/Min/Max/Position
-     on the bar directly (WithReExtract, UpdateProgress). Returning the
-     widget rather than wrapping every TProgressBar property keeps the
-     wrapper thin.}
     property ProgressBar: TProgressBar read FProgressBar;
     property Visible: Boolean read FVisible;
   end;
@@ -121,10 +85,8 @@ begin
     Exit;
   if not Assigned(FOnQueryLayout) or not FOnQueryLayout(Stretch, Layout) then
     Exit;
-  {Right edge of the last panel — the boundary the AfterPanels layout
-   needs to clear. Computed from the live panel widths so adding or
-   removing a panel in UpdateStatusBar requires no separate
-   bookkeeping here.}
+  {Right edge of the last panel — computed live so adding or removing
+   a panel in UpdateStatusBar needs no separate bookkeeping here.}
   PanelsRight := 0;
   for I := 0 to FStatusBar.Panels.Count - 1 do
     Inc(PanelsRight, FStatusBar.Panels[I].Width);

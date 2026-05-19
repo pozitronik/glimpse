@@ -1,28 +1,7 @@
 {Per-group control bundles + bind helpers for the WCX settings dialog.
-
- Step 99 (C8, part 1): mirrors the WLX-side wlx/uSettingsControlsBundles
- (step 50) on the WCX side. The bundles decompose the WCX dialog's
- ~50-line SettingsToControls / ControlsToSettings methods into named
- records + paired BindXxxFromControls / BindXxxToControls free
- procedures. The TWcxSettings shared groups (Extraction, Timestamp,
- Banner from uSettingsGroups) align with the WLX equivalents; the
- WCX-only groups (Mode bitmask, Output, Combined, Limits) get their
- own records here.
-
- Design notes:
-
- - WCX-only. Lives in wcx/ for the same reason wlx/uSettingsControlsBundles
-   stays in wlx/: the shared uSettingsGroups unit must remain VCL-free.
-   The two plugins have different dialog layouts; sharing only the
-   value-object group records (uSettingsGroups) and not the bundle/bind
-   layer keeps the cross-plugin coupling minimal.
-
- - Names are TWcxXxxControls (not TXxxControls) to prevent name clashes
-   if a future shared base unit needs to import both bundle units.
-
- - Font shadow fields (FBannerFontName/Size, FTimestampFontName/Size)
-   stay on the dialog as dialog-local state — same convention as the
-   WLX bundle unit.}
+ Mirrors wlx/uSettingsControlsBundles; lives in wcx/ to keep the shared
+ uSettingsGroups unit VCL-free. Names are TWcxXxxControls to prevent
+ clashes with the WLX bundle unit.}
 unit uWcxSettingsControlsBundles;
 
 interface
@@ -32,11 +11,8 @@ uses
   uWcxSettings;
 
 type
-  {General + Sampling tab: extraction + frame-count + parallelism +
-   decoder toggles. MaxWorkers and MaxThreads are encoded across the
-   auto-checkbox / spin-control pair via uSettingsDlgLogic. WCX-specific
-   addition vs WLX: UdFrameCount (WLX manages this via toolbar at
-   runtime instead of in settings).}
+  {MaxWorkers and MaxThreads encode across the auto-checkbox / spin-
+   control pair via uSettingsDlgLogic.}
   TWcxExtractionControls = record
     UdFrameCount: TUpDown;
     UdSkipEdges: TUpDown;
@@ -49,33 +25,21 @@ type
     ChkRespectAnamorphic: TCheckBox;
   end;
 
-  {Sampling tab: random extraction toggle + percent slider. WCX has no
-   CacheRandomFrames toggle (no frame cache exists in WCX), so this is
-   smaller than the WLX random cluster.}
   TWcxRandomControls = record
     ChkRandomExtraction: TCheckBox;
     TrkRandomPercent: TTrackBar;
   end;
 
-  {General tab: ffmpeg path edit. BindFromControls writes the path
-   verbatim (TWcxSettings has no SetFFmpegPath setter — the field is
-   plain Read/Write).}
   TWcxFFmpegControls = record
     EdtFFmpegPath: TEdit;
   end;
 
-  {Output tab: 3 mode-bitmask toggles. WCX-specific (no shared group;
-   the underlying field is the Mode bitmask exposed via the
-   ShowFrames / ShowCombined / ShowPresets convenience properties).}
   TWcxModeControls = record
     ChkModeFrames: TCheckBox;
     ChkModeCombined: TCheckBox;
     ChkModePresets: TCheckBox;
   end;
 
-  {Output tab: bitmap-output knobs. WCX-only group on the model side
-   (TWcxSettings has SaveFormat / JpegQuality / PngCompression /
-   BackgroundAlpha / ShowFileSizes as flat properties).}
   TWcxOutputControls = record
     CbxFormat: TComboBox;
     UdJpegQuality: TUpDown;
@@ -84,9 +48,6 @@ type
     ChkShowFileSizes: TCheckBox;
   end;
 
-  {Combined tab: grid layout + background color (the timestamp + banner
-   sub-clusters get their own bundles below since they reuse the WLX-
-   shared group records).}
   TWcxCombinedControls = record
     UdColumns: TUpDown;
     UdCellGap: TUpDown;
@@ -94,9 +55,6 @@ type
     PnlBackground: TPanel;
   end;
 
-  {Combined tab's timestamp cluster. Mirror of the WLX bundle except
-   the show toggle is named ChkTimestamp (WCX) vs ChkShowTimecode (WLX);
-   the underlying setting is ShowTimestamp.}
   TWcxTimestampControls = record
     ChkTimestamp: TCheckBox;
     CbxTimestampCorner: TComboBox;
@@ -106,7 +64,6 @@ type
     UdTCTextAlpha: TUpDown;
   end;
 
-  {Combined tab's banner cluster. Mirror of the WLX bundle.}
   TWcxBannerControls = record
     ChkShowBanner: TCheckBox;
     PnlBannerBackground: TPanel;
@@ -115,9 +72,7 @@ type
     CbxBannerPosition: TComboBox;
   end;
 
-  {Limits tab: per-frame max side + combined max side. Both 0 = no
-   limit (the spin controls clamp at 0 and the model treats it as
-   "uncapped" — see TWcxSettings docstring on FrameMaxSide).}
+  {Both 0 = no limit (uncapped); spin controls clamp at 0.}
   TWcxLimitsControls = record
     UdFrameMax: TUpDown;
     UdCombinedMax: TUpDown;
@@ -238,8 +193,8 @@ begin
   ASettings.SaveFormat := TSaveFormat(AControls.CbxFormat.ItemIndex);
   ASettings.JpegQuality := AControls.UdJpegQuality.Position;
   ASettings.PngCompression := AControls.UdPngCompression.Position;
-  {Explicit Byte cast: TUpDown.Position is Integer, target is Byte; the
-   control's Min/Max are clamped to [0, 255] so the narrowing is safe.}
+  {Narrowing from Integer; safe because the control clamps Position to
+   [0, 255].}
   ASettings.BackgroundAlpha := Byte(AControls.UdBackgroundAlpha.Position);
   ASettings.ShowFileSizes := AControls.ChkShowFileSizes.Checked;
 end;

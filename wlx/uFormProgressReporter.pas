@@ -1,15 +1,6 @@
-{Form-side IProgressReporter implementation.
-
- Step 107 (N1): wires TSaveResolutionExtractor's lifecycle into the
- form's TProgressIndicator. Used by TPluginForm.WithReExtract; could
- also serve any future caller that needs to drive the form's progress
- widget from a worker context.
-
- Lifetime: held as an IInterface inside WithReExtract; auto-released
- at scope end. TInterfacedObject-based ref counting is fine here
- because the reporter holds NO state of its own — the TProgressIndicator
- reference is borrowed (form owns the indicator), so a late release
- is harmless.}
+{Form-side IProgressReporter — drives the form's TProgressIndicator.
+ The indicator reference is borrowed (form owns it), so the reporter's
+ ref-counted lifetime can outlive its useful scope without harm.}
 unit uFormProgressReporter;
 
 interface
@@ -42,12 +33,7 @@ end;
 
 procedure TFormProgressReporter.Start(const AStatusText: string; ATotalSteps: Integer);
 begin
-  {AStatusText is currently ignored — the form's progress widget has
-   no visible label panel (status text shows in the modal host dialog
-   that the form runs around the reporter, not in the bar itself).
-   Wiring AStatusText into a future status-bar label panel would be
-   a one-line change here. Kept in the interface signature for that
-   future extension.}
+  {AStatusText is ignored: the form's progress widget has no label panel.}
   FIndicator.ProgressBar.Style := pbstNormal;
   FIndicator.ProgressBar.Min := 0;
   FIndicator.ProgressBar.Max := ATotalSteps;

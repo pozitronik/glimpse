@@ -1,18 +1,6 @@
-{Predicts the rendered combined-image dimensions for a one-shot
- resolution choice, mirroring the layout math in
- RenderCombinedFromCells / RenderSmartCombinedFromCells /
- RenderGridCombinedAtLiveResolution. Used by the toolbar dropdown to
- label the Save view / Copy view variants with their predicted output
- size and by the status-bar resolution panel.
-
- Extracted from TFrameExporter so the prediction concern (read-only,
- pure layout math) lives separately from the actual render and save/
- copy orchestration. The predictor reuses the render pipeline's layout
- helpers (ComputeSmartCombinedLayout, ComputeUniformLayoutInputs) so
- prediction and render cannot drift apart.
-
- Lifetime: bound to the owning facade (TFrameExporter constructs and
- destroys). The render-pipeline reference is non-owned.}
+{Predicts rendered combined-image dimensions for a one-shot resolution
+ choice. Reuses the render pipeline's layout helpers so prediction and
+ render cannot drift apart.}
 unit uFrameDimensionPredictor;
 
 interface
@@ -22,9 +10,6 @@ uses
   uFrameRenderPipeline;
 
 type
-  {Step 109 (N3, ISP): depends only on IRenderColorPolicy (CellGap +
-   CombinedBorder for the layout math) and ISaveFormatPolicy
-   (CombinedMaxSide for the cap clamp).}
   TFrameDimensionPredictor = class
   strict private
     FFrameView: TFrameView;
@@ -36,21 +21,12 @@ type
       const ARenderColorPolicy: IRenderColorPolicy;
       const ASavePolicy: ISaveFormatPolicy;
       ARenderPipeline: TFrameRenderPipeline);
-    {Predicts the pixel dimensions the rendered combined image would have
-     for a one-shot resolution choice, before banner attachment and before
-     the CombinedMaxSide cap. Banner height is intentionally omitted (it
-     adds a small variable height that is hard to predict without setting
-     up a canvas). Returns 0,0 when there are no cells.}
+    {Pre-banner, pre-cap pixel dimensions. Banner height is omitted (variable
+     and hard to predict without a canvas). Returns 0,0 when no cells.}
     procedure PredictCombinedSize(AForceLiveRes: Boolean; out AW, AH: Integer);
-    {Predicts the rendered combined-image dimensions and the post-cap
-     dimensions for a one-shot resolution choice. ACappedW/H equal AW/H
-     when the CombinedMaxSide cap does not apply (cap=0 or image
-     already fits). Returns False when no frames are loaded yet.}
+    {ACappedW/H equal AW/H when CombinedMaxSide does not clamp.}
     function PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
-    {Returns the bracketed dimension suffix used on the Save/Copy view
-     dropdown menu items, e.g. " [1920x1080]" or
-     " [19200x10800 -> 8192x4608]" when CombinedMaxSide caps the output.
-     Empty string when no frames are loaded yet.}
+    {Bracketed dimension suffix for the Save/Copy view dropdown items.}
     function FormatPredictedSize(AForceLiveRes: Boolean): string;
   end;
 
@@ -88,8 +64,7 @@ begin
   if N = 0 then
     Exit;
 
-  {vmSingle: SaveView/CopyView degenerate to single-frame paths so the
-   "view"-level resolution is the focused frame's dimensions.}
+  {vmSingle: "view"-level resolution is the focused frame's dimensions.}
   if FFrameView.ViewMode = vmSingle then
   begin
     if AForceLiveRes then
@@ -117,7 +92,6 @@ begin
     Exit;
   end;
 
-  {Uniform-row modes (vmGrid, vmFilmstrip, vmScroll).}
   Border := Max(0, FRenderColorPolicy.GetCombinedBorder);
   Gap := Max(0, FRenderColorPolicy.GetCellGap);
   FRenderPipeline.ComputeUniformLayoutInputs(AForceLiveRes, Cols, CellW, CellH);

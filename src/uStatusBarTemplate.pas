@@ -1,21 +1,9 @@
-{Parser for the user-editable status-bar template string. Each panel of
- the live status bar corresponds to one '%name%' or '%name attr=value%'
- token. Whitespace and any other characters between tokens are silently
- ignored: the model is "one token per panel", not "tokens interleaved
- with literal text".
-
- Unknown identifiers parse into tkUnknown tokens that carry their raw
- source text, so the renderer can paint the typo back to the user
- instead of silently dropping it.
-
- Casing rule: a token whose identifier is fully uppercase (e.g.
- %VIEW_MODE%) sets the Casing field to tcUpper, instructing the renderer
- to uppercase the produced text. Mixed-case or lowercase identifiers
- leave the value untouched. Case at the identifier level is otherwise
- ignored — the kind lookup is case-insensitive.
-
- Pure: no VCL, no settings, no global state. TestStatusBarTemplate
- exercises every branch end-to-end.}
+{Parses the user-editable status-bar template string into one token per
+ panel. Whitespace and any other characters between tokens are silently
+ ignored. Unknown identifiers parse into tkUnknown tokens that carry
+ their raw source text so the renderer paints the typo back instead of
+ silently dropping it. A fully-uppercase identifier (e.g. %VIEW_MODE%)
+ sets Casing := tcUpper.}
 unit uStatusBarTemplate;
 
 interface
@@ -24,14 +12,10 @@ uses
   uStatusBarTokens;
 
 type
-  {Casing flag derived from the token identifier:
-     tcAsIs  - identifier was lower- or mixed-case; render value verbatim
-     tcUpper - identifier was fully uppercase; renderer uppercases value}
   TStatusBarTokenCase = (tcAsIs, tcUpper);
 
-  {Panel text alignment derived from the optional align=... attribute.
-   Prefixed sba* to avoid clashing with VCL's TAlignment.taLeftJustify
-   et al; the renderer maps these onto Vcl.Classes.TAlignment.}
+  {Prefixed sba* to avoid clashing with VCL's TAlignment.taLeftJustify;
+   the renderer maps these onto Vcl.Classes.TAlignment.}
   TStatusBarTokenAlign = (sbaLeft, sbaRight, sbaCenter);
 
   TStatusBarTokenAttr = record
@@ -42,33 +26,24 @@ type
   TStatusBarToken = record
     Kind: TStatusBarTokenKind;
     Casing: TStatusBarTokenCase;
-    {Original "%...%" source span, captured verbatim. Painted by the
-     renderer when Kind = tkUnknown so the user can spot typos in their
-     template; otherwise informational.}
+    {Original "%...%" source span. Painted by the renderer when
+     Kind = tkUnknown so the user can spot template typos.}
     RawText: string;
     Attributes: TArray<TStatusBarTokenAttr>;
-    {Attribute lookup is case-insensitive on Name. Returns ADefault when
-     missing.}
     function AttrValue(const AName: string; const ADefault: string = ''): string;
-    {True iff AName is present (case-insensitive).}
     function HasAttr(const AName: string): Boolean;
-    {Convenience around AttrValue('width'): returns True with the parsed
-     positive integer when an explicit pixel width is set; returns False
-     for missing, 'auto', or unparseable values (caller falls back to
-     auto-measurement).}
+    {Returns True with the parsed positive integer when an explicit width
+     is set; False for missing, 'auto', or unparseable values.}
     function TryGetWidth(out AWidth: Integer): Boolean;
-    {Reads the optional align=left|right|center attribute. Defaults to
-     sbaLeft for missing or unrecognised values (silent fallback rather
-     than error — keeps the bar usable for a typo).}
+    {Defaults to sbaLeft for missing or unrecognised values.}
     function GetAlignment: TStatusBarTokenAlign;
   end;
 
   TStatusBarTokenArray = TArray<TStatusBarToken>;
 
-{Parses ATemplate into an array of tokens. Never raises: malformed
- fragments (unclosed '%', '%' followed by no identifier, '%%') become
- tkUnknown carrying their raw text. Anything outside of '%...%' spans
- (including whitespace between tokens) is dropped silently.}
+{Never raises: malformed fragments (unclosed '%', '%' with no identifier,
+ '%%') become tkUnknown carrying their raw text so the user sees the
+ broken fragment instead of losing it.}
 function ParseStatusBarTemplate(const ATemplate: string): TStatusBarTokenArray;
 
 implementation
@@ -173,7 +148,6 @@ begin
   begin
     if ATemplate[Pos] <> '%' then
     begin
-      {Anything outside a '%...%' span is silently skipped.}
       Inc(Pos);
       Continue;
     end;
@@ -183,9 +157,9 @@ begin
 
     if (Pos > Len) or (not IsIdentStart(ATemplate[Pos])) then
     begin
-      {Empty identifier ('%%' or '% '...) or trailing '%'. Scan to the
+      {Empty identifier ('%%', '% '...) or trailing '%'. Scan to the
        next '%' (inclusive) and emit the whole span as tkUnknown so the
-       user sees the broken fragment instead of losing it silently.}
+       user sees the broken fragment.}
       Found := False;
       ScanPos := Pos;
       while ScanPos <= Len do
@@ -227,7 +201,6 @@ begin
     else
       Tok.Casing := tcAsIs;
 
-    {Read zero or more name=value attributes until the closing '%'.}
     while Pos <= Len do
     begin
       while (Pos <= Len) and (ATemplate[Pos] <> '%') and ATemplate[Pos].IsWhiteSpace do
@@ -236,8 +209,7 @@ begin
         Break;
       if not IsIdentStart(ATemplate[Pos]) then
       begin
-        {Junk in attribute position; advance one char to avoid spinning
-         and keep scanning for either an attribute or the closing '%'.}
+        {Junk in attribute position; advance one char to avoid spinning.}
         Inc(Pos);
         Continue;
       end;
@@ -265,7 +237,7 @@ begin
     else
     begin
       {Unclosed '%name...': degrade to tkUnknown so the user notices the
-       missing closing '%' instead of getting a token with no panel.}
+       missing closing '%' instead of getting a panel-less token.}
       Tok.Kind := tkUnknown;
       Tok.Attributes := nil;
       Tok.RawText := Copy(ATemplate, RawStart, Len - RawStart + 1);

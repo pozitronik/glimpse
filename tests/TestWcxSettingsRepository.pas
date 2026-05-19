@@ -1,8 +1,7 @@
-{Tests for TProductionWcxSettingsRepository (step 103, M24).
-
- The repository is a thin seam over TWcxSettings.Save; the production
- contract under test is: "Save delegates to ASettings.Save which writes
- to its FIniPath". Nil-safety + round-trip via a tempdir ini path.}
+{Tests for TProductionWcxSettingsRepository — a thin seam over
+ TWcxSettings.Save. Pins the contract that Save delegates to
+ ASettings.Save which writes to its FIniPath; nil-safety + round-trip
+ via a tempdir ini path.}
 unit TestWcxSettingsRepository;
 
 interface

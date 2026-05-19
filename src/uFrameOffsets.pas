@@ -1,74 +1,42 @@
-﻿{Frame offset calculator for uniform time distribution.
- Pure computation: no I/O, no dependencies on UI or ffmpeg.}
+﻿{Pure frame-offset calculation and timecode formatting.}
 unit uFrameOffsets;
 
 interface
 
 type
   TFrameOffset = record
-    Index: Integer; {1-based frame number}
-    TimeOffset: Double; {seconds from video start}
+    Index: Integer;
+    TimeOffset: Double;
   end;
 
   TFrameOffsetArray = array of TFrameOffset;
 
-  {Calculates evenly-spaced frame offsets across a video's duration.
-   Formula: offset_i = EffStart + EffDuration * (2i - 1) / (2N)
-   where EffStart and EffDuration account for edge guard skipping.
-   @param ADuration Video duration in seconds (must be > 0)
-   @param AFrameCount Number of frames to extract (must be >= 1)
-   @param ASkipEdgesPercent Percentage of video to skip at start and end (0 = disabled, clamped to 0..49)
-   @return Array of frame offsets with 1-based indices
-   @raises EArgumentException if ADuration <= 0 or AFrameCount < 1}
+  {Formula: offset_i = EffStart + EffDuration * (2i - 1) / (2N)
+   ASkipEdgesPercent: 0..49 (raises otherwise).
+   Raises on invalid duration or zero frame count.}
 function CalculateFrameOffsets(ADuration: Double; AFrameCount: Integer; ASkipEdgesPercent: Integer = 0): TFrameOffsetArray;
 
-{Calculates randomised frame offsets within their respective slices.
- Each frame i lives in slice i (effective range divided into N equal
- slices); the chosen time is the slice midpoint plus a random jitter
- capped by the randomness window:
- slice_len    = effective_range / N
- midpoint_i   = effective_start + (i + 0.5) * slice_len
- window_half  = slice_len / 2 * (P / 100)
- t_i          = midpoint_i + Random(-window_half .. +window_half)
- Frame ordering is preserved by construction (P clamped to 1..100 keeps
- t_i strictly inside slice i, never crossing into a neighbour). Pulls
- randomness from the global Random — caller is responsible for calling
- Randomize once at startup to seed it.
- @param ADuration Video duration in seconds (must be > 0)
- @param AFrameCount Number of frames to extract (must be >= 1)
- @param ASkipEdgesPercent Same semantics as CalculateFrameOffsets
- @param ARandomnessPercent Jitter strength 1..100 (clamped). At 1, the
- window is 1% of the slice; at 100, the entire slice is in play.
- @raises EArgumentException for invalid inputs.}
+{Each frame lives in its slice; midpoint plus capped jitter.
+ ARandomnessPercent 1..100 (clamped). Pulls from global Random; caller
+ must Randomize at startup.}
 function CalculateRandomFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomnessPercent: Integer): TFrameOffsetArray;
 
-{Single source of truth for the random-vs-deterministic offset choice
- made by both plugins. ARandom selects between CalculateRandomFrameOffsets
- and CalculateFrameOffsets; the other parameters are forwarded as-is.
- Centralising the dispatch here keeps WLX and WCX in lockstep when the
- random/deterministic decision evolves (e.g. future stratified or
- deterministic-but-jittered modes).}
+{Centralises the random vs deterministic decision so WLX and WCX stay
+ in lockstep when this evolves.}
 function BuildFrameOffsets(ADuration: Double; AFrameCount, ASkipEdgesPercent, ARandomPercent: Integer; ARandom: Boolean): TFrameOffsetArray;
 
-{Formats a time in seconds as HH:MM:SS.mmm for display.}
+{HH:MM:SS.mmm}
 function FormatTimecode(ASeconds: Double): string;
 
-{Formats a time in seconds as HH-MM-SS.mmm for use in filenames.}
+{HH-MM-SS.mmm for filenames.}
 function FormatTimecodeForFilename(ASeconds: Double): string;
 
-{Formats a duration in seconds as human-readable H:MM:SS or M:SS.
- Returns '?' for non-positive values.}
+{H:MM:SS or M:SS; '?' for non-positive values.}
 function FormatDurationHMS(ASeconds: Double): string;
 
-{Formats a millisecond elapsed time for the status-bar load-time panel.
- Output scales with magnitude:
-   under 1 minute  -> 'S.mmm s'      (e.g. '5.123 s')
-   under 1 hour    -> 'M:SS.mmm'     (e.g. '12:34.567')
-   1 hour or more  -> 'H:MM:SS'      (milliseconds dropped because the
-                                      column gets too wide otherwise)
- Pure: no I/O, no globals; callable from any thread. Cardinal input
- mirrors GetTickCount's return type and accepts the full ~49.7-day
- range without overflow.}
+{Scales by magnitude: 'S.mmm s' / 'M:SS.mmm' / 'H:MM:SS' (ms dropped
+ for hours to keep the status-bar column tight). Cardinal handles
+ GetTickCount's full ~49.7-day range.}
 function FormatLoadTimeMs(AElapsedMs: Cardinal): string;
 
 implementation
@@ -118,9 +86,7 @@ begin
   if (ASkipEdgesPercent < 0) or (ASkipEdgesPercent > 49) then
     raise EArgumentException.CreateFmt('SkipEdgesPercent must be 0..49, got %d', [ASkipEdgesPercent]);
 
-  {Clamp randomness silently rather than raising: the slider in the UI
-   is bounded already; callers that pass an out-of-range integer (e.g.
-   from a hand-edited INI) should still get sensible behaviour.}
+  {Silent clamp so hand-edited INI values get sensible behaviour.}
   P := EnsureRange(ARandomnessPercent, 1, 100);
 
   if ASkipEdgesPercent > 0 then
@@ -139,11 +105,6 @@ begin
   for I := 0 to AFrameCount - 1 do
   begin
     Midpoint := EffStart + (I + 0.5) * SliceLen;
-    {Random returns [0, 1). Map to [-WindowHalf, +WindowHalf). The
-     half-open upper bound (+WindowHalf is exclusive) introduces a
-     sub-millisecond bias that is well below ffmpeg's seek granularity
-     and visually irrelevant for frame selection; symmetry would cost a
-     conditional branch for no observable benefit.}
     Jitter := (Random * 2.0 - 1.0) * WindowHalf;
     Result[I].Index := I + 1;
     Result[I].TimeOffset := Midpoint + Jitter;

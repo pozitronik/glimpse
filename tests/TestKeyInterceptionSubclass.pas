@@ -1,8 +1,7 @@
-{Pinning tests for the pure key-passthrough policy hoisted out of
- uPluginForm. ShouldLetKeyPassThrough's per-key rationale is load-
- bearing for the plugin's key-interception subclass — any future
- regression here would silently break either VCL focus cycling (Tab)
- or the user's ability to close the Lister window (Alt+F4) or hotkey
+{Pinning tests for ShouldLetKeyPassThrough's per-key rationale,
+ which is load-bearing for the plugin's key-interception subclass.
+ A regression here would silently break VCL focus cycling (Tab),
+ the user's ability to close the Lister window (Alt+F4), or hotkey
  chord assembly (bare modifiers). One test per branch.}
 unit TestKeyInterceptionSubclass;
 

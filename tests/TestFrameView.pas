@@ -197,11 +197,8 @@ type
     [Test] procedure TestSingleZoomedRecalcSize;
     [Test] procedure TestGridZoomPreservesOnResize;
     [Test] procedure TestGridVerticalCentering;
-    {ApplyZoom is the named transaction wrapper for the ZoomFactor
-     write (step 60). Body is currently one line — sets FZoomFactor —
-     and deliberately does NOT call RecalcSize. The test pins both
-     properties: the write happens, and Self.Width is unchanged until
-     the caller triggers a separate layout pass.}
+    {ApplyZoom must set FZoomFactor without calling RecalcSize: layout
+     stays the caller's responsibility via a separate pass.}
     [Test] procedure TestApplyZoomSetsZoomFactor;
     [Test] procedure TestApplyZoomDoesNotImmediatelyResize;
   end;
@@ -241,11 +238,11 @@ begin
   AView.Parent.Free;
 end;
 
-{TFrameView.SetFrame's contract requires pf24bit input -- the production
- path memcpys 3 bytes per pixel into a pf24bit destination. TBitmap.Create
- defaults to pfDevice (which finalises to pf32bit on this Windows build),
- so explicit format selection avoids tripping the contract check in every
- test that exercises SetFrame.}
+{TFrameView.SetFrame's contract requires pf24bit input; production
+ memcpys 3 bytes per pixel into a pf24bit destination. TBitmap.Create
+ defaults to pfDevice (which finalises to pf32bit on this Windows
+ build), so explicit format selection avoids tripping the contract
+ check in every test that exercises SetFrame.}
 function MakeFrameBitmap(AWidth, AHeight: Integer): TBitmap;
 begin
   Result := TBitmap.Create;

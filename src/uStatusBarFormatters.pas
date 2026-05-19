@@ -1,24 +1,14 @@
 {Maps a parsed status-bar token plus a snapshot of plugin state to the
- string that should appear in the panel. The unit is the source of
- truth for "what does %name% look like" — every visible difference
- between the old hand-rolled UpdateStatusBar and the new template-driven
- bar lives here.
+ string that should appear in the panel. Pure: no VCL, no plugin classes,
+ no global state — testable without a TStatusBar.
 
- Pure: no VCL, no plugin classes, no global state. Caller (the renderer
- in wlx/) populates a TStatusBarValues record from its collaborators
- and passes it in. This makes the per-kind formatting exhaustively
- testable without spinning up a TStatusBar.
+ Missing-data contract: empty string means data unavailable; renderer
+ decides whether to skip the panel (width=auto) or paint a placeholder
+ (fixed width). The audio token is special-cased: when video info is
+ valid but no audio stream exists, returns 'No audio' rather than ''.
 
- Missing-data contract: when a token's source datum is unavailable, the
- formatter returns ''. The renderer decides what to do with the empty
- string (skip the panel for width=auto, show '?' for fixed width). The
- audio token is special-cased: when video info is valid but no audio
- stream exists, it returns 'No audio' rather than '' (matches the
- pre-template behaviour).
-
- Casing: when AToken.Casing = tcUpper the final result is uppercased.
- Applied after formatting so numeric formats and the transform glyph
- are unaffected.}
+ Casing: tcUpper uppercases the final result after formatting so numeric
+ formats and the transform glyph are unaffected.}
 unit uStatusBarFormatters;
 
 interface
@@ -27,16 +17,15 @@ uses
   uStatusBarTokens, uStatusBarTemplate;
 
 type
-  {Snapshot of every datum the token catalogue can render. Boolean *Available
-   flags exist where a zero / empty value is itself a valid state and the
-   formatter would otherwise have no way to distinguish "not yet known"
-   from "known to be zero" (e.g. file position, frames, predicted dims).
-   Numeric fields whose 0 already means "unavailable" (resolution, fps,
-   duration, bitrate) skip the flag.}
+  {Snapshot of every datum the token catalogue can render. Boolean
+   *Available flags exist where 0 / '' is a valid state and the formatter
+   would otherwise be unable to distinguish "not known" from "known zero".
+   Fields whose 0 already means "unavailable" (resolution, fps, duration,
+   bitrate) skip the flag.}
   TStatusBarValues = record
-    {True iff the source video has been probed successfully. Tokens that
-     read source-info fields short-circuit on this — including %audio%,
-     which only emits 'No audio' when video info is known to be valid.}
+    {True iff video has been probed; tokens that read source-info fields
+     short-circuit on this, including %audio% which only emits 'No audio'
+     when video info is valid.}
     VideoInfoValid: Boolean;
 
     FilePositionAvailable: Boolean;
@@ -76,16 +65,14 @@ type
   end;
 
 {Returns the panel text for AToken given AValues. Empty string means
- "data unavailable" and the renderer is expected to either skip the
- panel (width=auto) or paint a placeholder (fixed width). tkUnknown
- always returns AToken.RawText so the user sees their typo back.
+ data unavailable. tkUnknown returns AToken.RawText so the user sees
+ their typo back.
 
- AResolutionTransformGlyph is the arrow/separator shown between the
- native and capped dimensions in %save_dimension% / %copy_dimension%
- when capping fires. The caller (typically the WLX form) resolves it
- via uPlatformDetect.ResolutionTransformGlyph once and passes it here,
- keeping this unit free of the OS-detect dependency. Empty string is a
- valid default for tests that do not exercise the dim-with-cap path.}
+ AResolutionTransformGlyph: arrow/separator between native and capped
+ dimensions in %save_dimension% / %copy_dimension%. Caller (typically
+ the WLX form) resolves via uPlatformDetect.ResolutionTransformGlyph
+ once and passes it in, keeping this unit free of the OS-detect
+ dependency.}
 function FormatStatusBarToken(const AToken: TStatusBarToken;
   const AValues: TStatusBarValues;
   const AResolutionTransformGlyph: string = ''): string;
@@ -119,12 +106,8 @@ begin
     Result := Result + Format(' %d kbps', [AValues.SourceAudioBitrateKbps]);
 end;
 
-{Common renderer for %save_dimension% / %copy_dimension%. ALabel is the
- 'Save' or 'Copy' prefix that mirrors today's text. AShowCap is the
- already-resolved attribute value: when False, the post-cap segment is
- suppressed regardless of whether capping would actually change the
- dimensions. When True (the default), the post-cap segment appears only
- when CombinedMaxSide actually shrinks the image.}
+{ALabel is 'Save' or 'Copy'. When AShowCap is False the post-cap segment
+ is suppressed regardless of whether capping would change dimensions.}
 function FormatPredictedDim(const ALabel: string;
   AAvailable: Boolean; AW, AH, ACappedW, ACappedH: Integer;
   AShowCap: Boolean; const AGlyph: string): string;
@@ -140,25 +123,9 @@ end;
 
 function ResolveCapAttr(const AToken: TStatusBarToken): Boolean;
 begin
-  {Default is True — the pre-template UpdateStatusBar always showed the
-   transform when capping fired. cap=false is the user's opt-out.}
+  {Default True; cap=false is the user's opt-out.}
   Result := not SameText(AToken.AttrValue(ATTR_CAP, 'true'), 'false');
 end;
-
-{Step 56 (N8, lightweight): replaces the previous 85-LOC case-statement
- dispatch with a per-kind table of anonymous-method projectors. Adding
- a new token kind = enum entry + one assignment to GProjectors[tkNew]
- + its lambda body, all in the same unit. The case statement is gone;
- the dispatcher (FormatStatusBarToken) is now lookup + Assigned guard +
- call + uppercase post-process.
-
- An array of TStatusBarProjectorFunc covers exactly the same surface
- the case statement did: each former branch became one assignment.
- The OCP win that step 56's plan called for (new kind = new file
- isolated from existing logic) is delivered at lower cost than the
- originally-envisioned 15-class projector hierarchy + IPluginStateProvider
- interface; the case dispatcher's friction ("edit two methods") was
- the only practical objection and the table addresses it.}
 
 type
   TStatusBarProjectorFunc = reference to function(
@@ -181,8 +148,6 @@ begin
   else
     Result := '';
 
-  {Casing post-process is uniform across all kinds — keep it on the
-   dispatcher rather than duplicating in every projector.}
   if (AToken.Casing = tcUpper) and (Result <> '') then
     Result := UpperCase(Result);
 end;
@@ -192,8 +157,6 @@ initialization
   GProjectors[tkUnknown] := function(const AValues: TStatusBarValues;
     const AToken: TStatusBarToken; const AResolutionTransformGlyph: string): string
   begin
-    {Echo the raw text the parser couldn't recognize, so the user sees
-     their typo back in the panel.}
     Result := AToken.RawText;
   end;
 

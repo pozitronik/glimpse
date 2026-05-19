@@ -1,6 +1,5 @@
-{View mode layout strategies: compute cell positions, sizes, and scroll behavior.
- Extracted from TFrameView to satisfy OCP: adding a view mode means adding
- a class, not editing switch statements across the control.}
+{View mode layout strategies: compute cell positions, sizes, and scroll
+ behaviour. Adding a view mode means adding a class, not editing switches.}
 unit uViewModeLayout;
 
 interface
@@ -33,32 +32,17 @@ type
 
   TLayoutWheelAction = (lwaVerticalScroll, lwaHorizontalScroll, lwaNavigateFrame);
 
-  {Per-mode scrollbar visibility derived from view mode + zoom state.
-   The form previously encoded this as a case-on-mode inline in
-   UpdateFrameViewSize, reading FFrameView state then writing to the
-   scrollbox's HorzScrollBar/VertScrollBar.Visible — Information Expert
-   violation. Lifted here so the per-mode rules live next to the rest
-   of the layout strategies.}
   TScrollbarPolicy = record
     HorzVisible: Boolean;
     VertVisible: Boolean;
   end;
 
-{Returns the scrollbar visibility a TScrollBox hosting the frame view
- should adopt for the given view mode + zoom state. AIsZoomed reflects
- the live ZoomFactor (not the persisted ZoomMode); the two arguments
- are independent because zmActual at ZoomFactor=1.0 still needs the
- actual-size scroll rules even though "not zoomed" technically.}
+{AIsZoomed reflects the live ZoomFactor (independent of ZoomMode) —
+ zmActual at ZoomFactor=1.0 still needs the actual-size scroll rules.}
 function GetScrollbarPolicy(AMode: TViewMode; AZoom: TZoomMode; AIsZoomed: Boolean): TScrollbarPolicy;
 
-{Returns the grid column count for the active zoom mode given a
- zoom-fit candidate (AFitCols) and the user/default-driven candidate
- (ADefCols). zmFitWindow takes AFitCols verbatim, zmFitIfLarger
- returns Max(AFitCols, ADefCols) so the grid never collapses below
- the user's preferred density, anything else returns 0 (caller
- interprets 0 as "let the layout strategy auto-decide"). Pure;
- lives next to the layout strategies for the same Information Expert
- reason as GetScrollbarPolicy.}
+{zmFitWindow = AFitCols; zmFitIfLarger = Max(AFitCols, ADefCols);
+ zmActual = 0 ("let the layout strategy decide").}
 function GridColumnCountFor(AZoom: TZoomMode; AFitCols, ADefCols: Integer): Integer;
 
 type
@@ -122,15 +106,9 @@ type
     function CellIndexAt(const APoint: TPoint; const ACtx: TViewLayoutContext): Integer; override;
   end;
 
-  {Computes the cells-per-row arrangement for a smart grid that minimises
-   aspect-ratio mismatch between the displayed cells and the source frame.
-   ACellCount frames are distributed over rows; the row count that yields
-   the lowest total mismatch wins. Returns the per-row cell counts (sum
-   equals ACellCount).
-
-   Shared between TSmartGridLayout (live view) and the file/clipboard save
-   path so a saved smart-combined image uses the exact same arrangement
-   the user is looking at when they trigger the save.}
+  {Returns per-row cell counts (sum = ACellCount) for the row layout that
+   minimises aspect-ratio mismatch between displayed cells and the source.
+   Shared between live view and save path so saved images match the view.}
 function ComputeSmartGridRows(ACellCount, ABaseW, ABaseH, ACellGap: Integer; AAspectRatio: Double): TArray<Integer>;
 
 function CreateViewModeLayout(AMode: TViewMode): TViewModeLayout;
@@ -175,8 +153,6 @@ begin
     zmFitWindow:   Result := AFitCols;
     zmFitIfLarger: Result := Max(AFitCols, ADefCols);
   else
-    {zmActual (and any future zoom mode) yields 0; UpdateFrameViewSize
-     interprets 0 as "let the layout strategy auto-decide".}
     Result := 0;
   end;
 end;
@@ -199,7 +175,6 @@ function TGridLayout.GetColumnCount(const ACtx: TViewLayoutContext): Integer;
 begin
   if ACtx.CellCount <= 1 then
     Exit(1);
-  {Original size: columns based on native frame width}
   if (ACtx.ZoomMode = zmActual) and (ACtx.NativeW > 0) then
     Exit(Max(1, (ACtx.BaseW - ACtx.CellGap) div (ACtx.NativeW + ACtx.CellGap)));
   if ACtx.ColumnCount > 0 then
@@ -212,8 +187,7 @@ var
   Cols, AvailW: Integer;
 begin
   Cols := GetColumnCount(ACtx);
-  {Gaps live between cells only: N cells share (N-1) gaps. Outer padding
-   is the caller's job (TFrameView applies CellMargin around the layout).}
+  {Gaps live between cells only — caller adds outer padding via CellMargin.}
   AvailW := ACtx.BaseW - Max(Cols - 1, 0) * ACtx.CellGap;
   Result.cx := Max(1, Round(AvailW / Cols * ACtx.ZoomFactor));
   Result.cy := Max(1, Round(Result.cx * ACtx.AspectRatio));
@@ -306,9 +280,7 @@ begin
   CellW := Max(1, Round(CellW * ACtx.ZoomFactor));
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
 
-  {Center horizontally when cell is narrower than control. Outer margin
-   is added by TFrameView via CellMargin, so the layout itself starts
-   cells at column 0 / row 0.}
+  {Outer margin is added by TFrameView via CellMargin; layout starts at 0.}
   if CellW < ACtx.ClientWidth then
     LeftX := (ACtx.ClientWidth - CellW) div 2
   else
@@ -364,9 +336,7 @@ begin
   CellH := Max(1, Round(CellH * ACtx.ZoomFactor));
   CellW := Max(1, Round(CellH / Max(ACtx.AspectRatio, DEF_ASPECT_RATIO)));
 
-  {Center vertically within control. Outer margin is added by TFrameView
-   via CellMargin, so the layout itself starts at top 0 when the strip
-   spans the full height.}
+  {Outer margin is added by TFrameView via CellMargin; layout starts at 0.}
   if CellH < AvailH then
     TopY := (ACtx.ClientHeight - CellH) div 2
   else
@@ -404,9 +374,7 @@ var
   CellW, CellH: Integer;
   AvailW, AvailH: Integer;
 begin
-  {Base available space from frozen viewport, not control size. Outer
-   margin is added by TFrameView via CellMargin; the layout consumes the
-   full BaseW/BaseH it was handed.}
+  {Use frozen viewport, not control size; outer margin added by TFrameView.}
   AvailW := Max(1, ACtx.BaseW);
   AvailH := Max(1, ACtx.BaseH);
 
@@ -525,9 +493,7 @@ begin
       CellW := Max(1, (ACtx.BaseW - (FSmartRows[RowIdx].Count - 1) * Gap) div Max(1, FSmartRows[RowIdx].Count));
       RowTop := RowIdx * (RowH + Gap);
 
-      {Last row/cell fills remaining space to absorb rounding remainder.
-       Gaps sit between cells only, so the last cell's right edge is BaseW
-       and the last row's bottom edge is BaseH - no gap trails after them}
+      {Last cell/row absorbs the rounding remainder out to BaseW/BaseH.}
       Result.Left := CellInRow * (CellW + Gap);
       if CellInRow = FSmartRows[RowIdx].Count - 1 then
         Result.Right := ACtx.BaseW
@@ -592,11 +558,8 @@ begin
   BestR := 1;
   BestScore := MaxDouble;
 
-  {Try each possible row count and find the one with least cropping.
-   Cell dimensions include gap subtraction so the scoring reflects how
-   the cells will actually render - otherwise gap>0 would bias the
-   score toward row counts that cram more cells per row than they can
-   fit cleanly.}
+  {Score with gap subtraction so the row count reflects actual rendering;
+   without subtraction, gap>0 would bias toward overpacked rows.}
   for R := 1 to N do
   begin
     Score := 0;
@@ -649,9 +612,7 @@ begin
     vmSingle:
       Result := TSingleLayout.Create;
     else
-      {A new TViewMode value added to the enum without a factory branch
-       used to silently get TGridLayout; raising loudly catches the
-       omission at the first attempt to instantiate the unmapped mode.}
+      {Raise loudly on an unmapped TViewMode value so the omission cannot hide as a silent TGridLayout.}
       raise EArgumentException.CreateFmt(
         'CreateViewModeLayout: no factory branch for TViewMode(%d)', [Ord(AMode)]);
   end;

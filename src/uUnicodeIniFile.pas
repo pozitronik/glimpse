@@ -1,27 +1,13 @@
-{Encoding-aware INI file handler — thin file-I/O facade.
-
- Wraps a TIniDocument (parse / mutate / emit, in src/infrastructure/
- uIniDocument) with the disk-side concerns: file path, load on open,
- atomic UTF-8-no-BOM write on UpdateFile, auto-flush in destructor
- so a "create / write / free" caller does not lose data.
-
- TIniFile in the RTL routes through Win32 GetPrivateProfileString, which
- only understands UTF-16 LE with BOM or ANSI; UTF-8 (with or without BOM)
- is read as ANSI and mojibakes any non-ASCII content. Modern Notepad on
- Win11 defaults to UTF-8, so the gap is real. This unit reads UTF-8 /
- UTF-16 LE / UTF-16 BE (BOM-detected) and falls back to ANSI on no-BOM
- files that fail strict UTF-8 decoding. Writes emit UTF-8 without BOM
- and CRLF line endings.
-
- The split: uIniEncoding owns the bytes<->string heuristic;
- uIniDocument owns the line-list mutation; this facade owns the file
- I/O orchestration. Public API of TUnicodeIniFile is unchanged.
+{UTF-8 / UTF-16-aware INI file handler. TIniFile in the RTL routes
+ through Win32 GetPrivateProfileString which only understands UTF-16 LE
+ with BOM or ANSI; UTF-8 is read as ANSI and mojibakes any non-ASCII
+ content. This unit reads UTF-8 / UTF-16 LE / UTF-16 BE (BOM-detected)
+ with strict-UTF-8 fallback on no-BOM files, and writes UTF-8 without
+ BOM + CRLF.
 
  In-memory model preserves comments, blank lines, and original ordering
  across read-modify-write so hand-edited files survive Save unchanged.
- Lenient ReadBool accepts True/False/Yes/No/On/Off/0/1. Duplicate
- sections and duplicate keys: first occurrence wins; subsequent ones
- are reported via uDebugLog when logging is enabled.}
+ ReadBool is lenient: True/False/Yes/No/On/Off/0/1.}
 unit uUnicodeIniFile;
 
 interface
@@ -31,37 +17,27 @@ uses
   uIniDocument;
 
 type
-  {Descends from TCustomIniFile so the instance can substitute
-   wherever the RTL ini-file interface is expected. Every abstract
-   member is overridden; the inherited ReadDate / WriteDate / etc. work
-   transparently because they route through ReadString / WriteString
-   which the descendant implements over the line-list model. ReadBool /
-   WriteBool are also overridden to preserve the lenient
-   True/False/Yes/No/On/Off/0/1 contract — the base only accepts 0/1.}
+  {Descends from TCustomIniFile so the instance can substitute wherever
+   the RTL ini-file interface is expected. ReadBool/WriteBool are
+   overridden to preserve lenient parsing; the base only accepts 0/1.}
   TUnicodeIniFile = class(TCustomIniFile)
   strict private
     FDocument: TIniDocument;
 
     procedure LoadFromDisk;
   public
-    {TCustomIniFile.Create's no-Encoding overload is non-virtual in
-     this Delphi RTL; reintroduce here keeps the same call site working
-     while we run our own initialization. The base's other Create
-     overload (with Encoding) is left alone — callers who want explicit
-     encoding can construct via the inherited form.}
+    {The base's no-Encoding Create is non-virtual; reintroduce so the
+     existing call sites keep working while we run our own initialisation.}
     constructor Create(const AFileName: string); reintroduce;
     destructor Destroy; override;
 
     function ReadString(const Section, Ident, Default: string): string; override;
     procedure WriteString(const Section, Ident, Value: string); override;
-    {ReadInteger / WriteInteger / ReadBool / WriteBool are non-virtual
-     on TCustomIniFile (the base routes them through ReadString /
-     WriteString). reintroduce keeps the typed-as-TUnicodeIniFile
-     callers using the line-list-direct paths and preserves ReadBool's
-     leniency (True/Yes/On/1 → True; False/No/Off/0 → False); a caller
-     typed as TCustomIniFile would fall through to the base's stricter
-     0/1 ReadBool — same risk as not having these methods at all on
-     the base, accepted to keep the substitution promise.}
+    {Non-virtual on the base; reintroduce so typed-as-TUnicodeIniFile
+     callers use the lenient line-list-direct paths (True/Yes/On/1 -> True).
+     Callers typed as TCustomIniFile fall through to the stricter 0/1
+     base impl — same risk as not overriding at all, accepted to keep
+     the substitution promise.}
     function ReadInteger(const Section, Ident: string; Default: Longint): Longint; reintroduce;
     function ReadBool(const Section, Ident: string; Default: Boolean): Boolean; reintroduce;
     procedure WriteInteger(const Section, Ident: string; Value: Longint); reintroduce;
@@ -69,30 +45,19 @@ type
 
     procedure ReadSections(Strings: TStrings); override;
     procedure ReadSection(const Section: string; Strings: TStrings); override;
-    {TCustomIniFile contract: emits "Key=Value" lines (one per key in
-     ASection). Our line-list model already carries Key + Value per
-     ilkKeyValue entry; the override walks it and assembles the
-     formatted strings the base expects.}
     procedure ReadSectionValues(const Section: string; Strings: TStrings); override;
-    {ValueExists / SectionExists are non-virtual on TCustomIniFile —
-     reintroduce so the line-list-direct path stays in use.}
+    {Non-virtual on the base; reintroduce to keep the line-list-direct path.}
     function ValueExists(const Section, Ident: string): Boolean; reintroduce;
     function SectionExists(const Section: string): Boolean; reintroduce;
     procedure DeleteKey(const Section, Ident: string); override;
     procedure EraseSection(const Section: string); override;
-    {Discards every line, leaving an empty in-memory document. Used
-     when callers want to fully rewrite the file from scratch.}
     procedure Clear;
-    {Persists the in-memory state to FileName as UTF-8 without BOM
-     and CRLF line endings. Silent no-op when FileName is empty
-     (mirrors the TIniFile sentinel).}
+    {Silent no-op when FileName is empty (mirrors the TIniFile sentinel).}
     procedure UpdateFile; override;
   end;
 
-{Decodes ABytes into a Delphi string per the BOM-then-strict-UTF-8
- heuristic. Re-exported for backward compatibility — callers that
- previously imported uUnicodeIniFile for this helper continue to work
- unchanged. New callers should import uIniEncoding directly.}
+{Re-exported for callers that previously imported from this unit; new
+ callers should import uIniEncoding directly.}
 function DecodeIniBytes(const ABytes: TBytes): string;
 
 implementation
@@ -116,18 +81,10 @@ end;
 
 destructor TUnicodeIniFile.Destroy;
 begin
-  {Destructor does NOT auto-flush (step 67 / N18). The previous policy
-   mirrored TIniFile's "writes hit the disk on Free" behaviour by
-   calling UpdateFile inside a swallow-everything try/except — that
-   silently dropped writes when UpdateFile raised (disk full, file
-   locked, permission denied), and the caller had no way to learn
-   their settings did not persist.
-
-   Every production caller (TPluginSettings.Save, TWcxSettings.Save,
-   uWcxPresets.SavePresets) already calls UpdateFile explicitly in its
-   try/finally, so this destructor change does not lose any writes in
-   the current code base. New callers MUST call UpdateFile explicitly;
-   the Dirty property is available if they want to gate the call.}
+  {No auto-flush. Callers MUST call UpdateFile explicitly — a destructor-
+   time flush would have to swallow exceptions (disk full, file locked,
+   permission denied), leaving the caller with no signal that the save
+   did not persist. Use the Dirty property to gate the UpdateFile call.}
   FDocument.Free;
   inherited;
 end;
@@ -188,10 +145,8 @@ var
   I: Integer;
   Key: string;
 begin
-  {TCustomIniFile contract: emits "Key=Value" pairs, one per line. The
-   line-list model carries each pair as a TIniLine; we re-format here
-   by reading keys via ReadSection (preserves document order) and
-   pairing each with its stored value.}
+  {TCustomIniFile contract: emit "Key=Value" pairs, one per line, in
+   document order.}
   Strings.Clear;
   Keys := TStringList.Create;
   try

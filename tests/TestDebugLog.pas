@@ -60,13 +60,11 @@ begin
     'VT_LogTest_' + TGUID.NewGuid.ToString);
   TDirectory.CreateDirectory(FTempDir);
   FLogPath := TPath.Combine(FTempDir, 'test.log');
-  {Setup does NOT Configure the singleton. Tests that need a configured
-   state call TDebugLog.Instance.Configure(FLogPath) themselves;
-   "starts unconfigured" tests (e.g. TestEmptyPathIsNoOp,
-   TestCreatesNewFile) need the singleton not to have created the file.
-   Previously Setup's bare GDebugLogPath := FLogPath was harmless
-   because the file wasn't created until first DebugLog; the singleton's
-   eager-open semantics make Setup's choice load-bearing.}
+  {Setup does NOT Configure the singleton; tests needing a configured
+   state call TDebugLog.Instance.Configure(FLogPath) themselves.
+   "Starts unconfigured" tests (e.g. TestEmptyPathIsNoOp,
+   TestCreatesNewFile) rely on the singleton not having created the
+   file, since Configure opens it eagerly.}
 end;
 
 procedure TTestDebugLog.TearDown;

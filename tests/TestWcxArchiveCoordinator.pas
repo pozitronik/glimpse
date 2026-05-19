@@ -1,24 +1,18 @@
 {Tests for TWcxArchiveCoordinator + IWcxSettingsProvider / IProbeService.
 
- Step 100 (C9): the OpenArchive flow was lifted out of the WCX ABI thunk
- (DoOpenArchive) into TWcxArchiveCoordinator with 3 injected factories.
- These tests pin the DI contract: the coordinator must defer settings
- build, video probing, and frame-extractor construction to its
- collaborators rather than instantiate concrete types itself.
+ Pin the DI contract: the coordinator defers settings build, video
+ probing, and frame-extractor construction to its collaborators
+ rather than instantiating concrete types itself.
 
  The flow still touches the filesystem (TFile.GetLastWriteTime /
- GetSize on the source video file, and FindFFmpegExe expects ffmpeg.exe
- to either exist on disk at the configured path, in the plugin
- directory next to the INI, or on PATH). Tests therefore set up a temp
- directory with a synthetic ffmpeg.exe stub (zero bytes is fine — the
- coordinator never invokes it because the probe service is faked) and
- a similarly-synthetic source video file. The synthetic INI path lives
- in the same temp directory.
+ GetSize on the source video, and FindFFmpegExe expects ffmpeg.exe
+ on disk). Tests set up a temp directory with a synthetic zero-byte
+ ffmpeg.exe stub and a synthetic source video; the coordinator never
+ invokes ffmpeg because the probe service is faked.
 
- ShowFileSizes is left at its default False so PreExtractFrames does
- not run (it would launch ffmpeg). ShowPresets is also left False so
- the production LoadPresets path is not taken (and the test does not
- need a presets.ini next to the synthetic INI).}
+ ShowFileSizes / ShowPresets are left False so PreExtractFrames
+ (which would launch ffmpeg) and LoadPresets (which would need a
+ presets.ini) are skipped.}
 unit TestWcxArchiveCoordinator;
 
 interface
@@ -72,8 +66,8 @@ type
      (not the configured-but-unresolved INI value).}
     [Test] procedure TestOpenArchive_ProbeService_CalledOnceWithResolvedFFmpegPath;
 
-    {Step 101 (C10): ProcessFile + CloseArchive class methods (no
-     instance — they're stateless against the handle).}
+    {ProcessFile + CloseArchive are class methods — stateless against
+     the handle.}
     [Test] procedure TestProcessFile_PKSkip_AdvancesCursorReturnsSuccess;
     [Test] procedure TestProcessFile_NonExtractOp_AdvancesCursorReturnsSuccess;
     [Test] procedure TestProcessFile_Exhausted_ReturnsEndArchive;
@@ -467,10 +461,10 @@ begin
   end;
 end;
 
-{Step 101 (C10): ProcessFile + CloseArchive class methods are
- stateless against the handle — tests don't need a full coordinator
- instance + factories, just a TArchiveHandle with a synthetic Listing.
- The TStubEntry below records Extract invocations + returns a
+{ProcessFile + CloseArchive are stateless against the handle, so
+ these tests skip the coordinator instance + factories and drive the
+ class methods directly with a TArchiveHandle + synthetic Listing.
+ TStubEntry below records Extract invocations and returns a
  configurable code.}
 
 type

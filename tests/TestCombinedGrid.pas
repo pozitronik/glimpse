@@ -64,13 +64,13 @@ type
     [Test] procedure SmartRender_PartialAlpha_GapPixelCarriesBackgroundAlpha;
   end;
 
-  {Direct tests for LiftToAlphaAwareCore -- the rect-driven 24bit->32bit
-   lift used by both LiftToAlphaAware (uniform grid) and
-   LiftToAlphaAwareSmart (variable rows). The renderer-level tests cover
-   the production paths; this fixture pins the defensive guards
-   (nil frame mid-array, frames-longer-than-rects, out-of-bounds rect)
-   that the renderers never exercise but the helper still has to handle
-   correctly for any future caller.}
+  {Direct tests for LiftToAlphaAwareCore — the rect-driven 24bit to
+   32bit lift used by both LiftToAlphaAware (uniform grid) and
+   LiftToAlphaAwareSmart (variable rows). The renderer-level tests
+   cover the production paths; this fixture pins the defensive
+   guards (nil frame mid-array, frames longer than rects, out-of-
+   bounds rect) that the renderers never exercise but the helper
+   still has to handle correctly.}
   [TestFixture]
   TTestLiftToAlphaAwareCore = class
   public
@@ -1266,8 +1266,8 @@ begin
       {Inside both source and rect: pixel must be lifted to alpha=255.}
       Assert.AreEqual(255, Integer(LiftAlphaAt(Lifted, 7, 7)));
       {Pixel that the rect would have covered but lies outside source
-       is simply not addressable on the output -- the test just confirms
-       the function returned without exception.}
+       is simply not addressable on the output; the test just
+       confirms the function returned without exception.}
     finally
       Lifted.Free;
     end;

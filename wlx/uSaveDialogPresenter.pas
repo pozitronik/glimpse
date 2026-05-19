@@ -1,14 +1,7 @@
 {File "Save as" dialog with an inline "Save at view resolution" check
- button on Vista+ (the Delphi VCL wrapper does not expose
- IFileDialogCustomize, so a hook bridges the gap), falling back to the
- plain legacy TSaveDialog on pre-Vista or when the modern dialog refuses
- to instantiate.
-
- Extracted from TFrameExporter so the Win32 file-dialog concerns live
- apart from the render and clipboard pipelines. The presenter owns the
- dialog lifecycle and the inline-checkbox round-trip; the caller passes
- in the persisted settings record so save-folder, save-format and
- save-at-view-resolution state can round-trip through a single object.}
+ button on Vista+ (bridged via IFileDialogCustomize because the VCL
+ wrapper does not expose it). Falls back to TSaveDialog on pre-Vista
+ or when the modern dialog refuses to instantiate.}
 unit uSaveDialogPresenter;
 
 interface
@@ -17,28 +10,15 @@ uses
   uSettingsInterfaces, uBitmapSaver;
 
 type
-  {Presents the system "Save as" dialog and reports the user's choices
-   back via out parameters. Lifetime is one-call: create on the stack,
-   invoke Show, destroy. The presenter mutates the policy on accept
-   (SaveFolder + SaveAtLiveResolution) and calls Save so the persisted
-   state matches what the dialog returned; the caller does not need to
-   redo the save.
-
-   Step 109 (N3, ISP): depends on ISaveFormatPolicy only (read +
-   write + Save). The full TPluginSettings is no longer threaded
-   through.}
+  {On accept the presenter mutates the policy (SaveFolder + SaveAtLiveResolution)
+   and calls Save, so caller need not redo the save.}
   TSaveDialogPresenter = class
   strict private
     FSavePolicy: ISaveFormatPolicy;
   public
     constructor Create(const ASavePolicy: ISaveFormatPolicy);
-    {Opens the file dialog and returns the chosen path/format. The
-     AInitialLiveRes value seeds the dialog: on modern Windows it is the
-     starting state of the inline 'Save at view resolution' check button
-     (the user can flip it before accept, and the final state is what
-     gets persisted via FSettings.SaveAtLiveResolution); on legacy
-     Windows the dialog has no checkbox, so the seed becomes the
-     authoritative value and is persisted directly.}
+    {AInitialLiveRes seeds the inline check button on modern Windows
+     (final state wins); on legacy Windows the seed is authoritative.}
     function Show(const ATitle, ADefaultName: string;
       AOverwritePrompt: Boolean; AInitialLiveRes: Boolean;
       out APath: string; out AFormat: TSaveFormat): Boolean;
@@ -53,20 +33,15 @@ uses
   uPathExpand;
 
 const
-  {Arbitrary control id for the inline 'save at live resolution' check button
-   on the modern (Vista+) file save dialog. Must be unique within the dialog;
-   1001 is well clear of any control ids the system uses.}
+  {Unique within the dialog; clear of any system-used ids.}
   ID_CHK_LIVE_RES = 1001;
   LIVE_RES_LABEL = 'Save at view resolution';
 
 type
-  {Bridges TFileSaveDialog with the Win32 IFileDialogCustomize interface,
-   which the Delphi VCL wrapper does not expose. The check button must be
-   added before the dialog window is created (DoOnExecute fires just
-   before Show), and its final state must be read while the dialog is
-   still alive (OnFileOkClick fires inside the modal loop). After the
-   dialog closes, TCustomFileDialog clears its internal IFileDialog
-   reference, so a query attempt after Execute returns is too late.}
+  {Bridges TFileSaveDialog with IFileDialogCustomize. The check button MUST
+   be added in DoOnExecute (before Show) and its state read in OnFileOkClick
+   (still inside the modal loop) — TCustomFileDialog clears its internal
+   IFileDialog after Execute, so a later query is too late.}
   TLiveResDialogHook = class
   strict private
     FDialog: TCustomFileDialog;
@@ -85,7 +60,7 @@ begin
   inherited Create;
   FDialog := ADialog;
   FInitialState := AInitialState;
-  FFinalState := AInitialState; {Preserve current value if the user cancels mid-flight.}
+  FFinalState := AInitialState; {Preserve current value on cancel.}
 end;
 
 procedure TLiveResDialogHook.Attach;
@@ -137,11 +112,8 @@ begin
   Result := False;
   ModernHandled := False;
 
-  {Modern Vista+ dialog with an inline 'live resolution' check button.
-   Falls through to the legacy TSaveDialog if the platform refuses the
-   modern dialog (pre-Vista or unusual COM environments). The legacy
-   path has no checkbox; the same toggle is reachable via the settings
-   dialog there or via the toolbar's Save view dropdown.}
+  {Falls through to legacy TSaveDialog when the modern one refuses (pre-Vista
+   or unusual COM environments). Legacy path has no inline checkbox.}
   if Win32MajorVersion >= 6 then
   begin
     try
@@ -232,8 +204,7 @@ begin
       end;
       APath := LegacyDlg.FileName;
       FSavePolicy.SetSaveFolder(ExtractFilePath(LegacyDlg.FileName));
-      {No dialog override available on legacy Windows, so the caller's
-       seed becomes the persisted choice.}
+      {Legacy dialog has no inline override; caller's seed becomes persisted choice.}
       FSavePolicy.SetSaveAtLiveResolution(AInitialLiveRes);
       FSavePolicy.Save;
       Result := True;

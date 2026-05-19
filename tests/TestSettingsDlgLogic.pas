@@ -55,7 +55,7 @@ uses
   System.SysUtils,
   uTypes, uDefaults, uSettingsDlgLogic;
 
-{ -------- MaxThreadsAutoLabel -------- }
+{ MaxThreadsAutoLabel }
 
 procedure TTestSettingsDlgLogic.MaxThreads_OnePerFrameOff_ReturnsEmpty;
 begin
@@ -99,7 +99,7 @@ begin
   Assert.AreEqual('', MaxThreadsAutoLabel(True, 12, 8));
 end;
 
-{ -------- DecodeTimestampCornerControls / EncodeTimestampCornerControls -------- }
+{ DecodeTimestampCornerControls / EncodeTimestampCornerControls }
 
 procedure TTestSettingsDlgLogic.DecodeTimestamp_LegacyNone_UnchecksAndSetsDefaultCorner;
 var
@@ -181,7 +181,7 @@ begin
   end;
 end;
 
-{ -------- DecodeMaxWorkersControls / EncodeMaxWorkersControls -------- }
+{ DecodeMaxWorkersControls / EncodeMaxWorkersControls }
 
 procedure TTestSettingsDlgLogic.DecodeMaxWorkers_Zero_ChecksAutoAndFallsBackToOne;
 var
@@ -242,7 +242,7 @@ begin
     'Positive MaxWorkers must survive Decode→Encode unchanged');
 end;
 
-{ -------- DecodeMaxThreadsControl -------- }
+{ DecodeMaxThreadsControl }
 
 procedure TTestSettingsDlgLogic.DecodeMaxThreads_Positive_ReturnsAsIs;
 begin
@@ -263,7 +263,7 @@ begin
   Assert.AreEqual(0, DecodeMaxThreadsControl(0));
 end;
 
-{ -------- DeriveColorPanelNameForButton -------- }
+{ DeriveColorPanelNameForButton }
 
 procedure TTestSettingsDlgLogic.DerivePanelName_BtnPrefix_ReplacesWithPnl;
 begin

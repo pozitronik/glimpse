@@ -1,21 +1,10 @@
-{Render pipeline for saved / clipboard combined images.
+{Render pipeline for saved / clipboard combined images. Owns layout
+ math, cell scaling, smart-grid + uniform-grid renderers, banner
+ attachment, the combined-size cap, and override-frames source selection.
 
- Extracted from TFrameExporter so the layout math, the cell-scaling
- helpers, the smart-grid and uniform-grid renderers, the banner
- attachment, the combined-size cap, and the override-frames source
- selection all live in one cohesive unit, separated from the save and
- clipboard orchestration concerns.
-
- The pipeline owns:
- - the override-frames array (set/cleared by the host before/after a
-   re-extract; the render paths prefer overrides over live cells when
-   present), and
- - the banner info snapshot (updated by UpdateBannerInfo before a
-   render, applied by RenderWithBanner).
-
- References (non-owned): TFrameView (the live grid) and the persisted
- TPluginSettings record. Lifetime is bound to the owning facade
- (TFrameExporter constructs and destroys the pipeline).}
+ Owns: override-frames array (set/cleared by host around re-extract) and
+ the banner info snapshot.
+ References (non-owned): TFrameView and the four narrow policy interfaces.}
 unit uFrameRenderPipeline;
 
 interface
@@ -27,14 +16,6 @@ uses
   uCombinedGrid, uTimecodeOverlay, uFrameOffsets;
 
 type
-  {Step 109 (N3, ISP): depends on 4 narrow per-concern interfaces
-   instead of the whole TPluginSettings god object.
-     IRenderColorPolicy     - Background/Alpha/CellGap/CombinedBorder
-                              for grid layout + scaling.
-     IBannerStyleProvider   - Banner record + ShowBanner toggle for
-                              banner attachment.
-     ITimecodeStyleProvider - Timestamp record for overlay rendering.
-     ISaveFormatPolicy      - CombinedMaxSide for the post-render cap.}
   TFrameRenderPipeline = class
   strict private
     FFrameView: TFrameView;
@@ -43,14 +24,10 @@ type
     FTimecodeStyleProvider: ITimecodeStyleProvider;
     FSavePolicy: ISaveFormatPolicy;
     FBannerInfo: TBannerInfo;
-    {Optional save-resolution bitmaps supplied by the caller before a
-     save/copy operation, indexed parallel to FFrameView cells. Bitmaps
-     are non-owned references (typically owned by TFrameCache). When the
-     SaveAtLiveResolution toggle is off, save paths prefer entries from
-     this array over the live FFrameView bitmaps; nil entries fall back
-     to the live cell. Set length 0 to disable.
-     Lifetime: the caller (TPluginForm) sets this before invoking a save
-     method and clears it after, so the pipeline never owns the memory.}
+    {Indexed parallel to FFrameView cells. Non-owned (typically owned by
+     TFrameCache). When SaveAtLiveResolution is off, save paths prefer
+     entries from this array over live FFrameView bitmaps; nil entries
+     fall back to the live cell. Length 0 disables.}
     FOverrideFrames: TArray<TBitmap>;
     function CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray;
       ALiveResolutionIntent: Boolean): Integer;
@@ -62,76 +39,47 @@ type
       const ABannerStyleProvider: IBannerStyleProvider;
       const ATimecodeStyleProvider: ITimecodeStyleProvider;
       const ASavePolicy: ISaveFormatPolicy);
-    {Returns the bitmap that the save/copy paths should consume for cell
-     AIndex, honouring FOverrideFrames when set and the toggle is off.
-     ALiveResolutionIntent: True means "render at on-screen cell size"
-     (callers route to RenderCellAtLiveSize separately and never invoke
-     PickSaveBitmap in that path today; the param is reserved for
-     symmetry with the other render-path entry points so a future
-     unified caller doesn't have to special-case the intent flag).
-     False means "native frame size" - the override array wins when
-     populated, falling back to the live cell.}
+    {Returns the bitmap save/copy paths should consume for cell AIndex,
+     honouring FOverrideFrames when set and the live-resolution toggle
+     is off. ALiveResolutionIntent True routes through RenderCellAtLiveSize
+     separately today; the param is reserved for symmetry so a future
+     unified caller need not special-case the intent flag.}
     function PickSaveBitmap(AIndex: Integer; ALiveResolutionIntent: Boolean): TBitmap;
-    {Counts the columns the live layout is currently using by iterating
-     cells and counting those that share cell 0's top coordinate.
-     Generalises across the three uniform-row modes:
-     vmGrid      - cells in row 0 share Top, returns column count.
-     vmFilmstrip - all cells share Top (one row), returns FrameCount.
-     vmScroll    - only cell 0 has that Top (one column), returns 1.
-     Used by the live-resolution save path; not called for vmSmartGrid
-     (which has its own renderer) or vmSingle (which routes to SaveFrame).}
+    {Counts columns in the live layout by counting cells sharing cell 0's
+     top coordinate. Generalises across vmGrid (column count), vmFilmstrip
+     (FrameCount), and vmScroll (1). Not called for vmSmartGrid or
+     vmSingle (which have their own paths).}
     function CountLiveGridColumns: Integer;
-    {Pulls the panel-inner dimensions and the smart-grid arrangement
-     parameters that RenderSmartCombinedFromCells and PredictCombinedSize
-     both need. Centralises the FrameView fallback to a 16:9 box and the
-     per-mode column policy in a single place so render and predict
-     cannot disagree.}
+    {Centralises panel-inner / smart-grid parameters so render and
+     PredictCombinedSize cannot drift.}
     procedure GetSmartGridParameters(out APanelInnerW, APanelInnerH: Integer; out AAspectRatio: Double);
     procedure ComputeSmartCombinedLayout(AForceLiveRes: Boolean; const AFrames: TArray<TBitmap>; out AOutputW, AOutputH: Integer; out ARowCounts: TArray<Integer>);
-    {Resolves cell pixel size and column count for a uniform-grid render
-     in either live (panel-pixel) or native (frame-pixel) mode. Used by
-     RenderGridCombinedAtLiveResolution, RenderCombinedFromCells (native
-     branch) and PredictCombinedSize so a future change to the per-mode
-     column rule or to the cell-bitmap fallback applies everywhere.}
+    {Resolves cell pixel size and column count for uniform-grid render
+     in live or native mode. Centralised so render and predict stay in
+     lockstep across per-mode column rules and the cell-bitmap fallback.}
     procedure ComputeUniformLayoutInputs(AForceLiveRes: Boolean; out ACols, ACellW, ACellH: Integer);
-    {Letterbox-scales ASrc to fit AW x AH, filling unused area with ABg.
-     Mirrors TFrameView.PaintLoadedFrame (vmGrid live view) so saved cells
+    {Mirrors TFrameView.PaintLoadedFrame (vmGrid live view) so saved cells
      look identical to what the user sees when SaveAtLiveResolution is on.
      Caller owns the returned bitmap.}
     function ScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
-    {Crop-to-fill scaling. Mirrors TFrameView.PaintCropToFill (vmSmartGrid
-     live view) so saved smart-grid cells preserve aspect ratio without
-     letterbox bands. Caller owns the returned bitmap.}
+    {Mirrors TFrameView.PaintCropToFill (vmSmartGrid live view) so saved
+     smart-grid cells preserve aspect ratio without letterbox bands.
+     Caller owns the returned bitmap.}
     function ScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
-    {Renders a single cell at the size and fitting mode the live view is
-     currently using for that cell. vmSmartGrid uses crop-to-fill; every
-     other mode uses letterbox-fit. Used by single-frame save and clipboard
-     copy when SaveAtLiveResolution is on.}
+    {vmSmartGrid uses crop-to-fill; other modes use letterbox-fit.}
     function RenderCellAtLiveSize(AIndex: Integer): TBitmap;
     function RenderGridCombinedAtLiveResolution: TBitmap;
-    {ALiveResolutionIntent: True = panel-pixel cells (live view sizing),
-     False = anchor-to-widest native cell sizes. Replaces the previous
-     internal read of FSettings.SaveAtLiveResolution so CopyView /
-     CopyFrame can route their per-call intent through without temp-
-     flipping the settings field.}
     function RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
-    {ALiveResolutionIntent: True dispatches to the always-live
-     RenderGridCombinedAtLiveResolution for uniform-row modes. Replaces
-     the previous internal read of FSettings.SaveAtLiveResolution.}
     function RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
-    {Shrinks ABmp in place when ISaveFormatPolicy.GetCombinedMaxSide > 0
-     and the bitmap's longer side exceeds the cap. The original is freed
-     and replaced with a downscaled copy. No-op when the cap is 0
-     (unlimited) or the bitmap already fits. Centralises the policy used
-     by SaveView and CopyView.}
+    {No-op when GetCombinedMaxSide is 0 (unlimited) or the bitmap already
+     fits. Frees the original and replaces with a downscaled copy when
+     capping fires.}
     procedure ApplyCombinedSizeCap(var ABmp: TBitmap);
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
-    {Caller-supplied save-resolution bitmaps. Set before invoking a save
-     or copy method when SaveAtLiveResolution is off and the caller has
-     re-extracted at native (or capped) resolution; clear immediately
-     after. Pass an empty array (or nil) to release. Bitmaps are not
-     owned by the pipeline.}
+    {Set before invoking a save/copy when SaveAtLiveResolution is off and
+     the caller has re-extracted at native (or capped) resolution; clear
+     immediately after. Bitmaps are not owned by the pipeline.}
     procedure SetOverrideFrames(const AFrames: TArray<TBitmap>);
     procedure ClearOverrideFrames;
   end;
@@ -144,10 +92,9 @@ uses
   uTypes, uBannerPainter, uBitmapResize, uViewModeLayout;
 
 type
-  {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for the
-   GDI helpers SetStretchBltMode/SetBrushOrgEx) declares its own TBITMAP
-   record alias, which would otherwise shadow Vcl.Graphics.TBitmap and
-   cause method signatures here to mismatch the interface declarations.}
+  {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
+   SetStretchBltMode/SetBrushOrgEx) declares a TBITMAP alias that would
+   otherwise shadow Vcl.Graphics.TBitmap and break the signatures here.}
   TBitmap = Vcl.Graphics.TBitmap;
 
 { TFrameRenderPipeline }
@@ -166,12 +113,6 @@ begin
   FSavePolicy := ASavePolicy;
 end;
 
-{Picks which bitmap to feed into the save/copy renderers for cell AIndex.
- With FOverrideFrames set and the live-resolution toggle off, prefers the
- override entry (typically a cache-owned save-resolution bitmap); a nil
- override entry falls back to the live cell so partial coverage degrades
- gracefully. With the toggle on, always uses the live cell since the
- toggle's contract is to mirror what is on screen.}
 function TFrameRenderPipeline.PickSaveBitmap(AIndex: Integer; ALiveResolutionIntent: Boolean): TBitmap;
 begin
   Result := nil;
@@ -191,11 +132,6 @@ begin
   SetLength(FOverrideFrames, 0);
 end;
 
-{Builds the frames + offsets arrays for the renderer.
- Frame source is PickSaveBitmap so override entries (when set) take
- precedence over the live cells. Offsets always come from the live view.
- nil entries for placeholder/error/missing cells are passed through; the
- renderer skips them.}
 function TFrameRenderPipeline.CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray;
   ALiveResolutionIntent: Boolean): Integer;
 var
@@ -213,7 +149,7 @@ end;
 
 procedure TFrameRenderPipeline.BuildGridStyle(out AGrid: TCombinedGridStyle);
 begin
-  {Columns=0 means "auto" (ceil(sqrt(N))); callers override when needed.}
+  {Columns=0 means auto (ceil(sqrt(N))); callers override when needed.}
   AGrid := TCombinedGridStyle.FromFields(0,
     FRenderColorPolicy.GetCellGap, FRenderColorPolicy.GetCombinedBorder,
     FRenderColorPolicy.GetBackground, FRenderColorPolicy.GetBackgroundAlpha);
@@ -323,11 +259,10 @@ end;
 
 procedure TFrameRenderPipeline.GetSmartGridParameters(out APanelInnerW, APanelInnerH: Integer; out AAspectRatio: Double);
 begin
-  {Panel inner area drives the smart-grid arrangement. Falls back to a
-   16:9 box when the FrameView has not been sized yet (e.g., save
-   triggered before the lister fully laid out).}
   APanelInnerW := Max(1, FFrameView.BaseW - 2 * FFrameView.CellMargin);
   APanelInnerH := Max(1, FFrameView.BaseH - 2 * FFrameView.CellMargin);
+  {16:9 fallback for when the FrameView has not been sized yet (save
+   triggered before the lister fully laid out).}
   if (APanelInnerW <= 1) or (APanelInnerH <= 1) then
   begin
     APanelInnerW := 1600;
@@ -365,18 +300,16 @@ begin
 
   if AForceLiveRes then
   begin
-    {Pixel-faithful to the live view: total output = panel size, inner
-     area = panel inner. Border setting still wraps the inner area so
-     saved images and live view stay visually consistent.}
+    {Pixel-faithful to the live view: output equals panel size; border
+     still wraps the inner area so saved images and live view stay
+     visually consistent.}
     InnerW := PanelInnerW;
     InnerH := PanelInnerH;
   end else begin
     {Native: anchor inner_W to the widest row, then preserve the panel's
-     inner aspect ratio so rows look the same as on screen. NativeW comes
-     from the first non-nil frame; uniform across a video. Frames passed
-     by the renderer are preferred so override-frames (set by re-extract)
-     are honoured; the predictor passes nil so we fall back to FrameView
-     cells.}
+     inner aspect ratio so rows look the same as on screen. Frames passed
+     by the renderer take precedence so override-frames are honoured; the
+     predictor passes nil so we fall back to FrameView cells.}
     MaxCells := 1;
     for I := 0 to High(ARowCounts) do
       if ARowCounts[I] > MaxCells then
@@ -425,8 +358,6 @@ begin
     ACellH := Max(1, CellRect.Height);
     ACols := CountLiveGridColumns;
   end else begin
-    {Native cell size from first non-nil cell bitmap; matches the
-     fallback RenderCombinedImage uses when scanning AFrames internally.}
     ACellW := 320;
     ACellH := 240;
     for I := 0 to N - 1 do
@@ -452,13 +383,6 @@ begin
     ACols := 1;
 end;
 
-{Live-resolution variant of the uniform-grid render: cell pixel size
- matches what the live view is currently showing on screen, and the
- column count tracks the live layout. Used by vmGrid, vmFilmstrip, and
- vmScroll save/copy when SaveAtLiveResolution is on. Frames are
- pre-letterboxed to the live cell dimensions, then fed to the same
- uniform-grid renderer the native path uses. This keeps alpha lifting,
- timecode rendering, and border/gap math centralised.}
 function TFrameRenderPipeline.RenderGridCombinedAtLiveResolution: TBitmap;
 var
   Frames, Scaled: TArray<TBitmap>;
@@ -492,14 +416,6 @@ begin
   end;
 end;
 
-{Renders the live smart-grid arrangement to a combined image. Row counts
- come from ComputeSmartGridRows fed with the panel's inner aspect ratio,
- so the saved arrangement matches what the user sees at the moment of
- save. Output dimensions follow the FSettings.SaveAtLiveResolution toggle:
- - True: panel inner area + Border (pixel-faithful to the live view)
- - False: anchor to the row with the most cells, sized at native frame
- width; total inner aspect ratio still tracks the panel so rows look
- the same shape as on screen.}
 function TFrameRenderPipeline.RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 var
   Frames: TArray<TBitmap>;
@@ -522,25 +438,6 @@ begin
   Result := RenderSmartCombinedImage(Frames, Offsets, RowCounts, OutputW, OutputH, Grid, Ts);
 end;
 
-{Renders the frames into a single combined image laid out per the
- live view mode. Cell pixel size follows the SaveAtLiveResolution
- toggle in every mode:
-
- - vmSmartGrid: smart layout (panel-aspect-driven row counts);
- panel-pixel cells when the toggle is on, anchor-to-widest native
- cells when off. Handled by RenderSmartCombinedFromCells.
- - vmGrid / vmFilmstrip / vmScroll: uniform-row grid. When the toggle
- is on, all three route through RenderGridCombinedAtLiveResolution
- so cell pixels match the on-screen layout (vmFilmstrip = one wide
- row, vmScroll = one tall column, vmGrid = current column count).
- When off, they render at native cell size with Columns pinned to
- the view's natural shape.
- - vmSingle: caller (SaveView/CopyView) routes to single-frame paths
- before reaching this function, so vmSingle never reaches the
- regular grid renderer here.
-
- Returns nil only when there are no cells; placeholder/error cells are
- passed through as nil bitmaps and skipped by the renderer.}
 function TFrameRenderPipeline.RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 var
   Frames: TArray<TBitmap>;
@@ -552,9 +449,8 @@ begin
   if FFrameView.ViewMode = vmSmartGrid then
     Exit(RenderSmartCombinedFromCells(ALiveResolutionIntent));
 
-  {The uniform-row modes (vmGrid, vmFilmstrip, vmScroll) all share the
-   same live-resolution path: it picks Columns from the live layout
-   via CountLiveGridColumns, which generalises across the three.}
+  {The three uniform-row modes (vmGrid, vmFilmstrip, vmScroll) share the
+   same live-resolution path via CountLiveGridColumns.}
   if ALiveResolutionIntent and (FFrameView.ViewMode in [vmGrid, vmFilmstrip, vmScroll]) then
     Exit(RenderGridCombinedAtLiveResolution);
 
@@ -565,12 +461,6 @@ begin
   BuildGridStyle(Grid);
   BuildTimestampStyle(Ts);
 
-  {Native-resolution path for the uniform-row modes. Cell pixel size
-   comes from the first non-nil frame; columns follow the live layout
-   so the saved image preserves the on-screen arrangement (filmstrip =
-   one wide row, scroll = one tall column, vmGrid = current live column
-   count). ComputeUniformLayoutInputs centralises both rules so render
-   and PredictCombinedSize stay in lockstep.}
   ComputeUniformLayoutInputs(False, Cols, CellW, CellH);
   Grid.Columns := Cols;
   Result := RenderCombinedImage(Frames, Offsets, Grid, Ts);
@@ -596,7 +486,7 @@ begin
     Exit;
   Shrunk := DownscaleBitmapToFit(ABmp, FSavePolicy.GetCombinedMaxSide);
   if Shrunk = nil then
-    Exit; {Already fits - keep the original.}
+    Exit;
   ABmp.Free;
   ABmp := Shrunk;
 end;

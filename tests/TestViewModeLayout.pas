@@ -820,10 +820,10 @@ var
   RowsWide, RowsTall: TArray<Integer>;
 begin
   {Same frame count and panel size, different source aspect ratios:
-   a portrait source (h/w > 1) should not produce the same arrangement
-   as a landscape source (h/w < 1) for a wide panel. We do not pin an
-   exact arrangement -- just that the algorithm reacts to the aspect
-   parameter rather than ignoring it.}
+   a portrait source (h/w > 1) should not produce the same
+   arrangement as a landscape source (h/w < 1) for a wide panel. We
+   do not pin an exact arrangement, just that the algorithm reacts
+   to the aspect parameter rather than ignoring it.}
   RowsWide := ComputeSmartGridRows(6, 1600, 600, 0, 9.0 / 16.0);
   RowsTall := ComputeSmartGridRows(6, 1600, 600, 0, 16.0 / 9.0);
   Assert.IsTrue(Length(RowsWide) > 0);

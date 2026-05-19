@@ -364,7 +364,7 @@ begin
   end;
 end;
 
-{ -------- ClampSizeForAnsiHeader -------- }
+{ ClampSizeForAnsiHeader }
 
 procedure TTestWcxAPI.ClampSize_BelowMaxInt_PassesThrough;
 begin
@@ -403,7 +403,7 @@ begin
   Assert.AreEqual(0, ClampSizeForAnsiHeader(0));
 end;
 
-{ -------- ExceptionClassToWcxError -------- }
+{ ExceptionClassToWcxError }
 
 procedure TTestWcxAPI.ExcMap_OutOfMemory_MapsToNoMemory;
 begin

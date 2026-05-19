@@ -1,7 +1,5 @@
-{Banner painter: turns text lines + style into a bitmap above/below the
- source. Owns the GDI font-fitting, line-wrap, and alpha-aware lift logic
- the WLX/WCX renderers rely on to stamp the info banner onto a saved
- combined sheet. Pure rendering: no I/O, no settings storage.}
+{Stamps an info banner above or below a source bitmap. Owns GDI font-
+ fitting, line wrap, and alpha-aware copy. Pure rendering; no I/O.}
 unit uBannerPainter;
 
 interface
@@ -11,10 +9,8 @@ uses
   uTypes, uSettingsGroups;
 
 type
-  {Visual style and placement for the info banner. When AutoSize is True the
-   renderer picks a font size using the historical width-based heuristic and
-   shrinks to fit; when False it uses FontSize as a fixed point size and wraps
-   overflowing lines instead of shrinking.}
+  {AutoSize True picks a width-based font size and shrinks to fit;
+   AutoSize False uses FontSize as fixed and wraps overflowing lines.}
   TBannerStyle = record
     Background: TColor;
     TextColor: TColor;
@@ -22,18 +18,10 @@ type
     FontSize: Integer;
     AutoSize: Boolean;
     Position: TBannerPosition;
-    {Builds the banner style from the persisted settings group. The
-     group's Show field is a gating concern (caller decides whether to
-     render the banner at all) and intentionally has no parallel in the
-     style record.}
     class function FromSettings(const AGroup: TBannerSettingsGroup): TBannerStyle; static;
   end;
 
-{Attaches a solid-color info banner above or below an existing bitmap.
- @param ASrc Source bitmap (not freed; caller still owns it)
- @param ALines Text lines to display (empty array = no banner, returns copy of ASrc)
- @param AStyle Colors, font, and placement (top/bottom)
- @return New bitmap with banner attached. Caller owns result.}
+{Empty ALines returns a copy of ASrc. Caller owns the result.}
 function AttachBanner(ASrc: TBitmap; const ALines: TArray<string>; const AStyle: TBannerStyle): TBitmap;
 
 implementation
@@ -43,9 +31,8 @@ uses
   uDefaults;
 
 type
-  {Re-bind TBitmap to the VCL class. Winapi.Windows (pulled in for
-   GDI calls) declares its own TBITMAP record alias that would
-   otherwise shadow Vcl.Graphics.TBitmap throughout this implementation.}
+  {Winapi.Windows declares its own TBITMAP record alias which would
+   otherwise shadow Vcl.Graphics.TBitmap.}
   TBitmap = Vcl.Graphics.TBitmap;
 
 const
@@ -67,7 +54,6 @@ begin
   Result.Position := AGroup.Position;
 end;
 
-{Truncates text to fit within MaxW pixels, appending ellipsis if needed}
 function TruncateToFit(ACanvas: TCanvas; const AText: string; AMaxW: Integer): string;
 var
   Len: Integer;
@@ -83,11 +69,8 @@ begin
   Result := Copy(AText, 1, Len) + BANNER_ELLIPSIS;
 end;
 
-{Word-wraps AText into lines that each fit within AMaxW at the canvas's
- current font. Splits on whitespace and rejoins with single spaces, so the
- decorative double-spaces around '|' separators collapse on wrapped lines
- (an acceptable cost for keeping all text visible). A single token wider
- than AMaxW is character-truncated with ellipsis.}
+{Decorative double-spaces around '|' separators collapse to single
+ spaces on wrapped lines (accepted to keep all text visible).}
 function WrapTextToLines(ACanvas: TCanvas; const AText: string; AMaxW: Integer): TArray<string>;
 var
   Words: TArray<string>;
@@ -122,7 +105,6 @@ begin
       Current := Test
     else
     begin
-      {Flush the in-progress line if any, then place this word on a new line}
       if Current <> '' then
         Result := Result + [Current];
 
@@ -130,7 +112,6 @@ begin
         Current := Words[I]
       else
       begin
-        {Pathological: a single token wider than the line - truncate it}
         Result := Result + [TruncateToFit(ACanvas, Words[I], AMaxW)];
         Current := '';
       end;
@@ -141,9 +122,7 @@ begin
     Result := Result + [Current];
 end;
 
-{Returns the largest font size in [BANNER_FONT_MIN, AInitial] at which every
- line in ALines fits within AMaxW. Returns BANNER_FONT_MIN when no size in
- the range fits - the caller should then wrap overflowing lines.}
+{Returns BANNER_FONT_MIN when no size fits — caller should then wrap.}
 function FindFittingBannerFontSize(ACanvas: TCanvas; const ALines: TArray<string>; AInitial, AMaxW: Integer): Integer;
 var
   Size, I: Integer;
@@ -165,10 +144,8 @@ begin
   Result := BANNER_FONT_MIN;
 end;
 
-{Forces every pixel in the banner band to alpha=255 so the GDI banner
- background and text show up opaque. GDI canvas operations on a pf32bit
- bitmap leave the alpha byte at whatever the destination held (zero for
- freshly-allocated scan lines).}
+{GDI canvas ops on pf32bit leave the alpha byte untouched (zero for
+ freshly-allocated scan lines), so we must stamp it opaque explicitly.}
 procedure StampBannerAlpha(ABmp: TBitmap; AY, AHeight: Integer);
 var
   X, Y: Integer;
@@ -188,11 +165,8 @@ begin
   end;
 end;
 
-{Byte-for-byte BGRA copy of ASrc into ABmp at vertical offset AY. Replaces
- Canvas.Draw for the pf32bit->pf32bit case: Canvas.Draw on alpha-aware
- sources routes through AlphaBlend, which expects pre-multiplied RGB and
- corrupts colour values when the source is plain non-pre-multiplied
- (which is what the saver and PNG format both want).}
+{Canvas.Draw on alpha-aware sources routes through AlphaBlend which
+ expects pre-multiplied RGB and corrupts non-pre-multiplied colours.}
 procedure CopySourceBgraIntoBanner(ABmp: TBitmap; AY: Integer; ASrc: TBitmap);
 var
   Y, RowBytes: Integer;
@@ -219,21 +193,15 @@ var
 begin
   if (Length(ALines) = 0) or (ASrc = nil) then
   begin
-    {Return a copy so the caller always gets an owned bitmap}
+    {Always return an owned bitmap.}
     Result := TBitmap.Create;
     if ASrc <> nil then
       Result.Assign(ASrc);
     Exit;
   end;
 
-  {Defensive: a source narrower than 4 * BANNER_PADDING_H has at most a
-   sub-20-pixel content area after subtracting the horizontal padding on
-   both sides. Earlier this produced a negative MaxTextW that drove
-   FindFittingBannerFontSize and WrapTextToLines into pathological
-   branches: every word truncated to '...', producing a banner band of
-   ellipses on top of the tiny source. The legitimate WLX/WCX flows
-   never feed inputs this small; treat them as degenerate and skip the
-   banner entirely.}
+  {Skip degenerate inputs: a sub-20-pixel content area would force every
+   word to '...', producing a band of ellipses over a tiny source.}
   if ASrc.Width < 4 * BANNER_PADDING_H then
   begin
     Result := TBitmap.Create;
@@ -246,23 +214,18 @@ begin
     FontName := DEF_BANNER_FONT_NAME;
   MaxTextW := ASrc.Width - 2 * BANNER_PADDING_H;
 
-  {Measure on a temp bitmap so the result canvas isn't dirtied with
-   intermediate font states during the shrink probe.}
+  {Measure on a temp bitmap so the result canvas stays clean during the
+   shrink probe.}
   TempBmp := TBitmap.Create;
   try
     TempBmp.Canvas.Font.Name := FontName;
 
     if AStyle.AutoSize then
-      {Auto mode: historical width-based ratio, then shrink until every
-       line fits (or bottom out at BANNER_FONT_MIN and rely on wrapping).}
       FontSize := FindFittingBannerFontSize(TempBmp.Canvas, ALines, EnsureRange(ASrc.Width div BANNER_FONT_RATIO, BANNER_FONT_MIN, BANNER_FONT_MAX), MaxTextW)
     else
-      {Fixed mode: user-chosen size; overflow is handled by wrapping only.}
       FontSize := AStyle.FontSize;
     TempBmp.Canvas.Font.Size := FontSize;
 
-    {Build the final render list: pass each line through the wrapper,
-     which is a no-op for lines that already fit.}
     RenderLines := [];
     for I := 0 to High(ALines) do
     begin
@@ -280,10 +243,8 @@ begin
   AlphaAware := ASrc.PixelFormat = pf32bit;
   Result := TBitmap.Create;
   if AlphaAware then
-    {Defer setting AlphaFormat: while it is afDefined, GDI canvas
-     operations would route through AlphaBlend, which corrupts non-pre-
-     multiplied colour values. Set it at the end after every byte is
-     where we want it.}
+    {Defer AlphaFormat := afDefined until after the manual copy; while
+     afDefined, GDI ops route through AlphaBlend and corrupt colours.}
     Result.PixelFormat := pf32bit
   else
     Result.PixelFormat := pf24bit;
@@ -298,11 +259,9 @@ begin
     SrcY := BannerH;
   end;
 
-  {Draw banner background}
   Result.Canvas.Brush.Color := AStyle.Background;
   Result.Canvas.FillRect(Rect(0, BannerY, Result.Width, BannerY + BannerH));
 
-  {Draw text lines (already fitted by shrink + wrap; no truncation pass)}
   Result.Canvas.Font.Name := FontName;
   Result.Canvas.Font.Size := FontSize;
   Result.Canvas.Font.Color := AStyle.TextColor;
@@ -312,15 +271,11 @@ begin
 
   if AlphaAware then
   begin
-    {Manual BGRA copy keeps source colours and alpha bit-identical;
-     bypasses AlphaBlend's premultiplied-source assumption.}
     CopySourceBgraIntoBanner(Result, SrcY, ASrc);
-    {GDI canvas left the banner band's alpha at zero; stamp it opaque.}
     StampBannerAlpha(Result, BannerY, BannerH);
     Result.AlphaFormat := afDefined;
   end
   else
-    {Existing pf24bit fast path}
     Result.Canvas.Draw(0, SrcY, ASrc);
 end;
 

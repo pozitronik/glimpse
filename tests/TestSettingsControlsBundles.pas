@@ -1,19 +1,10 @@
-{Tests for wlx/uSettingsControlsBundles (step 50, M22).
-
- Each bundle is exercised end-to-end with real VCL components (TCheckBox,
- TEdit, TUpDown, TPanel, TComboBox, TTrackBar) instantiated in Setup and
- freed in TearDown. The tests pin two contracts per bundle:
-
- 1. BindXxxToControls writes the settings-side values into the control
-    cluster verbatim (or via the documented decode helper).
- 2. BindXxxFromControls reads the controls and writes back into the
-    settings via flat property setters, round-tripping cleanly.
-
- Decode/encode edge cases (MaxWorkers auto vs manual, MaxThreads 0
- vs >0, TimestampCorner show toggle, ProgressBarLayout/SaveFormat/
- BannerPosition/StatusBarHeightApply/ThumbnailMode enum ord-cast)
- get dedicated tests so the bundle's reliance on the helpers is
- explicit and protected against silent contract drift.}
+{Tests for wlx/uSettingsControlsBundles. Each bundle is exercised
+ end-to-end with real VCL controls (TCheckBox, TEdit, TUpDown,
+ TPanel, TComboBox, TTrackBar). Per bundle two contracts are pinned:
+ BindXxxToControls writes settings values into the control cluster,
+ and BindXxxFromControls reads them back and round-trips cleanly.
+ Encode/decode edge cases (MaxWorkers auto vs manual, enum ord-cast,
+ etc.) have dedicated tests to guard against silent contract drift.}
 unit TestSettingsControlsBundles;
 
 interface

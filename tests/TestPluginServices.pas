@@ -1,9 +1,8 @@
-{Tests for the TPluginServices DI container + production factories
- introduced in step 90. The factories isolate TPluginForm from concrete
- cache/extractor construction, so these tests pin the production
- wiring contract: which concrete class is returned under which
- settings, and that the convenience constructor populates every field
- the form's constructor will dereference.}
+{Tests for the TPluginServices DI container + production factories.
+ The factories isolate TPluginForm from concrete cache/extractor
+ construction; these tests pin which concrete class is returned under
+ which settings, and that the convenience constructor populates every
+ field the form's constructor will dereference.}
 unit TestPluginServices;
 
 interface

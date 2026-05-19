@@ -79,9 +79,6 @@ type
     [TearDown] procedure TearDown;
 
     [Test] procedure Defaults_PaNoneIsEmpty;
-    {Defaults_SaveSelectedIsUnbound was removed when the SaveSelected action
-     was consolidated into SaveFrames; every action now has a default chord,
-     so there is no longer an "intentionally unbound" case to pin.}
     [Test] procedure Defaults_PrevFileHasThreeChords;
     [Test] procedure Defaults_NextFileHasTwoChords;
     [Test] procedure Defaults_PrevFrameHasBareAndCtrlLeft;
@@ -622,8 +619,6 @@ begin
   end;
 end;
 
-{Defaults_SaveSelectedIsUnbound was removed: see declaration above.}
-
 procedure TTestHotkeyBindings.Defaults_PrevFileHasThreeChords;
 var
   B: THotkeyBindings;
@@ -749,9 +744,9 @@ var
   I: Integer;
   Chord: THotkeyChord;
 begin
-  {Pin the rule that the four new variants are reachable via Lookup —
-   guards against a future default-binding edit that accidentally
-   collides one of the variants with another action's chord.}
+  {Pin the rule that the four Save/Copy view variants are each reachable
+   via Lookup, guarding against a future default-binding edit that
+   accidentally collides one variant with another action's chord.}
   Variants := [paSaveViewLive, paSaveViewNative, paCopyViewLive, paCopyViewNative];
   B := THotkeyBindings.Create;
   try
@@ -782,8 +777,8 @@ begin
     Assert.AreEqual(Ord(paViewModeGrid), Ord(B.Lookup(Ord('2'), [ssCtrl])));
     Assert.AreEqual(Ord(paPrevFrame), Ord(B.Lookup(VK_LEFT, [ssCtrl])));
     Assert.AreEqual(Ord(paFrameCountInc), Ord(B.Lookup(VK_UP, [ssCtrl])));
-    {Bare R = Refresh (existing), Ctrl+R = Shuffle (new). The two
-     coexist on the same key letter to keep "R" mnemonic for both.}
+    {Bare R = Refresh, Ctrl+R = Shuffle. Same key letter keeps the
+     "R" mnemonic for both.}
     Assert.AreEqual(Ord(paRefreshExtraction), Ord(B.Lookup(Ord('R'), [])));
     Assert.AreEqual(Ord(paShuffleExtraction), Ord(B.Lookup(Ord('R'), [ssCtrl])));
   finally

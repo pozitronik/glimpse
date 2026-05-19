@@ -1,15 +1,6 @@
-{Default-style fabricators for the combined-image renderer.
-
- These were originally housed in uCombinedImage alongside the rendering
- procedures, but they only consume uDefaults constants and emit value
- records — they have no rendering knowledge. Hoisting them lets the
- renderer be leaf-rendering only and lets test code import "give me a
- default style" without dragging in pf32bit bitmap construction and the
- GDI AlphaBlend stack the renderers carry.
-
- No internal state; functions are pure. The records returned
- (TBannerStyle, TCombinedGridStyle, TTimestampStyle) live in the
- split-out painter / grid / overlay units; this unit only wires defaults.}
+{Default-style fabricators for the combined-image renderer. Pure
+ functions over uDefaults constants; lets tests build styles without
+ importing the GDI rendering stack.}
 unit uRenderDefaults;
 
 interface
@@ -18,17 +9,10 @@ uses
   Vcl.Graphics,
   uBannerPainter, uCombinedGrid, uTimecodeOverlay;
 
-{Returns the historical defaults (dark bg, light text, Segoe UI, auto size, top).
- Useful for tests and as a fallback when a caller has no configured style.}
 function DefaultBannerStyle: TBannerStyle;
 
-{Returns the historical defaults for the grid layout (auto columns, no gap,
- no border, black background). Callers override individual fields as needed.}
 function DefaultCombinedGridStyle: TCombinedGridStyle;
 
-{Returns the historical defaults for the timestamp overlay (hidden, bottom-left,
- Consolas 9pt, black legacy-shadow background, white text). Callers override
- individual fields as needed.}
 function DefaultTimestampStyle: TTimestampStyle;
 
 implementation
@@ -67,9 +51,8 @@ begin
   Result.BackAlpha := 0;
   Result.TextColor := DEF_TIMESTAMP_TEXT_COLOR;
   Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
-  {Historic default matches the WLX 1.0.x legacy renderer for back-compat
-   with saved combined sheets; the modern rect-based path is opt-in via
-   the explicit Mode field.}
+  {Legacy renderer for back-compat with saved combined sheets; modern
+   rect-based path is opt-in via Mode.}
   Result.Mode := tsmLegacy;
 end;
 

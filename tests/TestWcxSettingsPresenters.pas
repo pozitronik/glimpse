@@ -1,15 +1,11 @@
-{Tests for wcx/uWcxSettingsPresenters (step 99, part 2).
+{Tests for wcx/uWcxSettingsPresenters. Two layers of coverage:
+ per-presenter smoke tests (LoadFrom/SaveTo + update helpers), and
+ deeper coverage of TWcxPresetEditorPresenter (preset CRUD,
+ navigation, current-row tracking, validation-failure navigation),
+ which is the only presenter with non-trivial state transitions.
 
- Two layers of coverage:
-   1. Per-presenter smoke tests (LoadFrom/SaveTo + update helpers).
-   2. Deeper coverage of TWcxPresetEditorPresenter (the substantive
-      cluster — preset CRUD, navigation, current-row tracking,
-      validation-failure navigation) since it's the most behaviour-
-      heavy presenter and the only one with non-trivial state
-      transitions.
-
- Fixture pattern matches TestWcxSettingsControlsBundles: hidden TForm
- as both owner + parent so VCL handles allocate.}
+ Fixture uses a hidden TForm as both owner + parent so VCL handles
+ allocate.}
 unit TestWcxSettingsPresenters;
 
 interface

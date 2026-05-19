@@ -1,11 +1,6 @@
-{User-defined ffmpeg preset model and INI loader/saver for the WCX plugin.
- Each preset becomes one virtual file in the archive listing; running it
- invokes ffmpeg with the user's argument string against the source video.
- This unit owns the data model and INI I/O only — template expansion,
- validation, tokenisation, and the dedupe pass live in their own units
- (uWcxPresetTemplate / uWcxPresetValidation / uCmdLineTokens /
- uFileNameDedupe). No process execution lives here either — that
- belongs to uWcxPresetExtractor.}
+{User-defined ffmpeg preset model and INI loader/saver. Data and I/O
+ only; template expansion, validation, tokenisation, dedupe, and
+ process execution live in their own units.}
 unit uWcxPresets;
 
 interface
@@ -14,20 +9,12 @@ uses
   System.SysUtils;
 
 type
-  {Preset definition as it appears in presets.ini.
-   Name is the INI section name and doubles as a template variable.
-   OutputExt is stored without a leading dot; the leading dot is added by
-   BuildOutputFileName so callers do not need to know whether the user wrote
-   "mp3" or ".mp3" in the INI.
-   OutputName is a pre-expansion template; empty means "use the documented
-   default (%basename%_%name%)" and stays empty in the record so a settings
-   editor can distinguish "user set this to the default" from "user left it
-   blank".
-   Args is the ffmpeg argument string that goes after "-i <input>". May be
-   empty when the user wants a default-codec transcode driven only by the
-   output extension.
-   Enabled mirrors the INI key; disabled presets are skipped at load time
-   so they never reach the listing or extractor.}
+  {Name is the INI section and doubles as a template variable.
+   OutputExt is stored without a leading dot (BuildOutputFileName adds
+   it). OutputName empty means "use the default %basename%_%name%" and
+   stays empty in the record so the editor can tell "user picked the
+   default" from "user blanked it". Args is the ffmpeg argument string
+   that follows "-i <input>".}
   TWcxPreset = record
     Name: string;
     Description: string;
@@ -39,36 +26,19 @@ type
 
   TWcxPresetArray = TArray<TWcxPreset>;
 
-{Loads enabled, valid presets from APath.
- Returns an empty array when the file does not exist or contains no
- sections; never raises. Disabled entries, entries missing the required
- OutputExt, entries with a malformed OutputExt or OutputName, and entries
- whose Args contain a forbidden token are skipped with a DebugLog warning
- so the rest of the file still loads.
- Note: the "skip disabled" semantics are tailored to the WCX listing path
- (a disabled preset has no place in the visible archive). The editor uses
- LoadAllPresets instead so it can show, edit, and re-enable disabled
- entries.}
+{Returns empty on missing/empty INI; never raises. Disabled or invalid
+ entries are skipped with a DebugLog warning so the rest still loads.
+ The listing path uses this; the editor calls LoadAllPresets to keep
+ disabled or malformed entries visible and fixable.}
 function LoadPresets(const APath: string): TWcxPresetArray;
 
-{Loads every preset section verbatim — including disabled entries —
- without applying the validation filter. Used by the GUI editor so a
- disabled or temporarily-malformed preset is visible and fixable rather
- than silently dropped on file open. Sections that cannot be parsed at
- all are still skipped (they would round-trip to invalid INI), but the
- OutputExt / OutputName / Args validation is deferred to save time.}
 function LoadAllPresets(const APath: string): TWcxPresetArray;
 
-{Writes APresets to APath in their array order. Order matters — first
- defined wins the bare name in the listing-time dedupe pass — so the
- editor stores its working order via this routine. Clears the file's
- previous content first so removed presets do not leak back in.}
+{Writes in array order — first-defined wins the dedupe pass — and
+ clears the file first so removed presets do not leak back in.}
 procedure SavePresets(const APath: string; const APresets: TWcxPresetArray);
 
-{Returns the full path to the presets file expected to live next to the
- WCX settings INI. Pure path manipulation; does not touch the disk.
- Returns '' when the settings path is empty so callers downstream can
- short-circuit on the documented "no presets" sentinel.}
+{Pure path manipulation; returns '' on empty input.}
 function PresetsIniPath(const ASettingsIniPath: string): string;
 
 implementation
@@ -92,9 +62,8 @@ begin
   Result := IncludeTrailingPathDelimiter(ExtractFilePath(ASettingsIniPath)) + 'presets.ini';
 end;
 
-{Reads one section into a preset record without applying any validation.
- OutputExt is normalised (leading dot stripped) for editor convenience;
- the more involved checks live in the caller.}
+{Normalises only OutputExt (leading dot stripped); deeper checks live
+ in the caller.}
 function ReadPresetSection(AIni: TUnicodeIniFile; const ASection: string): TWcxPreset;
 var
   RawExt: string;
@@ -214,10 +183,8 @@ begin
     Exit;
   Ini := TUnicodeIniFile.Create(APath);
   try
-    {Wipe the file's previous content so an editor-driven full rewrite
-     does not leak removed presets back into the saved output.
-     Order-preserving Insert behaviour in TUnicodeIniFile guarantees the
-     write order below matches the editor's array order.}
+    {Wipe so editor-driven removals do not leak back in. TUnicodeIniFile
+     preserves Insert order, so the write order matches the array.}
     Ini.Clear;
     for I := 0 to High(APresets) do
     begin
@@ -228,9 +195,7 @@ begin
       Ini.WriteString(P.Name, 'OutputExt', P.OutputExt);
       if P.OutputName <> '' then
         Ini.WriteString(P.Name, 'OutputName', P.OutputName);
-      {Args may legitimately be empty (default-codec transcode); skip
-       the key in that case so the loader's "absent = empty" path
-       round-trips cleanly.}
+      {Skip empty Args so the loader's "absent = empty" path round-trips.}
       if P.Args <> '' then
         Ini.WriteString(P.Name, 'Args', P.Args);
     end;

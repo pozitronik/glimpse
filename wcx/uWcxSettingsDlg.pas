@@ -1,5 +1,4 @@
-﻿{Configuration dialog for the WCX plugin.
- Shown via ConfigurePacker when the user clicks Configure in TC.}
+﻿{Configuration dialog for the WCX plugin, shown via ConfigurePacker.}
 unit uWcxSettingsDlg;
 
 interface
@@ -41,10 +40,6 @@ type
     BtnFFmpegPath: TButton;
     LblFFmpegInfo: TLabel;
     EdtFFmpegInfo: TEdit;
-    {Sampling tab — frame-positioning controls: frame count, skip edges,
-     and the random-extraction slider. No "Cache random frames" toggle
-     here: WCX runs on demand from TC and has no frame cache, so the
-     option would be a no-op.}
     TshSampling: TTabSheet;
     LblRandomPercent: TLabel;
     LblRandomPercentValue: TLabel;
@@ -125,7 +120,6 @@ type
     BtnOK: TButton;
     BtnCancel: TButton;
     ColorDlg: TColorDialog;
-    {Presets tab — master-detail editor over TPresetEditorModel}
     TshPresets: TTabSheet;
     LbxPresets: TListBox;
     BtnPresetAdd: TButton;
@@ -168,13 +162,9 @@ type
     procedure BtnPresetRemoveClick(Sender: TObject);
     procedure BtnPresetDuplicateClick(Sender: TObject);
   strict private
-    {These four are set once in CreateForSettings and read by the
-     dialog's own methods. strict private blocks the previous
-     ShowWcxSettingsDialog pattern of reaching into private fields from
-     outside the class (same-unit "private" did not protect against
-     that). Construct the form via CreateForSettings to wire them.
-     The two repositories own persistence; the dialog never calls
-     TWcxSettings.Save or SavePresets directly.}
+    {Construct via CreateForSettings; strict-private blocks the previous
+     external-reach pattern. Repositories own persistence — the dialog
+     never calls TWcxSettings.Save or SavePresets directly.}
     FSettings: TWcxSettings;
     FOnApply: TProc;
     FSettingsRepo: IWcxSettingsRepository;
@@ -182,13 +172,6 @@ type
   private
     FOwnerWnd: HWND;
     FPresetModel: TPresetEditorModel;
-    {Per-cluster control bundles + presenters (step 99). Each presenter
-     owns its bundle(s), event handlers, update helpers, and (for the
-     output presenter) the font shadow fields. The form delegates DFM-
-     wired handlers to them and collapses SettingsToControls /
-     ControlsToSettings into a sequence of LoadFrom / SaveTo calls.
-     Bundles populated by InitControlsBundles; presenters constructed
-     in CreateForSettings, freed in Destroy.}
     FExtractionControls: TWcxExtractionControls;
     FRandomControls: TWcxRandomControls;
     FFFmpegControls: TWcxFFmpegControls;
@@ -204,32 +187,18 @@ type
     procedure InitControlsBundles;
     procedure SettingsToControls(ASettings: TWcxSettings);
     procedure ControlsToSettings(ASettings: TWcxSettings);
-    {Validates the model and writes both Glimpse.ini and presets.ini.
-     Returns False on validation failure (with a message box already
-     shown and the offending preset selected/focused). Used by both
-     Apply and OK so the persistence rules stay in one place.}
+    {False on validation failure (offending preset already selected and
+     a message box shown).}
     function TrySaveAll: Boolean;
-    {Toggles the combined-tab controls' Enabled property based on
-     ChkModeCombined + ChkShowBanner. The WCX dialog does not have a
-     declarative TEnableRules table (unlike WLX after step 82), so
-     this stays inline as the imperative analog. Future step could
-     promote it to a table; out of scope for step 99.}
     procedure UpdateCombinedState;
-    {Greys out the randomness slider and its labels when the random
-     extraction checkbox is unchecked, so the user is not given a control
-     that would have no effect until the checkbox is ticked.}
     procedure UpdateRandomState;
     procedure UpdateMaxWorkersControls;
     procedure PickColor(APanel: TPanel);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
-    {Constructs the dialog and wires it to the supplied settings,
-     apply-callback and persistence repositories in one atomic step.
-     Caller still owns ASettings; the form mutates it in place on Apply
-     and OK via TrySaveAll. The repositories own persistence: pass nil
-     for APresetsRepo to disable preset persistence (presets list will
-     load empty and SaveAll never fires).}
+    {Caller still owns ASettings; the form mutates it in place on Apply
+     and OK. Pass nil for APresetsRepo to disable preset persistence.}
     constructor CreateForSettings(AOwnerWnd: HWND; ASettings: TWcxSettings;
       AOnApply: TProc;
       const ASettingsRepo: IWcxSettingsRepository;
@@ -237,9 +206,8 @@ type
     destructor Destroy; override;
   end;
 
-  {Shows the WCX settings dialog. Returns True if the user clicked OK.
-   AOnApply fires after every Apply press; the settings object has already
-   been updated and persisted by the time the callback runs.}
+  {AOnApply fires after every Apply press; ASettings is already persisted
+   by the time the callback runs.}
 function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings;
   const ASettingsRepo: IWcxSettingsRepository;
   const APresetsRepo: IWcxPresetsRepository;
@@ -306,9 +274,6 @@ end;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 begin
-  {Per-cluster delegation. Each presenter's LoadFrom is self-contained
-   for its tab cluster. The form-owned Update*State methods fire after
-   (they read VCL values just bound by the presenters).}
   FExtractionPresenter.LoadFrom(ASettings);
   FOutputPresenter.LoadFrom(ASettings);
 
@@ -390,22 +355,17 @@ end;
 
 procedure TWcxSettingsForm.ChkModeFramesClick(Sender: TObject);
 begin
-  {Frames have no dependent fields on this tab; the click is a no-op
-   for the dependent-state pass but matches the Combined / Presets
-   handlers for symmetry.}
+  {No-op; kept for symmetry with the Combined / Presets handlers.}
 end;
 
 procedure TWcxSettingsForm.ChkModeCombinedClick(Sender: TObject);
 begin
-  {The Combined tab's controls grey out when this is off — keep the
-   dependent state in sync as the user toggles.}
   UpdateCombinedState;
 end;
 
 procedure TWcxSettingsForm.ChkModePresetsClick(Sender: TObject);
 begin
-  {No dependent state on this tab today; the Presets tab manages its
-   own enable state.}
+  {No-op; the Presets tab manages its own enable state.}
 end;
 
 procedure TWcxSettingsForm.ChkMaxWorkersAutoClick(Sender: TObject);
@@ -493,9 +453,8 @@ var
   Orchestrator: TSettingsSaveOrchestrator;
   Outcome: TSettingsSaveResult;
 begin
-  {Flush any in-progress edits in the right-hand panel back to the model
-   so validation and save see the user's latest input, not the snapshot
-   from the last list-selection change.}
+  {Flush in-progress right-pane edits to the model so validation and
+   save see the user's latest input.}
   FPresetEditorPresenter.CommitCurrentPreset;
 
   Orchestrator := TSettingsSaveOrchestrator.Create;
@@ -518,14 +477,13 @@ begin
       end;
     ssrSuccess:
       begin
-        {Re-validate the FFmpeg path in case the user changed it; without this
-         the info label keeps showing the validation result from dialog open.}
+        {Re-validate the FFmpeg path so the info label reflects any
+         change the user just made.}
         FExtractionPresenter.UpdateFFmpegInfo;
         Exit(True);
       end;
   else
-    {ssrSkipped: nothing to save (FSettings was nil); fall through with
-     Result = False.}
+    {ssrSkipped: FSettings was nil; nothing to do.}
     Exit(False);
   end;
 end;
@@ -537,9 +495,8 @@ end;
 
 procedure TWcxSettingsForm.BtnOKClick(Sender: TObject);
 begin
-  {OK is "save and close". Validation failure keeps the dialog open so
-   the user can fix the offending preset; success sets ModalResult so
-   ShowModal returns mrOk and the caller knows the dialog committed.}
+  {Validation failure keeps the dialog open so the user can fix the
+   offending preset.}
   if TrySaveAll then
     ModalResult := mrOk;
 end;
@@ -598,9 +555,8 @@ begin
   FOnApply := AOnApply;
   FSettingsRepo := ASettingsRepo;
   FPresetsRepo := APresetsRepo;
-  {InitControlsBundles + presenter construction happen after the DFM
-   has instantiated every control referenced. Bundles populated first
-   so the presenters' constructors can copy refs out of them.}
+  {Order: bundles populated first so presenters can copy refs out;
+   both run after the DFM has instantiated every control referenced.}
   InitControlsBundles;
   FExtractionPresenter := TWcxExtractionPresenter.Create(
     FExtractionControls, FRandomControls, FFFmpegControls,
@@ -614,9 +570,9 @@ begin
     FPresetModel, FPresetsRepo, LbxPresets,
     EdtPresetName, ChkPresetEnabled, EdtPresetDescription,
     EdtPresetOutputExt, EdtPresetOutputName, MemoPresetArgs);
-  {Keep tooltips visible as long as the cursor stays over the control.
-   Application is per-DLL, so this only affects hints shown by our forms;
-   TC's own UI uses its own (non-VCL) tooltip mechanism.}
+  {Keep tooltips visible as long as the cursor stays. Application is
+   per-DLL, so this only affects our forms; TC uses its own non-VCL
+   tooltip mechanism.}
   Application.HintHidePause := MaxInt;
   if FSettings <> nil then
   begin
@@ -641,8 +597,6 @@ begin
     Params.WndParent := FOwnerWnd;
 end;
 
-{Public API}
-
 function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings;
   const ASettingsRepo: IWcxSettingsRepository;
   const APresetsRepo: IWcxPresetsRepository;
@@ -656,9 +610,8 @@ begin
   try
     if Dlg.ShowModal = mrOk then
     begin
-      {Settings + presets are already persisted by BtnOKClick → TrySaveAll;
-       just refresh the caller's settings reference so any post-dialog
-       inspection sees what the dialog committed.}
+      {Persisted already by BtnOKClick; refresh ASettings so post-dialog
+       inspection sees what was committed.}
       Dlg.ControlsToSettings(ASettings);
       Result := True;
     end;

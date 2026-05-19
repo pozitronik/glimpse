@@ -56,10 +56,9 @@ type
     [Test] procedure StrToBannerPosition_RoundTrip_BothValues;
     [Test] procedure StrToBannerPosition_Unknown_ReturnsDefault;
     [Test] procedure StrToBannerPosition_MixedCase_Accepted;
-    {Enum codecs moved out of TPluginSettings into free functions here.
-     The one-arg StrToX overloads fall back to a hard-coded default
-     baked into the function — pinning that default plus the round-trip
-     contract for every enum value.}
+    {Free-function enum codecs. The one-arg StrToX overloads fall
+     back to a hard-coded default baked into the function; pins that
+     default plus the round-trip contract for every enum value.}
     [Test] procedure FFmpegModeToStr_BothValues;
     [Test] procedure StrToFFmpegMode_KnownTokens;
     [Test] procedure StrToFFmpegMode_RoundTrip;

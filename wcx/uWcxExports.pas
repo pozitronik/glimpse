@@ -1,5 +1,5 @@
-{WCX plugin exported functions.
- Presents a video file as a virtual archive containing frame images.}
+{WCX plugin exported functions. Presents a video file as a virtual
+ archive containing frame images.}
 unit uWcxExports;
 
 interface
@@ -7,37 +7,30 @@ interface
 uses
   System.SysUtils, Winapi.Windows, uWcxAPI;
 
-{Opens archive (video file) for listing or extraction}
 function OpenArchive(var ArchiveData: TOpenArchiveData): THandle; stdcall;
 function OpenArchiveW(var ArchiveData: TOpenArchiveDataW): THandle; stdcall;
 
-{Reads next file header from archive}
 function ReadHeader(hArcData: THandle; var HeaderData: THeaderData): Integer; stdcall;
 function ReadHeaderExW(hArcData: THandle; var HeaderData: THeaderDataExW): Integer; stdcall;
 
-{Processes (extracts/skips) the current file}
 function ProcessFile(hArcData: THandle; Operation: Integer; DestPath, DestName: PAnsiChar): Integer; stdcall;
 function ProcessFileW(hArcData: THandle; Operation: Integer; DestPath, DestName: PWideChar): Integer; stdcall;
 
-{Closes archive handle}
 function CloseArchive(hArcData: THandle): Integer; stdcall;
 
-{Callback setters}
 procedure SetChangeVolProc(hArcData: THandle; pChangeVolProc: TChangeVolProc); stdcall;
 procedure SetChangeVolProcW(hArcData: THandle; pChangeVolProc: TChangeVolProcW); stdcall;
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 procedure SetProcessDataProcW(hArcData: THandle; pProcessDataProc: TProcessDataProcW); stdcall;
 
-{Reports plugin capabilities}
 function GetPackerCaps: Integer; stdcall;
 
-{Receives default INI path from TC}
 procedure SetDefaultParams(dps: PWcxDefaultParams); stdcall;
 
-{Stub: packing not supported, exists only to make Configure button accessible}
+{Stub: packing not supported, exported only to make TC enable the
+ Configure button.}
 function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar; Flags: Integer): Integer; stdcall;
 
-{Shows configuration dialog}
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 
 implementation
@@ -54,10 +47,8 @@ uses
 
 var
   GIniPath: string;
-  {Production factory instances. Constructed at unit initialization and
-   released at finalization. Captured by the per-OpenArchive coordinator
-   (which itself lives only for the duration of one call). Lifetime
-   spans the DLL load, matching the legacy module-global GIniPath above.}
+  {Stateless production factories, built once per DLL load and captured
+   by each per-call TWcxArchiveCoordinator.}
   GSettingsProvider: IWcxSettingsProvider;
   GProbeService: IProbeService;
   GFrameExtractorFactory: IFrameExtractorFactory;
@@ -72,11 +63,8 @@ var
   Coord: TWcxArchiveCoordinator;
   H: TArchiveHandle;
 begin
-  {Thunk: every open-flow concern (settings load, ffmpeg locate, probe,
-   listing build, pre-extract) now lives behind TWcxArchiveCoordinator.
-   This thunk's only job is to (1) translate the ABI integer handle to a
-   class pointer and back, (2) wire the module-global factory cache into
-   the per-call coordinator. Step 100 (C9) of the refactoring campaign.}
+  {Thunk: only translates the ABI integer handle to a class pointer and
+   wires the module-global factories into the per-call coordinator.}
   Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory);
   try
     H := Coord.OpenArchive(AFileName, AOpenMode, GIniPath, AOpenResult);
@@ -91,13 +79,9 @@ end;
 
 function OpenArchive(var ArchiveData: TOpenArchiveData): THandle; stdcall;
 begin
-  {Encoding caveat: every ANSI export in this unit converts the incoming
-   PAnsiChar via the system code page (string(AnsiString(...))). Paths
-   containing characters not representable in the local CP_ACP are
-   corrupted at this boundary. The Wide siblings (OpenArchiveW,
-   ProcessFileW, ReadHeaderExW) are the supported path; modern TC
-   always calls them. The ANSI shims exist for ABI completeness and
-   fall back gracefully on plain ASCII paths.}
+  {ANSI exports convert via the system code page; paths with characters
+   outside CP_ACP corrupt here. The Wide siblings are the supported
+   path; modern TC always calls them. Kept for ABI completeness.}
   Result := DoOpenArchive(string(AnsiString(ArchiveData.ArcName)), ArchiveData.OpenMode, ArchiveData.OpenResult);
 end;
 
@@ -119,11 +103,8 @@ begin
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
-  {THeaderData.UnpSize is 32-bit signed; clamp so >2 GB sizes surface as
-   MaxInt instead of wrapping into a negative size. The polymorphic
-   ReportedSize subsumes the prior "is this a preset? use source-file
-   size; else use cached EntrySizes" branching — each entry class
-   answers for itself.}
+  {THeaderData.UnpSize is 32-bit signed; clamp so >2 GB surfaces as
+   MaxInt instead of wrapping negative.}
   HeaderData.UnpSize := ClampSizeForAnsiHeader(H.CurrentEntry.ReportedSize(H, H.CurrentEntryIndex));
   HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
@@ -156,10 +137,6 @@ end;
 
 function DoProcessFile(hArcData: THandle; Operation: Integer; const ADestPath, ADestName: string): Integer;
 begin
-  {Step 101 (C10): cursor-advance + dispatch logic moved into
-   TWcxArchiveCoordinator.ProcessFile (static class method, no instance
-   needed). This thunk's only job is the ABI integer-handle → class-
-   pointer cast.}
   Result := TWcxArchiveCoordinator.ProcessFile(TArchiveHandle(hArcData),
     Operation, ADestPath, ADestName);
 end;
@@ -196,28 +173,25 @@ end;
 
 function CloseArchive(hArcData: THandle): Integer; stdcall;
 begin
-  {Step 101 (C10): handle-free logic moved into
-   TWcxArchiveCoordinator.CloseArchive (static class method).}
   Result := TWcxArchiveCoordinator.CloseArchive(TArchiveHandle(hArcData));
 end;
 
 procedure SetChangeVolProc(hArcData: THandle; pChangeVolProc: TChangeVolProc); stdcall;
 begin
-  {Not used: video files are single-volume}
+  {No-op: video files are single-volume.}
 end;
 
 procedure SetChangeVolProcW(hArcData: THandle; pChangeVolProc: TChangeVolProcW); stdcall;
 begin
-  {Not used: video files are single-volume. Exported for ABI completeness so
-   modern TC builds find the symbol they expect.}
+  {No-op: video files are single-volume. Exported so modern TC finds the
+   symbol it expects.}
 end;
 
 procedure SetProcessDataProc(hArcData: THandle; pProcessDataProc: TProcessDataProc); stdcall;
 begin
-  {Stored on the handle; the preset extractor invokes it via
-   uWcxProgressBridge to surface progress and observe user cancel.
-   Legacy per-frame extraction is synchronous and does not call the
-   callback.}
+  {Stored on the handle for the preset extractor to invoke via
+   uWcxProgressBridge. Per-frame extraction is synchronous and does not
+   touch this callback.}
   if hArcData = 0 then
     Exit;
   TArchiveHandle(hArcData).ProcessDataProc := pProcessDataProc;
@@ -232,13 +206,9 @@ end;
 
 function GetPackerCaps: Integer; stdcall;
 begin
-  {Read-only "video as virtual archive" plugin: no PK_CAPS_NEW (cannot create
-   archives), no PK_CAPS_MODIFY/DELETE. PK_CAPS_OPTIONS gives users a
-   Configure button in TC's Configuration > Options > Plugins > Packer
-   plugins UI; PK_CAPS_BY_CONTENT lets TC probe by content; PK_CAPS_HIDE
-   keeps videos shown as ordinary files in the file panel. PK_CAPS_SEARCHTEXT
-   is intentionally not set - the virtual archive entries are binary PNG/JPEG
-   frames with no text content to search.}
+  {BY_CONTENT lets TC probe; HIDE keeps videos shown as ordinary files
+   in the panel; OPTIONS surfaces the Configure button. SEARCHTEXT is
+   omitted because the entries are binary frames.}
   Result := PK_CAPS_BY_CONTENT or PK_CAPS_HIDE or PK_CAPS_OPTIONS;
 end;
 
@@ -265,10 +235,6 @@ begin
   Settings := TWcxSettings.Create(GIniPath);
   try
     Settings.Load;
-    {Production repositories. Settings repo wraps TWcxSettings.Save;
-     presets repo captures the presets INI path derived from the
-     settings INI. The dialog talks only to these — never to the
-     persistence free functions directly.}
     SettingsRepo := TProductionWcxSettingsRepository.Create;
     PresetsRepo := TProductionWcxPresetsRepository.Create(PresetsIniPath(GIniPath));
     if ShowWcxSettingsDialog(Parent, Settings, SettingsRepo, PresetsRepo,
@@ -277,11 +243,8 @@ begin
         TWcxFrameCache.Instance.Invalidate;
       end) then
     begin
-      {ShowWcxSettingsDialog returns True only when TrySaveAll succeeded,
-       which already saved settings + presets through the repos AND
-       invoked the apply callback (Invalidate above). Keeping the
-       Invalidate here is belt-and-braces in case the dialog's contract
-       changes.}
+      {Belt-and-braces: the apply callback above already invalidated;
+       this guards against a future change to the dialog's contract.}
       TWcxFrameCache.Instance.Invalidate;
     end;
   finally
@@ -292,38 +255,27 @@ end;
 initialization
 
 {Fallback: INI next to the DLL, in case SetDefaultParams is not called
- before ConfigurePacker or OpenArchive}
+ before ConfigurePacker or OpenArchive.}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 
-{Production factory wiring for the OpenArchive coordinator. Stateless
- instances; one of each is built once per DLL load and reused for
- every OpenArchive call via the per-call TWcxArchiveCoordinator.}
 GSettingsProvider := TProductionWcxSettingsProvider.Create;
 GProbeService := TProductionProbeService.Create;
 GFrameExtractorFactory := TProductionFrameExtractorFactory.Create;
 
-{Production reporter. Lives in uPresetExtractReporter as a global so
- TPresetEntry.Extract can reach it without back-linking into this unit;
- tests can swap it via SetPresetFailureReporter.}
 SetPresetFailureReporter(TMessageBoxFailureReporter.Create);
 
-{Debug logging is opt-in via the hidden "[debug] LogEnabled=1" key in
- Glimpse.ini. Start silent; DoOpenArchive flips TDebugLog.Configure on
- or off each time after reading the setting, so a hand-edit of the INI
- takes effect on the next archive open without a TC restart.}
+{Start silent. DoOpenArchive re-reads the "[debug] LogEnabled" key on
+ every open so a hand-edit takes effect without restarting TC.}
 TDebugLog.Instance.Configure('');
 
-{Seed the global Random once per DLL load. CalculateRandomFrameOffsets
- reads from this RNG; without seeding, every TC session would emit the
- same "random" sequence on this plugin and defeat the user's intent of
- a non-deterministic frame layout.}
+{Seeds the global RNG used by CalculateRandomFrameOffsets; without
+ this, every TC session would emit the same "random" sequence.}
 Randomize;
 
 finalization
 
 SetPresetFailureReporter(nil);
-{Release the factory interfaces in reverse construction order so any
- transitive references between them drop cleanly.}
+{Reverse construction order so any transitive references drop cleanly.}
 GFrameExtractorFactory := nil;
 GProbeService := nil;
 GSettingsProvider := nil;

@@ -64,22 +64,14 @@ type
     [Test] procedure TestEmptyPathSaveSilentlyNoOp;
     [Test] procedure TestSemicolonAtLineStartIsComment;
     [Test] procedure TestEqualsAtColumnOneIsCommentLike;
-    {Regression for step 67: the destructor no longer auto-flushes.
-     Write a key, Free without UpdateFile, reopen, assert the key did
-     NOT make it to disk. The previous swallow-everything try/except
-     in Destroy silently lost writes when UpdateFile raised; removing
-     it pushes the contract to callers (every settings Save path
-     already calls UpdateFile explicitly).}
+    {Destructor must not auto-flush: writes are lost if UpdateFile is
+     not called. Pin the explicit-flush contract callers depend on.}
     [Test] procedure TestDestroyWithoutUpdateFile_DoesNotFlush;
-    {Substitution proof for step 68: a TUnicodeIniFile instance can be
-     used through a TCustomIniFile reference. Calls Write/Read methods
-     via the base reference and asserts the values round-trip through
-     the line-list model. The override correctness of every abstract
-     member is the implicit contract this test pins.}
+    {Substitution: TUnicodeIniFile must be usable through a
+     TCustomIniFile reference — Write/Read round-trip via the base
+     reference proves every abstract member is overridden correctly.}
     [Test] procedure TestSubstitutesAsTCustomIniFile;
-    {ReadSectionValues is one of the abstract members the step 68
-     descent had to override (previous TUnicodeIniFile had no such
-     method). Pin the "Key=Value" emission format.}
+    {Pin the "Key=Value" emission format of ReadSectionValues.}
     [Test] procedure TestReadSectionValuesEmitsKeyEqualsValuePairs;
   end;
 
@@ -861,10 +853,9 @@ begin
     Writer.Free;
   end;
 
-  {The previous policy would have called UpdateFile inside Destroy and
-   the file would now exist with the key in it. The new policy puts the
-   flush contract on the caller — Free without UpdateFile means the
-   write is lost. This test pins that explicit-flush contract.}
+  {Pins the explicit-flush contract: Free without UpdateFile must
+   leave the disk untouched. The caller owns the flush — Destroy
+   does not auto-write.}
   Assert.IsFalse(TFile.Exists(Path),
     'Destroy must not write to disk when UpdateFile was never called');
 

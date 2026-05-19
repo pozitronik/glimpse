@@ -1,22 +1,6 @@
-{Byte-keyed cache storage abstraction.
-
- ICacheStorage exposes the minimal operations a byte-cache needs:
- Read/Write/Delete/Clear, Touch (LRU access-time bump), and List (for
- eviction policies to enumerate entries with size + access metadata).
- The interface is intentionally narrow — anything caller-specific
- (PNG encoding, lock acquisition, key hashing) lives above this layer.
-
- TDiskCacheStorage is the production implementation: it stores each
- entry as `<root>\<2-char-shard>\<key>.<ext>`, writes atomically via
- MoveFileEx with MOVEFILE_REPLACE_EXISTING, and sweeps orphaned `.tmp`
- files at construction. The legacy on-disk layout (sharded dir +
- `.png` extension) is preserved so existing user caches keep working
- after the TFrameCache refactor.
-
- Implementations make no thread-safety claim — the caller (TFrameCache)
- is the composition root that owns the lock and serialises every
- invocation. Tests of an eviction policy can use a TMemoryCacheStorage
- fake (see tests/) to drive the policy without disk I/O.}
+{Byte-keyed cache storage. TDiskCacheStorage stores entries as
+ <root>\<2-char-shard>\<key>.<ext> with atomic writes via MoveFileEx.
+ Not thread-safe — the caller (TFrameCache) owns the lock.}
 unit uCacheStorage;
 
 interface
@@ -25,48 +9,25 @@ uses
   System.SysUtils;
 
 type
-  {Per-entry metadata returned by ICacheStorage.List. The policy uses
-   Size for budget accounting and AccessTime for LRU ordering; Key is
-   the same string the caller originally passed to Write and is what
-   Delete expects back.}
   TCacheEntryInfo = record
     Key: string;
     Size: Int64;
     AccessTime: TDateTime;
   end;
 
-  {Minimal byte-keyed cache contract. Read returns an empty byte array
-   on miss (or on read failure — both are caller-indistinguishable, by
-   design). Write is atomic — readers concurrent with a Write see either
-   the prior bytes or the new bytes, never a torn payload. Delete and
-   Clear are best-effort: failures are swallowed because a cache cannot
-   meaningfully recover from "the OS would not let us delete this".}
+  {Read returns empty bytes on miss or failure (indistinguishable by
+   design). Write is atomic — readers see prior or new bytes, never
+   torn. Delete/Clear are best-effort.}
   ICacheStorage = interface
     ['{C7A4F1E8-5B2D-4E3A-9F6C-1D8E2A5B7C9F}']
-    {Loads the bytes stored under AKey. Returns an empty TBytes (length=0)
-     on miss or read failure.}
     function Read(const AKey: string): TBytes;
-    {Stores ABytes under AKey, replacing any prior entry atomically.}
     procedure Write(const AKey: string; const AData: TBytes);
-    {Removes the entry under AKey. Best-effort — silently no-ops if the
-     entry doesn't exist or can't be deleted.}
     procedure Delete(const AKey: string);
-    {Removes every entry. Best-effort.}
     procedure Clear;
-    {Updates the LRU access timestamp for AKey to now. Best-effort —
-     silently no-ops if the entry doesn't exist or the OS rejects the
-     update. The LRU policy reads access time via List.}
     procedure Touch(const AKey: string);
-    {Enumerates every stored entry with its size and access timestamp.
-     Order is unspecified — the eviction policy sorts as needed.}
     function List: TArray<TCacheEntryInfo>;
   end;
 
-  {Disk-backed storage with the existing sharded `.png` layout. Atomic
-   writes via temp-file + MoveFileEx; orphaned `.tmp` files (left by a
-   crash mid-write) are swept at construction. The extension is
-   per-instance — production passes `.png` to match the legacy layout;
-   tests could use any extension.}
   TDiskCacheStorage = class(TInterfacedObject, ICacheStorage)
   strict private
     FRoot: string;
@@ -115,11 +76,8 @@ var
   Files: TArray<string>;
   F: string;
 begin
-  {Write writes <root>\<guid>.tmp and renames via MoveFileEx. If the
-   process crashed between SaveToStream and the rename, the .tmp
-   survived forever — there was no later sweep, and List only walks
-   the configured extension. Wipe leftover temp files at construction
-   so a crash-prone environment does not accumulate disk-leaking shards.}
+  {Sweep .tmp files left by a crash mid-rename; otherwise they accumulate
+   indefinitely since List only walks the configured extension.}
   if not TDirectory.Exists(FRoot) then
     Exit;
   try
@@ -131,9 +89,7 @@ begin
     try
       TFile.Delete(F);
     except
-      {Best-effort: a temp may still be locked by another instance
-       holding the cache open for a different write-in-progress.
-       Skipping leaves it for the next constructor call.}
+      {Locked .tmp will be retried on next constructor call}
     end;
 end;
 
@@ -164,8 +120,7 @@ begin
   TempPath := TPath.Combine(FRoot, TGUID.NewGuid.ToString + '.tmp');
   try
     TFile.WriteAllBytes(TempPath, AData);
-    {Atomic replace: MoveFileEx with MOVEFILE_REPLACE_EXISTING is atomic
-     on NTFS, eliminating the window where concurrent readers see no file.}
+    {NTFS atomic replace prevents concurrent readers seeing no file}
     if not MoveFileEx(PChar(TempPath), PChar(FinalPath), MOVEFILE_REPLACE_EXISTING) then
     begin
       try
@@ -208,8 +163,7 @@ begin
       TDirectory.Delete(FRoot, True);
     TDirectory.CreateDirectory(FRoot);
   except
-    {Best-effort clear; directory may be locked. Tear down what we can
-     by walking shards individually as a fallback.}
+    {Directory locked; tear down shards individually as fallback}
     try
       Dirs := TDirectory.GetDirectories(FRoot);
       for Dir in Dirs do
@@ -254,10 +208,6 @@ begin
     try
       Info.Size := TFile.GetSize(FileName);
       Info.AccessTime := TFile.GetLastAccessTime(FileName);
-      {Reconstruct the original key from the on-disk path. The layout
-       is <root>\<2-char-shard>\<key>.<ext>; the shard prefix is derived
-       deterministically from the key, so the file's basename without
-       extension is the key.}
       KeyOnly := TPath.GetFileNameWithoutExtension(FileName);
       if KeyOnly = '' then
         Continue;

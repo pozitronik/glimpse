@@ -30,13 +30,9 @@ type
     [Test] procedure OutOfRangeIndexIsSkipped;
     [Test] procedure ProgressCallbacksFire;
     [Test] procedure DoneCallbackFiresEvenOnEarlyExit;
-    {Negative test for the review claim that ExtractAtTarget stores the
-     extractor's bitmap reference shared with the result array so freeing
-     the result would leave a dangling pointer in the cache. The production
-     TFrameCache serialises the bitmap to a PNG on disk and drops the
-     reference; the next TryGet rebuilds a fresh TBitmap. The test
-     uses a real disk cache, frees the first result, and asserts the
-     second extraction returns a distinct, valid bitmap.}
+    {Pin that ExtractAtTarget does not share the extractor's TBitmap with
+     the cache: freeing the returned bitmap must not corrupt a subsequent
+     TryGet. Production TFrameCache serialises to PNG and drops the ref.}
     [Test] procedure CacheDoesNotShareBitmapWithResult;
   end;
 
@@ -49,9 +45,9 @@ uses
   uSaveResolutionExtractor;
 
 type
-  {Step 107: minimal test-side IProgressReporter that records every
-   lifecycle call so ProgressCallbacksFire / DoneCallbackFiresEvenOnEarlyExit
-   can assert on them without wiring 4 separate anonymous methods.}
+  {Test-side IProgressReporter that records every lifecycle call so
+   ProgressCallbacksFire / DoneCallbackFiresEvenOnEarlyExit can assert
+   on them without wiring 4 separate anonymous methods.}
   TRecordingReporter = class(TInterfacedObject, IProgressReporter)
   strict private
     FStartCalled: Boolean;
@@ -288,9 +284,10 @@ end;
 
 procedure TTestNeedsReExtractForSave.CapToNativeTriggersReExtract;
 begin
-  {Live extracted with cap (e.g. 1920), save wants native (0): re-extract
-   even though target seems "smaller" -- the cap selection is what matters
-   to the cache key, and a fresh native extraction is required.}
+  {Live extracted with cap (e.g. 1920), save wants native (0):
+   re-extract even though target seems "smaller". The cap selection
+   is what matters to the cache key, and a fresh native extraction
+   is required.}
   Assert.IsTrue(NeedsReExtractForSave(False, 9, 0, 1920),
     'Cap-to-native still requires re-extract');
 end;
@@ -548,8 +545,7 @@ begin
     try
       Assert.IsTrue(Reporter.StartCalled, 'Reporter.Start must fire on entry');
       Assert.IsTrue(Reporter.CompleteCalled, 'Reporter.Complete must fire on exit');
-      {Step 107 unified Start+Advance — one Advance per processed index.
-       Single-index extraction → 1 Advance call.}
+      {One Advance per processed index; single-index extraction → 1 call.}
       Assert.AreEqual(1, Reporter.AdvanceCount);
       Assert.AreEqual(1, Reporter.LastTotal,
         'Start receives the total work count up front');
@@ -571,9 +567,9 @@ var
   Reporter: TRecordingReporter;
   ReporterRef: IProgressReporter;
 begin
-  {Early-exit guards (empty offsets / empty indices / empty filename) must
-   not fire Reporter.Complete -- Complete is paired with the work loop,
-   which the early exits skip. Start does not fire either. Pin the contract.}
+  {Early-exit guards (empty offsets / empty indices / empty filename)
+   must not fire Reporter.Complete; Complete is paired with the work
+   loop, which the early exits skip. Start does not fire either.}
   Cache := TMockCache.Create;
   Ext := TMockExtractor.Create;
   Sub := TSaveResolutionExtractor.Create(Cache, Ext);
@@ -584,7 +580,7 @@ begin
     Ctx := MakeContext(0);
     Result := Sub.ExtractAtTarget(Ctx, 1920, [0]);
     Assert.IsFalse(Reporter.CompleteCalled,
-      'Early exit (no offsets) must not fire Reporter.Complete -- Start was never called');
+      'Early exit (no offsets) must not fire Reporter.Complete; Start was never called');
     Assert.IsFalse(Reporter.StartCalled);
     Assert.AreEqual(0, Integer(Length(Result)));
   finally

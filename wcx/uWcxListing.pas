@@ -1,16 +1,8 @@
-{Builds the typed entry list a WCX archive presents to Total Commander.
- Composes up to three independent listing sources — separate frames, the
- combined contact sheet, and user-defined ffmpeg presets — based on the
- booleans the caller passes in. Any combination is valid (including the
- all-off "empty archive" case). Filenames are deduped across the whole
- set so a preset template that happens to match a frame name still gets
- the (N) suffix.
- Pure data transformation — no I/O, no globals, no FFmpeg invocation.
- The WCX export layer consumes the result to drive ReadHeaderExW iteration
- and to dispatch ProcessFile to the appropriate extractor. Each entry is
- an IWcxEntryExtractor (TFrameEntry / TCombinedEntry / TPresetEntry) so
- the dispatch reduces to a single polymorphic call rather than a switch
- on a Kind enum.}
+{Builds the IWcxEntryExtractor array TC sees as an archive listing.
+ Composes frames + combined sheet + user presets per the Show* flags.
+ Filenames are deduped across the whole set so a preset template that
+ happens to match a frame name still gets the (N) suffix. Pure
+ transformation — no I/O.}
 unit uWcxListing;
 
 interface
@@ -21,27 +13,16 @@ uses
   uWcxPresets, uWcxPresetTemplate, uFileNameDedupe,
   uWcxEntryExtractors;
 
-{Builds the full archive listing for a video.
- The three booleans select which sources contribute entries; their order
- in the listing is fixed at frames first, combined next, presets last so
- existing TC scripts that key off the legacy positions stay stable.
- Frame entries occupy slot 0..Length(AOffsets)-1 when shown; the
- combined entry occupies the slot immediately after (Length(AOffsets) if
- frames are shown, 0 otherwise). The cache layer sizes its arrays to the
- same scheme.
- Filename dedupe runs across the whole composed listing, not per source.
- First-defined wins the bare name, subsequent collisions get "(N)"
- suffixes — frames before combined before presets.}
+{Order is fixed (frames, combined, presets) so existing TC scripts that
+ key off legacy positions stay stable. Dedupe runs across the composed
+ listing; first-defined wins the bare name.}
 function BuildArchiveListing(const AVideoFileName: string; const AOffsets: TFrameOffsetArray;
   AShowFrames, AShowCombined, AShowPresets: Boolean; ASaveFormat: TSaveFormat;
   const APresets: TWcxPresetArray): TWcxEntryExtractorArray;
 
-{Number of legacy (frame + combined) entries the cache code sizes its
- temp arrays against. Frames contribute Length(AOffsets) when shown; the
- combined image contributes one slot after. Presets do not pre-extract
- and so consume no temp slots. Single source of truth for the
- slot-numbering invariant: BuildArchiveListing uses it internally, and
- the cache layer in uWcxExports calls it before the listing exists.}
+{Single source of truth for the cache slot-numbering invariant: the
+ cache layer calls this BEFORE the listing exists, and
+ BuildArchiveListing uses it internally. Presets do not pre-extract.}
 function LegacyEntryCount(const AOffsets: TFrameOffsetArray; AShowFrames, AShowCombined: Boolean): Integer;
 
 implementation
@@ -77,10 +58,8 @@ begin
   else
     PresetCount := 0;
 
-  {The combined image sits in the cache slot immediately after the
-   frames; FrameCount=0 means it lands at slot 0 instead. TCombinedEntry
-   carries this slot so its Extract call looks up the right TempPaths
-   entry without re-deriving it from the iteration position.}
+  {TCombinedEntry carries this slot so Extract looks up the right
+   TempPaths entry without re-deriving it from the iteration position.}
   CombinedSlot := FrameCount;
 
   SetLength(AllNames, LegacyCount + PresetCount);

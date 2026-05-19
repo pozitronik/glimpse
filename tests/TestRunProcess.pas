@@ -17,12 +17,13 @@ type
     [Test] procedure SimultaneousStdOutAndStdErr;
     [Test] procedure EmptyOutput_ProducesEmptyBytes;
     [Test] procedure LargeOutput_CapturedFully;
-    {Wall-clock timeout: ATimeoutMs is the budget for total elapsed time, not
-     just the post-output wait. Earlier the function blocked on ReadPipeToEnd
-     until the child's stdout pipe closed -- a child that produces nothing
-     for 30 seconds blocked the call for 30 seconds regardless of the
-     500 ms timeout. The fix is a watcher thread that terminates the child
-     once ATimeoutMs elapses, cascading through pipe closure.}
+    {Wall-clock timeout: ATimeoutMs is the budget for total elapsed
+     time, not just the post-output wait. Earlier the function blocked
+     on ReadPipeToEnd until the child's stdout pipe closed, so a child
+     that produced nothing for 30 seconds blocked the call for 30
+     seconds regardless of the 500 ms timeout. The fix is a watcher
+     thread that terminates the child once ATimeoutMs elapses,
+     cascading through pipe closure.}
     [Test] procedure Timeout_TerminatesSlowChildWithinBudget;
     [Test] procedure BinaryOutput_PreservedExactly;
     { Cancellation contract: an optional cancel handle unblocks a long-running
@@ -39,12 +40,10 @@ type
     [Test] procedure Streaming_StderrStillBuffered;
     [Test] procedure Streaming_ReturnsExitCode;
     [Test] procedure Streaming_CancelHandleStopsLongRunningChild;
-    {RunProcessCore is the shared plumbing both public overloads delegate
-     to (step 64). A direct test exercises it with a custom consumer that
-     reads the stdout pipe directly — proves the core's contract
-     (consumer runs on calling thread, pipe handle is valid during the
-     call, exit code is propagated, cleanup happens in finally so a
-     raising consumer doesn't orphan the child).}
+    {Exercises RunProcessCore directly with a custom consumer that reads
+     the stdout pipe — pins the core contract (consumer runs on calling
+     thread, pipe handle is valid for the call, exit code propagated,
+     cleanup happens in finally even if the consumer raises).}
     [Test] procedure RunProcessCore_CustomConsumer_ReceivesPipeAndExitCode;
     [Test] procedure RunProcessCore_RaisingConsumer_StillCleansUpProcess;
   end;

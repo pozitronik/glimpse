@@ -477,9 +477,9 @@ var
   AlphaLine: PByteArray;
   ExpectedAlpha: Byte;
 begin
-  {Mirror of TestSavePNGAlphaRoundTrip but exercising the new stream
-   entry point instead of the file one. Pins that the alpha-aware fast
-   path is still selected for pf32bit sources when writing to a stream.}
+  {Mirror of TestSavePNGAlphaRoundTrip but via the stream entry point
+   instead of the file one. Pins that the alpha-aware fast path is
+   still selected for pf32bit sources when writing to a stream.}
   Src := TBitmap.Create;
   try
     Src.PixelFormat := pf32bit;

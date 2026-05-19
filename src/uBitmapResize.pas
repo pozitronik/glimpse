@@ -1,9 +1,6 @@
-{Bitmap downscaling helper.
- Used by the WCX combined-image path: the grid is rendered at full
- source resolution (so cell gaps stay intact) and then shrunk so the
- longer side fits the user-configured limit. The per-frame separate
- path achieves the same goal at extraction time via ffmpeg's scale
- filter (force_original_aspect_ratio=decrease).}
+{Bitmap downscaling helper for the WCX combined-image path. The grid is
+ rendered at full source resolution then shrunk to fit the longer-side
+ cap. The per-frame separate path scales at extraction time via ffmpeg.}
 unit uBitmapResize;
 
 interface
@@ -11,31 +8,12 @@ interface
 uses
   Winapi.Windows, Vcl.Graphics;
 
-{Computes the dimensions a bitmap would have after downscaling its longer
- side to fit within ACap. ACW/ACH are set to the post-cap size when the
- cap actually shrinks the image; otherwise they receive AW/AH unchanged.
-
- Returns True iff a downscale would happen (cap > 0 and longer side
- exceeds it). Use the return value to decide whether to allocate a new
- bitmap or whether the displayed dimensions differ from the source.
-
- Centralises the longest-side scaling math used by both
- DownscaleBitmapToFit (which actually performs the downscale) and the
- layout predictor in TPluginForm (which only needs to know the post-cap
- dimensions).}
+{Returns True iff a downscale would happen. ACW/ACH receive the post-cap
+ size, or AW/AH when no downscale is needed.}
 function ComputeCappedSize(AW, AH, ACap: Integer; out ACW, ACH: Integer): Boolean;
 
-{Downscales ABmp so its longer side fits within AMaxSide.
- Aspect ratio is preserved; orientation does not matter because the
- cap applies to whichever dimension is larger.
-
- Returns a new TBitmap on success. Returns nil when no downscaling is
- required so the caller can keep the original bitmap as-is:
- - AMaxSide is zero or negative;
- - the bitmap is empty or has invalid dimensions;
- - the bitmap already fits within the cap (no upscaling).
-
- Caller owns the returned bitmap.}
+{Returns nil when no downscaling is required (cap <= 0, empty bitmap,
+ or already fits). Caller owns the result.}
 function DownscaleBitmapToFit(ABmp: TBitmap; AMaxSide: Integer): TBitmap;
 
 implementation
@@ -43,9 +21,8 @@ implementation
 uses
   System.Math, System.Types;
 
-{Manual bilinear downscale that preserves the alpha channel. Used when the
- source is pf32bit; GDI's HALFTONE CopyRect path doesn't reliably write the
- alpha byte across all driver/Windows combinations, so we sample explicitly.}
+{Manual bilinear preserves the alpha channel; GDI's HALFTONE CopyRect
+ does not reliably write alpha across all driver/Windows combinations.}
 function ResampleAlphaAwareBilinear(ASrc: TBitmap; ANewW, ANewH: Integer): TBitmap;
 type
   TQuadRow = array [0 .. 0] of TRGBQuad;
@@ -71,10 +48,8 @@ begin
         IY := 0;
       if IY > ASrc.Height - 1 then
         IY := ASrc.Height - 1;
-      {Next-row index for bilinear interpolation. Clamping to the last row
-       collapses the row pair to nearest-neighbour at the bottom edge and on
-       1-pixel-tall sources (where ASrc.Height-2 = -1 would otherwise drive
-       IY to -1 and dereference ScanLine[-1]).}
+      {Clamp to last row so 1-pixel-tall sources collapse to nearest-
+       neighbour instead of dereferencing ScanLine[-1].}
       IY1 := IY + 1;
       if IY1 > ASrc.Height - 1 then
         IY1 := ASrc.Height - 1;
@@ -164,8 +139,8 @@ begin
   try
     Result.PixelFormat := pf24bit;
     Result.SetSize(NewW, NewH);
-    {HALFTONE averages source pixels properly; the default BLACKONWHITE
-     ANDs channel values independently, corrupting colors on downscale}
+    {HALFTONE averages source pixels properly; default BLACKONWHITE ANDs
+     channel values independently and corrupts colours on downscale.}
     SetStretchBltMode(Result.Canvas.Handle, HALFTONE);
     SetBrushOrgEx(Result.Canvas.Handle, 0, 0, nil);
     Result.Canvas.CopyRect(Rect(0, 0, NewW, NewH), ABmp.Canvas, Rect(0, 0, W, H));

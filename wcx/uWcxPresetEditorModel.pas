@@ -1,10 +1,7 @@
-{Working-set model for the WCX presets editor.
- Owns a mutable list of TWcxPreset records and exposes the operations the
- editor UI needs: add, remove, duplicate, reorder, and final validation.
- No UI dependencies — the editor form is a thin shell over this class so
- every behaviour pinned here is testable in isolation.
- Order matters: the listing-time dedupe pass gives the bare name to the
- first-defined preset, so MoveUp/Down change semantic priority too.}
+{Working-set model for the WCX presets editor. No UI dependencies so
+ every behaviour is testable in isolation. Order is semantic: listing-
+ time dedupe gives the bare name to the first-defined preset, so
+ reordering changes priority too.}
 unit uWcxPresetEditorModel;
 
 interface
@@ -18,18 +15,11 @@ type
   TPresetEditorModel = class
   strict private
     FPresets: TList<TWcxPreset>;
-    {Generates a non-colliding default name for a freshly-added preset.
-     Tries the bare prefix first, then suffixes _2, _3, ... until a
-     case-insensitive unique slot is found.}
     function GenerateUniqueName(const APrefix: string): string;
     function NameExists(const AName: string; AExceptIndex: Integer): Boolean;
-    {Returns True when AName matches any preset at an earlier index.
-     Used by Validate to flag the LATER of two duplicates as the
-     offender — that matches user intuition (the freshly-added entry
-     is the conflict, not the original).}
+    {Flags the LATER of two duplicates as the offender — the freshly-
+     added entry is the conflict from the user's perspective.}
     function HasDuplicateBefore(const AName: string; AIndex: Integer): Boolean;
-    {Per-preset rule runner shared by ValidateStructural and
-     ValidateForEditor. Differs only in ADuplicateCheck.}
     function CheckPresetAt(AIndex: Integer; const ADuplicateCheck: TFunc<string, Integer, Boolean>; out AReason: string): Boolean;
   public
     constructor Create;
@@ -41,33 +31,14 @@ type
     function Get(AIndex: Integer): TWcxPreset;
     procedure Update(AIndex: Integer; const APreset: TWcxPreset);
 
-    {Appends a new preset with sensible defaults and a unique name.
-     Returns the index of the new preset.}
     function Add: Integer;
     procedure Remove(AIndex: Integer);
-    {Inserts a copy right after the source. Returns the new index. The
-     copy gets a unique name (sourcename_copy, _copy_2, ...) so the
-     duplicate is immediately distinct.}
     function Duplicate(AIndex: Integer): Integer;
 
-    {Runs every validation rule against every preset and returns False
-     on first failure. AInvalidIndex points to the offender so the editor
-     can focus that row; AReason carries the user-visible message.
-     Rules: name non-empty and unique; OutputExt non-empty and free of
-     filename-illegal characters; OutputName free of path separators;
-     Args clear of the forbidden-token list.
-
-     Two variants differ ONLY in how a duplicate name is reported:
-       ValidateStructural — order-agnostic. Uses NameExists; on a
-         duplicate-name pair, the FIRST preset encountered in the loop
-         is flagged. Use this from non-UI paths (CLI, import).
-       ValidateForEditor — overlays the "blame the later duplicate"
-         UX rule via HasDuplicateBefore. The freshly-added preset is
-         the conflict from the user's perspective; the original keeps
-         its name. The editor dialog uses this variant.
-     Every other rule (empty name, OutputExt, OutputName, Args) is
-     identical between the two; the duplicate-blame is the only
-     semantic difference.}
+    {Both variants share every rule except duplicate-blame:
+     Structural blames the FIRST preset of a pair (order-agnostic, for
+     CLI/import). ForEditor blames the LATER one (matches user intent
+     for the freshly-added conflict).}
     function ValidateStructural(out AInvalidIndex: Integer; out AReason: string): Boolean;
     function ValidateForEditor(out AInvalidIndex: Integer; out AReason: string): Boolean;
   end;
@@ -182,11 +153,6 @@ begin
   FPresets.Insert(Result, Copy);
 end;
 
-{Per-preset rule runner shared by ValidateStructural and
- ValidateForEditor. The two callers differ only in ADuplicateCheck:
- NameExists for the structural variant (any-order conflict, the first
- preset of a pair is flagged), HasDuplicateBefore for the editor
- variant (LATER preset of the pair is flagged, matching user intent).}
 function TPresetEditorModel.CheckPresetAt(AIndex: Integer; const ADuplicateCheck: TFunc<string, Integer, Boolean>; out AReason: string): Boolean;
 var
   P: TWcxPreset;

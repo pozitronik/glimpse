@@ -112,8 +112,7 @@ begin
   Result.Canvas.FillRect(Rect(0, 0, AWidth, AHeight));
 end;
 
-{ Positional-arg builders so the pre-DTO test call sites stay one-liners.
-  Match the old RenderCombinedImage parameter order/defaults exactly. }
+{ Positional-arg builders so test call sites stay one-liners. }
 function MakeGrid(ACols, AGap: Integer; ABg: TColor; ABorder: Integer = 0): TCombinedGridStyle;
 begin
   Result.Columns := ACols;
