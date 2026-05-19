@@ -22,7 +22,7 @@ interface
 uses
   System.Classes,
   Vcl.Graphics,
-  uSettings, uBitmapWorkThread;
+  uSettings, uSettingsInterfaces, uBitmapWorkThread;
 
 type
   {Re-aliases from uBitmapWorkThread where these types and the
@@ -66,7 +66,11 @@ type
    paths (CF_HDROP file reference + in-memory format strategies).}
   TClipboardPublisher = class
   strict private
-    FSettings: TPluginSettings;
+    {Step 109 (N3, ISP): publisher only needs the clipboard-publish
+     slice of TPluginSettings (ClipboardFormats + PngCompression for
+     the in-memory CF_PNG path). Constructor takes IClipboardPolicy
+     instead of the whole god object.}
+    FClipboardPolicy: IClipboardPolicy;
     FOnAsyncTaskRun: TAsyncTaskRunner;
     {Path of the temp PNG we most recently wrote for the CF_HDROP
      "paste as file reference" toggle, or '' when nothing has been
@@ -77,7 +81,7 @@ type
      system's %TEMP% cleanup catches the file later.}
     FLastClipboardTempFile: string;
   public
-    constructor Create(ASettings: TPluginSettings);
+    constructor Create(const AClipboardPolicy: IClipboardPolicy);
     {Saves ABitmap to a fresh %TEMP%\glimpse_clip_*.png and publishes
      its path as CF_HDROP. Deletes the previous temp file if any.
 
@@ -160,10 +164,10 @@ end;
 
 { TClipboardPublisher }
 
-constructor TClipboardPublisher.Create(ASettings: TPluginSettings);
+constructor TClipboardPublisher.Create(const AClipboardPolicy: IClipboardPolicy);
 begin
   inherited Create;
-  FSettings := ASettings;
+  FClipboardPolicy := AClipboardPolicy;
 end;
 
 function TClipboardPublisher.PublishAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
@@ -234,11 +238,11 @@ begin
   AErrorMsg := '';
   {Capture the settings snapshot by value before crossing into the
    worker thread; the anonymous method below will reference these locals.
-   Reading FSettings directly inside the worker would also work today
-   (the values are immutable for the duration of the call) but the local
-   snapshot makes the lifetime contract explicit.}
-  FormatSettings := FSettings.ClipboardFormats;
-  PngCompression := FSettings.PngCompression;
+   Reading the interface directly inside the worker would also work
+   today (the values are immutable for the duration of the call) but
+   the local snapshot makes the lifetime contract explicit.}
+  FormatSettings := FClipboardPolicy.GetClipboardFormats;
+  PngCompression := FClipboardPolicy.GetPngCompression;
   Result := RunBitmapWorkInModal(ABitmap, 'Copying image to clipboard...',
     procedure(ABmp: TBitmap; var AOut: TBitmapWorkOutcome)
     var

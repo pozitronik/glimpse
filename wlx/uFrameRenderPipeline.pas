@@ -23,14 +23,25 @@ interface
 uses
   System.Types,
   Vcl.Graphics,
-  uFrameView, uSettings, uBannerInfo,
+  uFrameView, uSettingsInterfaces, uBannerInfo,
   uCombinedGrid, uTimecodeOverlay, uFrameOffsets;
 
 type
+  {Step 109 (N3, ISP): depends on 4 narrow per-concern interfaces
+   instead of the whole TPluginSettings god object.
+     IRenderColorPolicy     - Background/Alpha/CellGap/CombinedBorder
+                              for grid layout + scaling.
+     IBannerStyleProvider   - Banner record + ShowBanner toggle for
+                              banner attachment.
+     ITimecodeStyleProvider - Timestamp record for overlay rendering.
+     ISaveFormatPolicy      - CombinedMaxSide for the post-render cap.}
   TFrameRenderPipeline = class
   strict private
     FFrameView: TFrameView;
-    FSettings: TPluginSettings;
+    FRenderColorPolicy: IRenderColorPolicy;
+    FBannerStyleProvider: IBannerStyleProvider;
+    FTimecodeStyleProvider: ITimecodeStyleProvider;
+    FSavePolicy: ISaveFormatPolicy;
     FBannerInfo: TBannerInfo;
     {Optional save-resolution bitmaps supplied by the caller before a
      save/copy operation, indexed parallel to FFrameView cells. Bitmaps
@@ -46,7 +57,11 @@ type
     procedure BuildGridStyle(out AGrid: TCombinedGridStyle);
     procedure BuildTimestampStyle(out ATs: TTimestampStyle);
   public
-    constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
+    constructor Create(AFrameView: TFrameView;
+      const ARenderColorPolicy: IRenderColorPolicy;
+      const ABannerStyleProvider: IBannerStyleProvider;
+      const ATimecodeStyleProvider: ITimecodeStyleProvider;
+      const ASavePolicy: ISaveFormatPolicy);
     {Returns the bitmap that the save/copy paths should consume for cell
      AIndex, honouring FOverrideFrames when set and the toggle is off.
      ALiveResolutionIntent: True means "render at on-screen cell size"
@@ -105,10 +120,11 @@ type
      the previous internal read of FSettings.SaveAtLiveResolution.}
     function RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
-    {Shrinks ABmp in place when FSettings.CombinedMaxSide > 0 and the bitmap's
-     longer side exceeds the cap. The original is freed and replaced with a
-     downscaled copy. No-op when the cap is 0 (unlimited) or the bitmap
-     already fits. Centralises the policy used by SaveView and CopyView.}
+    {Shrinks ABmp in place when ISaveFormatPolicy.GetCombinedMaxSide > 0
+     and the bitmap's longer side exceeds the cap. The original is freed
+     and replaced with a downscaled copy. No-op when the cap is 0
+     (unlimited) or the bitmap already fits. Centralises the policy used
+     by SaveView and CopyView.}
     procedure ApplyCombinedSizeCap(var ABmp: TBitmap);
     procedure UpdateBannerInfo(const AInfo: TBannerInfo);
     {Caller-supplied save-resolution bitmaps. Set before invoking a save
@@ -136,11 +152,18 @@ type
 
 { TFrameRenderPipeline }
 
-constructor TFrameRenderPipeline.Create(AFrameView: TFrameView; ASettings: TPluginSettings);
+constructor TFrameRenderPipeline.Create(AFrameView: TFrameView;
+  const ARenderColorPolicy: IRenderColorPolicy;
+  const ABannerStyleProvider: IBannerStyleProvider;
+  const ATimecodeStyleProvider: ITimecodeStyleProvider;
+  const ASavePolicy: ISaveFormatPolicy);
 begin
   inherited Create;
   FFrameView := AFrameView;
-  FSettings := ASettings;
+  FRenderColorPolicy := ARenderColorPolicy;
+  FBannerStyleProvider := ABannerStyleProvider;
+  FTimecodeStyleProvider := ATimecodeStyleProvider;
+  FSavePolicy := ASavePolicy;
 end;
 
 {Picks which bitmap to feed into the save/copy renderers for cell AIndex.
@@ -191,13 +214,14 @@ end;
 procedure TFrameRenderPipeline.BuildGridStyle(out AGrid: TCombinedGridStyle);
 begin
   {Columns=0 means "auto" (ceil(sqrt(N))); callers override when needed.}
-  AGrid := TCombinedGridStyle.FromFields(0, FSettings.CellGap, FSettings.CombinedBorder,
-    FSettings.Background, FSettings.BackgroundAlpha);
+  AGrid := TCombinedGridStyle.FromFields(0,
+    FRenderColorPolicy.GetCellGap, FRenderColorPolicy.GetCombinedBorder,
+    FRenderColorPolicy.GetBackground, FRenderColorPolicy.GetBackgroundAlpha);
 end;
 
 procedure TFrameRenderPipeline.BuildTimestampStyle(out ATs: TTimestampStyle);
 begin
-  ATs := TTimestampStyle.FromSettings(FSettings.Timestamp);
+  ATs := TTimestampStyle.FromSettings(FTimecodeStyleProvider.GetTimestamp);
   {Live-view "show timecode" toggle wins over the persisted setting so
    the saved render matches what the user is looking at.}
   ATs.Show := FFrameView.ShowTimecode;
@@ -261,7 +285,7 @@ begin
     Result.SetSize(AW, AH);
     if (ASrc = nil) or (ASrc.Width <= 0) or (ASrc.Height <= 0) then
     begin
-      Result.Canvas.Brush.Color := FSettings.Background;
+      Result.Canvas.Brush.Color := FRenderColorPolicy.GetBackground;
       Result.Canvas.FillRect(Rect(0, 0, AW, AH));
       Exit;
     end;
@@ -294,7 +318,7 @@ begin
   if FFrameView.ViewMode = vmSmartGrid then
     Result := ScaleBitmapCropToFill(Src, W, H)
   else
-    Result := ScaleBitmapLetterbox(Src, W, H, FSettings.Background);
+    Result := ScaleBitmapLetterbox(Src, W, H, FRenderColorPolicy.GetBackground);
 end;
 
 procedure TFrameRenderPipeline.GetSmartGridParameters(out APanelInnerW, APanelInnerH: Integer; out AAspectRatio: Double);
@@ -331,8 +355,8 @@ begin
   if N = 0 then
     Exit;
 
-  Border := Max(0, FSettings.CombinedBorder);
-  Gap := Max(0, FSettings.CellGap);
+  Border := Max(0, FRenderColorPolicy.GetCombinedBorder);
+  Gap := Max(0, FRenderColorPolicy.GetCellGap);
 
   GetSmartGridParameters(PanelInnerW, PanelInnerH, AspectRatio);
   ARowCounts := ComputeSmartGridRows(N, PanelInnerW, PanelInnerH, Gap, AspectRatio);
@@ -457,7 +481,7 @@ begin
   try
     for I := 0 to N - 1 do
       if Frames[I] <> nil then
-        Scaled[I] := ScaleBitmapLetterbox(Frames[I], CellW, CellH, FSettings.Background)
+        Scaled[I] := ScaleBitmapLetterbox(Frames[I], CellW, CellH, FRenderColorPolicy.GetBackground)
       else
         Scaled[I] := nil;
 
@@ -554,10 +578,10 @@ end;
 
 function TFrameRenderPipeline.RenderWithBanner(ABmp: TBitmap): TBitmap;
 begin
-  if FSettings.ShowBanner then
+  if FBannerStyleProvider.GetShowBanner then
   begin
     Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo),
-      TBannerStyle.FromSettings(FSettings.Banner));
+      TBannerStyle.FromSettings(FBannerStyleProvider.GetBanner));
     ABmp.Free;
   end
   else
@@ -568,9 +592,9 @@ procedure TFrameRenderPipeline.ApplyCombinedSizeCap(var ABmp: TBitmap);
 var
   Shrunk: TBitmap;
 begin
-  if (ABmp = nil) or (FSettings.CombinedMaxSide <= 0) then
+  if (ABmp = nil) or (FSavePolicy.GetCombinedMaxSide <= 0) then
     Exit;
-  Shrunk := DownscaleBitmapToFit(ABmp, FSettings.CombinedMaxSide);
+  Shrunk := DownscaleBitmapToFit(ABmp, FSavePolicy.GetCombinedMaxSide);
   if Shrunk = nil then
     Exit; {Already fits - keep the original.}
   ABmp.Free;

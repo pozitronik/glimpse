@@ -18,17 +18,23 @@ unit uFrameDimensionPredictor;
 interface
 
 uses
-  uFrameView, uSettings,
+  uFrameView, uSettingsInterfaces,
   uFrameRenderPipeline;
 
 type
+  {Step 109 (N3, ISP): depends only on IRenderColorPolicy (CellGap +
+   CombinedBorder for the layout math) and ISaveFormatPolicy
+   (CombinedMaxSide for the cap clamp).}
   TFrameDimensionPredictor = class
   strict private
     FFrameView: TFrameView;
-    FSettings: TPluginSettings;
+    FRenderColorPolicy: IRenderColorPolicy;
+    FSavePolicy: ISaveFormatPolicy;
     FRenderPipeline: TFrameRenderPipeline;
   public
-    constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings;
+    constructor Create(AFrameView: TFrameView;
+      const ARenderColorPolicy: IRenderColorPolicy;
+      const ASavePolicy: ISaveFormatPolicy;
       ARenderPipeline: TFrameRenderPipeline);
     {Predicts the pixel dimensions the rendered combined image would have
      for a one-shot resolution choice, before banner attachment and before
@@ -38,8 +44,8 @@ type
     procedure PredictCombinedSize(AForceLiveRes: Boolean; out AW, AH: Integer);
     {Predicts the rendered combined-image dimensions and the post-cap
      dimensions for a one-shot resolution choice. ACappedW/H equal AW/H
-     when the FSettings.CombinedMaxSide cap does not apply (cap=0 or
-     image already fits). Returns False when no frames are loaded yet.}
+     when the CombinedMaxSide cap does not apply (cap=0 or image
+     already fits). Returns False when no frames are loaded yet.}
     function PredictDisplayedSize(AForceLiveRes: Boolean; out AW, AH, ACappedW, ACappedH: Integer): Boolean;
     {Returns the bracketed dimension suffix used on the Save/Copy view
      dropdown menu items, e.g. " [1920x1080]" or
@@ -56,11 +62,14 @@ uses
   uTypes, uCombinedGrid, uBitmapResize, uPlatformDetect;
 
 constructor TFrameDimensionPredictor.Create(AFrameView: TFrameView;
-  ASettings: TPluginSettings; ARenderPipeline: TFrameRenderPipeline);
+  const ARenderColorPolicy: IRenderColorPolicy;
+  const ASavePolicy: ISaveFormatPolicy;
+  ARenderPipeline: TFrameRenderPipeline);
 begin
   inherited Create;
   FFrameView := AFrameView;
-  FSettings := ASettings;
+  FRenderColorPolicy := ARenderColorPolicy;
+  FSavePolicy := ASavePolicy;
   FRenderPipeline := ARenderPipeline;
 end;
 
@@ -109,8 +118,8 @@ begin
   end;
 
   {Uniform-row modes (vmGrid, vmFilmstrip, vmScroll).}
-  Border := Max(0, FSettings.CombinedBorder);
-  Gap := Max(0, FSettings.CellGap);
+  Border := Max(0, FRenderColorPolicy.GetCombinedBorder);
+  Gap := Max(0, FRenderColorPolicy.GetCellGap);
   FRenderPipeline.ComputeUniformLayoutInputs(AForceLiveRes, Cols, CellW, CellH);
   Sz := ComputeCombinedImageSize(N, Cols, CellW, CellH, Border, Gap);
   AW := Sz.X;
@@ -127,7 +136,7 @@ begin
   PredictCombinedSize(AForceLiveRes, AW, AH);
   if (AW <= 0) or (AH <= 0) then
     Exit;
-  ComputeCappedSize(AW, AH, FSettings.CombinedMaxSide, ACappedW, ACappedH);
+  ComputeCappedSize(AW, AH, FSavePolicy.GetCombinedMaxSide, ACappedW, ACappedH);
   Result := True;
 end;
 

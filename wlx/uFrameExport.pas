@@ -256,10 +256,17 @@ begin
   inherited Create;
   FFrameView := AFrameView;
   FSettings := ASettings;
+  {Step 109 (N3, ISP): the facade still takes TPluginSettings (so the
+   form's existing call site doesn't change), but each sub-presenter
+   constructor now takes the narrow interface slice it actually needs.
+   Delphi auto-coerces ASettings to each interface via the implements
+   clause on TPluginSettings.}
   FSaveDialog := TSaveDialogPresenter.Create(ASettings);
   FClipboardPublisher := TClipboardPublisher.Create(ASettings);
-  FRenderPipeline := TFrameRenderPipeline.Create(AFrameView, ASettings);
-  FDimensionPredictor := TFrameDimensionPredictor.Create(AFrameView, ASettings, FRenderPipeline);
+  FRenderPipeline := TFrameRenderPipeline.Create(AFrameView,
+    ASettings, ASettings, ASettings, ASettings);
+  FDimensionPredictor := TFrameDimensionPredictor.Create(AFrameView,
+    ASettings, ASettings, FRenderPipeline);
 end;
 
 destructor TFrameExporter.Destroy;

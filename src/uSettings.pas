@@ -18,10 +18,19 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.UITypes, System.Math,
-  uBitmapSaver, uTypes, uStatusBarLayout, uDefaults, uHotkeys, uSettingsGroups, uUnicodeIniFile;
+  uBitmapSaver, uTypes, uStatusBarLayout, uDefaults, uHotkeys, uSettingsGroups, uUnicodeIniFile,
+  uSettingsInterfaces;
 
 type
-  TPluginSettings = class
+  {Step 109 (N3, ISP): TPluginSettings implements 5 narrow per-concern
+   interfaces (see uSettingsInterfaces) so collaborators can hold typed
+   refs to just the slice they need. Inherits from TNoRefCountObject
+   (not TInterfacedObject) because the WLX form owns the instance
+   manually — automatic refcounting would crash when both the form
+   and an interface field hold the same instance.}
+  TPluginSettings = class(TNoRefCountObject,
+    ITimecodeStyleProvider, IBannerStyleProvider, ISaveFormatPolicy,
+    IRenderColorPolicy, IClipboardPolicy)
   strict private
     FIniPath: string;
     FFFmpeg: TFFmpegSettingsGroup;
@@ -220,6 +229,28 @@ type
      ListSetDefaultParams (TC startup) and forwards to
      TDebugLog.Configure; hand-edits take effect on the next TC restart.}
     property DebugLogEnabled: Boolean read FDebugLogEnabled write FDebugLogEnabled;
+
+    {Step 109: per-concern narrow-interface implementations. Each method
+     just delegates to the existing flat property. Save (the method) is
+     declared above and satisfies ISaveFormatPolicy.Save without an
+     extra delegation.}
+    function GetTimestamp: TTimestampSettingsGroup;
+    function GetBanner: TBannerSettingsGroup;
+    function GetShowBanner: Boolean;
+    function GetSaveFormat: TSaveFormat;
+    function GetSaveFolder: string;
+    procedure SetSaveFolder(const AValue: string);
+    function GetSaveAtLiveResolution: Boolean;
+    procedure SetSaveAtLiveResolution(AValue: Boolean);
+    function GetCopyAtLiveResolution: Boolean;
+    function GetCombinedMaxSide: Integer;
+    function GetBackground: TColor;
+    function GetBackgroundAlpha: Byte;
+    function GetCellGap: Integer;
+    function GetCombinedBorder: Integer;
+    function GetClipboardFormats: TClipboardFormatsGroup;
+    function GetClipboardAsFileReference: Boolean;
+    function GetPngCompression: Integer;
   end;
 
 const
@@ -445,6 +476,94 @@ end;
 procedure TPluginSettings.SetActiveZoom(AValue: TZoomMode);
 begin
   FView.ModeZoom[FView.Mode] := AValue;
+end;
+
+{Step 109 narrow-interface implementations. Each body is a one-liner
+ that delegates to the matching flat property or field.}
+
+function TPluginSettings.GetTimestamp: TTimestampSettingsGroup;
+begin
+  Result := FTimestamp;
+end;
+
+function TPluginSettings.GetBanner: TBannerSettingsGroup;
+begin
+  Result := FBanner;
+end;
+
+function TPluginSettings.GetShowBanner: Boolean;
+begin
+  Result := FBanner.Show;
+end;
+
+function TPluginSettings.GetSaveFormat: TSaveFormat;
+begin
+  Result := FSave.SaveFormat;
+end;
+
+function TPluginSettings.GetSaveFolder: string;
+begin
+  Result := FSave.SaveFolder;
+end;
+
+procedure TPluginSettings.SetSaveFolder(const AValue: string);
+begin
+  FSave.SaveFolder := AValue;
+end;
+
+function TPluginSettings.GetSaveAtLiveResolution: Boolean;
+begin
+  Result := FSave.SaveAtLiveResolution;
+end;
+
+procedure TPluginSettings.SetSaveAtLiveResolution(AValue: Boolean);
+begin
+  FSave.SaveAtLiveResolution := AValue;
+end;
+
+function TPluginSettings.GetCopyAtLiveResolution: Boolean;
+begin
+  Result := FSave.CopyAtLiveResolution;
+end;
+
+function TPluginSettings.GetCombinedMaxSide: Integer;
+begin
+  Result := FSave.CombinedMaxSide;
+end;
+
+function TPluginSettings.GetBackground: TColor;
+begin
+  Result := FView.Background;
+end;
+
+function TPluginSettings.GetBackgroundAlpha: Byte;
+begin
+  Result := FSave.BackgroundAlpha;
+end;
+
+function TPluginSettings.GetCellGap: Integer;
+begin
+  Result := FView.CellGap;
+end;
+
+function TPluginSettings.GetCombinedBorder: Integer;
+begin
+  Result := FView.CombinedBorder;
+end;
+
+function TPluginSettings.GetClipboardFormats: TClipboardFormatsGroup;
+begin
+  Result := FClipboardFormats;
+end;
+
+function TPluginSettings.GetClipboardAsFileReference: Boolean;
+begin
+  Result := FSave.ClipboardAsFileReference;
+end;
+
+function TPluginSettings.GetPngCompression: Integer;
+begin
+  Result := FSave.PngCompression;
 end;
 
 end.

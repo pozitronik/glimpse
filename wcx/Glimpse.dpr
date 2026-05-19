@@ -48,6 +48,7 @@ uses
   uFFmpegCmdLine in '..\src\infrastructure\uFFmpegCmdLine.pas',
   uIniEncoding in '..\src\infrastructure\uIniEncoding.pas',
   uIniDocument in '..\src\infrastructure\uIniDocument.pas',
+  uSettingsInterfaces in '..\src\uSettingsInterfaces.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsDlgLogic in '..\src\uSettingsDlgLogic.pas',
   uSettingsDlgUI in '..\src\uSettingsDlgUI.pas',

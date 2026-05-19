@@ -14,20 +14,24 @@ unit uSaveDialogPresenter;
 interface
 
 uses
-  uSettings, uBitmapSaver;
+  uSettingsInterfaces, uBitmapSaver;
 
 type
   {Presents the system "Save as" dialog and reports the user's choices
    back via out parameters. Lifetime is one-call: create on the stack,
-   invoke Show, destroy. The presenter mutates ASettings on accept
-   (SaveFolder + SaveAtLiveResolution) and calls ASettings.Save so the
-   persisted state matches what the dialog returned; the caller does
-   not need to redo the save.}
+   invoke Show, destroy. The presenter mutates the policy on accept
+   (SaveFolder + SaveAtLiveResolution) and calls Save so the persisted
+   state matches what the dialog returned; the caller does not need to
+   redo the save.
+
+   Step 109 (N3, ISP): depends on ISaveFormatPolicy only (read +
+   write + Save). The full TPluginSettings is no longer threaded
+   through.}
   TSaveDialogPresenter = class
   strict private
-    FSettings: TPluginSettings;
+    FSavePolicy: ISaveFormatPolicy;
   public
-    constructor Create(ASettings: TPluginSettings);
+    constructor Create(const ASavePolicy: ISaveFormatPolicy);
     {Opens the file dialog and returns the chosen path/format. The
      AInitialLiveRes value seeds the dialog: on modern Windows it is the
      starting state of the inline 'Save at view resolution' check button
@@ -114,10 +118,10 @@ end;
 
 { TSaveDialogPresenter }
 
-constructor TSaveDialogPresenter.Create(ASettings: TPluginSettings);
+constructor TSaveDialogPresenter.Create(const ASavePolicy: ISaveFormatPolicy);
 begin
   inherited Create;
-  FSettings := ASettings;
+  FSavePolicy := ASavePolicy;
 end;
 
 function TSaveDialogPresenter.Show(const ATitle, ADefaultName: string;
@@ -154,7 +158,7 @@ begin
           JpegType.DisplayName := 'JPEG image';
           JpegType.FileMask := '*.jpg';
 
-          case FSettings.SaveFormat of
+          case FSavePolicy.GetSaveFormat of
             sfJPEG:
               ModernDlg.FileTypeIndex := 2;
             else
@@ -162,8 +166,8 @@ begin
           end;
           ModernDlg.DefaultExtension := 'png';
           ModernDlg.FileName := ADefaultName;
-          if FSettings.SaveFolder <> '' then
-            ModernDlg.DefaultFolder := ExpandEnvVars(FSettings.SaveFolder);
+          if FSavePolicy.GetSaveFolder <> '' then
+            ModernDlg.DefaultFolder := ExpandEnvVars(FSavePolicy.GetSaveFolder);
           if AOverwritePrompt then
             ModernDlg.Options := ModernDlg.Options + [fdoOverWritePrompt]
           else
@@ -180,9 +184,9 @@ begin
                 AFormat := sfPNG;
             end;
             APath := ModernDlg.FileName;
-            FSettings.SaveFolder := ExtractFilePath(ModernDlg.FileName);
-            FSettings.SaveAtLiveResolution := Hook.FinalState;
-            FSettings.Save;
+            FSavePolicy.SetSaveFolder(ExtractFilePath(ModernDlg.FileName));
+            FSavePolicy.SetSaveAtLiveResolution(Hook.FinalState);
+            FSavePolicy.Save;
             Result := True;
           end;
           ModernHandled := True;
@@ -205,7 +209,7 @@ begin
   try
     LegacyDlg.Title := ATitle;
     LegacyDlg.Filter := 'PNG image (*.png)|*.png|JPEG image (*.jpg)|*.jpg';
-    case FSettings.SaveFormat of
+    case FSavePolicy.GetSaveFormat of
       sfJPEG:
         LegacyDlg.FilterIndex := 2;
       else
@@ -213,8 +217,8 @@ begin
     end;
     LegacyDlg.DefaultExt := 'png';
     LegacyDlg.FileName := ADefaultName;
-    if FSettings.SaveFolder <> '' then
-      LegacyDlg.InitialDir := ExpandEnvVars(FSettings.SaveFolder);
+    if FSavePolicy.GetSaveFolder <> '' then
+      LegacyDlg.InitialDir := ExpandEnvVars(FSavePolicy.GetSaveFolder);
     if AOverwritePrompt then
       LegacyDlg.Options := LegacyDlg.Options + [ofOverwritePrompt];
 
@@ -227,11 +231,11 @@ begin
           AFormat := sfPNG;
       end;
       APath := LegacyDlg.FileName;
-      FSettings.SaveFolder := ExtractFilePath(LegacyDlg.FileName);
+      FSavePolicy.SetSaveFolder(ExtractFilePath(LegacyDlg.FileName));
       {No dialog override available on legacy Windows, so the caller's
        seed becomes the persisted choice.}
-      FSettings.SaveAtLiveResolution := AInitialLiveRes;
-      FSettings.Save;
+      FSavePolicy.SetSaveAtLiveResolution(AInitialLiveRes);
+      FSavePolicy.Save;
       Result := True;
     end;
   finally

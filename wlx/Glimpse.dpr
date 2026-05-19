@@ -13,6 +13,7 @@ uses
   uDefaults in '..\src\uDefaults.pas',
   uWlxAPI in 'uWlxAPI.pas',
   uPluginExports in 'uPluginExports.pas',
+  uSettingsInterfaces in '..\src\uSettingsInterfaces.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsToggleService in '..\src\uSettingsToggleService.pas',
   uFrameOffsets in '..\src\uFrameOffsets.pas',

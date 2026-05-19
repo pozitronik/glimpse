@@ -12,6 +12,8 @@ uses
   uStatusBarLayout in '..\src\uStatusBarLayout.pas',
   uDefaults in '..\src\uDefaults.pas',
   uSettingsGroups in '..\src\uSettingsGroups.pas',
+  uSettingsInterfaces in '..\src\uSettingsInterfaces.pas',
+  TestSettingsInterfaces in 'TestSettingsInterfaces.pas',
   uSettings in '..\src\uSettings.pas',
   uSettingsToggleService in '..\src\uSettingsToggleService.pas',
   TestSettingsToggleService in 'TestSettingsToggleService.pas',
