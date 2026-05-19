@@ -107,6 +107,8 @@
         <DCCReference Include="uToolbarGlyphLibrary.pas"/>
         <DCCReference Include="uToolbarBuilder.pas"/>
         <DCCReference Include="uToolbarController.pas"/>
+        <DCCReference Include="uViewportRefreshDebouncer.pas"/>
+        <DCCReference Include="uLoadTimeRecorder.pas"/>
         <DCCReference Include="..\src\uFileNavigator.pas"/>
         <DCCReference Include="..\src\uPathExpand.pas"/>
         <DCCReference Include="..\src\uColorConv.pas"/>

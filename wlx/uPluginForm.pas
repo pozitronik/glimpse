@@ -12,6 +12,7 @@ uses
   uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uToolbarController, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
+  uViewportRefreshDebouncer, uLoadTimeRecorder,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache, uPluginServices,
   uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
@@ -175,15 +176,11 @@ type
     FServices: TPluginServices;
     {Animation}
     FAnimTimer: TTimer;
-    {Debounce timer for "re-extract after the user stops resizing / switching
-     modes". Kicked on every viewport-changing event; its OnTimer fires once
-     the events settle, compares the computed MaxSide to what was used for
-     the last extraction, and triggers a soft refresh when they differ.}
-    FViewportRefreshTimer: TTimer;
-    {Options.MaxSide value from the last StartExtraction. 0 means no prior
-     extraction or scaling was off; compared against the freshly-computed
-     MaxSide in OnViewportRefreshTimer to decide whether to soft-refresh.}
-    FLastExtractionMaxSide: Integer;
+    {Step 105 (C1, part 2): viewport-refresh debounce + last-extraction-
+     size memo lifted into TViewportRefreshDebouncer. The form supplies
+     the precondition check + max-side computer + refresh callback;
+     the helper owns the timer.}
+    FViewportRefreshDebouncer: TViewportRefreshDebouncer;
     {True when FOffsets currently holds randomly-picked positions (either
      because Settings.RandomExtraction was on at build time, or the user
      invoked Shuffle as a one-shot override). Drives cache-override
@@ -196,10 +193,10 @@ type
     FQuickViewMode: Boolean;
     {Suppresses WM_CHAR after OnKeyDown consumed the keystroke}
     FKeyConsumed: Boolean;
-    {Tick count when LoadFile started (for load time measurement)}
-    FLoadStartTick: Cardinal;
-    {Formatted load time string, populated when extraction completes}
-    FLoadTimeStr: string;
+    {Step 105 (C1, part 2): load-time bookkeeping lifted into
+     TLoadTimeRecorder. Start in StartExtraction, Finalize in
+     WMExtractionDone, formatted string read by BuildStatusBarValues.}
+    FLoadTimer: TLoadTimeRecorder;
     {Rolling snapshot used by ShowSettings to detect what changed since the
      previous Apply/OK commit, so Apply can be pressed repeatedly and only
      trigger the side-effects (cache recreate, re-extract) that apply to the
@@ -226,7 +223,7 @@ type
     procedure UpdateStatusBar;
     {Snapshot every datum the status-bar formatter consumes. Reads
      FFileName / FSettings / FOffsets / FFrameView / FVideoInfo /
-     FExporter / FLoadTimeStr; safe to call any time, never mutates.}
+     FExporter / FLoadTimer.Formatted; safe to call any time, never mutates.}
     procedure BuildStatusBarValues(out AValues: TStatusBarValues);
     {Pushes the four status-bar settings (template, font name + size,
      auto-width-live flag) into the renderer. Triggers a re-parse +
@@ -321,8 +318,6 @@ type
     procedure NavigateToAdjacentFile(ADelta: Integer);
     procedure RefreshExtraction;
     procedure SoftRefreshExtraction;
-    procedure ScheduleViewportRefresh;
-    procedure OnViewportRefreshTimer(Sender: TObject);
     {Builds FOffsets from the current FVideoInfo.Duration / frame count /
      skip-edges. AForceRandom = True overrides Settings.RandomExtraction
      for the current build only (used by Shuffle); otherwise the
@@ -354,7 +349,6 @@ type
     procedure UpdateProgress;
     procedure ShowProgress(const AText: string);
     procedure HideProgress;
-    procedure FinalizeLoadTime;
     procedure RepositionProgressBar;
     procedure OnAnimTimer(Sender: TObject);
     procedure OnFrameCountChange(Sender: TObject);
@@ -836,10 +830,34 @@ begin
   FAnimTimer.OnTimer := OnAnimTimer;
   FAnimTimer.Enabled := True;
 
-  FViewportRefreshTimer := TTimer.Create(Self);
-  FViewportRefreshTimer.Interval := VIEWPORT_REFRESH_DEBOUNCE_MS;
-  FViewportRefreshTimer.OnTimer := OnViewportRefreshTimer;
-  FViewportRefreshTimer.Enabled := False;
+  {Step 105 (C1, part 2): TViewportRefreshDebouncer owns the timer + the
+   last-extraction-max-side memo + the precondition / fire logic. The
+   form supplies 3 callbacks: should-refresh (combined preconditions),
+   compute-current-max-side, and the action (SoftRefreshExtraction).}
+  FViewportRefreshDebouncer := TViewportRefreshDebouncer.Create(Self,
+    VIEWPORT_REFRESH_DEBOUNCE_MS,
+    function: Boolean
+    begin
+      Result := (FSettings <> nil) and FSettings.AutoRefreshOnViewportChange
+        and FSettings.ScaledExtraction and FVideoInfo.IsValid
+        and (FFileName <> '') and (Length(FOffsets) > 0);
+    end,
+    function: Integer
+    var
+      ViewportFrames: Integer;
+    begin
+      ViewportFrames := ViewportFrameCount(FFrameView.ViewMode, Length(FOffsets));
+      Result := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight,
+        ViewportFrames, FFrameView.AspectRatio,
+        FVideoInfo.Width, FVideoInfo.Height,
+        FSettings.MinFrameSide, FSettings.MaxFrameSide);
+    end,
+    procedure
+    begin
+      SoftRefreshExtraction;
+    end);
+
+  FLoadTimer := TLoadTimeRecorder.Create;
 
   {Build the command dispatch table after every collaborator the
    handlers read from (FExporter, FFrameView, FSettings, FFileName)
@@ -885,6 +903,8 @@ begin
    destructor. Free the controller before inherited so its destructor
    runs while form fields are still alive.}
   FreeAndNil(FToolbarController);
+  FreeAndNil(FViewportRefreshDebouncer);
+  FreeAndNil(FLoadTimer);
   {FStatusBarRenderer is owned by Self (step 59) — inherited TForm.Destroy
    iterates FComponents and frees it. The resolver method-reference
    captures Self; release happens during the inherited pass while
@@ -1284,7 +1304,7 @@ begin
     end;
   end;
 
-  AValues.LoadTimeText := FLoadTimeStr;
+  AValues.LoadTimeText := FLoadTimer.Formatted;
 end;
 
 procedure TPluginForm.UpdateStatusBar;
@@ -1422,7 +1442,7 @@ begin
   {Mode change might have altered the effective per-frame viewport
    (grid<->single), so kick the debounce timer; the actual refresh only
    fires if the computed MaxSide actually changes.}
-  ScheduleViewportRefresh;
+  FViewportRefreshDebouncer.Schedule;
   {Status bar's frame-position panel switches between "N / Total" and
    "Total" based on mode.}
   UpdateStatusBar;
@@ -1529,8 +1549,7 @@ end;
 procedure TPluginForm.LoadFile(const AFileName: string);
 begin
   FormLog(Format('LoadFile: %s', [AFileName]));
-  FLoadStartTick := GetTickCount;
-  FLoadTimeStr := '';
+  FLoadTimer.Start;
   FFileName := AFileName;
   SetWindowText(FParentWnd, PChar(Format('Lister (glimpse) - [%s]', [AFileName])));
   FExtractCtrl.Stop;
@@ -1631,8 +1650,7 @@ var
   ViewportFrames: Integer;
 begin
   FExtractCtrl.Stop;
-  FLoadStartTick := GetTickCount;
-  FLoadTimeStr := '';
+  FLoadTimer.Start;
   UpdateToolbarButtons;
 
   FProgressBar.Style := pbstMarquee;
@@ -1648,9 +1666,10 @@ begin
   else
     Options := FSettings.Extraction.ToExtractionOptions;
 
-  {Remember the extraction size so OnViewportRefreshTimer can decide
-   whether the next viewport-change event actually changed anything.}
-  FLastExtractionMaxSide := Options.MaxSide;
+  {Remember the extraction size so the debouncer's fire-time compare
+   can decide whether the next viewport-change event actually changed
+   anything.}
+  FViewportRefreshDebouncer.RecordExtractionMaxSide(Options.MaxSide);
 
   Extractor := FServices.FrameExtractorFactory.CreateExtractor(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets, FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
@@ -1665,7 +1684,7 @@ var
   Total, I: Integer;
 begin
   Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height, FSettings.ScaledExtraction, FSettings.MaxFrameSide);
-  if not NeedsReExtractForSave(FSettings.SaveAtLiveResolution, Length(AIndices), Target, FLastExtractionMaxSide) then
+  if not NeedsReExtractForSave(FSettings.SaveAtLiveResolution, Length(AIndices), Target, FViewportRefreshDebouncer.LastExtractionMaxSide) then
   begin
     AAction;
     Exit;
@@ -1759,22 +1778,6 @@ begin
   FStatusBar.Visible := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
 end;
 
-procedure TPluginForm.FinalizeLoadTime;
-var
-  ElapsedMs: Cardinal;
-begin
-  if FLoadStartTick = 0 then
-    Exit;
-  if FLoadTimeStr <> '' then
-    Exit; {already finalized}
-
-  {Cast guards correct unsigned wraparound; GetTickCount avoids the Vista+
-   GetTickCount64 dependency that crashes on XP via delay-load.}
-  ElapsedMs := Cardinal(GetTickCount - FLoadStartTick);
-  FLoadTimeStr := FormatLoadTimeMs(ElapsedMs);
-  UpdateStatusBar;
-end;
-
 procedure TPluginForm.RepositionProgressBar;
 const
   {Tiny inset so the bar doesn't touch the status bar's borders.}
@@ -1805,7 +1808,8 @@ begin
   UpdateToolbarButtons;
   if FExtractCtrl.FramesLoaded >= FExtractCtrl.TotalFrames then
   begin
-    FinalizeLoadTime;
+    FLoadTimer.Finalize;
+    UpdateStatusBar;
     HideProgress;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   end else if (FExtractCtrl.FramesLoaded > 0) and FProgressVisible then
@@ -1826,7 +1830,8 @@ begin
   FormLog(Format('WMExtractionDone: framesLoaded=%d total=%d', [FExtractCtrl.FramesLoaded, FExtractCtrl.TotalFrames]));
   {Safety net: process any frames that arrived after the last notification}
   FExtractCtrl.ProcessPendingFrames;
-  FinalizeLoadTime;
+  FLoadTimer.Finalize;
+  UpdateStatusBar;
   HideProgress;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   FormLog(Format('  hasPlaceholders=%s timerEnabled=%s', [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));
@@ -2428,12 +2433,12 @@ begin
    CreateStatusBar (called before the first user-triggered Resize).}
   if Assigned(FStatusBar) then
     UpdateStatusBar;
-  {Viewport width/height may have changed the MaxSide bucket; debounce and
-   let the timer decide whether to refresh. ScheduleViewportRefresh is a
-   no-op before the timer field is constructed, so calling during early
-   VCL construction is safe.}
-  if Assigned(FViewportRefreshTimer) then
-    ScheduleViewportRefresh;
+  {Viewport width/height may have changed the MaxSide bucket; debounce
+   and let the timer decide whether to refresh. The debouncer's Schedule
+   is a no-op before its preconditions hold; the Assigned guard catches
+   the early VCL construction window when the helper field is still nil.}
+  if Assigned(FViewportRefreshDebouncer) then
+    FViewportRefreshDebouncer.Schedule;
 end;
 
 function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
@@ -2651,56 +2656,6 @@ begin
   FExtractCtrl.Stop;
   FExtractCtrl.DrainPendingFrameMessages;
   StartExtraction(RandomCacheOverride);
-end;
-
-procedure TPluginForm.ScheduleViewportRefresh;
-begin
-  {Kick (or re-kick) the debounce timer. Every viewport-changing event
-   calls this; when the events stop arriving for VIEWPORT_REFRESH_DEBOUNCE_MS
-   the timer fires OnViewportRefreshTimer, which does the actual comparison
-   and (maybe) refresh. No-op when the user disabled the feature.}
-  if FSettings = nil then
-    Exit;
-  if not FSettings.AutoRefreshOnViewportChange then
-    Exit;
-  {Restart the countdown by toggling Enabled — setting False then True
-   resets the internal timer.}
-  FViewportRefreshTimer.Enabled := False;
-  FViewportRefreshTimer.Enabled := True;
-end;
-
-procedure TPluginForm.OnViewportRefreshTimer(Sender: TObject);
-var
-  NewMaxSide: Integer;
-  ViewportFrames: Integer;
-begin
-  FViewportRefreshTimer.Enabled := False;
-  {All of these can become false between the event that kicked the timer
-   and the timer firing (user closed, disabled the feature, etc.), so
-   re-check every precondition.}
-  if FSettings = nil then
-    Exit;
-  if not FSettings.AutoRefreshOnViewportChange then
-    Exit;
-  if not FSettings.ScaledExtraction then
-    Exit;
-  if not FVideoInfo.IsValid then
-    Exit;
-  if FFileName = '' then
-    Exit;
-  if Length(FOffsets) = 0 then
-    Exit;
-
-  ViewportFrames := ViewportFrameCount(FFrameView.ViewMode, Length(FOffsets));
-  NewMaxSide := CalcExtractionMaxSide(FScrollBox.ClientWidth, FScrollBox.ClientHeight, ViewportFrames, FFrameView.AspectRatio, FVideoInfo.Width, FVideoInfo.Height, FSettings.MinFrameSide, FSettings.MaxFrameSide);
-
-  {Same size bucket as the live extraction (viewport only jittered within
-   one SCALE_BUCKET, or the view mode didn't actually change the divisor).
-   Nothing to do — any cached frames are already at the right resolution.}
-  if NewMaxSide = FLastExtractionMaxSide then
-    Exit;
-
-  SoftRefreshExtraction;
 end;
 
 initialization

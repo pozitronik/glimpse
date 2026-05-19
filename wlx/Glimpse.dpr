@@ -50,6 +50,8 @@ uses
   uToolbarGlyphLibrary in 'uToolbarGlyphLibrary.pas',
   uToolbarBuilder in 'uToolbarBuilder.pas',
   uToolbarController in 'uToolbarController.pas',
+  uViewportRefreshDebouncer in 'uViewportRefreshDebouncer.pas',
+  uLoadTimeRecorder in 'uLoadTimeRecorder.pas',
   uFileNavigator in '..\src\uFileNavigator.pas',
   uPathExpand in '..\src\uPathExpand.pas',
   uColorConv in '..\src\uColorConv.pas',
