@@ -46,6 +46,11 @@ type
     [Test] procedure TestMakeTempPathHandlesPathWithDirectory;
     [Test] procedure TestMakeTempPathHandlesNoExtension;
     [Test] procedure TestMakeTempPathHandlesMultipleDots;
+    { ExtractPreset failure-path coverage. The success path needs a
+      live ffmpeg and a sample video; the bad-binary path exercises the
+      exception handler + Result.ErrorMessage assembly without any
+      external dependencies. }
+    [Test] procedure TestExtractPresetBadBinaryReportsLaunchFailure;
   end;
 
 implementation
@@ -371,6 +376,25 @@ begin
     basename and survive. Important for filenames like "My.Movie.poster.jpg". }
   Assert.AreEqual('My.Movie.poster.tmp.jpg',
     MakeTempPath('My.Movie.poster.jpg'));
+end;
+
+procedure TTestWcxPresetExtractor.TestExtractPresetBadBinaryReportsLaunchFailure;
+var
+  Preset: TWcxPreset;
+  R: TPresetExtractResult;
+begin
+  {Pointing ExtractPreset at a non-existent ffmpeg binary must surface
+   a structured failure (Success=False, ErrorMessage filled in) rather
+   than escape as an unhandled exception. Whether the failure travels
+   the exception-handler path (RunProcess raises) or the exit-code path
+   (RunProcess returns non-zero) is an implementation detail; the
+   externally observable contract is "non-success, non-empty message".}
+  Preset := MakePreset('-vn', 'mp3');
+  R := ExtractPreset('Z:\nonexistent\ffmpeg.exe', 'Z:\input.mkv',
+    'Z:\output.mp3', Preset, 10.0, nil, 0, 5000);
+  Assert.IsFalse(R.Success, 'bad ffmpeg path must not report success');
+  Assert.IsTrue(R.ErrorMessage <> '',
+    'ErrorMessage must be populated so the caller can surface it');
 end;
 
 end.

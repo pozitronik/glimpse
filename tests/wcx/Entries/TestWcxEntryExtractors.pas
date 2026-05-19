@@ -18,23 +18,37 @@ type
     [Test] procedure TestFrameEntryExtractEmptyPathsReturnsECreate;
     [Test] procedure TestFrameEntryExtractCallsFrameExtractorAndSaver;
     [Test] procedure TestFrameEntryExtractReturnsBadDataOnNilBitmap;
+    [Test] procedure TestFrameEntryExtractUsesCacheWhenTempPathPresent;
+    [Test] procedure TestFrameEntryExtractUsesADestNameWhenSet;
     { TCombinedEntry: size + extract contract }
     [Test] procedure TestCombinedEntryFileNameReturnedFromConstructor;
     [Test] procedure TestCombinedEntryCombinedSlotReturnedFromConstructor;
     [Test] procedure TestCombinedEntryReportedSizeReturnsEntrySizesAtListingIndex;
     [Test] procedure TestCombinedEntryReportedSizeZeroWhenNoCache;
-    { TPresetEntry: structural contract only — Extract is exercised via
-      its production dependencies in TestWcxPresetExtractor }
+    [Test] procedure TestCombinedEntryExtractEmptyPathsReturnsECreate;
+    [Test] procedure TestCombinedEntryExtractUsesCacheWhenSlotPresent;
+    [Test] procedure TestCombinedEntryExtractUsesADestNameWhenSet;
+    { TPresetEntry: structural contract + early-bail branches. Full
+      ffmpeg-running path is exercised via TestWcxPresetExtractor. }
     [Test] procedure TestPresetEntryFileNameReturnedFromConstructor;
     [Test] procedure TestPresetEntryPresetIndexReturnedFromConstructor;
     [Test] procedure TestPresetEntryReportedSizeReturnsSourceFileSize;
     [Test] procedure TestPresetEntryReportedSizeIgnoresAListingIndex;
+    [Test] procedure TestPresetEntryExtractOutOfRangeIndexReturnsBadData;
+    [Test] procedure TestPresetEntryExtractEmptyPathsReturnsECreate;
+    { RenderCombinedBitmap: pure helper exposed for the pre-extract
+      cache path; tested with a stub IFrameExtractor that hands back
+      tiny in-memory bitmaps so the composition runs end-to-end without
+      ffmpeg. }
+    [Test] procedure TestRenderCombinedBitmapReturnsNilWhenNoOffsets;
+    [Test] procedure TestRenderCombinedBitmapInvokesExtractorPerOffset;
+    [Test] procedure TestRenderCombinedBitmapProducesBitmap;
   end;
 
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, Vcl.Graphics,
+  Winapi.Windows, System.SysUtils, System.IOUtils, System.Classes, Vcl.Graphics,
   Types, BitmapSaver, FrameExtractor, FrameOffsets, VideoInfo,
   WcxAPI, WcxSettings, WcxPresets, WcxEntryExtractors;
 
@@ -404,6 +418,34 @@ begin
   Assert.AreEqual(Ctx.GetSettings.SaveFormat, Saver.Format);
 end;
 
+{Writes a 1-byte file to a fresh temp path so the cache-hit branch in
+ TFrameEntry/TCombinedEntry has a real source for TFile.Copy. Caller
+ deletes both the source and the produced destination via the returned
+ cleanup record.}
+type
+  TTempPair = record
+    Src: string;
+    Dst: string;
+  end;
+
+function MakeTempCachePair(const APrefix: string): TTempPair;
+var
+  Dir: string;
+begin
+  Dir := IncludeTrailingPathDelimiter(TPath.GetTempPath);
+  Result.Src := Dir + APrefix + '_src_' + IntToStr(GetTickCount) + '.bin';
+  Result.Dst := Dir + APrefix + '_dst_' + IntToStr(GetTickCount) + '.bin';
+  TFile.WriteAllBytes(Result.Src, TBytes.Create(0));
+end;
+
+procedure CleanupTempPair(const APair: TTempPair);
+begin
+  if TFile.Exists(APair.Src) then
+    TFile.Delete(APair.Src);
+  if TFile.Exists(APair.Dst) then
+    TFile.Delete(APair.Dst);
+end;
+
 procedure TTestWcxEntryExtractors.TestFrameEntryExtractReturnsBadDataOnNilBitmap;
 var
   Ctx: TFakeContext;
@@ -425,6 +467,66 @@ begin
 
   Entry := TFrameEntry.Create('frame.png', 0);
   Assert.AreEqual(E_BAD_DATA, Entry.Extract(ICtx, 'C:\out', ''));
+end;
+
+procedure TTestWcxEntryExtractors.TestFrameEntryExtractUsesCacheWhenTempPathPresent;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+  FrameExtractor: TFakeFrameExtractor;
+  Saver: TFakeBitmapSaverRouter;
+  Pair: TTempPair;
+begin
+  {When TempPaths[FFrameIndex] points at an existing file, Extract must
+   short-circuit through TryCopyCachedFrame without touching either the
+   FrameExtractor or the BitmapSaver. The destination file should appear
+   as a copy of the cached source.}
+  Pair := MakeTempCachePair('frame');
+  try
+    Ctx := TFakeContext.Create;
+    ICtx := Ctx;
+    Ctx.SetFileName('C:\v\sample.mkv');
+    Ctx.SetOffsets(MakeOffsets(1));
+    Ctx.SetTempPaths(TArray<string>.Create(Pair.Src));
+    FrameExtractor := TFakeFrameExtractor.Create;
+    Saver := TFakeBitmapSaverRouter.Create;
+    Ctx.SetFrameExtractor(FrameExtractor);
+    Ctx.SetBitmapSaver(Saver);
+
+    Entry := TFrameEntry.Create('frame_001.png', 0);
+    Assert.AreEqual(E_SUCCESS, Entry.Extract(ICtx, '', Pair.Dst));
+    Assert.AreEqual(0, FrameExtractor.CallCount, 'cache hit must skip extractor');
+    Assert.IsFalse(Saver.Called, 'cache hit must skip saver');
+    Assert.IsTrue(TFile.Exists(Pair.Dst), 'destination must be created from cache copy');
+  finally
+    CleanupTempPair(Pair);
+  end;
+end;
+
+procedure TTestWcxEntryExtractors.TestFrameEntryExtractUsesADestNameWhenSet;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+  Saver: TFakeBitmapSaverRouter;
+  ExpectedDest: string;
+begin
+  {ADestName when non-empty takes precedence over ADestPath; Extract must
+   pass that exact string to the saver as the target path.}
+  ExpectedDest := IncludeTrailingPathDelimiter(TPath.GetTempPath) + 'caller_chose_this.png';
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetFileName('C:\v\x.mkv');
+  Ctx.SetOffsets(MakeOffsets(1));
+  Ctx.SetFrameExtractor(TFakeFrameExtractor.Create);
+  Saver := TFakeBitmapSaverRouter.Create;
+  Ctx.SetBitmapSaver(Saver);
+
+  Entry := TFrameEntry.Create('ignored.png', 0);
+  Assert.AreEqual(E_SUCCESS, Entry.Extract(ICtx, 'C:\ignored', ExpectedDest));
+  Assert.IsTrue(Saver.Called);
+  Assert.AreEqual(ExpectedDest, Saver.Path);
 end;
 
 { TCombinedEntry }
@@ -477,8 +579,77 @@ begin
   Assert.AreEqual(Int64(0), Entry.ReportedSize(ICtx, 0));
 end;
 
-{ TPresetEntry — structural only; behavioural coverage lives in
-  TestWcxPresetExtractor. }
+procedure TTestWcxEntryExtractors.TestCombinedEntryExtractEmptyPathsReturnsECreate;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+begin
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetOffsets(MakeOffsets(1));
+  Entry := TCombinedEntry.Create('combined.png', 0);
+  Assert.AreEqual(E_ECREATE, Entry.Extract(ICtx, '', ''));
+end;
+
+procedure TTestWcxEntryExtractors.TestCombinedEntryExtractUsesCacheWhenSlotPresent;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+  Saver: TFakeBitmapSaverRouter;
+  Pair: TTempPair;
+begin
+  {Cache hit by CombinedSlot index — TryCopyCachedFrame copies the cached
+   file and returns E_SUCCESS without rebuilding the combined image.}
+  Pair := MakeTempCachePair('combined');
+  try
+    Ctx := TFakeContext.Create;
+    ICtx := Ctx;
+    Ctx.SetFileName('C:\v\x.mkv');
+    Ctx.SetOffsets(MakeOffsets(2));
+    {Slot 2 = combined slot when 2 frames precede it.}
+    Ctx.SetTempPaths(TArray<string>.Create('', '', Pair.Src));
+    Saver := TFakeBitmapSaverRouter.Create;
+    Ctx.SetBitmapSaver(Saver);
+
+    Entry := TCombinedEntry.Create('combined.png', 2);
+    Assert.AreEqual(E_SUCCESS, Entry.Extract(ICtx, '', Pair.Dst));
+    Assert.IsFalse(Saver.Called);
+    Assert.IsTrue(TFile.Exists(Pair.Dst));
+  finally
+    CleanupTempPair(Pair);
+  end;
+end;
+
+procedure TTestWcxEntryExtractors.TestCombinedEntryExtractUsesADestNameWhenSet;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+  Pair: TTempPair;
+begin
+  {Pins the ADestName precedence on the cache-hit branch (avoids needing
+   a real RenderCombinedBitmap, which pulls VCL paint code).}
+  Pair := MakeTempCachePair('combinedname');
+  try
+    Ctx := TFakeContext.Create;
+    ICtx := Ctx;
+    Ctx.SetFileName('C:\v\x.mkv');
+    Ctx.SetOffsets(MakeOffsets(0));
+    Ctx.SetTempPaths(TArray<string>.Create(Pair.Src));
+    Ctx.SetBitmapSaver(TFakeBitmapSaverRouter.Create);
+
+    Entry := TCombinedEntry.Create('ignored.png', 0);
+    Assert.AreEqual(E_SUCCESS, Entry.Extract(ICtx, 'C:\ignored', Pair.Dst));
+    Assert.IsTrue(TFile.Exists(Pair.Dst), 'destination must equal ADestName, not ADestPath join');
+  finally
+    CleanupTempPair(Pair);
+  end;
+end;
+
+{ TPresetEntry — structural + early-bail branches. Full ffmpeg-running
+  path is exercised via TestWcxPresetExtractor. }
 
 procedure TTestWcxEntryExtractors.TestPresetEntryFileNameReturnedFromConstructor;
 var
@@ -532,6 +703,121 @@ begin
   Assert.AreEqual(Int64(777), Entry.ReportedSize(ICtx, 0));
   Assert.AreEqual(Int64(777), Entry.ReportedSize(ICtx, 999));
   Assert.AreEqual(Int64(777), Entry.ReportedSize(ICtx, -1));
+end;
+
+procedure TTestWcxEntryExtractors.TestPresetEntryExtractOutOfRangeIndexReturnsBadData;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+begin
+  {PresetIndex outside Presets range must fail fast with E_BAD_DATA
+   before touching the progress bridge or ffmpeg.}
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetPresets(nil);
+  Entry := TPresetEntry.Create('out.mp4', 5);
+  Assert.AreEqual(E_BAD_DATA, Entry.Extract(ICtx, 'C:\out', ''));
+end;
+
+procedure TTestWcxEntryExtractors.TestPresetEntryExtractEmptyPathsReturnsECreate;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+  Presets: TWcxPresetArray;
+begin
+  {With a valid PresetIndex but empty ADestPath/ADestName the entry
+   short-circuits with E_ECREATE before launching the progress bridge.}
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  SetLength(Presets, 1);
+  Presets[0].Name := 'PNGSnapshot';
+  Presets[0].OutputName := 'out.png';
+  Presets[0].Args := '-frames:v 1';
+  Ctx.SetPresets(Presets);
+  Entry := TPresetEntry.Create('out.png', 0);
+  Assert.AreEqual(E_ECREATE, Entry.Extract(ICtx, '', ''));
+end;
+
+procedure TTestWcxEntryExtractors.TestRenderCombinedBitmapReturnsNilWhenNoOffsets;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Bmp: TBitmap;
+  Extractor: TFakeFrameExtractor;
+  IExtractor: IFrameExtractor;
+begin
+  {No offsets means no frames to compose; RenderCombinedImage walks an
+   empty array and returns nil. Production callers (TCombinedEntry.Extract)
+   short-circuit to E_BAD_DATA on this.}
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetFileName('C:\v\x.mkv');
+  Extractor := TFakeFrameExtractor.Create;
+  IExtractor := Extractor;
+
+  Bmp := RenderCombinedBitmap(ICtx, IExtractor);
+  try
+    Assert.IsNull(Bmp);
+    Assert.AreEqual(0, Extractor.CallCount, 'no offsets must mean no extraction');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestWcxEntryExtractors.TestRenderCombinedBitmapInvokesExtractorPerOffset;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Bmp: TBitmap;
+  Extractor: TFakeFrameExtractor;
+  IExtractor: IFrameExtractor;
+begin
+  {The extractor must be called once per offset; loop boundary is the
+   common off-by-one risk.}
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetFileName('C:\v\x.mkv');
+  Ctx.SetOffsets(MakeOffsets(4));
+  Extractor := TFakeFrameExtractor.Create;
+  IExtractor := Extractor;
+
+  Bmp := RenderCombinedBitmap(ICtx, IExtractor);
+  try
+    Assert.AreEqual(4, Extractor.CallCount);
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestWcxEntryExtractors.TestRenderCombinedBitmapProducesBitmap;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Bmp: TBitmap;
+  Extractor: TFakeFrameExtractor;
+  IExtractor: IFrameExtractor;
+begin
+  {Happy path: with stubbed frames coming back, the combined grid is
+   composed without touching ffmpeg or disk. The shape is exercised; the
+   exact pixels depend on RenderCombinedImage layout math (covered in
+   its own tests).}
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetFileName('C:\v\x.mkv');
+  Ctx.SetOffsets(MakeOffsets(2));
+  Extractor := TFakeFrameExtractor.Create;
+  IExtractor := Extractor;
+
+  Bmp := RenderCombinedBitmap(ICtx, IExtractor);
+  try
+    Assert.IsNotNull(Bmp, 'composed bitmap must be non-nil for non-empty offsets');
+    Assert.IsTrue(Bmp.Width > 0);
+    Assert.IsTrue(Bmp.Height > 0);
+  finally
+    Bmp.Free;
+  end;
 end;
 
 initialization

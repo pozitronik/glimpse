@@ -210,7 +210,9 @@ uses
   TestPlatformDetect in 'TestPlatformDetect.pas',
   ProgressModalForm in '..\wlx\Forms\ProgressModalForm.pas',
   BitmapWorkThread in '..\wlx\Services\BitmapWorkThread.pas',
-  TestBitmapWorkThread in 'TestBitmapWorkThread.pas';
+  TestBitmapWorkThread in 'TestBitmapWorkThread.pas',
+  TestClipboardPublisher in 'wlx\Services\TestClipboardPublisher.pas',
+  TestWcxFrameCache in 'wcx\Services\TestWcxFrameCache.pas';
 
 var
   Runner: ITestRunner;
