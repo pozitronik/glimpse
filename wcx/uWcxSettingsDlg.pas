@@ -10,7 +10,8 @@ uses
   Vcl.Dialogs,
   Winapi.Windows,
   uWcxSettings, uWcxPresetEditorModel,
-  uWcxSettingsRepository, uWcxPresetsRepository;
+  uWcxSettingsRepository, uWcxPresetsRepository,
+  uWcxSettingsControlsBundles, uWcxSettingsPresenters;
 
 type
   TWcxSettingsForm = class(TForm)
@@ -180,48 +181,46 @@ type
     FPresetsRepo: IWcxPresetsRepository;
   private
     FOwnerWnd: HWND;
-    FTimestampFontName: string;
-    FTimestampFontSize: Integer;
-    FBannerFontName: string;
-    FBannerFontSize: Integer;
     FPresetModel: TPresetEditorModel;
-    {Tracks which row the edit fields currently mirror so a list-selection
-     change can flush the in-progress edits back to the model before
-     loading the newly-selected row.}
-    FCurrentPresetIndex: Integer;
+    {Per-cluster control bundles + presenters (step 99). Each presenter
+     owns its bundle(s), event handlers, update helpers, and (for the
+     output presenter) the font shadow fields. The form delegates DFM-
+     wired handlers to them and collapses SettingsToControls /
+     ControlsToSettings into a sequence of LoadFrom / SaveTo calls.
+     Bundles populated by InitControlsBundles; presenters constructed
+     in CreateForSettings, freed in Destroy.}
+    FExtractionControls: TWcxExtractionControls;
+    FRandomControls: TWcxRandomControls;
+    FFFmpegControls: TWcxFFmpegControls;
+    FModeControls: TWcxModeControls;
+    FOutputControls: TWcxOutputControls;
+    FCombinedControls: TWcxCombinedControls;
+    FTimestampControls: TWcxTimestampControls;
+    FBannerControls: TWcxBannerControls;
+    FLimitsControls: TWcxLimitsControls;
+    FExtractionPresenter: TWcxExtractionPresenter;
+    FOutputPresenter: TWcxOutputPresenter;
+    FPresetEditorPresenter: TWcxPresetEditorPresenter;
+    procedure InitControlsBundles;
     procedure SettingsToControls(ASettings: TWcxSettings);
     procedure ControlsToSettings(ASettings: TWcxSettings);
-    {Pulls every preset from disk into FPresetModel and refreshes the
-     listbox. Called once at dialog open and after Apply (so the next
-     edit cycle starts from the persisted state).}
-    procedure LoadPresetsFromDisk;
-    {Refreshes the listbox to mirror FPresetModel and selects ASelectIndex
-     (clamping to a valid row when out of range).}
-    procedure RefreshPresetList(ASelectIndex: Integer);
-    {Loads the preset at AIndex into the edit fields. Pass -1 to clear
-     the panel and disable editing (no rows in the model).}
-    procedure ShowPreset(AIndex: Integer);
-    {Saves the edit fields back into FPresetModel at FCurrentPresetIndex.
-     No-op when no row is currently displayed.}
-    procedure CommitCurrentPreset;
-    procedure SetEditFieldsEnabled(AEnabled: Boolean);
     {Validates the model and writes both Glimpse.ini and presets.ini.
      Returns False on validation failure (with a message box already
      shown and the offending preset selected/focused). Used by both
      Apply and OK so the persistence rules stay in one place.}
     function TrySaveAll: Boolean;
+    {Toggles the combined-tab controls' Enabled property based on
+     ChkModeCombined + ChkShowBanner. The WCX dialog does not have a
+     declarative TEnableRules table (unlike WLX after step 82), so
+     this stays inline as the imperative analog. Future step could
+     promote it to a table; out of scope for step 99.}
     procedure UpdateCombinedState;
     {Greys out the randomness slider and its labels when the random
      extraction checkbox is unchecked, so the user is not given a control
      that would have no effect until the checkbox is ticked.}
     procedure UpdateRandomState;
     procedure UpdateMaxWorkersControls;
-    procedure UpdateFFmpegInfo;
-    procedure UpdateTimestampFontDisplay;
-    procedure UpdateBannerFontDisplay;
     procedure PickColor(APanel: TPanel);
-    procedure PickTimestampFont;
-    procedure PickBannerFont;
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -256,123 +255,72 @@ uses
   uSettingsDlgUI, uPluginMessages, uDefaults, uTypes,
   uWcxPresets, uSettingsSaveOrchestrator;
 
-procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
-var
-  AutoChecked, ShowChecked: Boolean;
-  UdPos, ComboIdx: Integer;
+procedure TWcxSettingsForm.InitControlsBundles;
 begin
-  UdFrameCount.Position := ASettings.FramesCount;
-  UdSkipEdges.Position := ASettings.SkipEdgesPercent;
+  FExtractionControls.UdFrameCount := UdFrameCount;
+  FExtractionControls.UdSkipEdges := UdSkipEdges;
+  FExtractionControls.ChkMaxWorkersAuto := ChkMaxWorkersAuto;
+  FExtractionControls.UdMaxWorkers := UdMaxWorkers;
+  FExtractionControls.UdMaxThreads := UdMaxThreads;
+  FExtractionControls.ChkUseBmpPipe := ChkUseBmpPipe;
+  FExtractionControls.ChkHwAccel := ChkHwAccel;
+  FExtractionControls.ChkUseKeyframes := ChkUseKeyframes;
+  FExtractionControls.ChkRespectAnamorphic := ChkRespectAnamorphic;
 
-  ChkRandomExtraction.Checked := ASettings.RandomExtraction;
-  TrkRandomPercent.Position := ASettings.RandomPercent;
-  LblRandomPercentValue.Caption := IntToStr(ASettings.RandomPercent) + '%';
+  FRandomControls.ChkRandomExtraction := ChkRandomExtraction;
+  FRandomControls.TrkRandomPercent := TrkRandomPercent;
 
-  DecodeMaxWorkersControls(ASettings.MaxWorkers, AutoChecked, UdPos);
-  ChkMaxWorkersAuto.Checked := AutoChecked;
-  UdMaxWorkers.Position := UdPos;
-  UdMaxThreads.Position := DecodeMaxThreadsControl(ASettings.MaxThreads);
-  ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
-  ChkHwAccel.Checked := ASettings.HwAccel;
-  ChkUseKeyframes.Checked := ASettings.UseKeyframes;
-  ChkRespectAnamorphic.Checked := ASettings.RespectAnamorphic;
-  EdtFFmpegPath.Text := ASettings.FFmpegExePath;
+  FFFmpegControls.EdtFFmpegPath := EdtFFmpegPath;
 
-  ChkModeFrames.Checked := ASettings.ShowFrames;
-  ChkModeCombined.Checked := ASettings.ShowCombined;
-  ChkModePresets.Checked := ASettings.ShowPresets;
+  FModeControls.ChkModeFrames := ChkModeFrames;
+  FModeControls.ChkModeCombined := ChkModeCombined;
+  FModeControls.ChkModePresets := ChkModePresets;
 
-  CbxFormat.ItemIndex := Ord(ASettings.SaveFormat);
-  UdJpegQuality.Position := ASettings.JpegQuality;
-  UdPngCompression.Position := ASettings.PngCompression;
-  UdBackgroundAlpha.Position := ASettings.BackgroundAlpha;
-  ChkShowFileSizes.Checked := ASettings.ShowFileSizes;
+  FOutputControls.CbxFormat := CbxFormat;
+  FOutputControls.UdJpegQuality := UdJpegQuality;
+  FOutputControls.UdPngCompression := UdPngCompression;
+  FOutputControls.UdBackgroundAlpha := UdBackgroundAlpha;
+  FOutputControls.ChkShowFileSizes := ChkShowFileSizes;
 
-  UdColumns.Position := ASettings.CombinedColumns;
-  UdCellGap.Position := ASettings.CellGap;
-  UdBorder.Position := ASettings.CombinedBorder;
-  PnlBackground.Color := ASettings.Background;
-  DecodeTimestampCornerControls(ASettings.ShowTimestamp, ASettings.TimestampCorner, ShowChecked, ComboIdx);
-  ChkTimestamp.Checked := ShowChecked;
-  CbxTimestampCorner.ItemIndex := ComboIdx;
-  PnlTCBack.Color := ASettings.TimecodeBackColor;
-  UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
-  PnlTCTextColor.Color := ASettings.TimestampTextColor;
-  UdTCTextAlpha.Position := ASettings.TimestampTextAlpha;
-  FTimestampFontName := ASettings.TimestampFontName;
-  FTimestampFontSize := ASettings.TimestampFontSize;
-  UpdateTimestampFontDisplay;
-  ChkShowBanner.Checked := ASettings.ShowBanner;
-  PnlBannerBackground.Color := ASettings.BannerBackground;
-  PnlBannerTextColor.Color := ASettings.BannerTextColor;
-  FBannerFontName := ASettings.BannerFontName;
-  FBannerFontSize := ASettings.BannerFontSize;
-  ChkBannerAutoSize.Checked := ASettings.BannerFontAutoSize;
-  UpdateBannerFontDisplay;
-  CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
+  FCombinedControls.UdColumns := UdColumns;
+  FCombinedControls.UdCellGap := UdCellGap;
+  FCombinedControls.UdBorder := UdBorder;
+  FCombinedControls.PnlBackground := PnlBackground;
 
-  UdFrameMax.Position := ASettings.FrameMaxSide;
-  UdCombinedMax.Position := ASettings.CombinedMaxSide;
+  FTimestampControls.ChkTimestamp := ChkTimestamp;
+  FTimestampControls.CbxTimestampCorner := CbxTimestampCorner;
+  FTimestampControls.PnlTCBack := PnlTCBack;
+  FTimestampControls.UdTCAlpha := UdTCAlpha;
+  FTimestampControls.PnlTCTextColor := PnlTCTextColor;
+  FTimestampControls.UdTCTextAlpha := UdTCTextAlpha;
+
+  FBannerControls.ChkShowBanner := ChkShowBanner;
+  FBannerControls.PnlBannerBackground := PnlBannerBackground;
+  FBannerControls.PnlBannerTextColor := PnlBannerTextColor;
+  FBannerControls.ChkBannerAutoSize := ChkBannerAutoSize;
+  FBannerControls.CbxBannerPosition := CbxBannerPosition;
+
+  FLimitsControls.UdFrameMax := UdFrameMax;
+  FLimitsControls.UdCombinedMax := UdCombinedMax;
+end;
+
+procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
+begin
+  {Per-cluster delegation. Each presenter's LoadFrom is self-contained
+   for its tab cluster. The form-owned Update*State methods fire after
+   (they read VCL values just bound by the presenters).}
+  FExtractionPresenter.LoadFrom(ASettings);
+  FOutputPresenter.LoadFrom(ASettings);
 
   UpdateMaxWorkersControls;
   UpdateCombinedState;
   UpdateRandomState;
-  UpdateFFmpegInfo;
 end;
 
 procedure TWcxSettingsForm.ControlsToSettings(ASettings: TWcxSettings);
-var
-  Show: Boolean;
-  Corner: TTimestampCorner;
 begin
-  ASettings.FramesCount := UdFrameCount.Position;
-  ASettings.SkipEdgesPercent := UdSkipEdges.Position;
-  ASettings.RandomExtraction := ChkRandomExtraction.Checked;
-  ASettings.RandomPercent := TrkRandomPercent.Position;
-
-  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked, UdMaxWorkers.Position);
-  ASettings.MaxThreads := UdMaxThreads.Position;
-  ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
-  ASettings.HwAccel := ChkHwAccel.Checked;
-  ASettings.UseKeyframes := ChkUseKeyframes.Checked;
-  ASettings.RespectAnamorphic := ChkRespectAnamorphic.Checked;
-  ASettings.FFmpegExePath := EdtFFmpegPath.Text;
-
-  ASettings.ShowFrames := ChkModeFrames.Checked;
-  ASettings.ShowCombined := ChkModeCombined.Checked;
-  ASettings.ShowPresets := ChkModePresets.Checked;
-
-  ASettings.SaveFormat := TSaveFormat(CbxFormat.ItemIndex);
-  ASettings.JpegQuality := UdJpegQuality.Position;
-  ASettings.PngCompression := UdPngCompression.Position;
-  {Explicit Byte cast: TUpDown.Position is Integer, target is Byte; the
-   control's Min/Max are clamped to [0, 255] so the narrowing is safe.}
-  ASettings.BackgroundAlpha := Byte(UdBackgroundAlpha.Position);
-  ASettings.ShowFileSizes := ChkShowFileSizes.Checked;
-
-  ASettings.CombinedColumns := UdColumns.Position;
-  ASettings.CellGap := UdCellGap.Position;
-  ASettings.CombinedBorder := UdBorder.Position;
-  ASettings.Background := PnlBackground.Color;
-  EncodeTimestampCornerControls(ChkTimestamp.Checked, CbxTimestampCorner.ItemIndex, Show, Corner);
-  ASettings.ShowTimestamp := Show;
-  ASettings.TimestampCorner := Corner;
-  ASettings.TimecodeBackColor := PnlTCBack.Color;
-  ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
-  ASettings.TimestampTextColor := PnlTCTextColor.Color;
-  ASettings.TimestampTextAlpha := UdTCTextAlpha.Position;
-  ASettings.TimestampFontName := FTimestampFontName;
-  ASettings.TimestampFontSize := FTimestampFontSize;
-  ASettings.ShowBanner := ChkShowBanner.Checked;
-  ASettings.BannerBackground := PnlBannerBackground.Color;
-  ASettings.BannerTextColor := PnlBannerTextColor.Color;
-  ASettings.BannerFontName := FBannerFontName;
-  ASettings.BannerFontSize := FBannerFontSize;
-  ASettings.BannerFontAutoSize := ChkBannerAutoSize.Checked;
-  ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
-
-  ASettings.FrameMaxSide := UdFrameMax.Position;
-  ASettings.CombinedMaxSide := UdCombinedMax.Position;
+  FExtractionPresenter.SaveTo(ASettings);
+  FOutputPresenter.SaveTo(ASettings);
 end;
 
 procedure TWcxSettingsForm.UpdateCombinedState;
@@ -440,35 +388,6 @@ begin
   LblMaxThreadsAuto.Caption := MaxThreadsAutoLabel(OnePerFrame, UdMaxThreads.Position, CPUCount);
 end;
 
-procedure TWcxSettingsForm.UpdateFFmpegInfo;
-var
-  Input, Path, Ver, Prefix, Value: string;
-  State: TFFmpegProbeState;
-begin
-  Input := EdtFFmpegPath.Text;
-  if Input <> '' then
-    Path := ExpandEnvVars(Input)
-  else
-    Path := FindFFmpegExe(ExtractFilePath(Application.ExeName), '');
-
-  Ver := '';
-  if Path = '' then
-    State := fpsNoPath
-  else if not FileExists(Path) then
-    State := fpsFileMissing
-  else
-  begin
-    Ver := ValidateFFmpeg(Path);
-    if Ver = '' then
-      State := fpsInvalid
-    else
-      State := fpsValid;
-  end;
-
-  FFmpegInfoLabelParts(State, Path, Ver, Input = '', Prefix, Value);
-  ApplyInfoParts(LblFFmpegInfo, EdtFFmpegInfo, Prefix, Value);
-end;
-
 procedure TWcxSettingsForm.ChkModeFramesClick(Sender: TObject);
 begin
   {Frames have no dependent fields on this tab; the click is a no-op
@@ -501,7 +420,7 @@ end;
 
 procedure TWcxSettingsForm.EdtFFmpegPathChange(Sender: TObject);
 begin
-  UpdateFFmpegInfo;
+  FExtractionPresenter.OnFFmpegPathChange;
 end;
 
 procedure TWcxSettingsForm.PickColor(APanel: TPanel);
@@ -509,43 +428,19 @@ begin
   PickColorForPanel(APanel, ColorDlg);
 end;
 
-procedure TWcxSettingsForm.UpdateTimestampFontDisplay;
-begin
-  RefreshFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
-end;
-
-procedure TWcxSettingsForm.UpdateBannerFontDisplay;
-begin
-  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked, FBannerFontName, FBannerFontSize);
-end;
-
-procedure TWcxSettingsForm.PickTimestampFont;
-begin
-  PickFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
-end;
-
-procedure TWcxSettingsForm.PickBannerFont;
-var
-  AutoSize: Boolean;
-begin
-  AutoSize := ChkBannerAutoSize.Checked;
-  PickBannerFontInto(FontDlg, EdtBannerFont, AutoSize, FBannerFontName, FBannerFontSize, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
-  ChkBannerAutoSize.Checked := AutoSize;
-end;
-
 procedure TWcxSettingsForm.BtnTimestampFontClick(Sender: TObject);
 begin
-  PickTimestampFont;
+  FOutputPresenter.OnTimestampFontClick;
 end;
 
 procedure TWcxSettingsForm.BtnBannerFontClick(Sender: TObject);
 begin
-  PickBannerFont;
+  FOutputPresenter.OnBannerFontClick;
 end;
 
 procedure TWcxSettingsForm.ChkBannerAutoSizeClick(Sender: TObject);
 begin
-  UpdateBannerFontDisplay;
+  FOutputPresenter.UpdateBannerFontDisplay;
 end;
 
 procedure TWcxSettingsForm.PnlBackgroundClick(Sender: TObject);
@@ -601,7 +496,7 @@ begin
   {Flush any in-progress edits in the right-hand panel back to the model
    so validation and save see the user's latest input, not the snapshot
    from the last list-selection change.}
-  CommitCurrentPreset;
+  FPresetEditorPresenter.CommitCurrentPreset;
 
   Orchestrator := TSettingsSaveOrchestrator.Create;
   try
@@ -617,11 +512,7 @@ begin
     ssrValidationFailed:
       begin
         PageControl.ActivePage := TshPresets;
-        if (Outcome.ValidationIndex >= 0) and (Outcome.ValidationIndex < LbxPresets.Items.Count) then
-        begin
-          LbxPresets.ItemIndex := Outcome.ValidationIndex;
-          ShowPreset(Outcome.ValidationIndex);
-        end;
+        FPresetEditorPresenter.NavigateToValidationFailure(Outcome.ValidationIndex);
         MessageBox(Handle, PChar(Outcome.ValidationReason), 'Invalid preset', MB_OK or MB_ICONWARNING);
         Exit(False);
       end;
@@ -629,7 +520,7 @@ begin
       begin
         {Re-validate the FFmpeg path in case the user changed it; without this
          the info label keeps showing the validation result from dialog open.}
-        UpdateFFmpegInfo;
+        FExtractionPresenter.UpdateFFmpegInfo;
         Exit(True);
       end;
   else
@@ -653,187 +544,29 @@ begin
     ModalResult := mrOk;
 end;
 
-procedure TWcxSettingsForm.LoadPresetsFromDisk;
-var
-  Loaded: TWcxPresetArray;
-begin
-  if FPresetsRepo <> nil then
-    Loaded := FPresetsRepo.LoadAll
-  else
-    Loaded := nil;
-  FPresetModel.LoadFrom(Loaded);
-  RefreshPresetList(0);
-end;
-
-procedure TWcxSettingsForm.RefreshPresetList(ASelectIndex: Integer);
-var
-  I, NewSel: Integer;
-  Caption: string;
-begin
-  LbxPresets.Items.BeginUpdate;
-  try
-    LbxPresets.Items.Clear;
-    for I := 0 to FPresetModel.Count - 1 do
-    begin
-      Caption := FPresetModel.Get(I).Name;
-      if not FPresetModel.Get(I).Enabled then
-        Caption := Caption + ' (off)';
-      LbxPresets.Items.Add(Caption);
-    end;
-  finally
-    LbxPresets.Items.EndUpdate;
-  end;
-
-  if FPresetModel.Count = 0 then
-  begin
-    LbxPresets.ItemIndex := -1;
-    ShowPreset(-1);
-    Exit;
-  end;
-
-  NewSel := ASelectIndex;
-  if NewSel < 0 then
-    NewSel := 0;
-  if NewSel >= FPresetModel.Count then
-    NewSel := FPresetModel.Count - 1;
-  LbxPresets.ItemIndex := NewSel;
-  ShowPreset(NewSel);
-end;
-
-procedure TWcxSettingsForm.SetEditFieldsEnabled(AEnabled: Boolean);
-begin
-  EdtPresetName.Enabled := AEnabled;
-  ChkPresetEnabled.Enabled := AEnabled;
-  EdtPresetDescription.Enabled := AEnabled;
-  EdtPresetOutputExt.Enabled := AEnabled;
-  EdtPresetOutputName.Enabled := AEnabled;
-  MemoPresetArgs.Enabled := AEnabled;
-end;
-
-procedure TWcxSettingsForm.ShowPreset(AIndex: Integer);
-var
-  P: TWcxPreset;
-begin
-  FCurrentPresetIndex := AIndex;
-  if (AIndex < 0) or (AIndex >= FPresetModel.Count) then
-  begin
-    EdtPresetName.Text := '';
-    ChkPresetEnabled.Checked := False;
-    EdtPresetDescription.Text := '';
-    EdtPresetOutputExt.Text := '';
-    EdtPresetOutputName.Text := '';
-    MemoPresetArgs.Text := '';
-    SetEditFieldsEnabled(False);
-    Exit;
-  end;
-
-  P := FPresetModel.Get(AIndex);
-  EdtPresetName.Text := P.Name;
-  ChkPresetEnabled.Checked := P.Enabled;
-  EdtPresetDescription.Text := P.Description;
-  EdtPresetOutputExt.Text := P.OutputExt;
-  EdtPresetOutputName.Text := P.OutputName;
-  MemoPresetArgs.Text := P.Args;
-  SetEditFieldsEnabled(True);
-end;
-
-procedure TWcxSettingsForm.CommitCurrentPreset;
-var
-  P: TWcxPreset;
-  ListCaption: string;
-begin
-  if (FCurrentPresetIndex < 0) or (FCurrentPresetIndex >= FPresetModel.Count) then
-    Exit;
-  P := FPresetModel.Get(FCurrentPresetIndex);
-  P.Name := Trim(EdtPresetName.Text);
-  P.Enabled := ChkPresetEnabled.Checked;
-  P.Description := Trim(EdtPresetDescription.Text);
-  P.OutputExt := Trim(EdtPresetOutputExt.Text);
-  P.OutputName := Trim(EdtPresetOutputName.Text);
-  P.Args := MemoPresetArgs.Text;
-  FPresetModel.Update(FCurrentPresetIndex, P);
-
-  {Reflect rename or enabled-toggle in the listbox label without rebuilding
-   the whole list, which would lose the user's selection.}
-  ListCaption := P.Name;
-  if not P.Enabled then
-    ListCaption := ListCaption + ' (off)';
-  if FCurrentPresetIndex < LbxPresets.Items.Count then
-    LbxPresets.Items[FCurrentPresetIndex] := ListCaption;
-end;
-
 procedure TWcxSettingsForm.LbxPresetsClick(Sender: TObject);
 begin
-  if LbxPresets.ItemIndex = FCurrentPresetIndex then
-    Exit;
-  CommitCurrentPreset;
-  ShowPreset(LbxPresets.ItemIndex);
+  FPresetEditorPresenter.OnLbxPresetsClick;
 end;
 
 procedure TWcxSettingsForm.BtnPresetAddClick(Sender: TObject);
-var
-  NewIdx: Integer;
 begin
-  CommitCurrentPreset;
-  NewIdx := FPresetModel.Add;
-  RefreshPresetList(NewIdx);
-  EdtPresetName.SetFocus;
-  EdtPresetName.SelectAll;
+  FPresetEditorPresenter.OnBtnPresetAddClick;
 end;
 
 procedure TWcxSettingsForm.BtnPresetRemoveClick(Sender: TObject);
-var
-  Idx: Integer;
 begin
-  Idx := LbxPresets.ItemIndex;
-  if Idx < 0 then
-    Exit;
-  {Skip the commit on remove — the in-flight edits are about to be
-   discarded. Drop the model row directly.}
-  FCurrentPresetIndex := -1;
-  FPresetModel.Remove(Idx);
-  RefreshPresetList(Idx);
+  FPresetEditorPresenter.OnBtnPresetRemoveClick;
 end;
 
 procedure TWcxSettingsForm.BtnPresetDuplicateClick(Sender: TObject);
-var
-  Idx, NewIdx: Integer;
 begin
-  Idx := LbxPresets.ItemIndex;
-  if Idx < 0 then
-    Exit;
-  CommitCurrentPreset;
-  NewIdx := FPresetModel.Duplicate(Idx);
-  if NewIdx >= 0 then
-  begin
-    RefreshPresetList(NewIdx);
-    EdtPresetName.SetFocus;
-    EdtPresetName.SelectAll;
-  end;
+  FPresetEditorPresenter.OnBtnPresetDuplicateClick;
 end;
 
 procedure TWcxSettingsForm.BtnFFmpegPathClick(Sender: TObject);
-var
-  Dlg: TOpenDialog;
 begin
-  Dlg := TOpenDialog.Create(Self);
-  try
-    Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files (*.*)|*.*';
-    Dlg.Title := 'Locate ffmpeg.exe';
-    if EdtFFmpegPath.Text <> '' then
-      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(EdtFFmpegPath.Text));
-    if Dlg.Execute and FileExists(Dlg.FileName) then
-    begin
-      if ValidateFFmpeg(Dlg.FileName) = '' then
-      begin
-        ShowPluginMessage(Handle, 'The selected file is not a valid ffmpeg executable.', MB_OK or MB_ICONWARNING);
-        Exit;
-      end;
-      EdtFFmpegPath.Text := Dlg.FileName;
-    end;
-  finally
-    Dlg.Free;
-  end;
+  FExtractionPresenter.OnFFmpegPathClick;
 end;
 
 procedure TWcxSettingsForm.BtnDefaultsClick(Sender: TObject);
@@ -850,9 +583,7 @@ end;
 
 procedure TWcxSettingsForm.TrkRandomPercentChange(Sender: TObject);
 begin
-  {Live readout — the percent value is also captured into TWcxSettings
-   on Apply/OK via ControlsToSettings.}
-  LblRandomPercentValue.Caption := IntToStr(TrkRandomPercent.Position) + '%';
+  FExtractionPresenter.OnRandomPercentChange;
 end;
 
 constructor TWcxSettingsForm.CreateForSettings(AOwnerWnd: HWND;
@@ -863,11 +594,26 @@ begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
   FPresetModel := TPresetEditorModel.Create;
-  FCurrentPresetIndex := -1;
   FSettings := ASettings;
   FOnApply := AOnApply;
   FSettingsRepo := ASettingsRepo;
   FPresetsRepo := APresetsRepo;
+  {InitControlsBundles + presenter construction happen after the DFM
+   has instantiated every control referenced. Bundles populated first
+   so the presenters' constructors can copy refs out of them.}
+  InitControlsBundles;
+  FExtractionPresenter := TWcxExtractionPresenter.Create(
+    FExtractionControls, FRandomControls, FFFmpegControls,
+    LblFFmpegInfo, EdtFFmpegInfo, LblRandomPercentValue,
+    ExtractFilePath(Application.ExeName), FOwnerWnd);
+  FOutputPresenter := TWcxOutputPresenter.Create(
+    FModeControls, FOutputControls, FCombinedControls,
+    FTimestampControls, FBannerControls, FLimitsControls,
+    EdtTimestampFont, EdtBannerFont, FontDlg);
+  FPresetEditorPresenter := TWcxPresetEditorPresenter.Create(
+    FPresetModel, FPresetsRepo, LbxPresets,
+    EdtPresetName, ChkPresetEnabled, EdtPresetDescription,
+    EdtPresetOutputExt, EdtPresetOutputName, MemoPresetArgs);
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
@@ -875,12 +621,15 @@ begin
   if FSettings <> nil then
   begin
     SettingsToControls(FSettings);
-    LoadPresetsFromDisk;
+    FPresetEditorPresenter.LoadPresetsFromDisk;
   end;
 end;
 
 destructor TWcxSettingsForm.Destroy;
 begin
+  FPresetEditorPresenter.Free;
+  FOutputPresenter.Free;
+  FExtractionPresenter.Free;
   FPresetModel.Free;
   inherited;
 end;

@@ -67,6 +67,8 @@ uses
   uSettingsSaveOrchestrator in 'uSettingsSaveOrchestrator.pas',
   uWcxSettingsRepository in 'uWcxSettingsRepository.pas',
   uWcxPresetsRepository in 'uWcxPresetsRepository.pas',
+  uWcxSettingsControlsBundles in 'uWcxSettingsControlsBundles.pas',
+  uWcxSettingsPresenters in 'uWcxSettingsPresenters.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports
