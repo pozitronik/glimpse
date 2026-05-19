@@ -136,8 +136,7 @@ begin
     else
       Result := cprFailed;
   finally
-    if Assigned(Thread) then
-      Thread.Free;
+    Thread.Free;
   end;
 end;
 

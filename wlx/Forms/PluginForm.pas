@@ -107,6 +107,11 @@ type
     FCurrentExtractionIsRandom: Boolean;
     {Re-entrancy guard against zoom-driven UpdateFrameViewSize.}
     FUpdatingLayout: Boolean;
+    {Set True at the end of CreateForPlugin. Gates the VCL handlers
+     (Resize, OnAnimTimer, DoMouseWheel, OnScrollBoxResize, LayoutToolbar)
+     that Win32 / VCL fires synchronously during sub-control creation,
+     before the form's fields finish wiring up.}
+    FInitialized: Boolean;
     {True when hosted in TC's Quick View panel (Ctrl+Q).}
     FQuickViewMode: Boolean;
     {Suppresses WM_CHAR after OnKeyDown consumed the keystroke.}
@@ -616,6 +621,8 @@ begin
   InitializeServices;
 
   LoadFile(AFileName);
+
+  FInitialized := True;
 end;
 
 procedure TPluginForm.InitializeWindowing(AParentWin: HWND);
@@ -843,7 +850,7 @@ procedure TPluginForm.LayoutToolbar;
 const
   CTRL_GAP = 8;
 begin
-  if not Assigned(FBtnHamburger) then
+  if not FInitialized then
     Exit;
   FToolbarController.Layout(FToolbar.ClientWidth, CTRL_GAP);
 end;
@@ -2266,31 +2273,29 @@ end;
 procedure TPluginForm.Resize;
 begin
   inherited;
+  if not FInitialized then
+    Exit;
   Realign;
   LayoutToolbar;
   FProgressIndicator.Reposition;
-  {VCL fires Resize during window creation, before CreateForPlugin finishes
-   constructing sub-controls, so FFrameView may not exist yet}
-  if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
+  if not FUpdatingLayout and FFrameView.Visible then
     UpdateFrameViewSize;
-  {Status bar's predicted Save / Copy view dimensions depend on cell sizes
-   and viewport - both change with the lister window. Refresh after the
-   layout pass; safe before FStatusBar exists since it is created in
-   CreateStatusBar (called before the first user-triggered Resize).}
-  if Assigned(FStatusBar) then
-    UpdateStatusBar;
+  {Status bar's predicted Save / Copy view dimensions depend on cell
+   sizes and viewport — both change with the lister window. Refresh
+   after the layout pass.}
+  UpdateStatusBar;
   {Viewport width/height may have changed the MaxSide bucket; debounce
-   and let the timer decide whether to refresh. The debouncer's Schedule
-   is a no-op before its preconditions hold; the Assigned guard catches
-   the early VCL construction window when the helper field is still nil.}
-  if Assigned(FViewportRefreshDebouncer) then
-    FViewportRefreshDebouncer.Schedule;
+   and let the timer decide whether to refresh.}
+  FViewportRefreshDebouncer.Schedule;
 end;
 
 function TPluginForm.DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean;
 var
   Msg: TWMMouseWheel;
 begin
+  if not FInitialized then
+    Exit(inherited);
+
   {Ctrl+Wheel: continuous zoom}
   if ssCtrl in Shift then
   begin
@@ -2302,9 +2307,8 @@ begin
     Exit;
   end;
 
-  {Forward to TFrameView so wheel logic lives in one place (WMMouseWheel).
-   Guards needed: VCL fires DoMouseWheel before constructor finishes.}
-  if Assigned(FFrameView) and Assigned(FScrollBox) and FScrollBox.Visible then
+  {Forward to TFrameView so wheel logic lives in one place (WMMouseWheel).}
+  if FScrollBox.Visible then
   begin
     ZeroMemory(@Msg, SizeOf(Msg));
     Msg.Msg := WM_MOUSEWHEEL;
@@ -2318,8 +2322,9 @@ end;
 
 procedure TPluginForm.OnScrollBoxResize(Sender: TObject);
 begin
-  {Same VCL lifecycle guard as Resize: FFrameView may not exist yet}
-  if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
+  if not FInitialized then
+    Exit;
+  if not FUpdatingLayout and FFrameView.Visible then
     UpdateFrameViewSize;
 end;
 
@@ -2376,12 +2381,12 @@ end;
 
 procedure TPluginForm.OnAnimTimer(Sender: TObject);
 begin
-  {Drain any frames that arrived since the last notification.
-   Covers the case where PostMessage notifications miss the HWND.}
-  if Assigned(FExtractCtrl) then
-    FExtractCtrl.ProcessPendingFrames;
-  {Timer fires during construction; FFrameView may not be ready yet}
-  if Assigned(FFrameView) and FFrameView.Visible then
+  if not FInitialized then
+    Exit;
+  {Drain any frames that arrived since the last notification — covers
+   the case where PostMessage notifications miss the HWND.}
+  FExtractCtrl.ProcessPendingFrames;
+  if FFrameView.Visible then
     FFrameView.AdvanceAnimation;
 end;
 
