@@ -46,7 +46,7 @@ function ValidateOutputName(const ATemplate: string; out AReason: string): Boole
  rejected with "OutputExt is required". The first forbidden character
  surfaces as "OutputExt contains an invalid character: '<C>'". Used by
  NormalizeOutputExt internally (which discards the reason) and by
- TPresetEditorModel.Validate (which surfaces it to the editor user).
+ TPresetEditorModel.ValidateForEditor (which surfaces it to the editor user).
  The single source of truth for the forbidden-character set.}
 function ValidateOutputExt(const ARaw: string; out AReason: string): Boolean;
 

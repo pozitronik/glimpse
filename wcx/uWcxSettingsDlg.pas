@@ -595,7 +595,7 @@ begin
    so validation and save see the user's latest input, not the snapshot
    from the last list-selection change.}
   CommitCurrentPreset;
-  if not FPresetModel.Validate(BadIdx, Reason) then
+  if not FPresetModel.ValidateForEditor(BadIdx, Reason) then
   begin
     PageControl.ActivePage := TshPresets;
     if (BadIdx >= 0) and (BadIdx < LbxPresets.Items.Count) then

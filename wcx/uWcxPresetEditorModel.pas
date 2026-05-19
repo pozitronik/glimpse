@@ -10,6 +10,7 @@ unit uWcxPresetEditorModel;
 interface
 
 uses
+  System.SysUtils,
   System.Generics.Collections,
   uWcxPresets;
 
@@ -27,6 +28,9 @@ type
      offender — that matches user intuition (the freshly-added entry
      is the conflict, not the original).}
     function HasDuplicateBefore(const AName: string; AIndex: Integer): Boolean;
+    {Per-preset rule runner shared by ValidateStructural and
+     ValidateForEditor. Differs only in ADuplicateCheck.}
+    function CheckPresetAt(AIndex: Integer; const ADuplicateCheck: TFunc<string, Integer, Boolean>; out AReason: string): Boolean;
   public
     constructor Create;
     destructor Destroy; override;
@@ -51,14 +55,27 @@ type
      can focus that row; AReason carries the user-visible message.
      Rules: name non-empty and unique; OutputExt non-empty and free of
      filename-illegal characters; OutputName free of path separators;
-     Args clear of the forbidden-token list.}
-    function Validate(out AInvalidIndex: Integer; out AReason: string): Boolean;
+     Args clear of the forbidden-token list.
+
+     Two variants differ ONLY in how a duplicate name is reported:
+       ValidateStructural — order-agnostic. Uses NameExists; on a
+         duplicate-name pair, the FIRST preset encountered in the loop
+         is flagged. Use this from non-UI paths (CLI, import).
+       ValidateForEditor — overlays the "blame the later duplicate"
+         UX rule via HasDuplicateBefore. The freshly-added preset is
+         the conflict from the user's perspective; the original keeps
+         its name. The editor dialog uses this variant.
+     Every other rule (empty name, OutputExt, OutputName, Args) is
+     identical between the two; the duplicate-blame is the only
+     semantic difference.}
+    function ValidateStructural(out AInvalidIndex: Integer; out AReason: string): Boolean;
+    function ValidateForEditor(out AInvalidIndex: Integer; out AReason: string): Boolean;
   end;
 
 implementation
 
 uses
-  System.SysUtils, uWcxPresetValidation;
+  uWcxPresetValidation;
 
 constructor TPresetEditorModel.Create;
 begin
@@ -165,51 +182,85 @@ begin
   FPresets.Insert(Result, Copy);
 end;
 
-function TPresetEditorModel.Validate(out AInvalidIndex: Integer; out AReason: string): Boolean;
+{Per-preset rule runner shared by ValidateStructural and
+ ValidateForEditor. The two callers differ only in ADuplicateCheck:
+ NameExists for the structural variant (any-order conflict, the first
+ preset of a pair is flagged), HasDuplicateBefore for the editor
+ variant (LATER preset of the pair is flagged, matching user intent).}
+function TPresetEditorModel.CheckPresetAt(AIndex: Integer; const ADuplicateCheck: TFunc<string, Integer, Boolean>; out AReason: string): Boolean;
 var
-  I: Integer;
   P: TWcxPreset;
   NameReason: string;
 begin
+  AReason := '';
+  P := FPresets[AIndex];
+
+  if P.Name.Trim = '' then
+  begin
+    AReason := 'Name must not be empty';
+    Exit(False);
+  end;
+  if ADuplicateCheck(P.Name, AIndex) then
+  begin
+    AReason := Format('Name "%s" is used by another preset (case-insensitive)', [P.Name]);
+    Exit(False);
+  end;
+
+  if not ValidateOutputExt(P.OutputExt, AReason) then
+    Exit(False);
+
+  if not ValidateOutputName(P.OutputName, NameReason) then
+  begin
+    AReason := 'OutputName: ' + NameReason;
+    Exit(False);
+  end;
+
+  if not ValidatePresetArgs(P.Args, AReason) then
+  begin
+    AReason := 'Args: ' + AReason;
+    Exit(False);
+  end;
+
+  Result := True;
+end;
+
+function TPresetEditorModel.ValidateStructural(out AInvalidIndex: Integer; out AReason: string): Boolean;
+var
+  I: Integer;
+  DupCheck: TFunc<string, Integer, Boolean>;
+begin
   AInvalidIndex := -1;
   AReason := '';
+  DupCheck := function(AName: string; AIndex: Integer): Boolean
+    begin
+      Result := NameExists(AName, AIndex);
+    end;
   for I := 0 to FPresets.Count - 1 do
-  begin
-    P := FPresets[I];
+    if not CheckPresetAt(I, DupCheck, AReason) then
+    begin
+      AInvalidIndex := I;
+      Exit(False);
+    end;
+  Result := True;
+end;
 
-    if P.Name.Trim = '' then
+function TPresetEditorModel.ValidateForEditor(out AInvalidIndex: Integer; out AReason: string): Boolean;
+var
+  I: Integer;
+  DupCheck: TFunc<string, Integer, Boolean>;
+begin
+  AInvalidIndex := -1;
+  AReason := '';
+  DupCheck := function(AName: string; AIndex: Integer): Boolean
+    begin
+      Result := HasDuplicateBefore(AName, AIndex);
+    end;
+  for I := 0 to FPresets.Count - 1 do
+    if not CheckPresetAt(I, DupCheck, AReason) then
     begin
       AInvalidIndex := I;
-      AReason := 'Name must not be empty';
       Exit(False);
     end;
-    if HasDuplicateBefore(P.Name, I) then
-    begin
-      AInvalidIndex := I;
-      AReason := Format('Name "%s" is used by another preset (case-insensitive)', [P.Name]);
-      Exit(False);
-    end;
-
-    if not ValidateOutputExt(P.OutputExt, AReason) then
-    begin
-      AInvalidIndex := I;
-      Exit(False);
-    end;
-
-    if not ValidateOutputName(P.OutputName, NameReason) then
-    begin
-      AInvalidIndex := I;
-      AReason := 'OutputName: ' + NameReason;
-      Exit(False);
-    end;
-
-    if not ValidatePresetArgs(P.Args, AReason) then
-    begin
-      AInvalidIndex := I;
-      AReason := 'Args: ' + AReason;
-      Exit(False);
-    end;
-  end;
   Result := True;
 end;
 

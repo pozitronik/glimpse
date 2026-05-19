@@ -43,6 +43,12 @@ type
     [Test] procedure TestValidateAcceptsVirtualPathInOutputName;
     [Test] procedure TestValidateRejectsTraversalInOutputName;
     [Test] procedure TestValidateRejectsLeadingSeparatorInOutputName;
+    {ValidateStructural is the order-agnostic variant: on a duplicate-name
+     pair, the FIRST preset in the loop is flagged (NameExists), whereas
+     ValidateForEditor blames the LATER one (HasDuplicateBefore). Pins the
+     semantic difference so a refactor that conflates the two surfaces here.}
+    [Test] procedure TestValidateStructural_DuplicateName_FlagsFirstPreset;
+    [Test] procedure TestValidateForEditor_DuplicateName_FlagsLaterPreset;
   end;
 
 implementation
@@ -285,7 +291,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsTrue(M.Validate(BadIdx, Reason));
+    Assert.IsTrue(M.ValidateForEditor(BadIdx, Reason));
     Assert.AreEqual(-1, BadIdx);
     Assert.AreEqual('', Reason);
   finally
@@ -305,7 +311,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
     Assert.IsTrue(Reason.Contains('Name'));
   finally
     M.Free;
@@ -329,7 +335,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
     Assert.AreEqual(1, BadIdx, 'Second occurrence is the offender');
   finally
     M.Free;
@@ -348,7 +354,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
     Assert.IsTrue(Reason.Contains('OutputExt'));
   finally
     M.Free;
@@ -367,7 +373,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
   finally
     M.Free;
   end;
@@ -386,7 +392,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
   finally
     M.Free;
   end;
@@ -405,7 +411,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
     Assert.IsTrue(Reason.Contains('Args'),
       'Reason must point at Args so the editor knows which field to focus');
   finally
@@ -429,7 +435,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
     Assert.AreEqual(2, BadIdx);
   finally
     M.Free;
@@ -450,7 +456,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsTrue(M.Validate(BadIdx, Reason));
+    Assert.IsTrue(M.ValidateForEditor(BadIdx, Reason));
   finally
     M.Free;
   end;
@@ -471,7 +477,7 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
     Assert.AreEqual(0, BadIdx);
     Assert.IsTrue(Reason.Contains('OutputName'));
   finally
@@ -492,7 +498,56 @@ begin
   M := TPresetEditorModel.Create;
   try
     M.LoadFrom(P);
-    Assert.IsFalse(M.Validate(BadIdx, Reason));
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestWcxPresetEditorModel.TestValidateStructural_DuplicateName_FlagsFirstPreset;
+var
+  M: TPresetEditorModel;
+  P: TWcxPresetArray;
+  BadIdx: Integer;
+  Reason: string;
+begin
+  {Two presets share a name; ValidateStructural is order-agnostic so it
+   flags the first preset in iteration order (index 0).}
+  SetLength(P, 2);
+  P[0].Name := 'shared'; P[0].Enabled := True; P[0].OutputExt := 'mp4';
+  P[1].Name := 'shared'; P[1].Enabled := True; P[1].OutputExt := 'mkv';
+
+  M := TPresetEditorModel.Create;
+  try
+    M.LoadFrom(P);
+    Assert.IsFalse(M.ValidateStructural(BadIdx, Reason));
+    Assert.AreEqual(0, BadIdx,
+      'ValidateStructural flags the FIRST preset of a duplicate-name pair (NameExists checks all-other)');
+  finally
+    M.Free;
+  end;
+end;
+
+procedure TTestWcxPresetEditorModel.TestValidateForEditor_DuplicateName_FlagsLaterPreset;
+var
+  M: TPresetEditorModel;
+  P: TWcxPresetArray;
+  BadIdx: Integer;
+  Reason: string;
+begin
+  {Same input — ValidateForEditor blames the LATER duplicate (index 1)
+   per the editor-UX rule. Pins the semantic difference from
+   ValidateStructural above.}
+  SetLength(P, 2);
+  P[0].Name := 'shared'; P[0].Enabled := True; P[0].OutputExt := 'mp4';
+  P[1].Name := 'shared'; P[1].Enabled := True; P[1].OutputExt := 'mkv';
+
+  M := TPresetEditorModel.Create;
+  try
+    M.LoadFrom(P);
+    Assert.IsFalse(M.ValidateForEditor(BadIdx, Reason));
+    Assert.AreEqual(1, BadIdx,
+      'ValidateForEditor flags the LATER preset of a duplicate-name pair (HasDuplicateBefore checks earlier-indices-only)');
   finally
     M.Free;
   end;
