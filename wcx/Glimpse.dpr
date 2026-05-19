@@ -61,6 +61,8 @@ uses
   uWcxListing in 'uWcxListing.pas',
   uWcxProgressBridge in 'uWcxProgressBridge.pas',
   uWcxPresetExtractor in 'uWcxPresetExtractor.pas',
+  uWcxErrorMapping in 'uWcxErrorMapping.pas',
+  uWcxExtractionController in 'uWcxExtractionController.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports

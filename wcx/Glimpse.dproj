@@ -102,6 +102,8 @@
         <DCCReference Include="..\src\uSettingsDlgUI.pas"/>
         <DCCReference Include="uWcxEntryExtractors.pas"/>
         <DCCReference Include="uWcxArchiveHandle.pas"/>
+        <DCCReference Include="uWcxErrorMapping.pas"/>
+        <DCCReference Include="uWcxExtractionController.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

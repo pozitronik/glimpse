@@ -110,6 +110,8 @@ uses
   TestWcxPresets in 'TestWcxPresets.pas',
   uWcxEntryExtractors in '..\wcx\uWcxEntryExtractors.pas',
   uWcxArchiveHandle in '..\wcx\uWcxArchiveHandle.pas',
+  uWcxErrorMapping in '..\wcx\uWcxErrorMapping.pas',
+  uWcxExtractionController in '..\wcx\uWcxExtractionController.pas',
   TestWcxArchiveHandle in 'TestWcxArchiveHandle.pas',
   uWcxListing in '..\wcx\uWcxListing.pas',
   TestWcxListing in 'TestWcxListing.pas',

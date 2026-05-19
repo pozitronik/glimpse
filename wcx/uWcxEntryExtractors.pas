@@ -187,7 +187,7 @@ uses
   uFrameFileNames, uBannerInfo, uBannerPainter, uCombinedGrid, uTimecodeOverlay,
   uBitmapResize, uDebugLog,
   uWcxPresetTemplate, uWcxPresetExtractor, uWcxProgressBridge,
-  uPresetExtractReporter;
+  uPresetExtractReporter, uWcxErrorMapping;
 {Note: Winapi.Windows is in scope transitively via uWcxAPI (interface
  uses), but Vcl.Graphics is listed AFTER it in this unit's interface
  uses so the unqualified TBitmap resolves to Vcl.Graphics.TBitmap, not
@@ -205,29 +205,6 @@ end;
 function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
 begin
   Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
-end;
-
-{Maps a Delphi exception class to the closest WCX error code. Kept in
- sync with the version in uWcxExports — duplicated rather than imported
- to avoid a back-link from this unit into the WCX dispatcher. The
- narrow mapping (out-of-memory, file-not-found) preserves the prior
- behaviour where uncategorised exceptions fall through to E_EWRITE.}
-function ExceptionClassToWcxError(AClass: TClass): Integer;
-begin
-  if (AClass <> nil) and AClass.InheritsFrom(EOutOfMemory) then
-    Result := E_NO_MEMORY
-  else if (AClass <> nil) and AClass.InheritsFrom(EFileNotFoundException) then
-    Result := E_EOPEN
-  else
-    Result := E_EWRITE;
-end;
-
-function ExceptionToWcxError(E: Exception): Integer;
-begin
-  if E = nil then
-    Result := E_EWRITE
-  else
-    Result := ExceptionClassToWcxError(E.ClassType);
 end;
 
 {Tries to satisfy an extract request from the pre-extracted temp file

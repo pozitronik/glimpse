@@ -74,7 +74,7 @@ implementation
 
 uses
   Winapi.Windows, System.SysUtils, System.IOUtils, System.Classes, System.SyncObjs,
-  uWcxAPI, uWcxExports, uWcxFrameCache;
+  uWcxAPI, uWcxExports, uWcxFrameCache, uWcxErrorMapping;
 
 { THeaderDataExW }
 

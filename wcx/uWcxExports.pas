@@ -40,38 +40,16 @@ function PackFiles(PackedFile, SubPath, SrcPath, AddList: PAnsiChar; Flags: Inte
 {Shows configuration dialog}
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 
-{Clamps a 64-bit file size into the 32-bit signed range used by the WCX
- ANSI ReadHeader (THeaderData.UnpSize is Integer). Negative input is
- promoted to zero (defensive; sizes from disk are non-negative); values
- above MaxInt saturate at MaxInt so a 5 GB combined image surfaces as
- ~2 GB instead of wrapping into a negative or truncated value. The Wide
- variant (ReadHeaderExW) carries the full 64-bit value via UnpSize +
- UnpSizeHigh and is unaffected.}
-function ClampSizeForAnsiHeader(AValue: Int64): Integer;
-
-{Maps a Delphi exception class to the closest WCX error code. Earlier the
- extract / copy except blocks mapped every exception to E_EWRITE, which
- told the user "disk write failed" even when the real problem was RAM
- exhaustion or a missing source file. The mapping is intentionally
- narrow: only the high-signal classes branch off; everything else still
- falls through to E_EWRITE so legacy behaviour is preserved for the
- uncategorised majority.
- Takes a class reference rather than an instance so tests can pin every
- branch without allocating instances of leak-tricky classes (EOutOfMemory
- overrides FreeInstance to a no-op for the singleton path).}
-function ExceptionClassToWcxError(AClass: TClass): Integer;
-function ExceptionToWcxError(E: Exception): Integer;
-
 implementation
 
 uses
   System.AnsiStrings, System.Classes, System.IOUtils,
-  Vcl.Graphics,
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFrameOffsets,
-  uFrameFileNames, uBitmapSaver, uFrameExtractor,
+  uFrameExtractor,
   uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo,
   uWcxPresets, uWcxListing, uWcxEntryExtractors, uWcxArchiveHandle,
-  uWcxFrameCache, uPresetExtractReporter;
+  uWcxFrameCache, uPresetExtractReporter, uWcxErrorMapping,
+  uWcxExtractionController;
 
 var
   GIniPath: string;
@@ -79,168 +57,6 @@ var
 procedure WcxLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
-end;
-
-{Builds extraction options from WCX settings.
- AMaxSide = 0 means no scale limit (combined-mode caller relies on this:
- the assembled grid is shrunk separately after rendering). For
- separate-frame mode, pass H.Settings.FrameMaxSide so ffmpeg's scale
- filter fits the longer dimension to the cap.}
-function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
-begin
-  Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
-end;
-
-function ClampSizeForAnsiHeader(AValue: Int64): Integer;
-begin
-  if AValue < 0 then
-    Result := 0
-  else if AValue > MaxInt then
-    Result := MaxInt
-  else
-    Result := Integer(AValue);
-end;
-
-type
-  {One row in the exception-to-WCX-error lookup table. ExceptionClass is
-   the metaclass reference; the lookup matches via InheritsFrom so any
-   subclass of the listed class resolves to the same WcxError. Order
-   matters when one mapped class inherits from another (more-specific
-   first) — none of the current entries have that relationship.}
-  TExceptionClassMapping = record
-    ExceptionClass: TClass;
-    WcxError: Integer;
-  end;
-
-const
-  {Adding a new (ExceptionClass -> WcxError) mapping is a one-line table
-   entry. Unmapped classes (and nil) fall through to E_EWRITE — the WCX
-   "write error" code that TC interprets as a generic mid-extraction
-   failure with a follow-up dialog.}
-  EXCEPTION_MAP: array[0..1] of TExceptionClassMapping = (
-    (ExceptionClass: EOutOfMemory;           WcxError: E_NO_MEMORY),
-    (ExceptionClass: EFileNotFoundException; WcxError: E_EOPEN)
-  );
-
-function ExceptionClassToWcxError(AClass: TClass): Integer;
-var
-  I: Integer;
-begin
-  if AClass = nil then
-    Exit(E_EWRITE);
-  for I := 0 to High(EXCEPTION_MAP) do
-    if AClass.InheritsFrom(EXCEPTION_MAP[I].ExceptionClass) then
-      Exit(EXCEPTION_MAP[I].WcxError);
-  Result := E_EWRITE;
-end;
-
-function ExceptionToWcxError(E: Exception): Integer;
-begin
-  if E = nil then
-    Result := E_EWRITE
-  else
-    Result := ExceptionClassToWcxError(E.ClassType);
-end;
-
-{Extracts all frames, renders a combined image, and saves to cache.
- The combined slot is the one immediately after the frames — when frames
- are also being shown the combined image lands at index Length(Offsets);
- when frames are off it lands at index 0. RenderCombinedBitmap lives in
- uWcxEntryExtractors so this pre-extract path and TCombinedEntry.Extract
- share the same composition rules.}
-procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
-  const ASession: TWcxCacheExtractionSession);
-var
-  Combined: TBitmap;
-  TempPath: string;
-  Slot: Integer;
-begin
-  Combined := uWcxEntryExtractors.RenderCombinedBitmap(H, AExtractor);
-  if Combined = nil then
-    Exit;
-  try
-    TempPath := TPath.Combine(ASession.CachedTempDir, GenerateCombinedFileName(H.FileName, H.Settings.SaveFormat));
-    SaveBitmapToFile(Combined, TempPath, H.Settings.SaveOptions);
-    if H.Settings.ShowFrames then
-      Slot := Length(H.Offsets)
-    else
-      Slot := 0;
-    ASession.RecordSlot(Slot, TempPath, TFile.GetSize(TempPath));
-  finally
-    Combined.Free;
-  end;
-end;
-
-{Extracts individual frames and saves each to cache}
-procedure ExtractSeparateToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
-  const ASession: TWcxCacheExtractionSession);
-var
-  Bmp: TBitmap;
-  TempPath: string;
-  I: Integer;
-  Options: TExtractionOptions;
-begin
-  Options := BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide);
-  for I := 0 to Length(H.Offsets) - 1 do
-  begin
-    Bmp := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, Options);
-    if Bmp = nil then
-      Continue;
-    try
-      TempPath := TPath.Combine(ASession.CachedTempDir, GenerateFrameFileName(H.FileName, I, H.Offsets[I].TimeOffset, H.Settings.SaveFormat));
-      SaveBitmapToFile(Bmp, TempPath, H.Settings.SaveOptions);
-      ASession.RecordSlot(I, TempPath, TFile.GetSize(TempPath));
-    finally
-      Bmp.Free;
-    end;
-  end;
-end;
-
-{Pre-extracts all frames to the module's TWcxFrameCache, or reuses an
- existing cache entry if the same video was already extracted.
- The session held by BeginExtractionSession owns the cache lock for its
- lifetime — a concurrent OpenArchive on a second thread blocks here
- until this pass finishes, which is intentional: two threads on the
- same video must not both proceed past the cache-hit check.
- Security caveat: the temp directory inherits the parent (user temp)
- ACL, so other processes running as the same user can read the
- extracted frames. Same exposure as ffmpeg's own temp output and as the
- WLX frame cache. Tightening would require an explicit per-directory
- ACL via SetSecurityInfo. Acceptable for a single-user TC session;
- revisit if multi-user or sandboxed contexts ever become a use case.}
-procedure PreExtractFrames(H: TArchiveHandle);
-var
-  Session: TWcxCacheExtractionSession;
-  EntryCount: Integer;
-  TempDir: string;
-begin
-  Session := TWcxFrameCache.Instance.BeginExtractionSession;
-  try
-    if Session.TryHit(H.FileName, H.TempPaths, H.EntrySizes) then
-    begin
-      WcxLog(Format('PreExtract: cache hit for %s', [H.FileName]));
-      Exit;
-    end;
-
-    {Cache arrays size to legacy entries only; preset entries do not
-     pre-extract (they run on demand during ProcessFile).}
-    EntryCount := LegacyEntryCount(H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined);
-    TempDir := Session.PrepareFresh(H.FileName, EntryCount);
-
-    {Each enabled mode populates its own cache slots. Both can run in
-     the same pass when the user has both Show* bits on. The frame
-     extractor is the per-session one already on the handle (set at
-     OpenArchive).}
-    if H.Settings.ShowFrames then
-      ExtractSeparateToCache(H, H.FrameExtractor, Session);
-    if H.Settings.ShowCombined then
-      ExtractCombinedToCache(H, H.FrameExtractor, Session);
-
-    Session.PublishTo(H.TempPaths, H.EntrySizes);
-    WcxLog(Format('PreExtract: %d entries to %s', [EntryCount, TempDir]));
-  finally
-    Session.Free;
-  end;
 end;
 
 function DoOpenArchive(const AFileName: string; AOpenMode: Integer; out AOpenResult: Integer): THandle;
