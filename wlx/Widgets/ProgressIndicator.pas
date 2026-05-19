@@ -1,6 +1,4 @@
-{Progress-bar widget controller for TPluginForm. Owns a TProgressBar
- parented on the status bar and recomputes its bounds via
- StatusBarLayout.ResolveProgressBarBounds.}
+{Progress-bar widget controller for TPluginForm.}
 unit ProgressIndicator;
 
 interface
@@ -20,32 +18,71 @@ type
     out ALayout: TProgressBarLayout): Boolean;
 
   TProgressIndicator = class
+  strict protected
+    function GetVisible: Boolean; virtual;
+    function GetProgressBar: TProgressBar; virtual;
+  public
+    procedure Show; virtual;
+    procedure Hide; virtual;
+    procedure Reposition; virtual;
+    property ProgressBar: TProgressBar read GetProgressBar;
+    property Visible: Boolean read GetVisible;
+  end;
+
+  TStatusBarProgressIndicator = class(TProgressIndicator)
   strict private
     FStatusBar: TStatusBar;
     FProgressBar: TProgressBar;
     FVisible: Boolean;
     FOnPostHideVisibility: TStatusBarVisibilityCallback;
     FOnQueryLayout: TStatusBarLayoutCallback;
+  strict protected
+    function GetVisible: Boolean; override;
+    function GetProgressBar: TProgressBar; override;
   public
     constructor Create(AStatusBar: TStatusBar;
       const AOnPostHideVisibility: TStatusBarVisibilityCallback;
       const AOnQueryLayout: TStatusBarLayoutCallback);
     {Idempotent — re-Show on a visible indicator just re-runs Reposition.}
-    procedure Show;
-    procedure Hide;
+    procedure Show; override;
+    procedure Hide; override;
     {No-op when the indicator is not visible.}
-    procedure Reposition;
-    property ProgressBar: TProgressBar read FProgressBar;
-    property Visible: Boolean read FVisible;
+    procedure Reposition; override;
   end;
 
 implementation
 
 const
-  PROGRESSBAR_MIN_W = 40; {Minimum width before clamping the embedded progress bar.}
-  PROGRESSBAR_MARGIN = 1; {Tiny inset so the bar doesn't touch the status bar's borders.}
+  PROGRESSBAR_MIN_W = 40;
+  PROGRESSBAR_MARGIN = 1;
 
-constructor TProgressIndicator.Create(AStatusBar: TStatusBar;
+{TProgressIndicator}
+
+function TProgressIndicator.GetVisible: Boolean;
+begin
+  Result := False;
+end;
+
+function TProgressIndicator.GetProgressBar: TProgressBar;
+begin
+  Result := nil;
+end;
+
+procedure TProgressIndicator.Show;
+begin
+end;
+
+procedure TProgressIndicator.Hide;
+begin
+end;
+
+procedure TProgressIndicator.Reposition;
+begin
+end;
+
+{TStatusBarProgressIndicator}
+
+constructor TStatusBarProgressIndicator.Create(AStatusBar: TStatusBar;
   const AOnPostHideVisibility: TStatusBarVisibilityCallback;
   const AOnQueryLayout: TStatusBarLayoutCallback);
 begin
@@ -58,7 +95,17 @@ begin
   FProgressBar.Visible := False;
 end;
 
-procedure TProgressIndicator.Show;
+function TStatusBarProgressIndicator.GetVisible: Boolean;
+begin
+  Result := FVisible;
+end;
+
+function TStatusBarProgressIndicator.GetProgressBar: TProgressBar;
+begin
+  Result := FProgressBar;
+end;
+
+procedure TStatusBarProgressIndicator.Show;
 begin
   FStatusBar.Visible := True;
   FVisible := True;
@@ -66,7 +113,7 @@ begin
   FProgressBar.Visible := True;
 end;
 
-procedure TProgressIndicator.Hide;
+procedure TStatusBarProgressIndicator.Hide;
 begin
   FProgressBar.Visible := False;
   FVisible := False;
@@ -74,7 +121,7 @@ begin
     FStatusBar.Visible := FOnPostHideVisibility;
 end;
 
-procedure TProgressIndicator.Reposition;
+procedure TStatusBarProgressIndicator.Reposition;
 var
   PanelsRight, I: Integer;
   Stretch: Boolean;
@@ -85,8 +132,6 @@ begin
     Exit;
   if not Assigned(FOnQueryLayout) or not FOnQueryLayout(Stretch, Layout) then
     Exit;
-  {Right edge of the last panel — computed live so adding or removing
-   a panel in UpdateStatusBar needs no separate bookkeeping here.}
   PanelsRight := 0;
   for I := 0 to FStatusBar.Panels.Count - 1 do
     Inc(PanelsRight, FStatusBar.Panels[I].Width);

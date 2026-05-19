@@ -571,6 +571,9 @@ end;
 constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string; const AServices: TPluginServices);
 begin
   CreateNew(nil);
+  {Null placeholder; CreateStatusBar swaps in the real indicator. Assigned
+   here so InitializeWindowing's handle-creation Resize has a non-nil target.}
+  FProgressIndicator := TProgressIndicator.Create;
   FContextCellIndex := -1;
   BorderStyle := bsNone;
   KeyPreview := True;
@@ -1046,12 +1049,8 @@ begin
   FStatusBar.ShowHint := True;
   FStatusBar.Visible := False;
 
-  {Step 105 (C1, part 3): TProgressIndicator owns the TProgressBar
-   widget + visibility flag + Reposition logic. The form's FProgressBar
-   alias points at the indicator's bar so direct .Style/.Max/.Position
-   writes (WithReExtract, UpdateProgress, the modal-runner lambda) work
-   as before.}
-  FProgressIndicator := TProgressIndicator.Create(FStatusBar,
+  FreeAndNil(FProgressIndicator);
+  FProgressIndicator := TStatusBarProgressIndicator.Create(FStatusBar,
     ComputeStatusBarPostHideVisibility,
     function(out AStretch: Boolean; out ALayout: TProgressBarLayout): Boolean
     begin
@@ -2269,11 +2268,9 @@ begin
   inherited;
   Realign;
   LayoutToolbar;
+  FProgressIndicator.Reposition;
   {VCL fires Resize during window creation, before CreateForPlugin finishes
-   constructing sub-controls, so FProgressIndicator / FFrameView / FStatusBar
-   may not exist yet.}
-  if Assigned(FProgressIndicator) then
-    FProgressIndicator.Reposition;
+   constructing sub-controls, so FFrameView may not exist yet}
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
   {Status bar's predicted Save / Copy view dimensions depend on cell sizes
