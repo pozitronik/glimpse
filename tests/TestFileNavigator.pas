@@ -37,6 +37,12 @@ type
     [Test] procedure TestGetFilePositionMixedExtensionsMatchesOnlyCount;
     [Test] procedure TestGetFilePositionCurrentNotInList;
     [Test] procedure TestGetFilePositionEmptyDirReturnsFalse;
+    {Cache tests (step 111).}
+    [Test] procedure Cache_ClearedInSetup_SizeIsZero;
+    [Test] procedure Cache_FirstCall_GrowsSizeToOne;
+    [Test] procedure Cache_SecondCallSameArgs_DoesNotGrow;
+    [Test] procedure Cache_DifferentExtensionList_AddsEntry;
+    [Test] procedure Cache_DirectoryMutation_InvalidatesAndReturnsFreshList;
   end;
 
 implementation
@@ -53,6 +59,12 @@ begin
   if TDirectory.Exists(FTempDir) then
     TDirectory.Delete(FTempDir, True);
   TDirectory.CreateDirectory(FTempDir);
+  {Clear the module-level directory cache so each test starts from a
+   known state. Required for the Cache_* tests that observe size; the
+   other tests are independent of cache state because the per-test
+   fresh FTempDir mtime always differs from any cached entry, but
+   clearing here is defensive against test-order side effects.}
+  ClearDirectoryCache;
 end;
 
 procedure TTestFileNavigator.TearDown;
@@ -283,6 +295,70 @@ begin
   Assert.IsFalse(GetFilePosition(FTempDir + 'phantom.mp4', 'mp4', Idx, Total));
   Assert.AreEqual(0, Idx);
   Assert.AreEqual(0, Total);
+end;
+
+procedure TTestFileNavigator.Cache_ClearedInSetup_SizeIsZero;
+begin
+  { Setup calls ClearDirectoryCache; verify the contract. }
+  Assert.AreEqual(0, DirectoryCacheSize);
+end;
+
+procedure TTestFileNavigator.Cache_FirstCall_GrowsSizeToOne;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mp4']);
+  GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total);
+  Assert.AreEqual(1, DirectoryCacheSize,
+    'First call inserts one cache entry for (dir, mtime, extensions)');
+end;
+
+procedure TTestFileNavigator.Cache_SecondCallSameArgs_DoesNotGrow;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mp4']);
+  GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total);
+  GetFilePosition(FTempDir + 'b.mp4', 'mp4', Idx, Total);
+  Assert.AreEqual(1, DirectoryCacheSize,
+    'Second call with identical key hits the cache; size stays at 1');
+end;
+
+procedure TTestFileNavigator.Cache_DifferentExtensionList_AddsEntry;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mkv']);
+  GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total);
+  GetFilePosition(FTempDir + 'a.mp4', 'mp4,mkv', Idx, Total);
+  Assert.AreEqual(2, DirectoryCacheSize,
+    'Different extension list -> different key -> separate cache entry');
+end;
+
+procedure TTestFileNavigator.Cache_DirectoryMutation_InvalidatesAndReturnsFreshList;
+var
+  Idx, Total: Integer;
+begin
+  CreateFiles(['a.mp4', 'b.mp4']);
+  Assert.IsTrue(GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total),
+    'Pre-mutation: a.mp4 is at position 1 of 2');
+  Assert.AreEqual(2, Total);
+
+  {Wait briefly + add file: NTFS bumps the parent's mtime when an
+   entry is added/removed. The cache's key includes FileAge(dir), so
+   the next lookup misses and triggers a fresh scan.
+
+   The sleep is here because some filesystems / Windows builds quantize
+   directory mtimes to 1-second resolution; without a wait the file
+   add could leave the dir's reported mtime equal to the pre-mutation
+   value (within the same second). 1100ms safely crosses the boundary.}
+  Sleep(1100);
+  CreateFiles(['c.mp4']);
+
+  Assert.IsTrue(GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total),
+    'Post-mutation: a.mp4 still at position 1 but total grew to 3');
+  Assert.AreEqual(3, Total,
+    'mtime invalidation: cache miss triggers fresh scan; new file included');
 end;
 
 end.

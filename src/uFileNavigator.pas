@@ -1,7 +1,16 @@
 {Finds the next or previous supported file in the same directory,
  and reports the current file's 1-based position among the supported
  siblings. Sorted alphabetically, case-insensitive, with wrap-around
- at boundaries for navigation.}
+ at boundaries for navigation.
+
+ Step 111 (S12): an in-memory cache keyed by (dir, mtime, extensions)
+ amortises the per-keypress TDirectory.GetFiles + sort across runs of
+ navigations in the same directory. Cache invalidates automatically
+ when the directory's mtime changes (file create/delete in NTFS bumps
+ the parent's mtime). Cache is bounded by CACHE_CAPACITY and uses
+ round-robin eviction. Single TCriticalSection guards the cache;
+ production callers are single-threaded (UI thread) but the lock is
+ defensive against future use from a background thread.}
 unit uFileNavigator;
 
 interface
@@ -19,26 +28,152 @@ function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integ
  ACurrentFile itself isn't in the sorted list.}
 function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
 
+{Drops every cache entry. Tests call this in Setup to start from a
+ known state. Production code does not need to call this; entries
+ expire automatically when the directory's mtime changes.}
+procedure ClearDirectoryCache;
+
+{Number of cached directory listings currently held. Tests use this to
+ verify cache hits vs misses (a second call with identical arguments
+ should not grow the count; a call with a different directory or
+ extension set should).}
+function DirectoryCacheSize: Integer;
+
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Types, System.Generics.Collections,
-  System.Generics.Defaults;
+  System.SysUtils, System.IOUtils, System.Types, System.Classes,
+  System.Generics.Collections, System.Generics.Defaults,
+  System.SyncObjs;
+
+const
+  {Holds the most recently scanned directory listings. 8 covers TC's
+   typical workflow (left + right panels plus a handful of recent
+   navigations). Round-robin eviction; the oldest entry is overwritten
+   when the table is full.}
+  CACHE_CAPACITY = 8;
+
+type
+  TDirCacheEntry = record
+    Key: string;
+    Files: TArray<string>;
+  end;
+
+var
+  GCacheLock: TCriticalSection;
+  GCache: array[0..CACHE_CAPACITY - 1] of TDirCacheEntry;
+  GCacheCount: Integer;
+  GCacheNext: Integer;
+
+{Builds a normalized comma-separated string from AExtensions: trimmed,
+ lowercased, sorted, deduplicated. Empty entries are dropped. Used as
+ part of the cache key so two callers with semantically-equivalent
+ extension lists (different whitespace, different case, different
+ order) hit the same cache row.}
+function NormalizedExtKey(const AExtensions: string): string;
+var
+  ExtList: TArray<string>;
+  ExtSet: TStringList;
+  Ext: string;
+  I: Integer;
+begin
+  ExtSet := TStringList.Create;
+  try
+    ExtSet.Sorted := True;
+    ExtSet.Duplicates := dupIgnore;
+    ExtList := AExtensions.Split([',', ' ']);
+    for I := 0 to High(ExtList) do
+    begin
+      Ext := ExtList[I].Trim.ToLower;
+      if Ext <> '' then
+        ExtSet.Add(Ext);
+    end;
+    Result := ExtSet.CommaText;
+  finally
+    ExtSet.Free;
+  end;
+end;
+
+{Locale-independent string form of the directory's last-write time.
+ Used in the cache key so mtime equality is a string compare. On any
+ failure (dir missing, access denied) returns '0' — the key then never
+ matches a successful entry, so the cache effectively bypasses until
+ the dir is readable again.}
+function DirMTimeKey(const ADir: string): string;
+var
+  DT: TDateTime;
+begin
+  try
+    DT := TDirectory.GetLastWriteTime(ExcludeTrailingPathDelimiter(ADir));
+    Result := FormatDateTime('yyyymmddhhnnsszzz', DT);
+  except
+    Result := '0';
+  end;
+end;
+
+function BuildCacheKey(const ADir, AExtensions: string): string;
+begin
+  Result := ADir.ToLower + '|' + DirMTimeKey(ADir) + '|' + NormalizedExtKey(AExtensions);
+end;
+
+function TryGetCached(const AKey: string; out AFiles: TArray<string>): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to GCacheCount - 1 do
+    if GCache[I].Key = AKey then
+    begin
+      AFiles := GCache[I].Files;
+      Exit(True);
+    end;
+  AFiles := nil;
+  Result := False;
+end;
+
+procedure StoreInCache(const AKey: string; const AFiles: TArray<string>);
+begin
+  GCache[GCacheNext].Key := AKey;
+  GCache[GCacheNext].Files := AFiles;
+  GCacheNext := (GCacheNext + 1) mod CACHE_CAPACITY;
+  if GCacheCount < CACHE_CAPACITY then
+    Inc(GCacheCount);
+end;
+
+procedure ClearDirectoryCache;
+var
+  I: Integer;
+begin
+  GCacheLock.Enter;
+  try
+    for I := 0 to CACHE_CAPACITY - 1 do
+    begin
+      GCache[I].Key := '';
+      GCache[I].Files := nil;
+    end;
+    GCacheCount := 0;
+    GCacheNext := 0;
+  finally
+    GCacheLock.Leave;
+  end;
+end;
+
+function DirectoryCacheSize: Integer;
+begin
+  GCacheLock.Enter;
+  try
+    Result := GCacheCount;
+  finally
+    GCacheLock.Leave;
+  end;
+end;
 
 {Enumerates supported files in ADir and returns their base names sorted
  case-insensitively. Shared by FindAdjacentFile and GetFilePosition so
- both use the exact same ordering.
-
- TODO performance: every navigation key (PrevFile / NextFile / file
- position read for the status bar) triggers a full TDirectory.GetFiles
- + sort. For directories with thousands of video files the rescan can
- show in keypress latency. A short-lived cache keyed by (Dir, mtime,
- Extensions) would amortise the scan across consecutive presses
- without risking stale listings. Acceptable for now since most folders
- hold a few dozen videos at most.}
+ both use the exact same ordering. Step 111 adds the cache wrapper;
+ the underlying scan logic is unchanged.}
 function CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
 var
-  Ext: string;
+  Key, Ext: string;
   ExtList: TArray<string>;
   ExtSet: TDictionary<string, Boolean>;
   RawFiles: TStringDynArray;
@@ -48,6 +183,15 @@ begin
   Result := nil;
   if (ADir = '') or not TDirectory.Exists(ADir) then
     Exit;
+
+  Key := BuildCacheKey(ADir, AExtensions);
+  GCacheLock.Enter;
+  try
+    if TryGetCached(Key, Result) then
+      Exit;
+  finally
+    GCacheLock.Leave;
+  end;
 
   ExtList := AExtensions.Split([',', ' ']);
   ExtSet := TDictionary<string, Boolean>.Create(Length(ExtList));
@@ -82,6 +226,13 @@ begin
     end;
   finally
     ExtSet.Free;
+  end;
+
+  GCacheLock.Enter;
+  try
+    StoreInCache(Key, Result);
+  finally
+    GCacheLock.Leave;
   end;
 end;
 
@@ -137,5 +288,12 @@ begin
   ATotal := Length(Files);
   Result := True;
 end;
+
+initialization
+  GCacheLock := TCriticalSection.Create;
+
+finalization
+  ClearDirectoryCache;
+  GCacheLock.Free;
 
 end.
