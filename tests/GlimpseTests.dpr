@@ -184,6 +184,8 @@ uses
   TestEnableRules in 'TestEnableRules.pas',
   uSettingsControlsBundles in '..\wlx\uSettingsControlsBundles.pas',
   TestSettingsControlsBundles in 'TestSettingsControlsBundles.pas',
+  uSettingsPresenters in '..\wlx\uSettingsPresenters.pas',
+  TestSettingsPresenters in 'TestSettingsPresenters.pas',
   uStatusBarTokens in '..\src\uStatusBarTokens.pas',
   uStatusBarTemplate in '..\src\uStatusBarTemplate.pas',
   uStatusBarFormatters in '..\src\uStatusBarFormatters.pas',

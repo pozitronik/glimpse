@@ -10,7 +10,7 @@ uses
   Vcl.ComCtrls, Vcl.Dialogs,
   Winapi.Windows,
   uTypes, uStatusBarLayout, uSettings, uHotkeys, uEnableRules,
-  uSettingsControlsBundles;
+  uSettingsControlsBundles, uSettingsPresenters;
 
 type
   TSettingsForm = class(TForm)
@@ -217,12 +217,16 @@ type
     FResolvedFFmpegPath: string;
     FSettings: TPluginSettings;
     FOnApply: TProc;
-    FTimestampFontName: string;
-    FTimestampFontSize: Integer;
-    FBannerFontName: string;
-    FBannerFontSize: Integer;
-    FStatusBarFontName: string;
-    FStatusBarFontSize: Integer;
+    {Per-cluster presenters (step 84). Each owns its bundle(s),
+     its event handlers, its update helpers, and (for Appearance)
+     its dialog-local font shadow fields. The form delegates DFM-
+     wired handlers to them and collapses SettingsToControls /
+     ControlsToSettings into a sequence of LoadFrom / SaveTo calls.
+     Constructed in CreateWithOwner after InitControlsBundles,
+     freed in Destroy.}
+    FExtractionPresenter: TExtractionPresenter;
+    FStoragePresenter: TStoragePresenter;
+    FAppearancePresenter: TAppearancePresenter;
     {Local snapshot of the bindings so the live table isn't mutated unless
      the user confirms with OK/Apply. Mirrors the per-row listview rows.}
     FHotkeys: uHotkeys.THotkeyBindings;
@@ -271,24 +275,8 @@ type
      then performs the only non-enable side effect: refreshing the
      MaxThreadsAuto caption to track UdMaxThreads.Position.}
     procedure RecomputeEnables;
-    procedure UpdateFFmpegInfo;
-    procedure UpdateCacheFolderInfo;
-    procedure UpdateCacheSizeInfo;
     procedure PickColor(APanel: TPanel);
-    procedure PickTimestampFont;
-    procedure PickBannerFont;
-    procedure PickStatusBarFont;
-    procedure UpdateTimestampFontDisplay;
-    procedure UpdateBannerFontDisplay;
-    procedure UpdateStatusBarFontDisplay;
     procedure PopulateStatusBarLegend;
-    {Enforces the rule that stretch panels mode implies progress-bar
-     Over panels: when the stretch checkbox is on, the progress bar
-     combo is forced to "Over panels" and disabled (the runtime will
-     override anyway, surface the override in the UI so the user
-     understands what they will get). When stretch is off, the combo
-     re-enables with whatever value it currently holds.}
-    procedure UpdateStretchLockState;
     procedure PopulateHotkeyList;
     procedure RefreshHotkeyRow(AAction: uHotkeys.TPluginAction);
     function SelectedHotkeyAction: uHotkeys.TPluginAction;
@@ -404,49 +392,22 @@ end;
 
 procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
 begin
-  {Per-group bundle binds. Order matches the visual tab order
-   (General -> Sampling -> Appearance -> Save -> Clipboard -> Cache ->
-   QuickView -> Thumbnails). Extraction first because the early
-   RecomputeEnables right after lets the workers/scaled enable rules
-   see the just-loaded values before later tabs paint.}
-  BindExtractionToControls(ASettings, FExtractionControls);
-  BindFFmpegToControls(ASettings, FFFmpegControls);
-  BindSaveToControls(ASettings, FSaveControls);
-  BindCacheToControls(ASettings, FCacheControls);
-  {Random-percent live readout (label, not a control bound by the
-   bundle). Pinned right after the Cache bind so the label tracks the
-   trackbar value the bundle just wrote.}
-  LblRandomPercentValue.Caption := IntToStr(ASettings.RandomPercent) + '%';
-  {Early enable-rule sweep so the workers/scaled groups visually reflect
-   the just-loaded values before subsequent setters paint the remaining
-   tabs. A final RecomputeEnables at the bottom of this method picks up
-   the controls whose values are set further down (banner, cache, etc).}
+  {Delegates per-cluster bundle binds + font shadow fields + update
+   helpers to the three presenters. Each presenter's LoadFrom is
+   self-contained for its tab cluster. The early RecomputeEnables sits
+   between Extraction (workers/scaled rules) and Appearance (banner
+   rule) so the workers/scaled groups visually reflect just-loaded
+   values before later tabs paint. The final RecomputeEnables picks
+   up the rest.}
+  FExtractionPresenter.LoadFrom(ASettings);
   RecomputeEnables;
+  FAppearancePresenter.LoadFrom(ASettings);
+  FStoragePresenter.LoadFrom(ASettings);
 
-  BindViewToControls(ASettings, FViewControls);
-  BindTimestampToControls(ASettings, FTimestampControls);
-  {Font shadow fields are dialog-local state, not VCL controls; the
-   bundle deliberately omits them. The UpdateXxxFontDisplay calls
-   refresh the read-only EdtXxxFont label after the shadow fields are
-   set.}
-  FTimestampFontName := ASettings.TimestampFontName;
-  FTimestampFontSize := ASettings.TimestampFontSize;
-  UpdateTimestampFontDisplay;
-
-  BindStatusBarToControls(ASettings, FStatusBarControls);
-  FStatusBarFontName := ASettings.StatusBarFontName;
-  FStatusBarFontSize := ASettings.StatusBarFontSize;
-  UpdateStatusBarFontDisplay;
-  UpdateStretchLockState;
-
-  BindBannerToControls(ASettings, FBannerControls);
-  FBannerFontName := ASettings.BannerFontName;
-  FBannerFontSize := ASettings.BannerFontSize;
-  UpdateBannerFontDisplay;
-
+  {Clipboard-formats bundle is the only one not owned by a presenter
+   (5 checkboxes; no event-handler-bearing logic justifies its own
+   class).}
   BindClipboardFormatsToControls(ASettings, FClipboardFormatsControls);
-  BindQuickViewToControls(ASettings, FQuickViewControls);
-  BindThumbnailsToControls(ASettings, FThumbnailsControls);
 
   {Snapshot the bindings into our local copy so edits here only commit on
    OK/Apply via ControlsToSettings.}
@@ -454,40 +415,18 @@ begin
   PopulateHotkeyList;
 
   RecomputeEnables;
-  UpdateFFmpegInfo;
-  UpdateCacheFolderInfo;
-  UpdateCacheSizeInfo;
 end;
 
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
 begin
-  {Per-group bundle binds (symmetric with SettingsToControls). Order
-   matches the visual tab order; bundles cover all model fields except
-   the font shadow fields + hotkey collection (handled inline below).}
-  BindExtractionFromControls(ASettings, FExtractionControls);
-  BindFFmpegFromControls(ASettings, FFFmpegControls);
-  BindSaveFromControls(ASettings, FSaveControls);
-  BindCacheFromControls(ASettings, FCacheControls);
-
-  BindViewFromControls(ASettings, FViewControls);
-  BindTimestampFromControls(ASettings, FTimestampControls);
-  {Font shadow fields are dialog-local state, not VCL controls; the
-   bundle deliberately omits them. The shadow values are the source of
-   truth at this point (set by PickXxxFont or BindXxxToControls).}
-  ASettings.TimestampFontName := FTimestampFontName;
-  ASettings.TimestampFontSize := FTimestampFontSize;
-
-  BindStatusBarFromControls(ASettings, FStatusBarControls);
-  ASettings.StatusBarFontName := FStatusBarFontName;
-  ASettings.StatusBarFontSize := FStatusBarFontSize;
-
-  BindBannerFromControls(ASettings, FBannerControls);
-  ASettings.BannerFontName := FBannerFontName;
-  ASettings.BannerFontSize := FBannerFontSize;
+  {Per-cluster SaveTo (symmetric with SettingsToControls). The
+   Extraction presenter owns the cache-bundle save (shared bundle —
+   Storage's SaveTo deliberately skips re-binding it).}
+  FExtractionPresenter.SaveTo(ASettings);
+  FAppearancePresenter.SaveTo(ASettings);
+  FStoragePresenter.SaveTo(ASettings);
 
   BindClipboardFormatsFromControls(ASettings, FClipboardFormatsControls);
-  BindQuickViewFromControls(ASettings, FQuickViewControls);
-  BindThumbnailsFromControls(ASettings, FThumbnailsControls);
 
   {Hotkeys were edited into our local snapshot; push the whole table back.}
   ASettings.Hotkeys.Assign(FHotkeys);
@@ -505,70 +444,24 @@ begin
   PickColorForPanel(APanel, ColorDlg);
 end;
 
-procedure TSettingsForm.UpdateTimestampFontDisplay;
-begin
-  RefreshFontEdit(EdtTimestampFont, FTimestampFontName, FTimestampFontSize);
-end;
-
-procedure TSettingsForm.UpdateBannerFontDisplay;
-begin
-  RefreshBannerFontEdit(EdtBannerFont, ChkBannerAutoSize.Checked, FBannerFontName, FBannerFontSize);
-end;
-
-procedure TSettingsForm.PickTimestampFont;
-begin
-  PickFontInto(FontDlg, EdtTimestampFont, FTimestampFontName, FTimestampFontSize, MIN_TIMESTAMP_FONT_SIZE, MAX_TIMESTAMP_FONT_SIZE);
-end;
-
-procedure TSettingsForm.PickBannerFont;
-var
-  AutoSize: Boolean;
-begin
-  AutoSize := ChkBannerAutoSize.Checked;
-  PickBannerFontInto(FontDlg, EdtBannerFont, AutoSize, FBannerFontName, FBannerFontSize, MIN_BANNER_FONT_SIZE, MAX_BANNER_FONT_SIZE, DEF_BANNER_FONT_SIZE);
-  ChkBannerAutoSize.Checked := AutoSize;
-end;
-
 procedure TSettingsForm.BtnTimestampFontClick(Sender: TObject);
 begin
-  PickTimestampFont;
+  FAppearancePresenter.OnTimestampFontClick;
 end;
 
 procedure TSettingsForm.BtnBannerFontClick(Sender: TObject);
 begin
-  PickBannerFont;
-end;
-
-procedure TSettingsForm.UpdateStatusBarFontDisplay;
-begin
-  RefreshFontEdit(EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize);
-end;
-
-procedure TSettingsForm.PickStatusBarFont;
-begin
-  PickFontInto(FontDlg, EdtStatusBarFont, FStatusBarFontName, FStatusBarFontSize,
-    MIN_STATUSBAR_FONT_SIZE, MAX_STATUSBAR_FONT_SIZE);
+  FAppearancePresenter.OnBannerFontClick;
 end;
 
 procedure TSettingsForm.BtnStatusBarFontClick(Sender: TObject);
 begin
-  PickStatusBarFont;
-end;
-
-procedure TSettingsForm.UpdateStretchLockState;
-begin
-  if ChkStatusBarStretchPanels.Checked then
-  begin
-    CbxProgressBarLayout.ItemIndex := Ord(pblOverPanels);
-    CbxProgressBarLayout.Enabled := False;
-  end
-  else
-    CbxProgressBarLayout.Enabled := True;
+  FAppearancePresenter.OnStatusBarFontClick;
 end;
 
 procedure TSettingsForm.ChkStatusBarStretchPanelsClick(Sender: TObject);
 begin
-  UpdateStretchLockState;
+  FAppearancePresenter.UpdateStretchLockState;
 end;
 
 procedure TSettingsForm.PopulateStatusBarLegend;
@@ -597,7 +490,7 @@ end;
 
 procedure TSettingsForm.ChkBannerAutoSizeClick(Sender: TObject);
 begin
-  UpdateBannerFontDisplay;
+  FAppearancePresenter.UpdateBannerFontDisplay;
 end;
 
 procedure TSettingsForm.OnColorSwatchClick(Sender: TObject);
@@ -630,42 +523,22 @@ end;
 
 procedure TSettingsForm.BtnSaveFolderClick(Sender: TObject);
 begin
-  BrowseFolderInto(EdtSaveFolder, Self);
+  FAppearancePresenter.OnSaveFolderClick;
 end;
 
 procedure TSettingsForm.BtnCacheFolderClick(Sender: TObject);
 begin
-  BrowseFolderInto(EdtCacheFolder, Self);
+  FStoragePresenter.OnCacheFolderClick;
 end;
 
 procedure TSettingsForm.BtnFFmpegPathClick(Sender: TObject);
-var
-  Dlg: TOpenDialog;
 begin
-  Dlg := TOpenDialog.Create(Self);
-  try
-    Dlg.Filter := 'ffmpeg.exe|ffmpeg.exe|All files (*.*)|*.*';
-    Dlg.Title := 'Locate ffmpeg.exe';
-    if EdtFFmpegPath.Text <> '' then
-      Dlg.InitialDir := ExtractFilePath(ExpandEnvVars(EdtFFmpegPath.Text));
-    if Dlg.Execute and FileExists(Dlg.FileName) then
-    begin
-      if ValidateFFmpeg(Dlg.FileName) = '' then
-      begin
-        ShowPluginMessage(Handle, 'The selected file is not a valid ffmpeg executable.', MB_OK or MB_ICONWARNING);
-        Exit;
-      end;
-      EdtFFmpegPath.Text := Dlg.FileName;
-      {OnChange fires automatically and updates the info label}
-    end;
-  finally
-    Dlg.Free;
-  end;
+  FExtractionPresenter.OnFFmpegPathClick;
 end;
 
 procedure TSettingsForm.EdtFFmpegPathChange(Sender: TObject);
 begin
-  UpdateFFmpegInfo;
+  FExtractionPresenter.OnFFmpegPathChange;
 end;
 
 procedure TSettingsForm.EdtMaxThreadsChange(Sender: TObject);
@@ -675,15 +548,12 @@ end;
 
 procedure TSettingsForm.EdtCacheFolderChange(Sender: TObject);
 begin
-  UpdateCacheFolderInfo;
+  FStoragePresenter.OnCacheFolderChange;
 end;
 
 procedure TSettingsForm.BtnClearCacheClick(Sender: TObject);
 begin
-  if ShowPluginMessage(Handle, 'Delete all cached frames and probe metadata?', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
-    Exit;
-  ClearAllGlimpseCaches(EffectiveCacheFolder(EdtCacheFolder.Text));
-  UpdateCacheSizeInfo;
+  FStoragePresenter.OnClearCacheClick;
 end;
 
 procedure TSettingsForm.BtnDefaultsClick(Sender: TObject);
@@ -715,7 +585,7 @@ end;
 
 procedure TSettingsForm.TrkRandomPercentChange(Sender: TObject);
 begin
-  LblRandomPercentValue.Caption := IntToStr(TrkRandomPercent.Position) + '%';
+  FExtractionPresenter.OnRandomPercentChange;
 end;
 
 procedure TSettingsForm.ChkCacheEnabledClick(Sender: TObject);
@@ -936,54 +806,6 @@ begin
     ChkMaxWorkersAuto.Checked, UdMaxThreads.Position, CPUCount);
 end;
 
-procedure TSettingsForm.UpdateFFmpegInfo;
-var
-  Input, Path, Ver, Prefix, Value: string;
-  State: TFFmpegProbeState;
-begin
-  Input := EdtFFmpegPath.Text;
-  if Input <> '' then
-    Path := ExpandEnvVars(Input)
-  else
-    Path := FResolvedFFmpegPath;
-
-  Ver := '';
-  if Path = '' then
-    State := fpsNoPath
-  else if not FileExists(Path) then
-    State := fpsFileMissing
-  else
-  begin
-    Ver := ValidateFFmpeg(Path);
-    if Ver = '' then
-      State := fpsInvalid
-    else
-      State := fpsValid;
-  end;
-
-  FFmpegInfoLabelParts(State, Path, Ver, Input = '', Prefix, Value);
-  ApplyInfoParts(LblFFmpegInfo, EdtFFmpegInfo, Prefix, Value);
-end;
-
-procedure TSettingsForm.UpdateCacheFolderInfo;
-begin
-  if EdtCacheFolder.Text = '' then
-    ApplyInfoParts(LblCacheFolderInfo, EdtCacheFolderInfo, 'Default:', DefaultCacheFolder)
-  else
-    ApplyInfoParts(LblCacheFolderInfo, EdtCacheFolderInfo, '', '');
-end;
-
-procedure TSettingsForm.UpdateCacheSizeInfo;
-var
-  Total: Int64;
-begin
-  Total := TotalGlimpseCacheBytes(EffectiveCacheFolder(EdtCacheFolder.Text));
-  if Total > 0 then
-    LblCacheSizeInfo.Caption := Format('(current: %.1f MB)', [Total / (1024 * 1024)])
-  else
-    LblCacheSizeInfo.Caption := '(current: empty)';
-end;
-
 constructor TSettingsForm.CreateWithOwner(AOwnerWnd: HWND);
 begin
   {Must be set before inherited: DFM loading may force handle creation,
@@ -998,6 +820,26 @@ begin
    to bundles would. Both live for the form's lifetime.}
   InitControlsBundles;
   BuildEnableRules;
+  {Presenters built after the bundles + rule table. Each owns its
+   slice of behaviour (handlers + helpers); the form delegates DFM
+   handlers to them via thin forwarders. FResolvedFFmpegPath is set
+   by ShowSettingsDialog right after CreateWithOwner returns; the
+   Extraction presenter reads it at UpdateFFmpegInfo time, so the
+   value handed in here doesn't need to be final.}
+  FExtractionPresenter := TExtractionPresenter.Create(
+    FExtractionControls, FFFmpegControls, FCacheControls,
+    LblFFmpegInfo, EdtFFmpegInfo, LblRandomPercentValue,
+    FResolvedFFmpegPath, FOwnerWnd);
+  FStoragePresenter := TStoragePresenter.Create(
+    FCacheControls, FThumbnailsControls, FQuickViewControls,
+    LblCacheFolderInfo, EdtCacheFolderInfo, LblCacheSizeInfo,
+    Self, FOwnerWnd);
+  FAppearancePresenter := TAppearancePresenter.Create(
+    FViewControls, FTimestampControls, FStatusBarControls,
+    FBannerControls, FSaveControls,
+    EdtTimestampFont, EdtBannerFont, EdtStatusBarFont,
+    ChkBannerAutoSize, FontDlg, CbxProgressBarLayout,
+    Self, FOwnerWnd);
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
@@ -1007,6 +849,9 @@ end;
 
 destructor TSettingsForm.Destroy;
 begin
+  FAppearancePresenter.Free;
+  FStoragePresenter.Free;
+  FExtractionPresenter.Free;
   FHotkeys.Free;
   inherited;
 end;
@@ -1026,6 +871,7 @@ begin
   Form := TSettingsForm.CreateWithOwner(AParentWnd);
   try
     Form.FResolvedFFmpegPath := AResolvedFFmpegPath;
+    Form.FExtractionPresenter.SetResolvedFFmpegPath(AResolvedFFmpegPath);
     Form.FSettings := ASettings;
     Form.FOnApply := AOnApply;
     Form.SettingsToControls(ASettings);

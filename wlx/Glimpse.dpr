@@ -32,6 +32,7 @@ uses
   uProbeCache in '..\src\uProbeCache.pas',
   uEnableRules in 'uEnableRules.pas',
   uSettingsControlsBundles in 'uSettingsControlsBundles.pas',
+  uSettingsPresenters in 'uSettingsPresenters.pas',
   uSettingsDlg in 'uSettingsDlg.pas',
   uCaptureShortcutDlg in 'uCaptureShortcutDlg.pas',
   uFrameFileNames in '..\src\uFrameFileNames.pas',
