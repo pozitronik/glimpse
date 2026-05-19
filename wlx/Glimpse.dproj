@@ -85,6 +85,7 @@
         <DCCReference Include="..\src\uCacheKey.pas"/>
         <DCCReference Include="..\src\uProbeCache.pas"/>
         <DCCReference Include="uEnableRules.pas"/>
+        <DCCReference Include="uSettingsControlsBundles.pas"/>
         <DCCReference Include="uSettingsDlg.pas">
             <Form>SettingsForm</Form>
         </DCCReference>

@@ -9,7 +9,8 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Dialogs,
   Winapi.Windows,
-  uTypes, uStatusBarLayout, uSettings, uHotkeys, uEnableRules;
+  uTypes, uStatusBarLayout, uSettings, uHotkeys, uEnableRules,
+  uSettingsControlsBundles;
 
 type
   TSettingsForm = class(TForm)
@@ -238,6 +239,23 @@ type
      reference; the table lives for the form's lifetime so there are no
      dangling-reference concerns.}
     FEnableRules: TEnableRules;
+    {Per-group control bundles. Populated once after the DFM has
+     instantiated every control referenced (see InitControlsBundles
+     called from CreateWithOwner). Each bundle is consumed by the
+     paired BindXxx free procedures in uSettingsControlsBundles —
+     SettingsToControls / ControlsToSettings dispatch through them.}
+    FExtractionControls: TExtractionControls;
+    FSaveControls: TSaveControls;
+    FCacheControls: TCacheControls;
+    FFFmpegControls: TFFmpegControls;
+    FViewControls: TViewControls;
+    FTimestampControls: TTimestampControls;
+    FBannerControls: TBannerControls;
+    FClipboardFormatsControls: TClipboardFormatsControls;
+    FStatusBarControls: TStatusBarControls;
+    FQuickViewControls: TQuickViewControls;
+    FThumbnailsControls: TThumbnailsControls;
+    procedure InitControlsBundles;
     procedure SettingsToControls(ASettings: TPluginSettings);
     procedure ControlsToSettings(ASettings: TPluginSettings);
     {Populates FEnableRules. Called once after the DFM-defined controls
@@ -301,100 +319,134 @@ uses
   uSettingsDlgLogic, uSettingsDlgUI, uPluginMessages, uCaptureShortcutDlg,
   uStatusBarTokens, uHotkeysDisplay;
 
-procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
-var
-  AutoChecked, ShowChecked: Boolean;
-  UdPos, ComboIdx: Integer;
+procedure TSettingsForm.InitControlsBundles;
 begin
-  UdSkipEdges.Position := ASettings.SkipEdgesPercent;
-  DecodeMaxWorkersControls(ASettings.MaxWorkers, AutoChecked, UdPos);
-  ChkMaxWorkersAuto.Checked := AutoChecked;
-  UdMaxWorkers.Position := UdPos;
-  ChkUseBmpPipe.Checked := ASettings.UseBmpPipe;
-  ChkHwAccel.Checked := ASettings.HwAccel;
-  ChkUseKeyframes.Checked := ASettings.UseKeyframes;
-  ChkRespectAnamorphic.Checked := ASettings.RespectAnamorphic;
-  UdMaxThreads.Position := DecodeMaxThreadsControl(ASettings.MaxThreads);
-  ChkScaledExtraction.Checked := ASettings.ScaledExtraction;
-  UdMinFrameSide.Position := ASettings.MinFrameSide;
-  UdMaxFrameSide.Position := ASettings.MaxFrameSide;
-  ChkAutoRefreshViewport.Checked := ASettings.AutoRefreshOnViewportChange;
-  ChkRandomExtraction.Checked := ASettings.RandomExtraction;
-  TrkRandomPercent.Position := ASettings.RandomPercent;
+  {Populates the per-group control bundles with their DFM components.
+   Called once from CreateWithOwner after `inherited Create(nil)` has
+   loaded the DFM. The bundles are consumed by the BindXxx free
+   procedures in uSettingsControlsBundles. Adding a control to a group
+   means three edits: DFM, bundle record (in uSettingsControlsBundles),
+   and this method. The dialog's SettingsToControls / ControlsToSettings
+   methods stay unchanged.}
+  FExtractionControls.UdSkipEdges := UdSkipEdges;
+  FExtractionControls.ChkMaxWorkersAuto := ChkMaxWorkersAuto;
+  FExtractionControls.UdMaxWorkers := UdMaxWorkers;
+  FExtractionControls.UdMaxThreads := UdMaxThreads;
+  FExtractionControls.ChkUseBmpPipe := ChkUseBmpPipe;
+  FExtractionControls.ChkHwAccel := ChkHwAccel;
+  FExtractionControls.ChkUseKeyframes := ChkUseKeyframes;
+  FExtractionControls.ChkRespectAnamorphic := ChkRespectAnamorphic;
+
+  FSaveControls.CbxSaveFormat := CbxSaveFormat;
+  FSaveControls.UdJpegQuality := UdJpegQuality;
+  FSaveControls.UdPngCompression := UdPngCompression;
+  FSaveControls.UdBackgroundAlpha := UdBackgroundAlpha;
+  FSaveControls.EdtSaveFolder := EdtSaveFolder;
+  FSaveControls.ChkSaveAtLiveResolution := ChkSaveAtLiveResolution;
+  FSaveControls.ChkCopyAtLiveResolution := ChkCopyAtLiveResolution;
+  FSaveControls.ChkClipboardAsFileReference := ChkClipboardAsFileReference;
+  FSaveControls.UdCombinedMaxSide := UdCombinedMaxSide;
+  FSaveControls.ChkScaledExtraction := ChkScaledExtraction;
+  FSaveControls.UdMinFrameSide := UdMinFrameSide;
+  FSaveControls.UdMaxFrameSide := UdMaxFrameSide;
+  FSaveControls.ChkAutoRefreshViewport := ChkAutoRefreshViewport;
+  FSaveControls.EdtExtensions := EdtExtensions;
+
+  FCacheControls.ChkCacheEnabled := ChkCacheEnabled;
+  FCacheControls.EdtCacheFolder := EdtCacheFolder;
+  FCacheControls.UdCacheMaxSize := UdCacheMaxSize;
+  FCacheControls.ChkRandomExtraction := ChkRandomExtraction;
+  FCacheControls.TrkRandomPercent := TrkRandomPercent;
+  FCacheControls.ChkCacheRandomFrames := ChkCacheRandomFrames;
+
+  FFFmpegControls.EdtFFmpegPath := EdtFFmpegPath;
+
+  FViewControls.PnlBackground := PnlBackground;
+  FViewControls.ChkShowToolbar := ChkShowToolbar;
+  FViewControls.ChkShowStatusBar := ChkShowStatusBar;
+  FViewControls.UdCellGap := UdCellGap;
+  FViewControls.UdBorder := UdBorder;
+  FViewControls.CbxProgressBarLayout := CbxProgressBarLayout;
+
+  FTimestampControls.ChkShowTimecode := ChkShowTimecode;
+  FTimestampControls.CbxTimestampCorner := CbxTimestampCorner;
+  FTimestampControls.PnlTCBack := PnlTCBack;
+  FTimestampControls.UdTCAlpha := UdTCAlpha;
+  FTimestampControls.PnlTCTextColor := PnlTCTextColor;
+  FTimestampControls.UdTCTextAlpha := UdTCTextAlpha;
+
+  FBannerControls.ChkShowBanner := ChkShowBanner;
+  FBannerControls.PnlBannerBackground := PnlBannerBackground;
+  FBannerControls.PnlBannerTextColor := PnlBannerTextColor;
+  FBannerControls.ChkBannerAutoSize := ChkBannerAutoSize;
+  FBannerControls.CbxBannerPosition := CbxBannerPosition;
+
+  FClipboardFormatsControls.ChkPublishAlphaAwareBitmap := ChkPublishAlphaAwareBitmap;
+  FClipboardFormatsControls.ChkPublishCompressedPng := ChkPublishCompressedPng;
+  FClipboardFormatsControls.ChkPublishFlattenedBitmap := ChkPublishFlattenedBitmap;
+  FClipboardFormatsControls.ChkPublishBitmapHandle := ChkPublishBitmapHandle;
+
+  FStatusBarControls.EdtStatusBarTemplate := EdtStatusBarTemplate;
+  FStatusBarControls.ChkStatusBarAutoWidthLive := ChkStatusBarAutoWidthLive;
+  FStatusBarControls.ChkStatusBarStretchPanels := ChkStatusBarStretchPanels;
+  FStatusBarControls.UdStatusBarHeight := UdStatusBarHeight;
+  FStatusBarControls.CbxStatusBarHeightApply := CbxStatusBarHeightApply;
+
+  FQuickViewControls.ChkQVDisableNavigation := ChkQVDisableNavigation;
+  FQuickViewControls.ChkQVHideToolbar := ChkQVHideToolbar;
+  FQuickViewControls.ChkQVHideStatusBar := ChkQVHideStatusBar;
+
+  FThumbnailsControls.ChkThumbnailsEnabled := ChkThumbnailsEnabled;
+  FThumbnailsControls.CbxThumbnailMode := CbxThumbnailMode;
+  FThumbnailsControls.UdThumbnailPosition := UdThumbnailPosition;
+  FThumbnailsControls.UdThumbnailGridFrames := UdThumbnailGridFrames;
+end;
+
+procedure TSettingsForm.SettingsToControls(ASettings: TPluginSettings);
+begin
+  {Per-group bundle binds. Order matches the visual tab order
+   (General -> Sampling -> Appearance -> Save -> Clipboard -> Cache ->
+   QuickView -> Thumbnails). Extraction first because the early
+   RecomputeEnables right after lets the workers/scaled enable rules
+   see the just-loaded values before later tabs paint.}
+  BindExtractionToControls(ASettings, FExtractionControls);
+  BindFFmpegToControls(ASettings, FFFmpegControls);
+  BindSaveToControls(ASettings, FSaveControls);
+  BindCacheToControls(ASettings, FCacheControls);
+  {Random-percent live readout (label, not a control bound by the
+   bundle). Pinned right after the Cache bind so the label tracks the
+   trackbar value the bundle just wrote.}
   LblRandomPercentValue.Caption := IntToStr(ASettings.RandomPercent) + '%';
-  ChkCacheRandomFrames.Checked := ASettings.CacheRandomFrames;
   {Early enable-rule sweep so the workers/scaled groups visually reflect
    the just-loaded values before subsequent setters paint the remaining
    tabs. A final RecomputeEnables at the bottom of this method picks up
    the controls whose values are set further down (banner, cache, etc).}
   RecomputeEnables;
-  EdtExtensions.Text := ASettings.ExtensionList;
-  EdtFFmpegPath.Text := ASettings.FFmpegExePath;
 
-  PnlBackground.Color := ASettings.Background;
-  PnlTCBack.Color := ASettings.TimecodeBackColor;
-  UdTCAlpha.Position := ASettings.TimecodeBackAlpha;
-  UdTCTextAlpha.Position := ASettings.TimestampTextAlpha;
-  PnlTCTextColor.Color := ASettings.TimestampTextColor;
+  BindViewToControls(ASettings, FViewControls);
+  BindTimestampToControls(ASettings, FTimestampControls);
+  {Font shadow fields are dialog-local state, not VCL controls; the
+   bundle deliberately omits them. The UpdateXxxFontDisplay calls
+   refresh the read-only EdtXxxFont label after the shadow fields are
+   set.}
   FTimestampFontName := ASettings.TimestampFontName;
   FTimestampFontSize := ASettings.TimestampFontSize;
   UpdateTimestampFontDisplay;
-  UdCellGap.Position := ASettings.CellGap;
-  UdBorder.Position := ASettings.CombinedBorder;
-  DecodeTimestampCornerControls(ASettings.ShowTimecode, ASettings.TimestampCorner, ShowChecked, ComboIdx);
-  ChkShowTimecode.Checked := ShowChecked;
-  CbxTimestampCorner.ItemIndex := ComboIdx;
-  ChkShowToolbar.Checked := ASettings.ShowToolbar;
-  ChkShowStatusBar.Checked := ASettings.ShowStatusBar;
-  CbxProgressBarLayout.ItemIndex := Ord(ASettings.ProgressBarLayout);
-  EdtStatusBarTemplate.Text := ASettings.StatusBarTemplate;
+
+  BindStatusBarToControls(ASettings, FStatusBarControls);
   FStatusBarFontName := ASettings.StatusBarFontName;
   FStatusBarFontSize := ASettings.StatusBarFontSize;
   UpdateStatusBarFontDisplay;
-  ChkStatusBarAutoWidthLive.Checked := ASettings.StatusBarAutoWidthLive;
-  ChkStatusBarStretchPanels.Checked := ASettings.StatusBarStretchPanels;
-  UdStatusBarHeight.Position := ASettings.StatusBarHeight;
-  CbxStatusBarHeightApply.ItemIndex := Ord(ASettings.StatusBarHeightApplyMode);
   UpdateStretchLockState;
 
-  CbxSaveFormat.ItemIndex := Ord(ASettings.SaveFormat);
-  UdJpegQuality.Position := ASettings.JpegQuality;
-  UdPngCompression.Position := ASettings.PngCompression;
-  UdBackgroundAlpha.Position := ASettings.BackgroundAlpha;
-  EdtSaveFolder.Text := ASettings.SaveFolder;
-  ChkShowBanner.Checked := ASettings.ShowBanner;
-  PnlBannerBackground.Color := ASettings.BannerBackground;
-  PnlBannerTextColor.Color := ASettings.BannerTextColor;
+  BindBannerToControls(ASettings, FBannerControls);
   FBannerFontName := ASettings.BannerFontName;
   FBannerFontSize := ASettings.BannerFontSize;
-  ChkBannerAutoSize.Checked := ASettings.BannerFontAutoSize;
   UpdateBannerFontDisplay;
-  CbxBannerPosition.ItemIndex := Ord(ASettings.BannerPosition);
-  ChkSaveAtLiveResolution.Checked := ASettings.SaveAtLiveResolution;
-  ChkCopyAtLiveResolution.Checked := ASettings.CopyAtLiveResolution;
-  UdCombinedMaxSide.Position := ASettings.CombinedMaxSide;
 
-  {[Clipboard tab] — per-format publish toggles + the file-reference
-   override. Order matches the visual layout: alpha-aware first, then
-   PNG, then the legacy variants, then the override.}
-  ChkPublishAlphaAwareBitmap.Checked := ASettings.PublishAlphaAwareBitmap;
-  ChkPublishCompressedPng.Checked := ASettings.PublishCompressedPng;
-  ChkPublishFlattenedBitmap.Checked := ASettings.PublishFlattenedBitmap;
-  ChkPublishBitmapHandle.Checked := ASettings.PublishBitmapHandle;
-  ChkClipboardAsFileReference.Checked := ASettings.ClipboardAsFileReference;
-
-  ChkCacheEnabled.Checked := ASettings.CacheEnabled;
-  EdtCacheFolder.Text := ASettings.CacheFolder;
-  UdCacheMaxSize.Position := ASettings.CacheMaxSizeMB;
-
-  ChkQVDisableNavigation.Checked := ASettings.QVDisableNavigation;
-  ChkQVHideToolbar.Checked := ASettings.QVHideToolbar;
-  ChkQVHideStatusBar.Checked := ASettings.QVHideStatusBar;
-
-  ChkThumbnailsEnabled.Checked := ASettings.ThumbnailsEnabled;
-  CbxThumbnailMode.ItemIndex := Ord(ASettings.ThumbnailMode);
-  UdThumbnailPosition.Position := ASettings.ThumbnailPosition;
-  UdThumbnailGridFrames.Position := ASettings.ThumbnailGridFrames;
+  BindClipboardFormatsToControls(ASettings, FClipboardFormatsControls);
+  BindQuickViewToControls(ASettings, FQuickViewControls);
+  BindThumbnailsToControls(ASettings, FThumbnailsControls);
 
   {Snapshot the bindings into our local copy so edits here only commit on
    OK/Apply via ControlsToSettings.}
@@ -408,86 +460,34 @@ begin
 end;
 
 procedure TSettingsForm.ControlsToSettings(ASettings: TPluginSettings);
-var
-  Show: Boolean;
-  Corner: TTimestampCorner;
 begin
-  ASettings.SkipEdgesPercent := UdSkipEdges.Position;
-  ASettings.MaxWorkers := EncodeMaxWorkersControls(ChkMaxWorkersAuto.Checked, UdMaxWorkers.Position);
-  ASettings.UseBmpPipe := ChkUseBmpPipe.Checked;
-  ASettings.HwAccel := ChkHwAccel.Checked;
-  ASettings.UseKeyframes := ChkUseKeyframes.Checked;
-  ASettings.RespectAnamorphic := ChkRespectAnamorphic.Checked;
-  ASettings.ScaledExtraction := ChkScaledExtraction.Checked;
-  ASettings.MinFrameSide := UdMinFrameSide.Position;
-  ASettings.MaxFrameSide := UdMaxFrameSide.Position;
-  ASettings.AutoRefreshOnViewportChange := ChkAutoRefreshViewport.Checked;
-  ASettings.RandomExtraction := ChkRandomExtraction.Checked;
-  ASettings.RandomPercent := TrkRandomPercent.Position;
-  ASettings.CacheRandomFrames := ChkCacheRandomFrames.Checked;
-  ASettings.MaxThreads := UdMaxThreads.Position;
-  ASettings.ExtensionList := EdtExtensions.Text;
+  {Per-group bundle binds (symmetric with SettingsToControls). Order
+   matches the visual tab order; bundles cover all model fields except
+   the font shadow fields + hotkey collection (handled inline below).}
+  BindExtractionFromControls(ASettings, FExtractionControls);
+  BindFFmpegFromControls(ASettings, FFFmpegControls);
+  BindSaveFromControls(ASettings, FSaveControls);
+  BindCacheFromControls(ASettings, FCacheControls);
 
-  ASettings.SetFFmpegPath(EdtFFmpegPath.Text);
-
-  ASettings.Background := PnlBackground.Color;
-  ASettings.TimecodeBackColor := PnlTCBack.Color;
-  ASettings.TimecodeBackAlpha := UdTCAlpha.Position;
-  ASettings.TimestampTextAlpha := UdTCTextAlpha.Position;
-  ASettings.TimestampTextColor := PnlTCTextColor.Color;
+  BindViewFromControls(ASettings, FViewControls);
+  BindTimestampFromControls(ASettings, FTimestampControls);
+  {Font shadow fields are dialog-local state, not VCL controls; the
+   bundle deliberately omits them. The shadow values are the source of
+   truth at this point (set by PickXxxFont or BindXxxToControls).}
   ASettings.TimestampFontName := FTimestampFontName;
   ASettings.TimestampFontSize := FTimestampFontSize;
-  ASettings.CellGap := UdCellGap.Position;
-  ASettings.CombinedBorder := UdBorder.Position;
-  EncodeTimestampCornerControls(ChkShowTimecode.Checked, CbxTimestampCorner.ItemIndex, Show, Corner);
-  ASettings.ShowTimecode := Show;
-  ASettings.TimestampCorner := Corner;
-  ASettings.ShowToolbar := ChkShowToolbar.Checked;
-  ASettings.ShowStatusBar := ChkShowStatusBar.Checked;
-  ASettings.ProgressBarLayout := TProgressBarLayout(CbxProgressBarLayout.ItemIndex);
-  ASettings.StatusBarTemplate := EdtStatusBarTemplate.Text;
+
+  BindStatusBarFromControls(ASettings, FStatusBarControls);
   ASettings.StatusBarFontName := FStatusBarFontName;
   ASettings.StatusBarFontSize := FStatusBarFontSize;
-  ASettings.StatusBarAutoWidthLive := ChkStatusBarAutoWidthLive.Checked;
-  ASettings.StatusBarStretchPanels := ChkStatusBarStretchPanels.Checked;
-  ASettings.StatusBarHeight := UdStatusBarHeight.Position;
-  ASettings.StatusBarHeightApplyMode := TStatusBarHeightApplyMode(CbxStatusBarHeightApply.ItemIndex);
 
-  ASettings.SaveFormat := TSaveFormat(CbxSaveFormat.ItemIndex);
-  ASettings.JpegQuality := UdJpegQuality.Position;
-  ASettings.PngCompression := UdPngCompression.Position;
-  ASettings.BackgroundAlpha := UdBackgroundAlpha.Position;
-  ASettings.SaveFolder := EdtSaveFolder.Text;
-  ASettings.ShowBanner := ChkShowBanner.Checked;
-  ASettings.BannerBackground := PnlBannerBackground.Color;
-  ASettings.BannerTextColor := PnlBannerTextColor.Color;
+  BindBannerFromControls(ASettings, FBannerControls);
   ASettings.BannerFontName := FBannerFontName;
   ASettings.BannerFontSize := FBannerFontSize;
-  ASettings.BannerFontAutoSize := ChkBannerAutoSize.Checked;
-  ASettings.BannerPosition := TBannerPosition(CbxBannerPosition.ItemIndex);
-  ASettings.SaveAtLiveResolution := ChkSaveAtLiveResolution.Checked;
-  ASettings.CopyAtLiveResolution := ChkCopyAtLiveResolution.Checked;
-  ASettings.CombinedMaxSide := UdCombinedMaxSide.Position;
 
-  {[Clipboard tab] — symmetric with SettingsToControls; same field order.}
-  ASettings.PublishAlphaAwareBitmap := ChkPublishAlphaAwareBitmap.Checked;
-  ASettings.PublishCompressedPng := ChkPublishCompressedPng.Checked;
-  ASettings.PublishFlattenedBitmap := ChkPublishFlattenedBitmap.Checked;
-  ASettings.PublishBitmapHandle := ChkPublishBitmapHandle.Checked;
-  ASettings.ClipboardAsFileReference := ChkClipboardAsFileReference.Checked;
-
-  ASettings.CacheEnabled := ChkCacheEnabled.Checked;
-  ASettings.CacheFolder := EdtCacheFolder.Text;
-  ASettings.CacheMaxSizeMB := UdCacheMaxSize.Position;
-
-  ASettings.QVDisableNavigation := ChkQVDisableNavigation.Checked;
-  ASettings.QVHideToolbar := ChkQVHideToolbar.Checked;
-  ASettings.QVHideStatusBar := ChkQVHideStatusBar.Checked;
-
-  ASettings.ThumbnailsEnabled := ChkThumbnailsEnabled.Checked;
-  ASettings.ThumbnailMode := TThumbnailMode(CbxThumbnailMode.ItemIndex);
-  ASettings.ThumbnailPosition := UdThumbnailPosition.Position;
-  ASettings.ThumbnailGridFrames := UdThumbnailGridFrames.Position;
+  BindClipboardFormatsFromControls(ASettings, FClipboardFormatsControls);
+  BindQuickViewFromControls(ASettings, FQuickViewControls);
+  BindThumbnailsFromControls(ASettings, FThumbnailsControls);
 
   {Hotkeys were edited into our local snapshot; push the whole table back.}
   ASettings.Hotkeys.Assign(FHotkeys);
@@ -991,8 +991,12 @@ begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
   FHotkeys := uHotkeys.THotkeyBindings.Create;
-  {Built once after the DFM has instantiated every control referenced
-   by the rule closures; lives for the form's lifetime.}
+  {Both InitControlsBundles and BuildEnableRules need the DFM-defined
+   controls to exist (the bundles capture VCL references; the rule
+   closures read VCL state). Init order is bundles first because the
+   rules don't depend on them but a future migration of rule predicates
+   to bundles would. Both live for the form's lifetime.}
+  InitControlsBundles;
   BuildEnableRules;
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;

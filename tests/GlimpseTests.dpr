@@ -182,6 +182,8 @@ uses
   TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas',
   uEnableRules in '..\wlx\uEnableRules.pas',
   TestEnableRules in 'TestEnableRules.pas',
+  uSettingsControlsBundles in '..\wlx\uSettingsControlsBundles.pas',
+  TestSettingsControlsBundles in 'TestSettingsControlsBundles.pas',
   uStatusBarTokens in '..\src\uStatusBarTokens.pas',
   uStatusBarTemplate in '..\src\uStatusBarTemplate.pas',
   uStatusBarFormatters in '..\src\uStatusBarFormatters.pas',
