@@ -109,6 +109,10 @@
         <DCCReference Include="..\src\uFrameExtractor.pas"/>
         <DCCReference Include="uViewModeLayout.pas"/>
         <DCCReference Include="uFrameExport.pas"/>
+        <DCCReference Include="uSaveDialogPresenter.pas"/>
+        <DCCReference Include="uClipboardPublisher.pas"/>
+        <DCCReference Include="uFrameRenderPipeline.pas"/>
+        <DCCReference Include="uFrameDimensionPredictor.pas"/>
         <DCCReference Include="uExtractionController.pas"/>
         <DCCReference Include="uSaveResolutionExtractor.pas"/>
         <DCCReference Include="..\src\uBannerInfo.pas"/>
