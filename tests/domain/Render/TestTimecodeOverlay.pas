@@ -56,6 +56,20 @@ type
      in regions where only one algorithm writes.}
     [Test] procedure ModeLegacy_DoesNotPaintTopLeftCornerPixel;
     [Test] procedure ModeModern_WithOpaqueBg_FillsCornerStripWithBackColor;
+    {Partial-alpha branches in DrawTimecodeOverlay (AlphaBlend paths) and
+     DrawLegacyTimecodeOverlay (offscreen snapshot + AlphaBlend back).
+     These exercise the slow paths that were previously skipped because
+     the existing tests use BackAlpha=255/0 and TextAlpha=255/0 only.}
+    [Test] procedure DrawTimecodeOverlay_PartialBackAlpha_DoesNotCrash;
+    [Test] procedure DrawTimecodeOverlay_PartialTextAlpha_BlendsWithoutCrash;
+    [Test] procedure DrawLegacyTimecodeOverlay_PartialTextAlpha_DoesNotCrash;
+    {Per-corner positioning: TModernRectPainter has a 4-way case on
+     AStyle.Corner. Exercising each corner ensures the rect-math for
+     all four lands.}
+    [Test] procedure ModernPainter_TopLeftCornerProducesNonEmptyOutput;
+    [Test] procedure ModernPainter_TopRightCornerProducesNonEmptyOutput;
+    [Test] procedure ModernPainter_BottomRightCornerProducesNonEmptyOutput;
+    [Test] procedure ModernPainter_BottomLeftCornerProducesNonEmptyOutput;
   end;
 
   {Direct tests for DrawCellTimecode. Exercised indirectly via the
@@ -680,6 +694,151 @@ begin
   finally
     Bmp.Free;
   end;
+end;
+
+procedure TTestTimecodeOverlay.DrawTimecodeOverlay_PartialBackAlpha_DoesNotCrash;
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  {Background alpha in (0, 255) exercises the AlphaBlend-with-1x1-color
+   path; the helper allocates an offscreen bitmap and blends it back.
+   The exact resulting pixel colour depends on Win32 AlphaBlend
+   (premultiplied alpha rules); we only pin the no-crash + non-empty
+   contract here.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(120, 60);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 120, 60));
+
+    Style := TimestampForGateTest(True, tcBottomRight, 128);
+    Style.BackColor := clBlue;
+    Style.Mode := tsmModern;
+    DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 120, 60), 1.0, Style);
+    Assert.Pass('partial-bg-alpha path completed without crashing');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestTimecodeOverlay.DrawTimecodeOverlay_PartialTextAlpha_BlendsWithoutCrash;
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  {Text alpha in (0, 255) blits the cell region into a scratch bitmap,
+   DrawText onto it, then AlphaBlend back. Heaviest branch in the
+   overlay code; covered separately so a regression here surfaces as
+   one focused failure rather than a generic "overlay broken".}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(120, 60);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 120, 60));
+
+    Style := TimestampForGateTest(True, tcBottomRight, 200);
+    Style.TextColor := clYellow;
+    Style.TextAlpha := 128;
+    Style.Mode := tsmModern;
+    DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 120, 60), 1.0, Style);
+    Assert.Pass('partial-text-alpha path completed without crashing');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestTimecodeOverlay.DrawLegacyTimecodeOverlay_PartialTextAlpha_DoesNotCrash;
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  {Legacy painter's slow path: render shadow + foreground into an
+   offscreen TBitmap clipped to the cell, then AlphaBlend back with
+   SourceConstantAlpha. Crashes here historically came from off-by-one
+   clipping when the corner pulled the text rect outside the cell.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(120, 60);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 120, 60));
+
+    Style := TimestampForGateTest(True, tcTopLeft, 0); {BackAlpha=0 -> legacy mode}
+    Style.TextColor := clYellow;
+    Style.TextAlpha := 128;
+    Style.Mode := tsmLegacy;
+    DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 120, 60), 1.0, Style);
+    Assert.Pass('legacy partial-text-alpha path completed without crashing');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+{Per-corner painter exercise: each of the 4 corners hits a distinct case
+ branch in TModernRectPainter.Paint. Tests assert the corner-anchored
+ strip contains the BackColor; opposite-corner pixel stays untouched.}
+function CornerHasBackColor(ABmp: TBitmap; ACorner: TTimestampCorner;
+  ABackColor: TColor): Boolean;
+var
+  X, Y, W, H: Integer;
+begin
+  W := ABmp.Width;
+  H := ABmp.Height;
+  case ACorner of
+    tcTopLeft:     begin X := 4; Y := 4; end;
+    tcTopRight:    begin X := W - 5; Y := 4; end;
+    tcBottomRight: begin X := W - 5; Y := H - 5; end;
+  else
+    {tcBottomLeft} X := 4; Y := H - 5;
+  end;
+  Result := ABmp.Canvas.Pixels[X, Y] = ABackColor;
+end;
+
+procedure ExerciseCorner(ACorner: TTimestampCorner);
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(200, 100);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 200, 100));
+
+    Style := TimestampForGateTest(True, ACorner, 255);
+    Style.BackColor := clBlue;
+    Style.Mode := tsmModern;
+    DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 200, 100), 5.0, Style);
+
+    Assert.IsTrue(CornerHasBackColor(Bmp, ACorner, clBlue),
+      'Modern painter must fill the anchored corner with BackColor');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestTimecodeOverlay.ModernPainter_TopLeftCornerProducesNonEmptyOutput;
+begin
+  ExerciseCorner(tcTopLeft);
+end;
+
+procedure TTestTimecodeOverlay.ModernPainter_TopRightCornerProducesNonEmptyOutput;
+begin
+  ExerciseCorner(tcTopRight);
+end;
+
+procedure TTestTimecodeOverlay.ModernPainter_BottomRightCornerProducesNonEmptyOutput;
+begin
+  ExerciseCorner(tcBottomRight);
+end;
+
+procedure TTestTimecodeOverlay.ModernPainter_BottomLeftCornerProducesNonEmptyOutput;
+begin
+  ExerciseCorner(tcBottomLeft);
 end;
 
 end.

@@ -212,7 +212,8 @@ uses
   BitmapWorkThread in '..\wlx\Services\BitmapWorkThread.pas',
   TestBitmapWorkThread in 'TestBitmapWorkThread.pas',
   TestClipboardPublisher in 'wlx\Services\TestClipboardPublisher.pas',
-  TestWcxFrameCache in 'wcx\Services\TestWcxFrameCache.pas';
+  TestWcxFrameCache in 'wcx\Services\TestWcxFrameCache.pas',
+  TestWcxExtractionController in 'wcx\Services\TestWcxExtractionController.pas';
 
 var
   Runner: ITestRunner;
