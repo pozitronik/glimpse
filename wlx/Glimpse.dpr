@@ -59,6 +59,7 @@ uses
   uCombinedGrid in '..\src\uCombinedGrid.pas',
   uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
   uFrameSelectionPolicy in '..\src\application\uFrameSelectionPolicy.pas',
+  uCacheMaintenance in '..\src\application\uCacheMaintenance.pas',
   uVideoInfo in '..\src\uVideoInfo.pas',
   uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
   uFFmpegProbeParser in '..\src\infrastructure\uFFmpegProbeParser.pas',

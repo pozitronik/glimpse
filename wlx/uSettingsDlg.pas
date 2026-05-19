@@ -297,7 +297,7 @@ implementation
 
 uses
   System.IOUtils, System.Math,
-  uDefaults, uFFmpegExe, uFFmpegCmdLine, uCache, uProbeCache, uBitmapSaver, uPathExpand,
+  uDefaults, uFFmpegExe, uFFmpegCmdLine, uCacheMaintenance, uBitmapSaver, uPathExpand,
   uSettingsDlgLogic, uSettingsDlgUI, uPluginMessages, uCaptureShortcutDlg,
   uStatusBarTokens, uHotkeysDisplay;
 
@@ -679,32 +679,10 @@ begin
 end;
 
 procedure TSettingsForm.BtnClearCacheClick(Sender: TObject);
-var
-  Dir: string;
-  Mgr: ICacheManager;
-  ProbeC: TProbeCache;
 begin
-  Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
-
   if ShowPluginMessage(Handle, 'Delete all cached frames and probe metadata?', MB_OKCANCEL or MB_ICONQUESTION) <> IDOK then
     Exit;
-
-  if TDirectory.Exists(Dir) then
-  begin
-    Mgr := CreateCacheManager(Dir, 0);
-    Mgr.Clear;
-  end;
-
-  {Probe cache lives outside the user-configurable cache folder, in
-   %TEMP%\Glimpse\probes. Wiping it alongside the frame cache matches
-   user intent (one Cache button = all of Glimpse's on-disk caches).}
-  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
-  try
-    ProbeC.Clear;
-  finally
-    ProbeC.Free;
-  end;
-
+  ClearAllGlimpseCaches(EffectiveCacheFolder(EdtCacheFolder.Text));
   UpdateCacheSizeInfo;
 end;
 
@@ -997,29 +975,9 @@ end;
 
 procedure TSettingsForm.UpdateCacheSizeInfo;
 var
-  Dir: string;
-  Mgr: ICacheManager;
-  ProbeC: TProbeCache;
   Total: Int64;
 begin
-  Total := 0;
-
-  Dir := EffectiveCacheFolder(EdtCacheFolder.Text);
-  if TDirectory.Exists(Dir) then
-  begin
-    Mgr := CreateCacheManager(Dir, 0);
-    Total := Total + Mgr.GetTotalSize;
-  end;
-
-  {Probe cache lives in a separate fixed directory; fold it into the total
-   so the readout reflects every byte the plugin keeps on disk.}
-  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
-  try
-    Total := Total + ProbeC.GetTotalSize;
-  finally
-    ProbeC.Free;
-  end;
-
+  Total := TotalGlimpseCacheBytes(EffectiveCacheFolder(EdtCacheFolder.Text));
   if Total > 0 then
     LblCacheSizeInfo.Caption := Format('(current: %.1f MB)', [Total / (1024 * 1024)])
   else

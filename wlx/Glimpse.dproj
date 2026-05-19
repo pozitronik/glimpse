@@ -116,6 +116,7 @@
         <DCCReference Include="..\src\uCombinedGrid.pas"/>
         <DCCReference Include="..\src\uTimecodeOverlay.pas"/>
         <DCCReference Include="..\src\application\uFrameSelectionPolicy.pas"/>
+        <DCCReference Include="..\src\application\uCacheMaintenance.pas"/>
         <DCCReference Include="..\src\uVideoInfo.pas"/>
         <DCCReference Include="..\src\infrastructure\uLineSplitter.pas"/>
         <DCCReference Include="..\src\infrastructure\uFFmpegProbeParser.pas"/>

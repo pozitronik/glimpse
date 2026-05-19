@@ -122,6 +122,8 @@ uses
   uTimecodeOverlay in '..\src\uTimecodeOverlay.pas',
   uFrameSelectionPolicy in '..\src\application\uFrameSelectionPolicy.pas',
   TestFrameSelectionPolicy in 'TestFrameSelectionPolicy.pas',
+  uCacheMaintenance in '..\src\application\uCacheMaintenance.pas',
+  TestCacheMaintenance in 'TestCacheMaintenance.pas',
   uVideoInfo in '..\src\uVideoInfo.pas',
   TestVideoInfo in 'TestVideoInfo.pas',
   uLineSplitter in '..\src\infrastructure\uLineSplitter.pas',
