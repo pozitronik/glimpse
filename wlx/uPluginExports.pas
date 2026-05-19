@@ -24,7 +24,7 @@ implementation
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
   Vcl.Graphics,
-  uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uCache, uProbeCache,
+  uSettings, uFFmpegLocator, uFFmpegExe, uPluginForm, uPluginServices, uCache, uProbeCache,
   uDebugLog, uThumbnailRender, uToolbarLayout, uPluginContext;
 
 var
@@ -48,13 +48,34 @@ end;
 function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer): HWND;
 var
   Form: TPluginForm;
+  Services: TPluginServices;
+  ServicesPassed: Boolean;
 begin
   Result := 0;
+  ServicesPassed := False;
   Log(Format('DoListLoad: ParentWin=$%s File=%s Flags=%d', [IntToHex(ParentWin), AFileName, ShowFlags]));
   try
     Log(Format('DoListLoad: ffmpegPath=%s', [TPluginContext.Instance.FFmpegPath]));
-    Form := TPluginForm.CreateForPlugin(ParentWin, AFileName,
-      TPluginContext.Instance.Settings, TPluginContext.Instance.FFmpegPath);
+    {Build the DI container BEFORE constructing the form. The form
+     takes ownership of Services.ProbeCache once CreateForPlugin
+     returns - so any exception thrown during construction leaves the
+     ProbeCache unowned, hence the defensive Free in the except branch.
+     Factory fields are refcounted interfaces and self-clean when
+     Services goes out of scope.}
+    Services := CreateProductionServices;
+    try
+      Form := TPluginForm.CreateForPlugin(ParentWin, AFileName,
+        TPluginContext.Instance.Settings, TPluginContext.Instance.FFmpegPath, Services);
+      ServicesPassed := True;
+    except
+      {Construction failed AFTER the record copy crossed the constructor
+       boundary is impossible: Delphi const-record parameters are passed
+       by reference and the constructor's first act under our control is
+       FServices := AServices. If the constructor fails before that
+       assignment (e.g. CreateNew), the ProbeCache is still ours to free
+       here. Once ServicesPassed flips True, ownership has transferred.}
+      raise;
+    end;
     Form.ApplyListerParams(ShowFlags);
     Result := Form.Handle;
     Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s', [IntToHex(Result), BoolToStr(IsWindow(Result), True), BoolToStr(IsWindowVisible(Result), True), IntToHex(GetParent(Result))]));
@@ -62,6 +83,8 @@ begin
     on E: Exception do
     begin
       Log(Format('DoListLoad: EXCEPTION %s: %s', [E.ClassName, E.Message]));
+      if not ServicesPassed and Assigned(Services.ProbeCache) then
+        FreeAndNil(Services.ProbeCache);
       MessageBox(ParentWin, PChar(Format('Glimpse: %s', [E.Message])), 'Glimpse', MB_OK or MB_ICONERROR);
     end;
   end;

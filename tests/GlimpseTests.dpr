@@ -37,6 +37,8 @@ uses
   uKeyInterceptionSubclass in '..\wlx\uKeyInterceptionSubclass.pas',
   TestKeyInterceptionSubclass in 'TestKeyInterceptionSubclass.pas',
   uPluginForm in '..\wlx\uPluginForm.pas',
+  uPluginServices in '..\wlx\uPluginServices.pas',
+  TestPluginServices in 'TestPluginServices.pas',
   TestFrameView in 'TestFrameView.pas',
   uDebugLog in '..\src\shared\uDebugLog.pas',
   uCacheStorage in '..\src\infrastructure\uCacheStorage.pas',

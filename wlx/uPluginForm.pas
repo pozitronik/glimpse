@@ -12,7 +12,7 @@ uses
   uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
-  uFrameExtractor, uFrameExport, uExtractionController, uProbeCache,
+  uFrameExtractor, uFrameExport, uExtractionController, uProbeCache, uPluginServices,
   uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
 
@@ -165,7 +165,14 @@ type
     FContextCellIndex: Integer;
     {Extraction}
     FExtractCtrl: TExtractionController;
-    FProbeCache: TProbeCache;
+    {DI container received in CreateForPlugin. Holds the cache + extractor
+     factories the extraction stack delegates to, plus the per-instance
+     TProbeCache (form takes ownership; destructor frees it via
+     FServices.ProbeCache.Free). Replaces the standalone FProbeCache field
+     and the inline TFrameCache / TFFmpegFrameExtractor constructions
+     that lived in InitializeExtractionStack / StartExtraction /
+     WithReExtract.}
+    FServices: TPluginServices;
     {Animation}
     FAnimTimer: TTimer;
     {Debounce timer for "re-extract after the user stops resizing / switching
@@ -284,8 +291,9 @@ type
      Windowing sets FParentWnd / FQuickViewMode and forces the form's
      Handle (needed by ExtractionStack's TWindowMessageSink); UI builds
      every TControl and runs ApplySettings; ExtractionStack constructs
-     FProbeCache / FExtractCtrl / FExporter; Services wires the
-     settings-toggle service, timers, command handlers + table.}
+     FExtractCtrl / FExporter via FServices factories (FServices.ProbeCache
+     is supplied by the caller); Services wires the settings-toggle
+     service, timers, command handlers + table.}
     procedure InitializeWindowing(AParentWin: HWND);
     procedure InitializeUI;
     procedure InitializeExtractionStack;
@@ -410,7 +418,7 @@ type
     procedure Resize; override;
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
   public
-    constructor CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
+    constructor CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string; const AServices: TPluginServices);
     destructor Destroy; override;
     procedure LoadFile(const AFileName: string);
     procedure ApplyListerParams(AParams: Integer);
@@ -678,7 +686,7 @@ end;
 
 { TPluginForm }
 
-constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
+constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string; const AServices: TPluginServices);
 begin
   CreateNew(nil);
   FContextCellIndex := -1;
@@ -701,9 +709,12 @@ begin
   Randomize;
 
   {Capture caller-provided dependencies before the Initialize phases
-   start reading them.}
+   start reading them. FServices owns its ProbeCache from this assignment
+   onward; the destructor frees it. Factory interface fields are
+   refcount-managed by the record copy.}
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
+  FServices := AServices;
 
   InitializeWindowing(AParentWin);
   InitializeUI;
@@ -769,17 +780,19 @@ end;
 
 procedure TPluginForm.InitializeExtractionStack;
 begin
-  FProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
+  {ProbeCache lives in the services container; form took ownership at
+   construction (FServices := AServices in CreateForPlugin), so the
+   destructor is responsible for freeing it.
 
-  {Create extraction controller with appropriate cache. The
-   TWindowMessageSink wraps the form's HWND so worker threads can post
-   WM_FRAME_READY / WM_EXTRACTION_DONE without needing the HWND directly.}
-  if FSettings.CacheEnabled then
-    FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
-      TFrameCache.Create(EffectiveCacheFolder(FSettings.CacheFolder), FSettings.CacheMaxSizeMB))
-  else
-    FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
-      TNullFrameCache.Create);
+   Create extraction controller with the cache produced by the injected
+   factory. The TWindowMessageSink wraps the form's HWND so worker
+   threads can post WM_FRAME_READY / WM_EXTRACTION_DONE without needing
+   the HWND directly. The cache-vs-null choice that used to live in an
+   inline if FSettings.CacheEnabled branch now lives inside
+   TProductionFrameCacheFactory.CreateCache, keeping this site agnostic
+   of the concrete cache class so tests can wire a fake factory.}
+  FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
+    FServices.FrameCacheFactory.CreateCache(FSettings));
   FExtractCtrl.OnFrameDelivered := OnFrameDelivered;
   FExtractCtrl.OnProgress := OnExtractionProgress;
 
@@ -854,7 +867,10 @@ begin
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
   FExtractCtrl.Free;
-  FProbeCache.Free;
+  {ProbeCache ownership was transferred from DoListLoad into FServices
+   at construction; this is the matching release.}
+  FServices.ProbeCache.Free;
+  FServices.ProbeCache := nil;
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
   FExporter.Free;
@@ -1562,7 +1578,7 @@ begin
     Exit;
   end;
 
-  FVideoInfo := FProbeCache.TryGetOrProbe(FFileName, FFFmpegPath);
+  FVideoInfo := FServices.ProbeCache.TryGetOrProbe(FFileName, FFFmpegPath);
 
   FExporter.UpdateBannerInfo(BuildBannerInfo(FFileName, FVideoInfo));
 
@@ -1670,7 +1686,7 @@ begin
    whether the next viewport-change event actually changed anything.}
   FLastExtractionMaxSide := Options.MaxSide;
 
-  Extractor := TFFmpegFrameExtractor.Create(FFFmpegPath);
+  Extractor := FServices.FrameExtractorFactory.CreateExtractor(FFFmpegPath);
   FExtractCtrl.Start(Extractor, FFileName, FOffsets, FSettings.MaxWorkers, FSettings.MaxThreads, Options, ACacheOverride);
 end;
 
@@ -1705,7 +1721,7 @@ begin
   Total := Length(AIndices);
 
   FormLog(Format('WithReExtract: starting target=%d cells indices=%d', [Target, Total]));
-  Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache, TFFmpegFrameExtractor.Create(FFFmpegPath));
+  Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache, FServices.FrameExtractorFactory.CreateExtractor(FFFmpegPath));
   try
     Reextractor.OnLabel := procedure(const AText: string)
       begin

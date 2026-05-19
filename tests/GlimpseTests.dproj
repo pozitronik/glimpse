@@ -96,6 +96,8 @@
         <DCCReference Include="..\wlx\uKeyInterceptionSubclass.pas"/>
         <DCCReference Include="TestKeyInterceptionSubclass.pas"/>
         <DCCReference Include="..\wlx\uPluginForm.pas"/>
+        <DCCReference Include="..\wlx\uPluginServices.pas"/>
+        <DCCReference Include="TestPluginServices.pas"/>
         <DCCReference Include="..\wlx\uCommandDescriptors.pas"/>
         <DCCReference Include="TestCommandDescriptors.pas"/>
         <DCCReference Include="..\wlx\uCaptureShortcutDlg.pas"/>

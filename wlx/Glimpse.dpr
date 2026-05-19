@@ -23,6 +23,7 @@ uses
   uStatusBarHostBar in 'uStatusBarHostBar.pas',
   uKeyInterceptionSubclass in 'uKeyInterceptionSubclass.pas',
   uPluginForm in 'uPluginForm.pas',
+  uPluginServices in 'uPluginServices.pas',
   uDebugLog in '..\src\shared\uDebugLog.pas',
   uCacheStorage in '..\src\infrastructure\uCacheStorage.pas',
   uLruEvictionPolicy in '..\src\infrastructure\uLruEvictionPolicy.pas',
