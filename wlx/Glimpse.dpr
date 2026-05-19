@@ -49,6 +49,7 @@ uses
   uToolbarLayout in 'uToolbarLayout.pas',
   uToolbarGlyphLibrary in 'uToolbarGlyphLibrary.pas',
   uToolbarBuilder in 'uToolbarBuilder.pas',
+  uToolbarController in 'uToolbarController.pas',
   uFileNavigator in '..\src\uFileNavigator.pas',
   uPathExpand in '..\src\uPathExpand.pas',
   uColorConv in '..\src\uColorConv.pas',

@@ -11,7 +11,7 @@ uses
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
   uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
-  uExtractionPlanner, uToolbarLayout, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
+  uExtractionPlanner, uToolbarLayout, uToolbarController, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache, uPluginServices,
   uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
@@ -102,7 +102,14 @@ type
     FVideoInfo: TVideoInfo;
     FOffsets: TFrameOffsetArray;
     FParentWnd: HWND;
-    {Toolbar}
+    {Toolbar — step 105 (C1) extracted the orchestration (build,
+     layout, hamburger click, button-enable updates) into
+     TToolbarController. The widget pointer-cache fields below are
+     non-owning aliases populated from the controller's Build result;
+     the widget components themselves are owned by the form (passed
+     as the TComponent owner). Kept as fields to avoid rewriting ~90
+     call sites that read FToolbar / FToolbarButtons / etc. directly.}
+    FToolbarController: TToolbarController;
     FToolbar: TPanel;
     FLblFrames: TLabel;
     FEditFrameCount: TEdit;
@@ -121,21 +128,14 @@ type
     FRefreshPopup: TPopupMenu;
     FSaveViewPopup: TPopupMenu;
     FCopyViewPopup: TPopupMenu;
-    {Owns the embedded ICON glyphs for toolbar buttons that have no good
-     Unicode equivalent (the hamburger is the first user). TComponent-owned
-     by Self so the form's inherited destructor releases it.}
-    FGlyphLibrary: TToolbarGlyphLibrary;
-    {Back-compat alias: points at FGlyphLibrary.Images. Several form sites
-     still reference FToolbarImages directly; CreateToolbar assigns this
-     field once the glyph library is constructed so those sites stay
-     unchanged.}
+    {Back-compat alias: points at FToolbarController.GlyphLibrary.Images.
+     Several form sites reference FToolbarImages directly; CreateToolbar
+     assigns this field after the controller builds the glyph library
+     so those sites stay unchanged. The image list itself is owned by
+     the controller (via TToolbarGlyphLibrary's TComponent ownership).}
     FToolbarImages: TImageList;
     FProgressBar: TProgressBar;
     FProgressVisible: Boolean;
-    {Per-element right pixel edges for collapse threshold checks}
-    FFrameCountRight: Integer;
-    FElementRights: TArray<Integer>;
-    FVisibleElementCount: Integer;
     {Status bar}
     FStatusBar: TStatusBar;
     {Owns parsing of the user template, panel build-out, and per-panel
@@ -194,8 +194,6 @@ type
     FUpdatingLayout: Boolean;
     {True when the plugin is hosted in TC's Quick View panel (Ctrl+Q)}
     FQuickViewMode: Boolean;
-    {Prevents key-triggered reopen while Popup is still returning}
-    FHamburgerMenuOpen: Boolean;
     {Suppresses WM_CHAR after OnKeyDown consumed the keystroke}
     FKeyConsumed: Boolean;
     {Tick count when LoadFile started (for load time measurement)}
@@ -443,7 +441,7 @@ uses
   uSettingsDlg, uFileNavigator, uDebugLog, uPathExpand, uBannerInfo, uTimecodeOverlay,
   uProgressModalForm,
   uPlatformDetect, uDefaults,
-  uToolbarBuilder,
+  uToolbarBuilder, {still needed for the TToolbarHandles type alias used in CreateToolbar's local H}
   uStatusBarHostBar, uKeyInterceptionSubclass;
 
 {Embedded toolbar glyph resources; consumed by TToolbarGlyphLibrary. The
@@ -766,6 +764,12 @@ end;
 
 procedure TPluginForm.InitializeUI;
 begin
+  {Step 105 (C1, partial): toolbar orchestration moved into
+   TToolbarController. The controller owns FGlyphLibrary + layout state
+   + the build/layout/hamburger-click/button-enable methods; the form
+   keeps non-owning widget pointer-cache fields populated from the
+   controller's Build result.}
+  FToolbarController := TToolbarController.Create(Self);
   CreateToolbar;
   CreateStatusBar;
   CreateFrameView;
@@ -874,6 +878,13 @@ begin
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
   FExporter.Free;
+  {Step 105: FToolbarController owns no widget components (those are
+   Self-owned via TComponent), only the build state + the FGlyphLibrary
+   reference. Its destructor is intentionally empty wrt FGlyphLibrary
+   — the glyph library is also Self-owned and freed by inherited
+   destructor. Free the controller before inherited so its destructor
+   runs while form fields are still alive.}
+  FreeAndNil(FToolbarController);
   {FStatusBarRenderer is owned by Self (step 59) — inherited TForm.Destroy
    iterates FComponents and frees it. The resolver method-reference
    captures Self; release happens during the inherited pass while
@@ -883,30 +894,19 @@ end;
 
 procedure TPluginForm.CreateToolbar;
 var
-  Builder: TToolbarBuilder;
   H: TToolbarHandles;
   VM: TViewMode;
 begin
-  {Glyph library owns the shared TImageList that paints the hamburger
-   button, the arrow-bearing mode buttons, and the matching menu items
-   on the hamburger overflow. Self-owned so the form's inherited
-   destructor releases it; FToolbarImages remains a back-compat alias
-   for the bare image list so existing form sites keep working without
-   the extraction touching them.}
-  FGlyphLibrary := TToolbarGlyphLibrary.Create(Self);
-  FToolbarImages := FGlyphLibrary.Images;
-  Builder := TToolbarBuilder.Create(Self, FGlyphLibrary,
+  {Step 105 (C1): TToolbarController owns the glyph library + the
+   TToolbarBuilder invocation + the per-build layout state. The form
+   caches the widget pointer handles below so the ~90 existing
+   FToolbar / FToolbarButtons / etc. reads across the form keep
+   compiling without churn.}
+  H := FToolbarController.Build(
     OnModeButtonClick, OnSizingMenuClick, OnTimecodeButtonClick,
     OnToolbarButtonClick, OnContextMenuClick, OnViewDropdownPopup,
     OnHamburgerClick, OnHamburgerMenuPopup);
-  try
-    H := Builder.Build;
-  finally
-    Builder.Free;
-  end;
-  {Copy each handle into its same-named form field so the rest of the
-   form (UpdateToolbarButtons, LayoutToolbar, OnHamburgerMenuPopup,
-   UpdateResolutionMenuLabels, ...) keeps reading its old fields.}
+  FToolbarImages := FToolbarController.GlyphLibrary.Images;
   FToolbar := H.Toolbar;
   FEditFrameCount := H.EditFrameCount;
   FUpDown := H.UpDown;
@@ -923,54 +923,20 @@ begin
   FCopyViewPopup := H.CopyViewPopup;
   FBtnHamburger := H.BtnHamburger;
   FHamburgerMenu := H.HamburgerMenu;
-  FElementRights := H.ElementRights;
-  FFrameCountRight := H.FrameCountRight;
 end;
 
 procedure TPluginForm.LayoutToolbar;
 const
   CTRL_GAP = 8;
-var
-  Layout: TToolbarLayoutResult;
-  VM: TViewMode;
-  I: Integer;
 begin
   if not Assigned(FBtnHamburger) then
     Exit;
-
-  Layout := ComputeToolbarLayout(FToolbar.ClientWidth, FElementRights, FFrameCountRight, FBtnHamburger.Width, CTRL_GAP);
-  FVisibleElementCount := Layout.VisibleCount;
-
-  {Per-button visibility based on element index}
-  for VM := Low(TViewMode) to High(TViewMode) do
-    FModeButtons[VM].Visible := Ord(VM) < Layout.VisibleCount;
-
-  FBtnTimecode.Visible := ELEM_TIMECODE_INDEX < Layout.VisibleCount;
-
-  for I := 0 to High(FToolbarButtons) do
-    FToolbarButtons[I].Visible := (ELEM_ACTION_FIRST + I) < Layout.VisibleCount;
-
-  {Hamburger button}
-  FBtnHamburger.Visible := Layout.HamburgerVisible;
-  FBtnHamburger.Left := Layout.HamburgerLeft;
+  FToolbarController.Layout(FToolbar.ClientWidth, CTRL_GAP);
 end;
 
 procedure TPluginForm.OnHamburgerClick(Sender: TObject);
-var
-  P: TPoint;
-  Hook: HHOOK;
 begin
-  if FHamburgerMenuOpen then
-    Exit;
-  FHamburgerMenuOpen := True;
-  Hook := InstallMenuKeyboardHook;
-  try
-    P := FBtnHamburger.ClientToScreen(Point(0, FBtnHamburger.Height));
-    FHamburgerMenu.Popup(P.X, P.Y);
-  finally
-    UninstallMenuKeyboardHook(Hook);
-    FHamburgerMenuOpen := False;
-  end;
+  FToolbarController.HamburgerClick;
 end;
 
 procedure TPluginForm.OnHamburgerMenuPopup(Sender: TObject);
@@ -978,7 +944,7 @@ var
   State: THamburgerMenuState;
   VM: TViewMode;
 begin
-  State.VisibleCount := FVisibleElementCount;
+  State.VisibleCount := FToolbarController.VisibleElementCount;
   State.ActiveMode := FFrameView.ViewMode;
   State.ShowTimecode := FFrameView.ShowTimecode;
   {Source of truth: do any cells currently display a real frame? Reading this
@@ -2360,29 +2326,28 @@ begin
 end;
 
 procedure TPluginForm.UpdateToolbarButtons;
-var
-  I: Integer;
-  Desc: TCommandDescriptor;
 begin
-  {Walks each toolbar button and asks the descriptor table what its
-   enable state should be. Save / copy must wait until extraction
-   settles (epRequiresExtract → CanExportFrames): PickActionCell would
-   otherwise return -1 or a stale cell that just got reset to a
-   placeholder by a Refresh and the action would silently no-op, which
-   reads as a broken button. Refresh stays clickable during extraction
-   (epRequiresLoadedCell) so the user can cancel and restart with new
-   settings without waiting for the current run to finish. Settings is
-   always enabled (epAlways).
-
-   Buttons whose Tag has no descriptor (none today, but defense in
-   depth for future toolbar items) default to Enabled := True so a
-   missing entry surfaces as "always usable" instead of silently
-   greying the button.}
-  for I := 0 to High(FToolbarButtons) do
-    if FindCommandByTag(FCommandTable, Cardinal(FToolbarButtons[I].Tag), Desc) then
-      FToolbarButtons[I].Enabled := PolicyAllows(Desc.EnabledPolicy)
-    else
-      FToolbarButtons[I].Enabled := True;
+  {Step 105: the per-button enable policy lookup moved into
+   TToolbarController.UpdateButtonEnables; the form supplies a
+   callback that maps a button tag to "is this enabled right now?"
+   via the command-descriptor table + PolicyAllows. The save/copy
+   buttons wait until extraction settles (epRequiresExtract ->
+   CanExportFrames) so the action doesn't silently no-op; refresh
+   stays clickable during extraction (epRequiresLoadedCell) so the
+   user can cancel and restart; settings is always enabled (epAlways).
+   Buttons whose tag has no descriptor default to True via the
+   controller's fallback path (defense in depth for future toolbar
+   items).}
+  FToolbarController.UpdateButtonEnables(
+    function(ATag: Integer): Boolean
+    var
+      Desc: TCommandDescriptor;
+    begin
+      if FindCommandByTag(FCommandTable, Cardinal(ATag), Desc) then
+        Result := PolicyAllows(Desc.EnabledPolicy)
+      else
+        Result := True;
+    end);
 end;
 
 procedure TPluginForm.OnModeButtonClick(Sender: TObject);
