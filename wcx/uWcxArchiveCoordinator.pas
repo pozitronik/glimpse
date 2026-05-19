@@ -66,6 +66,33 @@ type
     function OpenArchive(const AFileName: string; AOpenMode: Integer;
       const AIniPath: string;
       out AOpenResult: Integer): TArchiveHandle;
+
+    {Step 101 (C10): centralises the per-call WCX ABI logic that
+     previously lived as `DoProcessFile` / `CloseArchive` helpers in
+     uWcxExports. Both are stateless against the handle (the handle
+     carries everything they need) so they're declared as static class
+     methods — no instance, no factory dependencies. The export thunks
+     in uWcxExports keep their stdcall ABI marshalling and just call
+     these.
+
+     ConfigurePacker stays in uWcxExports deliberately — it talks to
+     ShowWcxSettingsDialog (VCL), and moving it would drag the VCL
+     dialog unit into the otherwise headless-testable coordinator.
+     The original step 101 deferral note documented this coupling-
+     taste trade-off; the partial move here respects it.}
+
+    {Advances the handle's cursor for skip/non-extract operations,
+     dispatches PK_EXTRACT to the current entry's polymorphic Extract
+     method, returns E_END_ARCHIVE when exhausted. Always advances the
+     cursor after a successful extract attempt (success or per-entry
+     failure) so the next ABI call sees the next entry.}
+    class function ProcessFile(AHandle: TArchiveHandle; AOperation: Integer;
+      const ADestPath, ADestName: string): Integer; static;
+
+    {Frees the handle's owned Settings instance + the handle itself.
+     Settings ownership is the handle's (production CloseArchive path)
+     for symmetry with the open-flow's error paths in OpenArchive.}
+    class function CloseArchive(AHandle: TArchiveHandle): Integer; static;
   end;
 
   {Production impls — used by DoOpenArchive at DLL init.}
@@ -225,6 +252,51 @@ begin
     TWcxFrameCache.Instance.Invalidate;
     AOpenResult := E_BAD_ARCHIVE;
   end;
+end;
+
+class function TWcxArchiveCoordinator.ProcessFile(AHandle: TArchiveHandle;
+  AOperation: Integer; const ADestPath, ADestName: string): Integer;
+begin
+  if AOperation = PK_SKIP then
+  begin
+    AHandle.AdvanceCursor;
+    Exit(E_SUCCESS);
+  end;
+
+  if (AOperation <> PK_EXTRACT) and (AOperation <> PK_TEST) then
+  begin
+    AHandle.AdvanceCursor;
+    Exit(E_SUCCESS);
+  end;
+
+  if AHandle.IsExhausted then
+    Exit(E_END_ARCHIVE);
+
+  if AOperation = PK_EXTRACT then
+  begin
+    {Single polymorphic dispatch — TFrameEntry, TCombinedEntry, and
+     TPresetEntry each carry the per-entry state (frame index, combined
+     slot, preset index) they need and implement Extract themselves. A
+     new entry kind becomes one new class, no edits here.}
+    Result := AHandle.CurrentEntry.Extract(AHandle, ADestPath, ADestName);
+
+    if Result <> E_SUCCESS then
+    begin
+      AHandle.AdvanceCursor;
+      Exit;
+    end;
+  end;
+
+  AHandle.AdvanceCursor;
+  Result := E_SUCCESS;
+end;
+
+class function TWcxArchiveCoordinator.CloseArchive(AHandle: TArchiveHandle): Integer;
+begin
+  CoordLog(Format('CloseArchive: %s', [AHandle.FileName]));
+  AHandle.Settings.Free;
+  AHandle.Free;
+  Result := E_SUCCESS;
 end;
 
 end.

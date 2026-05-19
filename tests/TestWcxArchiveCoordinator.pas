@@ -71,6 +71,16 @@ type
      handed the source file path along with the resolved FFmpeg path
      (not the configured-but-unresolved INI value).}
     [Test] procedure TestOpenArchive_ProbeService_CalledOnceWithResolvedFFmpegPath;
+
+    {Step 101 (C10): ProcessFile + CloseArchive class methods (no
+     instance — they're stateless against the handle).}
+    [Test] procedure TestProcessFile_PKSkip_AdvancesCursorReturnsSuccess;
+    [Test] procedure TestProcessFile_NonExtractOp_AdvancesCursorReturnsSuccess;
+    [Test] procedure TestProcessFile_Exhausted_ReturnsEndArchive;
+    [Test] procedure TestProcessFile_PKExtract_DispatchesToEntryExtract;
+    [Test] procedure TestProcessFile_PKExtract_AdvancesCursorAfterSuccess;
+    [Test] procedure TestProcessFile_PKExtract_OnFailure_AdvancesCursorReturnsErrorCode;
+    [Test] procedure TestCloseArchive_FreesHandleAndSettings_ReturnsSuccess;
   end;
 
 implementation
@@ -78,7 +88,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Classes,
   Winapi.Windows, Vcl.Graphics,
-  uTypes, uWcxAPI, uWcxArchiveHandle, uWcxSettings,
+  uTypes, uWcxAPI, uWcxArchiveHandle, uWcxSettings, uWcxEntryExtractors,
   uFrameExtractor, uVideoInfo,
   uWcxArchiveCoordinator;
 
@@ -455,6 +465,215 @@ begin
   finally
     Coord.Free;
   end;
+end;
+
+{Step 101 (C10): ProcessFile + CloseArchive class methods are
+ stateless against the handle — tests don't need a full coordinator
+ instance + factories, just a TArchiveHandle with a synthetic Listing.
+ The TStubEntry below records Extract invocations + returns a
+ configurable code.}
+
+type
+  TStubEntry = class(TInterfacedObject, IWcxEntryExtractor)
+  strict private
+    FExtractCallCount: Integer;
+    FExtractResult: Integer;
+    FLastDestPath: string;
+    FLastDestName: string;
+  public
+    constructor Create(AResult: Integer);
+    function GetFileName: string;
+    function ReportedSize(const AContext: IWcxExtractionContext; AListingIndex: Integer): Int64;
+    function Extract(const AContext: IWcxExtractionContext; const ADestPath, ADestName: string): Integer;
+    property ExtractCallCount: Integer read FExtractCallCount;
+    property LastDestPath: string read FLastDestPath;
+    property LastDestName: string read FLastDestName;
+  end;
+
+constructor TStubEntry.Create(AResult: Integer);
+begin
+  inherited Create;
+  FExtractResult := AResult;
+end;
+
+function TStubEntry.GetFileName: string;
+begin
+  Result := 'stub';
+end;
+
+function TStubEntry.ReportedSize(const AContext: IWcxExtractionContext; AListingIndex: Integer): Int64;
+begin
+  Result := 0;
+end;
+
+function TStubEntry.Extract(const AContext: IWcxExtractionContext; const ADestPath, ADestName: string): Integer;
+begin
+  Inc(FExtractCallCount);
+  FLastDestPath := ADestPath;
+  FLastDestName := ADestName;
+  Result := FExtractResult;
+end;
+
+{Builds a TArchiveHandle with a 2-entry synthetic listing. Caller frees
+ the handle (or passes it to CloseArchive). The two stub entries are
+ returned as out params so the test can read their Extract counts.}
+function MakeHandleWithStubs(out AStub0, AStub1: TStubEntry): TArchiveHandle;
+var
+  S0, S1: IWcxEntryExtractor;
+begin
+  Result := TArchiveHandle.Create;
+  Result.FileName := 'synthetic.mp4';
+  AStub0 := TStubEntry.Create(E_SUCCESS);
+  AStub1 := TStubEntry.Create(E_SUCCESS);
+  S0 := AStub0;
+  S1 := AStub1;
+  Result.Listing := TWcxEntryExtractorArray.Create(S0, S1);
+  Result.ResetCursor;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestProcessFile_PKSkip_AdvancesCursorReturnsSuccess;
+var
+  H: TArchiveHandle;
+  Stub0, Stub1: TStubEntry;
+  R: Integer;
+begin
+  H := MakeHandleWithStubs(Stub0, Stub1);
+  try
+    R := TWcxArchiveCoordinator.ProcessFile(H, PK_SKIP, '', '');
+    Assert.AreEqual(Integer(E_SUCCESS), R, 'PK_SKIP returns E_SUCCESS');
+    Assert.AreEqual(1, H.CurrentEntryIndex, 'Cursor advanced from 0 to 1');
+    Assert.AreEqual(0, Stub0.ExtractCallCount,
+      'PK_SKIP must NOT call Extract on the current entry');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestProcessFile_NonExtractOp_AdvancesCursorReturnsSuccess;
+var
+  H: TArchiveHandle;
+  Stub0, Stub1: TStubEntry;
+  R: Integer;
+begin
+  H := MakeHandleWithStubs(Stub0, Stub1);
+  try
+    {Use a fabricated op value outside PK_SKIP/PK_TEST/PK_EXTRACT range.
+     TC sends only those three today; defensive handling per the original
+     production code treats anything unknown the same as PK_SKIP.}
+    R := TWcxArchiveCoordinator.ProcessFile(H, 99, '', '');
+    Assert.AreEqual(Integer(E_SUCCESS), R, 'Unknown op falls through to advance + success');
+    Assert.AreEqual(1, H.CurrentEntryIndex, 'Cursor advanced');
+    Assert.AreEqual(0, Stub0.ExtractCallCount, 'Unknown op must NOT call Extract');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestProcessFile_Exhausted_ReturnsEndArchive;
+var
+  H: TArchiveHandle;
+  Stub0, Stub1: TStubEntry;
+  R: Integer;
+begin
+  H := MakeHandleWithStubs(Stub0, Stub1);
+  try
+    {Walk past both entries via PK_SKIP, then issue PK_EXTRACT. Cursor
+     is exhausted by then, so ProcessFile must short-circuit with
+     E_END_ARCHIVE instead of dereferencing CurrentEntry past the
+     end of the listing.}
+    TWcxArchiveCoordinator.ProcessFile(H, PK_SKIP, '', '');
+    TWcxArchiveCoordinator.ProcessFile(H, PK_SKIP, '', '');
+    Assert.IsTrue(H.IsExhausted, 'Sanity: cursor walked past both entries');
+
+    R := TWcxArchiveCoordinator.ProcessFile(H, PK_EXTRACT, 'dst', 'name');
+    Assert.AreEqual(Integer(E_END_ARCHIVE), R,
+      'PK_EXTRACT on an exhausted handle returns E_END_ARCHIVE');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestProcessFile_PKExtract_DispatchesToEntryExtract;
+var
+  H: TArchiveHandle;
+  Stub0, Stub1: TStubEntry;
+  R: Integer;
+begin
+  H := MakeHandleWithStubs(Stub0, Stub1);
+  try
+    R := TWcxArchiveCoordinator.ProcessFile(H, PK_EXTRACT, 'C:\dst', 'frame.png');
+    Assert.AreEqual(Integer(E_SUCCESS), R);
+    Assert.AreEqual(1, Stub0.ExtractCallCount,
+      'PK_EXTRACT must dispatch to the current entry''s Extract method');
+    Assert.AreEqual('C:\dst', Stub0.LastDestPath,
+      'DestPath argument threaded through');
+    Assert.AreEqual('frame.png', Stub0.LastDestName,
+      'DestName argument threaded through');
+    Assert.AreEqual(0, Stub1.ExtractCallCount,
+      'Only the current entry is invoked; cursor was at index 0');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestProcessFile_PKExtract_AdvancesCursorAfterSuccess;
+var
+  H: TArchiveHandle;
+  Stub0, Stub1: TStubEntry;
+begin
+  H := MakeHandleWithStubs(Stub0, Stub1);
+  try
+    TWcxArchiveCoordinator.ProcessFile(H, PK_EXTRACT, 'd', 'n');
+    Assert.AreEqual(1, H.CurrentEntryIndex,
+      'Successful PK_EXTRACT advances cursor for the next TC iteration');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestProcessFile_PKExtract_OnFailure_AdvancesCursorReturnsErrorCode;
+var
+  H: TArchiveHandle;
+  Stub0, Stub1: TStubEntry;
+  R: Integer;
+const
+  SOME_ERROR = 5;
+begin
+  H := TArchiveHandle.Create;
+  try
+    H.FileName := 'synthetic.mp4';
+    Stub0 := TStubEntry.Create(SOME_ERROR);
+    Stub1 := TStubEntry.Create(E_SUCCESS);
+    H.Listing := TWcxEntryExtractorArray.Create(
+      IWcxEntryExtractor(Stub0), IWcxEntryExtractor(Stub1));
+    H.ResetCursor;
+
+    R := TWcxArchiveCoordinator.ProcessFile(H, PK_EXTRACT, 'd', 'n');
+    Assert.AreEqual(SOME_ERROR, R,
+      'PK_EXTRACT failure path propagates the entry''s error code');
+    Assert.AreEqual(1, H.CurrentEntryIndex,
+      'Failure also advances cursor so TC iteration does not loop on the bad entry');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestCloseArchive_FreesHandleAndSettings_ReturnsSuccess;
+var
+  H: TArchiveHandle;
+  R: Integer;
+  TempIni: string;
+begin
+  {Construct a handle carrying an owned TWcxSettings — CloseArchive
+   must free both. DUnitX's leak detection at end-of-suite verifies
+   nothing leaked.}
+  TempIni := TPath.Combine(TPath.GetTempPath, 'VT_CoordClose_' + TGUID.NewGuid.ToString + '.ini');
+  H := TArchiveHandle.Create;
+  H.FileName := 'synthetic.mp4';
+  H.Settings := TWcxSettings.Create(TempIni);
+  R := TWcxArchiveCoordinator.CloseArchive(H);
+  Assert.AreEqual(Integer(E_SUCCESS), R,
+    'CloseArchive returns E_SUCCESS after freeing the handle + settings');
 end;
 
 initialization

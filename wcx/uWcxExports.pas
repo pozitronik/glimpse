@@ -155,43 +155,13 @@ begin
 end;
 
 function DoProcessFile(hArcData: THandle; Operation: Integer; const ADestPath, ADestName: string): Integer;
-var
-  H: TArchiveHandle;
 begin
-  H := TArchiveHandle(hArcData);
-
-  if Operation = PK_SKIP then
-  begin
-    H.AdvanceCursor;
-    Exit(E_SUCCESS);
-  end;
-
-  if (Operation <> PK_EXTRACT) and (Operation <> PK_TEST) then
-  begin
-    H.AdvanceCursor;
-    Exit(E_SUCCESS);
-  end;
-
-  if H.IsExhausted then
-    Exit(E_END_ARCHIVE);
-
-  if Operation = PK_EXTRACT then
-  begin
-    {Single polymorphic dispatch — TFrameEntry, TCombinedEntry, and
-     TPresetEntry each carry the per-entry state (frame index, combined
-     slot, preset index) they need and implement Extract themselves. A
-     new entry kind becomes one new class, no edits here.}
-    Result := H.CurrentEntry.Extract(H, ADestPath, ADestName);
-
-    if Result <> E_SUCCESS then
-    begin
-      H.AdvanceCursor;
-      Exit;
-    end;
-  end;
-
-  H.AdvanceCursor;
-  Result := E_SUCCESS;
+  {Step 101 (C10): cursor-advance + dispatch logic moved into
+   TWcxArchiveCoordinator.ProcessFile (static class method, no instance
+   needed). This thunk's only job is the ABI integer-handle → class-
+   pointer cast.}
+  Result := TWcxArchiveCoordinator.ProcessFile(TArchiveHandle(hArcData),
+    Operation, ADestPath, ADestName);
 end;
 
 function ProcessFile(hArcData: THandle; Operation: Integer; DestPath, DestName: PAnsiChar): Integer; stdcall;
@@ -225,14 +195,10 @@ begin
 end;
 
 function CloseArchive(hArcData: THandle): Integer; stdcall;
-var
-  H: TArchiveHandle;
 begin
-  H := TArchiveHandle(hArcData);
-  WcxLog(Format('CloseArchive: %s', [H.FileName]));
-  H.Settings.Free;
-  H.Free;
-  Result := E_SUCCESS;
+  {Step 101 (C10): handle-free logic moved into
+   TWcxArchiveCoordinator.CloseArchive (static class method).}
+  Result := TWcxArchiveCoordinator.CloseArchive(TArchiveHandle(hArcData));
 end;
 
 procedure SetChangeVolProc(hArcData: THandle; pChangeVolProc: TChangeVolProc); stdcall;
