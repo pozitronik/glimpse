@@ -29,13 +29,10 @@ type
     function CreateCache(const ASettings: TPluginSettings): IFrameCache;
   end;
 
-  {Builds an IFrameExtractor wrapping ffmpeg at AFFmpegPath. Stateless
-   factory; can be called many times from worker threads (StartExtraction
-   + WithReExtract both produce fresh extractors per call).}
-  IFrameExtractorFactory = interface
-    ['{A1B2C3D4-7777-8888-9999-AAAABBBBCCCC}']
-    function CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
-  end;
+  {IFrameExtractorFactory was relocated to src/uFrameExtractor.pas in step
+   100 (C9) so the WCX coordinator can reuse it without importing wlx/.
+   Re-exported here transitively via the uFrameExtractor unit on the uses
+   line so existing imports of uPluginServices keep resolving the type.}
 
   {DI container the form receives. ProbeCache is a concrete instance
    passed-in (form takes ownership; frees in destructor). Factories are
@@ -56,11 +53,11 @@ type
     function CreateCache(const ASettings: TPluginSettings): IFrameCache;
   end;
 
-  {Production factory: returns a fresh TFFmpegFrameExtractor per call.}
-  TProductionFrameExtractorFactory = class(TInterfacedObject, IFrameExtractorFactory)
-  public
-    function CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
-  end;
+  {TProductionFrameExtractorFactory was relocated to src/uFrameExtractor.pas
+   in step 100 (C9). CreateProductionServices below still instantiates it;
+   the class type now resolves via the uFrameExtractor unit on the uses
+   line. Tests that imported it through uPluginServices keep working
+   because Delphi re-exports types declared in interface-uses-listed units.}
 
 {Convenience constructor: builds a TPluginServices with production
  factories + a freshly-allocated TProbeCache. Used by DoListLoad; tests
@@ -77,13 +74,6 @@ begin
     Result := TFrameCache.Create(EffectiveCacheFolder(ASettings.CacheFolder), ASettings.CacheMaxSizeMB)
   else
     Result := TNullFrameCache.Create;
-end;
-
-{TProductionFrameExtractorFactory}
-
-function TProductionFrameExtractorFactory.CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
-begin
-  Result := TFFmpegFrameExtractor.Create(AFFmpegPath);
 end;
 
 function CreateProductionServices: TPluginServices;

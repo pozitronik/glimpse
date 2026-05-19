@@ -63,6 +63,7 @@ uses
   uWcxPresetExtractor in 'uWcxPresetExtractor.pas',
   uWcxErrorMapping in 'uWcxErrorMapping.pas',
   uWcxExtractionController in 'uWcxExtractionController.pas',
+  uWcxArchiveCoordinator in 'uWcxArchiveCoordinator.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports

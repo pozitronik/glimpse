@@ -112,6 +112,8 @@ uses
   uWcxArchiveHandle in '..\wcx\uWcxArchiveHandle.pas',
   uWcxErrorMapping in '..\wcx\uWcxErrorMapping.pas',
   uWcxExtractionController in '..\wcx\uWcxExtractionController.pas',
+  uWcxArchiveCoordinator in '..\wcx\uWcxArchiveCoordinator.pas',
+  TestWcxArchiveCoordinator in 'TestWcxArchiveCoordinator.pas',
   TestWcxArchiveHandle in 'TestWcxArchiveHandle.pas',
   uWcxListing in '..\wcx\uWcxListing.pas',
   TestWcxListing in 'TestWcxListing.pas',

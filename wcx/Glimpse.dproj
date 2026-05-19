@@ -104,6 +104,7 @@
         <DCCReference Include="uWcxArchiveHandle.pas"/>
         <DCCReference Include="uWcxErrorMapping.pas"/>
         <DCCReference Include="uWcxExtractionController.pas"/>
+        <DCCReference Include="uWcxArchiveCoordinator.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

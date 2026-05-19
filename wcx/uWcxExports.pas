@@ -44,15 +44,22 @@ implementation
 
 uses
   System.AnsiStrings, System.Classes, System.IOUtils,
-  uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFrameOffsets,
+  uWcxSettings, uWcxSettingsDlg, uFFmpegLocator,
   uFrameExtractor,
-  uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo,
-  uWcxPresets, uWcxListing, uWcxEntryExtractors, uWcxArchiveHandle,
+  uDebugLog, uTypes,
+  uWcxEntryExtractors, uWcxArchiveHandle,
   uWcxFrameCache, uPresetExtractReporter, uWcxErrorMapping,
-  uWcxExtractionController;
+  uWcxArchiveCoordinator;
 
 var
   GIniPath: string;
+  {Production factory instances. Constructed at unit initialization and
+   released at finalization. Captured by the per-OpenArchive coordinator
+   (which itself lives only for the duration of one call). Lifetime
+   spans the DLL load, matching the legacy module-global GIniPath above.}
+  GSettingsProvider: IWcxSettingsProvider;
+  GProbeService: IProbeService;
+  GFrameExtractorFactory: IFrameExtractorFactory;
 
 procedure WcxLog(const AMsg: string);
 begin
@@ -61,94 +68,23 @@ end;
 
 function DoOpenArchive(const AFileName: string; AOpenMode: Integer; out AOpenResult: Integer): THandle;
 var
+  Coord: TWcxArchiveCoordinator;
   H: TArchiveHandle;
-  ProbeC: TProbeCache;
 begin
-  Result := 0;
-  AOpenResult := E_SUCCESS;
-
-  H := TArchiveHandle.Create;
+  {Thunk: every open-flow concern (settings load, ffmpeg locate, probe,
+   listing build, pre-extract) now lives behind TWcxArchiveCoordinator.
+   This thunk's only job is to (1) translate the ABI integer handle to a
+   class pointer and back, (2) wire the module-global factory cache into
+   the per-call coordinator. Step 100 (C9) of the refactoring campaign.}
+  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory);
   try
-    H.FileName := AFileName;
-    H.OpenMode := AOpenMode;
-    H.ResetCursor;
-
-    H.Settings := TWcxSettings.Create(GIniPath);
-    H.Settings.Load;
-    {Apply the hidden debug-log toggle. Kept here (rather than at DLL init)
-     so a hand-edit of "[debug] LogEnabled" in Glimpse.ini takes effect on
-     the next archive open without forcing a TC restart.}
-    if H.Settings.DebugLogEnabled then
-      TDebugLog.Instance.Configure(ChangeFileExt(GetModuleName(HInstance), '.log'))
+    H := Coord.OpenArchive(AFileName, AOpenMode, GIniPath, AOpenResult);
+    if H <> nil then
+      Result := THandle(H)
     else
-      TDebugLog.Instance.Configure('');
-
-    H.FFmpegPath := FindFFmpegExe(ExtractFilePath(GIniPath), ExpandEnvVars(H.Settings.FFmpegExePath));
-
-    if H.FFmpegPath = '' then
-    begin
-      AOpenResult := E_EOPEN;
-      H.Free;
-      Exit;
-    end;
-
-    {Per-session collaborators. Constructed once per OpenArchive so
-     dependents (TFrameEntry / TCombinedEntry / the pre-extract cache
-     path) reuse the same instances across the session.}
-    H.FrameExtractor := TFFmpegFrameExtractor.Create(H.FFmpegPath);
-    H.BitmapSaver := TVclBitmapSaverRouter.Create;
-
-    ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
-    try
-      H.VideoInfo := ProbeC.TryGetOrProbe(AFileName, H.FFmpegPath);
-    finally
-      ProbeC.Free;
-    end;
-
-    if not H.VideoInfo.IsValid then
-    begin
-      AOpenResult := E_BAD_ARCHIVE;
-      H.Free;
-      Exit;
-    end;
-
-    H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
-    H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
-    {Captured once so subsequent ReadHeader / DoExtractPreset reads stay
-     consistent even if the source file changes mid-session.}
-    try
-      H.SourceFileSize := TFile.GetSize(AFileName);
-    except
-      H.SourceFileSize := 0;
-    end;
-
-    {Load presets only when their bit is set in the Mode mask so legacy
-     installs skip the IO entirely. The listing builder still runs
-     unconditionally because it produces the same legacy-only output
-     when the preset array is empty.}
-    if H.Settings.ShowPresets then
-    begin
-      H.Presets := LoadPresets(PresetsIniPath(GIniPath));
-      WcxLog(Format('Presets: ShowPresets=ON, path="%s", loaded=%d', [PresetsIniPath(GIniPath), Length(H.Presets)]));
-    end
-    else
-      WcxLog(Format('Presets: ShowPresets=OFF (read from "%s")', [GIniPath]));
-    H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined, H.Settings.ShowPresets, H.Settings.SaveFormat, H.Presets);
-
-    if H.Settings.ShowFileSizes then
-      PreExtractFrames(H);
-
-    WcxLog(Format('OpenArchive: %s mode=%d frames=%d presets=%d', [AFileName, H.Settings.Mode, Length(H.Offsets), Length(H.Presets)]));
-    Result := THandle(H);
-  except
-    H.Free;
-    {PreExtractFrames may have populated GCachedVideoFile / GCachedTempDir
-     and started writing temp files before the exception. Without this
-     reset, a subsequent OpenArchive on the same video file would treat the
-     partial directory as a cache hit and serve garbage entries (or trip
-     over missing temp files mid-extraction).}
-    TWcxFrameCache.Instance.Invalidate;
-    AOpenResult := E_BAD_ARCHIVE;
+      Result := 0;
+  finally
+    Coord.Free;
   end;
 end;
 
@@ -384,6 +320,13 @@ initialization
  before ConfigurePacker or OpenArchive}
 GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 
+{Production factory wiring for the OpenArchive coordinator. Stateless
+ instances; one of each is built once per DLL load and reused for
+ every OpenArchive call via the per-call TWcxArchiveCoordinator.}
+GSettingsProvider := TProductionWcxSettingsProvider.Create;
+GProbeService := TProductionProbeService.Create;
+GFrameExtractorFactory := TProductionFrameExtractorFactory.Create;
+
 {Production reporter. Lives in uPresetExtractReporter as a global so
  TPresetEntry.Extract can reach it without back-linking into this unit;
  tests can swap it via SetPresetFailureReporter.}
@@ -404,6 +347,11 @@ Randomize;
 finalization
 
 SetPresetFailureReporter(nil);
+{Release the factory interfaces in reverse construction order so any
+ transitive references between them drop cleanly.}
+GFrameExtractorFactory := nil;
+GProbeService := nil;
+GSettingsProvider := nil;
 TWcxFrameCache.ReleaseInstance;
 
 end.

@@ -25,6 +25,22 @@ type
     function ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ACancelHandle: THandle = 0): TBitmap;
   end;
 
+  {Builds an IFrameExtractor wrapping ffmpeg at AFFmpegPath. Stateless
+   factory; can be called many times from worker threads. Relocated from
+   wlx/uPluginServices to this shared home in step 100 (C9) so the WCX
+   coordinator can reuse it without importing from wlx/ — the return
+   type already lives here, which makes this its natural home.}
+  IFrameExtractorFactory = interface
+    ['{A1B2C3D4-7777-8888-9999-AAAABBBBCCCC}']
+    function CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
+  end;
+
+  {Production factory: returns a fresh TFFmpegFrameExtractor per call.}
+  TProductionFrameExtractorFactory = class(TInterfacedObject, IFrameExtractorFactory)
+  public
+    function CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
+  end;
+
 implementation
 
 uses
@@ -46,6 +62,13 @@ begin
   finally
     FFmpeg.Free;
   end;
+end;
+
+{TProductionFrameExtractorFactory}
+
+function TProductionFrameExtractorFactory.CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
+begin
+  Result := TFFmpegFrameExtractor.Create(AFFmpegPath);
 end;
 
 end.
