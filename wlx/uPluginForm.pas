@@ -5,17 +5,16 @@ unit uPluginForm;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Types, System.Math,
+  System.SysUtils, System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Clipbrd, Vcl.Buttons, Vcl.ImgList,
-  uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
-  uZoomController, uViewModeLogic,
-  uExtractionPlanner, uToolbarLayout, uToolbarController, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
+  Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Buttons, Vcl.ImgList,
+  uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uFrameOffsets, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
+  uZoomController,
+  uExtractionPlanner, uToolbarLayout, uToolbarController, uFrameView,
   uViewportRefreshDebouncer, uLoadTimeRecorder, uProgressIndicator,
-  uProgressReporter, uFormProgressReporter, uOverrideFramesScope,
-  uFrameExtractor, uFrameExport, uExtractionController, uProbeCache, uPluginServices,
-  uSaveResolutionExtractor, uCommandDescriptors,
+  uFrameExport, uExtractionController, uPluginServices,
+  uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
 
 type
@@ -446,6 +445,12 @@ uses
   uProgressModalForm,
   uPlatformDetect, uDefaults,
   uToolbarBuilder, {still needed for the TToolbarHandles type alias used in CreateToolbar's local H}
+  uProgressReporter, uFormProgressReporter, uOverrideFramesScope,
+  uToolbarGlyphLibrary, uSaveResolutionExtractor,
+  uHotkeysVcl, uPluginAppearance, uFFmpegExe,
+  uExtractionWorker, uViewModeLogic, uViewModeLayout,
+  uFrameExtractor, uProbeCache,
+  System.Math, Vcl.Clipbrd,
   uStatusBarHostBar, uKeyInterceptionSubclass;
 
 {Embedded toolbar glyph resources; consumed by TToolbarGlyphLibrary. The
