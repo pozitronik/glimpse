@@ -278,6 +278,18 @@ type
      branch (e.g. vmGrid+zmActual+NativeW>=BaseW collapses to 1 column,
      visually identical to vmScroll).}
     function ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;
+    {Constructor's four init phases. CreateForPlugin invokes them in
+     order so a future partial-construction failure mode localises to
+     one phase. Each phase reads from earlier phases via form fields:
+     Windowing sets FParentWnd / FQuickViewMode and forces the form's
+     Handle (needed by ExtractionStack's TWindowMessageSink); UI builds
+     every TControl and runs ApplySettings; ExtractionStack constructs
+     FProbeCache / FExtractCtrl / FExporter; Services wires the
+     settings-toggle service, timers, command handlers + table.}
+    procedure InitializeWindowing(AParentWin: HWND);
+    procedure InitializeUI;
+    procedure InitializeExtractionStack;
+    procedure InitializeServices;
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -667,8 +679,6 @@ end;
 { TPluginForm }
 
 constructor TPluginForm.CreateForPlugin(AParentWin: HWND; const AFileName: string; ASettings: TPluginSettings; const AFFmpegPath: string);
-var
-  R: TRect;
 begin
   CreateNew(nil);
   FContextCellIndex := -1;
@@ -690,10 +700,32 @@ begin
    on each open / Shuffle.}
   Randomize;
 
+  {Capture caller-provided dependencies before the Initialize phases
+   start reading them.}
   FSettings := ASettings;
-  FSettingsToggle := TSettingsToggleService.Create(FSettings);
   FFFmpegPath := AFFmpegPath;
 
+  InitializeWindowing(AParentWin);
+  InitializeUI;
+
+  {TDebugLog.Configure is called once at TC startup by ListSetDefaultParams (which
+   honours [debug] LogEnabled in release builds and forces the log on in
+   DEBUG builds). Re-applying it here would override that decision per
+   file open, which is unwanted: the user's toggle is supposed to be
+   process-wide, and the DEBUG-build path is supposed to stay verbose
+   regardless of any user setting.}
+  FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
+
+  InitializeExtractionStack;
+  InitializeServices;
+
+  LoadFile(AFileName);
+end;
+
+procedure TPluginForm.InitializeWindowing(AParentWin: HWND);
+var
+  R: TRect;
+begin
   Winapi.Windows.GetClientRect(AParentWin, R);
   SetBounds(0, 0, R.Right, R.Bottom);
 
@@ -707,17 +739,6 @@ begin
    not correctness of frame rendering.}
   FQuickViewMode := (GetWindowLong(AParentWin, GWL_STYLE) and WS_CHILD) <> 0;
 
-  CreateToolbar;
-  CreateStatusBar;
-  CreateFrameView;
-  CreateContextMenu;
-  CreateErrorLabel;
-  ApplySettings;
-
-  {Wire OnChange after ApplySettings so initial Position assignment doesn't
-   trigger a save that overwrites the loaded FramesCount}
-  FEditFrameCount.OnChange := OnFrameCountChange;
-
   ParentWindow := AParentWin;
   FParentWnd := AParentWin;
   SetWindowSubclass(AParentWin, @ParentSubclassProc, 1, DWORD_PTR(Self));
@@ -730,16 +751,24 @@ begin
    guaranteeing TC's subclass is already in place. Our subclass then fires
    first and can intercept keys TC would otherwise consume (F2/F3).}
   PostMessage(Handle, WM_DEFERRED_INIT, 0, 0);
+end;
 
-  {TDebugLog.Configure is called once at TC startup by ListSetDefaultParams (which
-   honours [debug] LogEnabled in release builds and forces the log on in
-   DEBUG builds). Re-applying it here would override that decision per
-   file open, which is unwanted: the user's toggle is supposed to be
-   process-wide, and the DEBUG-build path is supposed to stay verbose
-   regardless of any user setting.}
+procedure TPluginForm.InitializeUI;
+begin
+  CreateToolbar;
+  CreateStatusBar;
+  CreateFrameView;
+  CreateContextMenu;
+  CreateErrorLabel;
+  ApplySettings;
 
-  FormLog(Format('CreateForPlugin: file=%s handle=$%s', [AFileName, IntToHex(Handle)]));
+  {Wire OnChange after ApplySettings so initial Position assignment doesn't
+   trigger a save that overwrites the loaded FramesCount}
+  FEditFrameCount.OnChange := OnFrameCountChange;
+end;
 
+procedure TPluginForm.InitializeExtractionStack;
+begin
   FProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
 
   {Create extraction controller with appropriate cache. The
@@ -779,6 +808,11 @@ begin
         FProgressBar.Style := pbstNormal;
       end;
     end;
+end;
+
+procedure TPluginForm.InitializeServices;
+begin
+  FSettingsToggle := TSettingsToggleService.Create(FSettings);
 
   FAnimTimer := TTimer.Create(Self);
   FAnimTimer.Interval := ANIM_INTERVAL_MS;
@@ -798,8 +832,6 @@ begin
    construction.}
   FCommandHandlers := TPluginCommandHandlers.Create(Self);
   FCommandTable := FCommandHandlers.BuildTable;
-
-  LoadFile(AFileName);
 end;
 
 destructor TPluginForm.Destroy;
