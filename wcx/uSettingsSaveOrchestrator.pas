@@ -23,7 +23,9 @@ uses
   System.SysUtils,
   uWcxSettings,
   uWcxPresets,
-  uWcxPresetEditorModel;
+  uWcxPresetEditorModel,
+  uWcxSettingsRepository,
+  uWcxPresetsRepository;
 
 type
   TSettingsSaveResultKind = (
@@ -62,9 +64,11 @@ type
           ssrValidationFailed with the offending index + reason.
        3. APreparePersistence() runs (dialog's ControlsToSettings flush).
           May be nil if the caller has no pre-persist hook.
-       4. ASettings.Save (the WCX ini).
-       5. SavePresets(APresetsPath, APresetModel.ToArray) when
-          APresetsPath is non-empty.
+       4. ASettingsRepo.Save(ASettings) persists the WCX ini.
+       5. APresetsRepo.SaveAll(APresetModel.ToArray) persists the
+          presets ini. May be nil for callers that have no presets
+          backing store (e.g. minimal dialog wiring); the orchestrator
+          guards against it.
        6. AOnApply() if assigned.
        7. Return ssrSuccess.
 
@@ -72,7 +76,8 @@ type
      into the model" call) is NOT done here — it operates on VCL controls
      and belongs to the dialog, which calls it BEFORE invoking Run.}
     function Run(ASettings: TWcxSettings; APresetModel: TPresetEditorModel;
-      const APresetsPath: string;
+      const ASettingsRepo: IWcxSettingsRepository;
+      const APresetsRepo: IWcxPresetsRepository;
       const APreparePersistence: TProc;
       const AOnApply: TProc): TSettingsSaveResult;
   end;
@@ -80,7 +85,9 @@ type
 implementation
 
 function TSettingsSaveOrchestrator.Run(ASettings: TWcxSettings;
-  APresetModel: TPresetEditorModel; const APresetsPath: string;
+  APresetModel: TPresetEditorModel;
+  const ASettingsRepo: IWcxSettingsRepository;
+  const APresetsRepo: IWcxPresetsRepository;
   const APreparePersistence: TProc; const AOnApply: TProc): TSettingsSaveResult;
 begin
   Result.Kind := ssrSkipped;
@@ -99,9 +106,10 @@ begin
   if Assigned(APreparePersistence) then
     APreparePersistence();
 
-  ASettings.Save;
-  if APresetsPath <> '' then
-    SavePresets(APresetsPath, APresetModel.ToArray);
+  if ASettingsRepo <> nil then
+    ASettingsRepo.Save(ASettings);
+  if APresetsRepo <> nil then
+    APresetsRepo.SaveAll(APresetModel.ToArray);
 
   if Assigned(AOnApply) then
     AOnApply();

@@ -65,6 +65,8 @@ uses
   uWcxExtractionController in 'uWcxExtractionController.pas',
   uWcxArchiveCoordinator in 'uWcxArchiveCoordinator.pas',
   uSettingsSaveOrchestrator in 'uSettingsSaveOrchestrator.pas',
+  uWcxSettingsRepository in 'uWcxSettingsRepository.pas',
+  uWcxPresetsRepository in 'uWcxPresetsRepository.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports

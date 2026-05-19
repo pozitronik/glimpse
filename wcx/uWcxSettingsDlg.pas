@@ -9,7 +9,8 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.Controls, Vcl.ComCtrls,
   Vcl.Dialogs,
   Winapi.Windows,
-  uWcxSettings, uWcxPresetEditorModel;
+  uWcxSettings, uWcxPresetEditorModel,
+  uWcxSettingsRepository, uWcxPresetsRepository;
 
 type
   TWcxSettingsForm = class(TForm)
@@ -166,14 +167,17 @@ type
     procedure BtnPresetRemoveClick(Sender: TObject);
     procedure BtnPresetDuplicateClick(Sender: TObject);
   strict private
-    {These three are set once in CreateForSettings and read by the
+    {These four are set once in CreateForSettings and read by the
      dialog's own methods. strict private blocks the previous
      ShowWcxSettingsDialog pattern of reaching into private fields from
      outside the class (same-unit "private" did not protect against
-     that). Construct the form via CreateForSettings to wire them.}
+     that). Construct the form via CreateForSettings to wire them.
+     The two repositories own persistence; the dialog never calls
+     TWcxSettings.Save or SavePresets directly.}
     FSettings: TWcxSettings;
     FOnApply: TProc;
-    FPresetsPath: string;
+    FSettingsRepo: IWcxSettingsRepository;
+    FPresetsRepo: IWcxPresetsRepository;
   private
     FOwnerWnd: HWND;
     FTimestampFontName: string;
@@ -222,19 +226,25 @@ type
     procedure CreateParams(var Params: TCreateParams); override;
   public
     {Constructs the dialog and wires it to the supplied settings,
-     apply-callback and presets-INI path in one atomic step. Replaces
-     the older CreateWithOwner + reach-into-private-fields pattern.
+     apply-callback and persistence repositories in one atomic step.
      Caller still owns ASettings; the form mutates it in place on Apply
-     and OK via TrySaveAll. APresetsPath '' disables preset persistence.}
+     and OK via TrySaveAll. The repositories own persistence: pass nil
+     for APresetsRepo to disable preset persistence (presets list will
+     load empty and SaveAll never fires).}
     constructor CreateForSettings(AOwnerWnd: HWND; ASettings: TWcxSettings;
-      AOnApply: TProc; const APresetsPath: string);
+      AOnApply: TProc;
+      const ASettingsRepo: IWcxSettingsRepository;
+      const APresetsRepo: IWcxPresetsRepository);
     destructor Destroy; override;
   end;
 
   {Shows the WCX settings dialog. Returns True if the user clicked OK.
    AOnApply fires after every Apply press; the settings object has already
-   been updated and persisted to the INI by the time the callback runs.}
-function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings; AOnApply: TProc = nil): Boolean;
+   been updated and persisted by the time the callback runs.}
+function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings;
+  const ASettingsRepo: IWcxSettingsRepository;
+  const APresetsRepo: IWcxPresetsRepository;
+  AOnApply: TProc = nil): Boolean;
 
 implementation
 
@@ -595,7 +605,8 @@ begin
 
   Orchestrator := TSettingsSaveOrchestrator.Create;
   try
-    Outcome := Orchestrator.Run(FSettings, FPresetModel, FPresetsPath,
+    Outcome := Orchestrator.Run(FSettings, FPresetModel,
+      FSettingsRepo, FPresetsRepo,
       procedure begin ControlsToSettings(FSettings) end,
       FOnApply);
   finally
@@ -643,8 +654,14 @@ begin
 end;
 
 procedure TWcxSettingsForm.LoadPresetsFromDisk;
+var
+  Loaded: TWcxPresetArray;
 begin
-  FPresetModel.LoadFrom(LoadAllPresets(FPresetsPath));
+  if FPresetsRepo <> nil then
+    Loaded := FPresetsRepo.LoadAll
+  else
+    Loaded := nil;
+  FPresetModel.LoadFrom(Loaded);
   RefreshPresetList(0);
 end;
 
@@ -839,7 +856,9 @@ begin
 end;
 
 constructor TWcxSettingsForm.CreateForSettings(AOwnerWnd: HWND;
-  ASettings: TWcxSettings; AOnApply: TProc; const APresetsPath: string);
+  ASettings: TWcxSettings; AOnApply: TProc;
+  const ASettingsRepo: IWcxSettingsRepository;
+  const APresetsRepo: IWcxPresetsRepository);
 begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
@@ -847,7 +866,8 @@ begin
   FCurrentPresetIndex := -1;
   FSettings := ASettings;
   FOnApply := AOnApply;
-  FPresetsPath := APresetsPath;
+  FSettingsRepo := ASettingsRepo;
+  FPresetsRepo := APresetsRepo;
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
@@ -874,13 +894,16 @@ end;
 
 {Public API}
 
-function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings; AOnApply: TProc): Boolean;
+function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings;
+  const ASettingsRepo: IWcxSettingsRepository;
+  const APresetsRepo: IWcxPresetsRepository;
+  AOnApply: TProc): Boolean;
 var
   Dlg: TWcxSettingsForm;
 begin
   Result := False;
   Dlg := TWcxSettingsForm.CreateForSettings(AParentWnd, ASettings, AOnApply,
-    PresetsIniPath(ASettings.IniPath));
+    ASettingsRepo, APresetsRepo);
   try
     if Dlg.ShowModal = mrOk then
     begin

@@ -49,7 +49,8 @@ uses
   uDebugLog, uTypes,
   uWcxEntryExtractors, uWcxArchiveHandle,
   uWcxFrameCache, uPresetExtractReporter, uWcxErrorMapping,
-  uWcxArchiveCoordinator;
+  uWcxArchiveCoordinator,
+  uWcxPresets, uWcxSettingsRepository, uWcxPresetsRepository;
 
 var
   GIniPath: string;
@@ -292,21 +293,29 @@ end;
 procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 var
   Settings: TWcxSettings;
+  SettingsRepo: IWcxSettingsRepository;
+  PresetsRepo: IWcxPresetsRepository;
 begin
   Settings := TWcxSettings.Create(GIniPath);
   try
     Settings.Load;
-    if ShowWcxSettingsDialog(Parent, Settings,
+    {Production repositories. Settings repo wraps TWcxSettings.Save;
+     presets repo captures the presets INI path derived from the
+     settings INI. The dialog talks only to these — never to the
+     persistence free functions directly.}
+    SettingsRepo := TProductionWcxSettingsRepository.Create;
+    PresetsRepo := TProductionWcxPresetsRepository.Create(PresetsIniPath(GIniPath));
+    if ShowWcxSettingsDialog(Parent, Settings, SettingsRepo, PresetsRepo,
       procedure
       begin
         TWcxFrameCache.Instance.Invalidate;
       end) then
     begin
       {ShowWcxSettingsDialog returns True only when TrySaveAll succeeded,
-       which already called TWcxSettings.Save AND invoked the apply
-       callback (Invalidate above). Keeping the Invalidate here is
-       belt-and-braces in case the dialog's contract changes; the
-       previous duplicate Settings.Save was removed.}
+       which already saved settings + presets through the repos AND
+       invoked the apply callback (Invalidate above). Keeping the
+       Invalidate here is belt-and-braces in case the dialog's contract
+       changes.}
       TWcxFrameCache.Instance.Invalidate;
     end;
   finally

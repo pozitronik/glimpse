@@ -106,6 +106,8 @@
         <DCCReference Include="uWcxExtractionController.pas"/>
         <DCCReference Include="uWcxArchiveCoordinator.pas"/>
         <DCCReference Include="uSettingsSaveOrchestrator.pas"/>
+        <DCCReference Include="uWcxSettingsRepository.pas"/>
+        <DCCReference Include="uWcxPresetsRepository.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
