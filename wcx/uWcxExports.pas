@@ -70,71 +70,8 @@ uses
   uWcxSettings, uWcxSettingsDlg, uFFmpegLocator, uFrameOffsets,
   uFrameFileNames, uBitmapSaver, uFrameExtractor,
   uDebugLog, uPathExpand, uProbeCache, uTypes, uVideoInfo,
-  uWcxPresets, uWcxListing, uWcxEntryExtractors,
+  uWcxPresets, uWcxListing, uWcxEntryExtractors, uWcxArchiveHandle,
   uWcxFrameCache, uPresetExtractReporter;
-
-type
-  {State for one open archive (video file).
-   Implements IWcxExtractionContext so the polymorphic entry extractors
-   in uWcxEntryExtractors can read every per-session field through one
-   well-typed handle without back-linking into this unit. Descends from
-   TNoRefCountObject (RTL-provided "implements IInterface but does NOT
-   refcount") because the WCX API owns the handle's lifetime: OpenArchive
-   creates, CloseArchive frees. Refcounting via TInterfacedObject would
-   risk freeing the handle out from under TC when a transient interface
-   reference held by an entry extractor went out of scope.}
-  TArchiveHandle = class(TNoRefCountObject, IWcxExtractionContext)
-    FileName: string;
-    Settings: TWcxSettings;
-    FFmpegPath: string;
-    VideoInfo: TVideoInfo;
-    Offsets: TFrameOffsetArray;
-    CurrentIndex: Integer;
-    OpenMode: Integer;
-    FileTime: Integer;
-    {Populated from module-level cache when ShowFileSizes is enabled}
-    TempPaths: TArray<string>;
-    EntrySizes: TArray<Int64>;
-    {Loaded once at OpenArchive when ShowPresets is on; empty otherwise.
-     Indexed by TPresetEntry.PresetIndex.}
-    Presets: TWcxPresetArray;
-    {Pre-built polymorphic listing. ReadHeaderExW iterates this;
-     ProcessFile dispatches via Entry.Extract — no Kind switch.}
-    Listing: TWcxEntryExtractorArray;
-    {TC's progress callbacks. The Wide variant is preferred when set;
-     legacy TC builds fall back to the ANSI variant. Either or both may
-     be nil — ProcessFile then runs without surfacing progress.}
-    ProcessDataProc: TProcessDataProc;
-    ProcessDataProcW: TProcessDataProcW;
-    {Source video size in bytes. Reported as the synthetic UnpSize for
-     preset entries (output size is not predictable in advance, but
-     using the source size keeps the listing column believable AND gives
-     the progress bridge a meaningful denominator).}
-    SourceFileSize: Int64;
-    {Per-open-session collaborators. Allocated at OpenArchive (so
-     dependents share one instance per archive rather than reconstruct
-     per call), freed implicitly when the handle is freed. Frame
-     extractor wraps ffmpeg; bitmap saver wraps SaveBitmapToFile. Both
-     are interface-typed so the field lifetime is automatic.}
-    FrameExtractor: IFrameExtractor;
-    BitmapSaver: IBitmapSaverRouter;
-    {IWcxExtractionContext implementation. All trivial — each returns
-     the matching field. Implemented as methods (not direct field
-     reads) because Delphi properties on interfaces require getters.}
-    function GetFileName: string;
-    function GetFFmpegPath: string;
-    function GetSourceFileSize: Int64;
-    function GetSettings: TWcxSettings;
-    function GetOffsets: TFrameOffsetArray;
-    function GetPresets: TWcxPresetArray;
-    function GetVideoInfo: TVideoInfo;
-    function GetTempPaths: TArray<string>;
-    function GetEntrySizes: TArray<Int64>;
-    function GetProcessDataProc: TProcessDataProc;
-    function GetProcessDataProcW: TProcessDataProcW;
-    function GetFrameExtractor: IFrameExtractor;
-    function GetBitmapSaver: IBitmapSaverRouter;
-  end;
 
 var
   GIniPath: string;
@@ -142,76 +79,6 @@ var
 procedure WcxLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
-end;
-
-{ TArchiveHandle: IWcxExtractionContext getters
-  Trivial field forwarders. Methods (not raw field access) because
-  Delphi interface property accessors must be getter functions, not
-  direct fields. }
-
-function TArchiveHandle.GetFileName: string;
-begin
-  Result := FileName;
-end;
-
-function TArchiveHandle.GetFFmpegPath: string;
-begin
-  Result := FFmpegPath;
-end;
-
-function TArchiveHandle.GetSourceFileSize: Int64;
-begin
-  Result := SourceFileSize;
-end;
-
-function TArchiveHandle.GetSettings: TWcxSettings;
-begin
-  Result := Settings;
-end;
-
-function TArchiveHandle.GetOffsets: TFrameOffsetArray;
-begin
-  Result := Offsets;
-end;
-
-function TArchiveHandle.GetPresets: TWcxPresetArray;
-begin
-  Result := Presets;
-end;
-
-function TArchiveHandle.GetVideoInfo: TVideoInfo;
-begin
-  Result := VideoInfo;
-end;
-
-function TArchiveHandle.GetTempPaths: TArray<string>;
-begin
-  Result := TempPaths;
-end;
-
-function TArchiveHandle.GetEntrySizes: TArray<Int64>;
-begin
-  Result := EntrySizes;
-end;
-
-function TArchiveHandle.GetProcessDataProc: TProcessDataProc;
-begin
-  Result := ProcessDataProc;
-end;
-
-function TArchiveHandle.GetProcessDataProcW: TProcessDataProcW;
-begin
-  Result := ProcessDataProcW;
-end;
-
-function TArchiveHandle.GetFrameExtractor: IFrameExtractor;
-begin
-  Result := FrameExtractor;
-end;
-
-function TArchiveHandle.GetBitmapSaver: IBitmapSaverRouter;
-begin
-  Result := BitmapSaver;
 end;
 
 {Builds extraction options from WCX settings.
@@ -273,16 +140,6 @@ begin
     Result := E_EWRITE
   else
     Result := ExceptionClassToWcxError(E.ClassType);
-end;
-
-function GetEntryCount(H: TArchiveHandle): Integer;
-begin
-  Result := Length(H.Listing);
-end;
-
-function GetEntryName(H: TArchiveHandle): string;
-begin
-  Result := H.Listing[H.CurrentIndex].FileName;
 end;
 
 {Extracts all frames, renders a combined image, and saves to cache.
@@ -398,7 +255,7 @@ begin
   try
     H.FileName := AFileName;
     H.OpenMode := AOpenMode;
-    H.CurrentIndex := 0;
+    H.ResetCursor;
 
     H.Settings := TWcxSettings.Create(GIniPath);
     H.Settings.Load;
@@ -502,10 +359,10 @@ var
   Name: AnsiString;
 begin
   H := TArchiveHandle(hArcData);
-  if H.CurrentIndex >= GetEntryCount(H) then
+  if H.IsExhausted then
     Exit(E_END_ARCHIVE);
 
-  Name := AnsiString(GetEntryName(H));
+  Name := AnsiString(H.CurrentEntry.FileName);
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   System.AnsiStrings.StrLCopy(HeaderData.FileName, PAnsiChar(Name), SizeOf(HeaderData.FileName) - 1);
@@ -514,7 +371,7 @@ begin
    ReportedSize subsumes the prior "is this a preset? use source-file
    size; else use cached EntrySizes" branching — each entry class
    answers for itself.}
-  HeaderData.UnpSize := ClampSizeForAnsiHeader(H.Listing[H.CurrentIndex].ReportedSize(H, H.CurrentIndex));
+  HeaderData.UnpSize := ClampSizeForAnsiHeader(H.CurrentEntry.ReportedSize(H, H.CurrentEntryIndex));
   HeaderData.FileTime := H.FileTime;
   HeaderData.FileAttr := FILE_ATTRIBUTE_ARCHIVE;
 
@@ -528,14 +385,14 @@ var
   Size: Int64;
 begin
   H := TArchiveHandle(hArcData);
-  if H.CurrentIndex >= GetEntryCount(H) then
+  if H.IsExhausted then
     Exit(E_END_ARCHIVE);
 
-  Name := GetEntryName(H);
+  Name := H.CurrentEntry.FileName;
 
   FillChar(HeaderData, SizeOf(HeaderData), 0);
   StrLCopy(HeaderData.FileName, PChar(Name), Length(HeaderData.FileName) - 1);
-  Size := H.Listing[H.CurrentIndex].ReportedSize(H, H.CurrentIndex);
+  Size := H.CurrentEntry.ReportedSize(H, H.CurrentEntryIndex);
   HeaderData.UnpSize := DWORD(Size);
   HeaderData.UnpSizeHigh := DWORD(Size shr 32);
   HeaderData.FileTime := H.FileTime;
@@ -552,17 +409,17 @@ begin
 
   if Operation = PK_SKIP then
   begin
-    Inc(H.CurrentIndex);
+    H.AdvanceCursor;
     Exit(E_SUCCESS);
   end;
 
   if (Operation <> PK_EXTRACT) and (Operation <> PK_TEST) then
   begin
-    Inc(H.CurrentIndex);
+    H.AdvanceCursor;
     Exit(E_SUCCESS);
   end;
 
-  if H.CurrentIndex >= GetEntryCount(H) then
+  if H.IsExhausted then
     Exit(E_END_ARCHIVE);
 
   if Operation = PK_EXTRACT then
@@ -571,16 +428,16 @@ begin
      TPresetEntry each carry the per-entry state (frame index, combined
      slot, preset index) they need and implement Extract themselves. A
      new entry kind becomes one new class, no edits here.}
-    Result := H.Listing[H.CurrentIndex].Extract(H, ADestPath, ADestName);
+    Result := H.CurrentEntry.Extract(H, ADestPath, ADestName);
 
     if Result <> E_SUCCESS then
     begin
-      Inc(H.CurrentIndex);
+      H.AdvanceCursor;
       Exit;
     end;
   end;
 
-  Inc(H.CurrentIndex);
+  H.AdvanceCursor;
   Result := E_SUCCESS;
 end;
 

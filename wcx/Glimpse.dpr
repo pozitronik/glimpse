@@ -57,6 +57,7 @@ uses
   uFileNameDedupe in 'uFileNameDedupe.pas',
   uWcxPresets in 'uWcxPresets.pas',
   uWcxEntryExtractors in 'uWcxEntryExtractors.pas',
+  uWcxArchiveHandle in 'uWcxArchiveHandle.pas',
   uWcxListing in 'uWcxListing.pas',
   uWcxProgressBridge in 'uWcxProgressBridge.pas',
   uWcxPresetExtractor in 'uWcxPresetExtractor.pas',

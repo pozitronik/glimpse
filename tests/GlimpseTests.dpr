@@ -105,6 +105,8 @@ uses
   uWcxPresets in '..\wcx\uWcxPresets.pas',
   TestWcxPresets in 'TestWcxPresets.pas',
   uWcxEntryExtractors in '..\wcx\uWcxEntryExtractors.pas',
+  uWcxArchiveHandle in '..\wcx\uWcxArchiveHandle.pas',
+  TestWcxArchiveHandle in 'TestWcxArchiveHandle.pas',
   uWcxListing in '..\wcx\uWcxListing.pas',
   TestWcxListing in 'TestWcxListing.pas',
   TestWcxEntryExtractors in 'TestWcxEntryExtractors.pas',
