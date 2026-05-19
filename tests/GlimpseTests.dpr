@@ -98,6 +98,7 @@ uses
   TestFrameExport in 'TestFrameExport.pas',
   uExtractionController in '..\wlx\uExtractionController.pas',
   TestExtractionController in 'TestExtractionController.pas',
+  uProgressReporter in '..\wlx\uProgressReporter.pas',
   uSaveResolutionExtractor in '..\wlx\uSaveResolutionExtractor.pas',
   TestSaveResolutionExtractor in 'TestSaveResolutionExtractor.pas',
   uWcxAPI in '..\wcx\uWcxAPI.pas',

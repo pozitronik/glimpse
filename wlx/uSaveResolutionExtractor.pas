@@ -22,7 +22,7 @@ interface
 uses
   System.SysUtils,
   Vcl.Graphics,
-  uTypes, uCache, uFrameOffsets, uFrameExtractor;
+  uTypes, uCache, uFrameOffsets, uFrameExtractor, uProgressReporter;
 
 type
   {Per-call inputs that the extractor needs but does not own. Carried as
@@ -41,20 +41,11 @@ type
     RespectAnamorphic: Boolean;
   end;
 
-  {Optional progress hooks. Caller wires these to its progress bar /
-   status text / message pump as appropriate. Nil callbacks are no-ops.}
-  TSaveResolutionProgress = reference to procedure(ACurrent, ATotal: Integer);
-  TSaveResolutionLabel = reference to procedure(const AText: string);
-  TSaveResolutionPump = reference to procedure;
-
   TSaveResolutionExtractor = class
   strict private
     FCache: IFrameCache;
     FExtractor: IFrameExtractor;
-    FOnProgress: TSaveResolutionProgress;
-    FOnLabel: TSaveResolutionLabel;
-    FOnDone: TSaveResolutionPump;
-    FOnPump: TSaveResolutionPump;
+    FReporter: IProgressReporter;
   public
     {Both dependencies are injected so tests can supply mocks. ACache is
      consulted for hits before each ffmpeg call, and (when not nil from
@@ -71,12 +62,11 @@ type
      owns and must Free each non-nil bitmap.}
     function ExtractAtTarget(const ACtx: TSaveResolutionContext; ATargetMaxSide: Integer; const AIndices: TArray<Integer>): TArray<TBitmap>;
 
-    property OnProgress: TSaveResolutionProgress read FOnProgress write FOnProgress;
-    property OnLabel: TSaveResolutionLabel read FOnLabel write FOnLabel;
-    property OnDone: TSaveResolutionPump read FOnDone write FOnDone;
-    {Called between iterations so the caller can pump messages and keep
-     the UI responsive on long videos.}
-    property OnPump: TSaveResolutionPump read FOnPump write FOnPump;
+    {Optional. Step 107 (N1): replaces the previous 4 separate
+     anonymous-method events (OnLabel + OnProgress + OnPump + OnDone)
+     with a single cohesive reporter. Nil = no progress UI; the
+     extractor short-circuits every Assigned(FReporter) check.}
+    property Reporter: IProgressReporter read FReporter write FReporter;
   end;
 
   {Pure decision: returns True when WithReExtract should re-fetch frames
@@ -135,10 +125,8 @@ begin
   Options.RespectAnamorphic := ACtx.RespectAnamorphic;
 
   Total := Length(AIndices);
-  if Assigned(FOnLabel) then
-    FOnLabel(Format('Re-extracting %d frame(s) at full resolution...', [Total]));
-  if Assigned(FOnProgress) then
-    FOnProgress(0, Total);
+  if FReporter <> nil then
+    FReporter.Start(Format('Re-extracting %d frame(s) at full resolution...', [Total]), Total);
 
   try
     for I := 0 to Total - 1 do
@@ -158,14 +146,15 @@ begin
 
       Result[Idx] := Bmp;
 
-      if Assigned(FOnProgress) then
-        FOnProgress(I + 1, Total);
-      if Assigned(FOnPump) then
-        FOnPump;
+      if FReporter <> nil then
+      begin
+        FReporter.Advance(I + 1);
+        FReporter.Pump;
+      end;
     end;
   finally
-    if Assigned(FOnDone) then
-      FOnDone;
+    if FReporter <> nil then
+      FReporter.Complete;
   end;
 end;
 

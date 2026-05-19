@@ -45,7 +45,49 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Classes, System.Generics.Collections,
   Winapi.Windows, Vcl.Graphics,
-  uTypes, uCache, uFrameOffsets, uFrameExtractor, uSaveResolutionExtractor;
+  uTypes, uCache, uFrameOffsets, uFrameExtractor, uProgressReporter,
+  uSaveResolutionExtractor;
+
+type
+  {Step 107: minimal test-side IProgressReporter that records every
+   lifecycle call so ProgressCallbacksFire / DoneCallbackFiresEvenOnEarlyExit
+   can assert on them without wiring 4 separate anonymous methods.}
+  TRecordingReporter = class(TInterfacedObject, IProgressReporter)
+  strict private
+    FStartCalled: Boolean;
+    FCompleteCalled: Boolean;
+    FAdvanceCount: Integer;
+    FLastTotal: Integer;
+  public
+    procedure Start(const AStatusText: string; ATotalSteps: Integer);
+    procedure Advance(AStepIndex: Integer);
+    procedure Pump;
+    procedure Complete;
+    property StartCalled: Boolean read FStartCalled;
+    property CompleteCalled: Boolean read FCompleteCalled;
+    property AdvanceCount: Integer read FAdvanceCount;
+    property LastTotal: Integer read FLastTotal;
+  end;
+
+procedure TRecordingReporter.Start(const AStatusText: string; ATotalSteps: Integer);
+begin
+  FStartCalled := True;
+  FLastTotal := ATotalSteps;
+end;
+
+procedure TRecordingReporter.Advance(AStepIndex: Integer);
+begin
+  Inc(FAdvanceCount);
+end;
+
+procedure TRecordingReporter.Pump;
+begin
+end;
+
+procedure TRecordingReporter.Complete;
+begin
+  FCompleteCalled := True;
+end;
 
 { Mock IFrameCache: tracks Put / TryGet calls, returns canned bitmaps. }
 type
@@ -487,31 +529,30 @@ var
   Ctx: TSaveResolutionContext;
   Result: TArray<TBitmap>;
   Canned: TBitmap;
-  LabelCalled, DoneCalled: Boolean;
-  ProgressCalls: Integer;
+  Reporter: TRecordingReporter;
+  ReporterRef: IProgressReporter;
 begin
   Cache := TMockCache.Create;
   Ext := TMockExtractor.Create;
   Sub := TSaveResolutionExtractor.Create(Cache, Ext);
+  Reporter := TRecordingReporter.Create;
+  ReporterRef := Reporter;
   try
     Ctx := MakeContext(2);
     Canned := MakeBitmap(64, 64);
     TMockExtractor(Ext).SetCanned(Ctx.Offsets[0].TimeOffset, Canned);
 
-    LabelCalled := False;
-    DoneCalled := False;
-    ProgressCalls := 0;
-
-    Sub.OnLabel := procedure(const AText: string) begin LabelCalled := True; end;
-    Sub.OnProgress := procedure(ACurrent, ATotal: Integer) begin Inc(ProgressCalls); end;
-    Sub.OnDone := procedure begin DoneCalled := True; end;
+    Sub.Reporter := ReporterRef;
 
     Result := Sub.ExtractAtTarget(Ctx, 1920, [0]);
     try
-      Assert.IsTrue(LabelCalled, 'Label callback must fire on entry');
-      Assert.IsTrue(DoneCalled, 'Done callback must fire on exit');
-      {Initial 0/Total + one per index = 2 progress ticks for one index.}
-      Assert.AreEqual(2, ProgressCalls);
+      Assert.IsTrue(Reporter.StartCalled, 'Reporter.Start must fire on entry');
+      Assert.IsTrue(Reporter.CompleteCalled, 'Reporter.Complete must fire on exit');
+      {Step 107 unified Start+Advance — one Advance per processed index.
+       Single-index extraction → 1 Advance call.}
+      Assert.AreEqual(1, Reporter.AdvanceCount);
+      Assert.AreEqual(1, Reporter.LastTotal,
+        'Start receives the total work count up front');
     finally
       Result[0].Free;
     end;
@@ -527,21 +568,24 @@ var
   Sub: TSaveResolutionExtractor;
   Ctx: TSaveResolutionContext;
   Result: TArray<TBitmap>;
-  DoneCalled: Boolean;
+  Reporter: TRecordingReporter;
+  ReporterRef: IProgressReporter;
 begin
   {Early-exit guards (empty offsets / empty indices / empty filename) must
-   not fire OnDone -- Done is paired with the work loop, which the early
-   exits skip. The label does not fire either. This pins the contract.}
+   not fire Reporter.Complete -- Complete is paired with the work loop,
+   which the early exits skip. Start does not fire either. Pin the contract.}
   Cache := TMockCache.Create;
   Ext := TMockExtractor.Create;
   Sub := TSaveResolutionExtractor.Create(Cache, Ext);
+  Reporter := TRecordingReporter.Create;
+  ReporterRef := Reporter;
   try
-    DoneCalled := False;
-    Sub.OnDone := procedure begin DoneCalled := True; end;
+    Sub.Reporter := ReporterRef;
     Ctx := MakeContext(0);
     Result := Sub.ExtractAtTarget(Ctx, 1920, [0]);
-    Assert.IsFalse(DoneCalled,
-      'Early exit (no offsets) must not fire OnDone -- caller did not see a label either');
+    Assert.IsFalse(Reporter.CompleteCalled,
+      'Early exit (no offsets) must not fire Reporter.Complete -- Start was never called');
+    Assert.IsFalse(Reporter.StartCalled);
     Assert.AreEqual(0, Integer(Length(Result)));
   finally
     Sub.Free;

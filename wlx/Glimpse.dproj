@@ -110,6 +110,9 @@
         <DCCReference Include="uViewportRefreshDebouncer.pas"/>
         <DCCReference Include="uLoadTimeRecorder.pas"/>
         <DCCReference Include="uProgressIndicator.pas"/>
+        <DCCReference Include="uProgressReporter.pas"/>
+        <DCCReference Include="uFormProgressReporter.pas"/>
+        <DCCReference Include="uOverrideFramesScope.pas"/>
         <DCCReference Include="..\src\uFileNavigator.pas"/>
         <DCCReference Include="..\src\uPathExpand.pas"/>
         <DCCReference Include="..\src\uColorConv.pas"/>

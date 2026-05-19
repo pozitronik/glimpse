@@ -13,6 +13,7 @@ uses
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uToolbarController, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
   uViewportRefreshDebouncer, uLoadTimeRecorder, uProgressIndicator,
+  uProgressReporter, uFormProgressReporter, uOverrideFramesScope,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache, uPluginServices,
   uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
@@ -1706,8 +1707,12 @@ var
   Ctx: TSaveResolutionContext;
   Reextractor: TSaveResolutionExtractor;
   Frames: TArray<TBitmap>;
-  Total, I: Integer;
+  Scope: IOverrideFramesScope;
 begin
+  {Step 107 (N1): WithReExtract used to mix 3 concerns inline (bitmap
+   lifetime + exporter override-frames cycle + 4-callback progress
+   wiring). The 3 helpers — TFormProgressReporter, TSaveResolutionExtractor's
+   new IProgressReporter, TOverrideFramesScope RAII — separate them.}
   Target := PickSaveMaxSide(FVideoInfo.Width, FVideoInfo.Height, FSettings.ScaledExtraction, FSettings.MaxFrameSide);
   if not NeedsReExtractForSave(FSettings.SaveAtLiveResolution, Length(AIndices), Target, FViewportRefreshDebouncer.LastExtractionMaxSide) then
   begin
@@ -1728,51 +1733,23 @@ begin
   Ctx.HwAccel := FSettings.HwAccel;
   Ctx.UseKeyframes := FSettings.UseKeyframes;
   Ctx.RespectAnamorphic := FSettings.RespectAnamorphic;
-  Total := Length(AIndices);
 
-  FormLog(Format('WithReExtract: starting target=%d cells indices=%d', [Target, Total]));
+  FormLog(Format('WithReExtract: starting target=%d cells indices=%d', [Target, Length(AIndices)]));
   Reextractor := TSaveResolutionExtractor.Create(FExtractCtrl.Cache, FServices.FrameExtractorFactory.CreateExtractor(FFFmpegPath));
   try
-    Reextractor.OnLabel := procedure(const AText: string)
-      begin
-        FormLog(Format('WithReExtract: OnLabel - showing progress (%s)', [AText]));
-        FProgressBar.Style := pbstNormal;
-        FProgressBar.Min := 0;
-        FProgressBar.Max := Total;
-        FProgressBar.Position := 0;
-        FProgressIndicator.Show;
-      end;
-    Reextractor.OnProgress := procedure(ACurrent, ATotal: Integer)
-      begin
-        FProgressBar.Position := ACurrent;
-      end;
-    Reextractor.OnPump := procedure
-      begin
-        Application.ProcessMessages;
-      end;
-    Reextractor.OnDone := procedure
-      begin
-        FormLog('WithReExtract: OnDone - hiding progress');
-        FProgressIndicator.Hide;
-      end;
-
+    Reextractor.Reporter := TFormProgressReporter.Create(FProgressIndicator);
     Frames := Reextractor.ExtractAtTarget(Ctx, Target, AIndices);
   finally
     Reextractor.Free;
   end;
   FormLog(Format('WithReExtract: re-extract finished, Frames length=%d', [Length(Frames)]));
 
-  try
-    FExporter.SetOverrideFrames(Frames);
-    try
-      AAction;
-    finally
-      FExporter.ClearOverrideFrames;
-    end;
-  finally
-    for I := 0 to High(Frames) do
-      Frames[I].Free;
-  end;
+  {Scope takes ownership of Frames + manages the exporter override-frames
+   cycle. Auto-released at proc end: clears override THEN frees bitmaps
+   so the exporter never sees freed memory. Replaces two nested
+   try-finally blocks.}
+  Scope := TOverrideFramesScope.Create(FExporter, Frames);
+  AAction;
 end;
 
 procedure TPluginForm.OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
