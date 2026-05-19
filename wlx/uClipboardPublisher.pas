@@ -25,38 +25,24 @@ uses
   uSettings, uBitmapWorkThread;
 
 type
-  {Outcome of a clipboard publish. The distinction matters for the
-   call-site UI: cprFailed should surface a MessageDlg, cprCancelled
-   should be silent (user's explicit choice), cprSuccess is the happy
-   path.}
-  TClipboardPublishResult = (cprSuccess, cprFailed, cprCancelled);
+  {Re-aliases from uBitmapWorkThread where these types and the
+   RunBitmapWorkInModal function moved in step 108. Kept in the
+   publisher's interface section because both TClipboardPublisher's
+   public method signatures and the uFrameExport facade's re-aliases
+   reference them by uClipboardPublisher's name — the move is meant
+   to be transparent to existing callers.}
+  TClipboardPublishResult = uBitmapWorkThread.TClipboardPublishResult;
+  TAsyncTaskRunner = uBitmapWorkThread.TAsyncTaskRunner;
 
-  {Runs AThread to completion inside a host-supplied modal "please wait"
-   dialog. AText is the status message. Returns True when the thread
-   completed normally; False when the user cancelled.}
-  TAsyncTaskRunner = reference to function(AThread: TThread;
-    const AText: string): Boolean;
+const
+  cprSuccess = uBitmapWorkThread.cprSuccess;
+  cprFailed = uBitmapWorkThread.cprFailed;
+  cprCancelled = uBitmapWorkThread.cprCancelled;
 
-{Runs AWork inside a TBitmapWorkThread, optionally hosted by ARunner
- (the host's modal "please wait" dialog). Returns a tri-state result:
- cprSuccess when the work succeeded, cprFailed when the work reported
- failure (or nil bitmap), cprCancelled when ARunner reported a user
- cancellation. AOutcome is populated with the worker's Outcome on the
- success/failed paths so the caller can log ErrorMsg or read other
- result fields; on cancel the outcome is left at default.
-
- OWNERSHIP: takes ABitmap unconditionally (var, sets to nil on entry).
- The thread frees it.
-
- On cancel the thread is detached (RequestCancel + the DLL pin) and the
- main thread does not wait for it; see TBitmapWorkThread.RequestCancel
- for the rationale. Callers MUST treat the returned cprCancelled as
- "thread is gone, results unreliable, do not inspect further".
-
- Pass ARunner=nil for synchronous, no-UI execution (tests / standalone).
- The function then runs the thread on the main thread via Start+WaitFor
- and treats the run as a success - cancellation is not possible in this
- mode by construction.}
+{Re-export of the function moved to uBitmapWorkThread in step 108.
+ Defined as a delegating interface function so existing callers
+ (uFrameExport.pas, TestFrameExport's TTestRunBitmapWorkInModal) keep
+ compiling without import changes.}
 function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const AStatusText: string;
   const AWork: TBitmapWorkProc;
@@ -165,56 +151,11 @@ function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
   const APostWork: TBitmapWorkPostProc;
   const ARunner: TAsyncTaskRunner;
   out AOutcome: TBitmapWorkOutcome): TClipboardPublishResult;
-var
-  TakenBmp: TBitmap;
-  Thread: TBitmapWorkThread;
-  TaskOk: Boolean;
 begin
-  Result := cprFailed;
-  AOutcome := Default(TBitmapWorkOutcome);
-  {Take ownership of the caller's bitmap up front. The local TakenBmp
-   becomes the thread's bitmap; the caller's ABitmap is set to nil so
-   any trailing try-finally Bmp.Free on the call site is a safe no-op
-   regardless of outcome.}
-  TakenBmp := ABitmap;
-  ABitmap := nil;
-  if TakenBmp = nil then
-    Exit;
-
-  Thread := TBitmapWorkThread.Create(TakenBmp, AWork, APostWork);
-  try
-    if Assigned(ARunner) then
-      TaskOk := ARunner(Thread, AStatusText)
-    else
-    begin
-      {Synchronous fallback for tests / standalone where no host modal
-       is available. Cannot be cancelled in this mode.}
-      Thread.Start;
-      Thread.WaitFor;
-      TaskOk := True;
-    end;
-
-    if not TaskOk then
-    begin
-      {User cancelled. RequestCancel pins the DLL and detaches via
-       FreeOnTerminate; the thread runs to completion in the background
-       and self-frees safely even if TC unloads the plugin a moment
-       later. Null the local reference so the finally block does not
-       double-free.}
-      Thread.RequestCancel;
-      Thread := nil;
-      Exit(cprCancelled);
-    end;
-
-    AOutcome := Thread.Outcome;
-    if AOutcome.Success then
-      Result := cprSuccess
-    else
-      Result := cprFailed;
-  finally
-    if Assigned(Thread) then
-      Thread.Free;
-  end;
+  {Step-108 thin re-export. Real implementation now lives in
+   uBitmapWorkThread alongside the TBitmapWorkThread class it constructs.}
+  Result := uBitmapWorkThread.RunBitmapWorkInModal(ABitmap, AStatusText,
+    AWork, APostWork, ARunner, AOutcome);
 end;
 
 { TClipboardPublisher }
