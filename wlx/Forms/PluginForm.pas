@@ -2269,9 +2269,11 @@ begin
   inherited;
   Realign;
   LayoutToolbar;
-  FProgressIndicator.Reposition;
   {VCL fires Resize during window creation, before CreateForPlugin finishes
-   constructing sub-controls, so FFrameView may not exist yet}
+   constructing sub-controls, so FProgressIndicator / FFrameView / FStatusBar
+   may not exist yet.}
+  if Assigned(FProgressIndicator) then
+    FProgressIndicator.Reposition;
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
     UpdateFrameViewSize;
   {Status bar's predicted Save / Copy view dimensions depend on cell sizes
