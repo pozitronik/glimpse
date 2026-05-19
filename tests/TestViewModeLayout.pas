@@ -69,6 +69,33 @@ type
     [Test] procedure TestUnknownModeRaises;
   end;
 
+  {Pins the per-mode scrollbar visibility rules + grid column-count
+   derivation that UpdateFrameViewSize delegates to. Pure functions;
+   each test exercises one mode-by-zoom-state combination.}
+  [TestFixture]
+  TTestScrollbarPolicy = class
+  public
+    [Test] procedure VmScroll_NotZoomedFitWindow_HorzHidden_VertVisible;
+    [Test] procedure VmScroll_ZoomedFitWindow_BothVisible;
+    [Test] procedure VmScroll_NotZoomedActual_HorzVisible;
+    [Test] procedure VmGrid_NotZoomed_HorzHidden;
+    [Test] procedure VmGrid_Zoomed_HorzVisible;
+    [Test] procedure VmSmartGrid_NotZoomed_BothHidden;
+    [Test] procedure VmSmartGrid_Zoomed_BothVisible;
+    [Test] procedure VmSingle_NotZoomed_BothHidden;
+    [Test] procedure VmFilmstrip_NotZoomedFitWindow_HorzVisible_VertHidden;
+    [Test] procedure VmFilmstrip_NotZoomedActual_BothVisible;
+  end;
+
+  [TestFixture]
+  TTestGridColumnCountFor = class
+  public
+    [Test] procedure FitWindow_ReturnsFitCols;
+    [Test] procedure FitIfLarger_PicksLargerOfFitAndDef;
+    [Test] procedure FitIfLarger_DefBeatsFit;
+    [Test] procedure Actual_ReturnsZero;
+  end;
+
   [TestFixture]
   TTestComputeSmartGridRows = class
   public
@@ -805,6 +832,121 @@ begin
     'Source aspect ratio should change row count for the same frame count');
 end;
 
+{TTestScrollbarPolicy}
+
+procedure TTestScrollbarPolicy.VmScroll_NotZoomedFitWindow_HorzHidden_VertVisible;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmScroll, zmFitWindow, False);
+  Assert.IsFalse(P.HorzVisible, 'vmScroll + FitWindow + not zoomed: horz must hide');
+  Assert.IsTrue(P.VertVisible, 'vmScroll always shows vert');
+end;
+
+procedure TTestScrollbarPolicy.VmScroll_ZoomedFitWindow_BothVisible;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmScroll, zmFitWindow, True);
+  Assert.IsTrue(P.HorzVisible);
+  Assert.IsTrue(P.VertVisible);
+end;
+
+procedure TTestScrollbarPolicy.VmScroll_NotZoomedActual_HorzVisible;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmScroll, zmActual, False);
+  Assert.IsTrue(P.HorzVisible, 'vmScroll + Actual zoom forces horz even when not zoomed');
+end;
+
+procedure TTestScrollbarPolicy.VmGrid_NotZoomed_HorzHidden;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmGrid, zmFitWindow, False);
+  Assert.IsFalse(P.HorzVisible);
+  Assert.IsTrue(P.VertVisible, 'vmGrid always shows vert');
+end;
+
+procedure TTestScrollbarPolicy.VmGrid_Zoomed_HorzVisible;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmGrid, zmFitWindow, True);
+  Assert.IsTrue(P.HorzVisible);
+end;
+
+procedure TTestScrollbarPolicy.VmSmartGrid_NotZoomed_BothHidden;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmSmartGrid, zmFitWindow, False);
+  Assert.IsFalse(P.HorzVisible);
+  Assert.IsFalse(P.VertVisible);
+end;
+
+procedure TTestScrollbarPolicy.VmSmartGrid_Zoomed_BothVisible;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmSmartGrid, zmFitWindow, True);
+  Assert.IsTrue(P.HorzVisible);
+  Assert.IsTrue(P.VertVisible);
+end;
+
+procedure TTestScrollbarPolicy.VmSingle_NotZoomed_BothHidden;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmSingle, zmFitWindow, False);
+  Assert.IsFalse(P.HorzVisible);
+  Assert.IsFalse(P.VertVisible);
+end;
+
+procedure TTestScrollbarPolicy.VmFilmstrip_NotZoomedFitWindow_HorzVisible_VertHidden;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmFilmstrip, zmFitWindow, False);
+  Assert.IsTrue(P.HorzVisible, 'vmFilmstrip always shows horz');
+  Assert.IsFalse(P.VertVisible);
+end;
+
+procedure TTestScrollbarPolicy.VmFilmstrip_NotZoomedActual_BothVisible;
+var
+  P: TScrollbarPolicy;
+begin
+  P := GetScrollbarPolicy(vmFilmstrip, zmActual, False);
+  Assert.IsTrue(P.HorzVisible);
+  Assert.IsTrue(P.VertVisible, 'vmFilmstrip + Actual zoom forces vert even when not zoomed');
+end;
+
+{TTestGridColumnCountFor}
+
+procedure TTestGridColumnCountFor.FitWindow_ReturnsFitCols;
+begin
+  Assert.AreEqual(5, GridColumnCountFor(zmFitWindow, 5, 99));
+end;
+
+procedure TTestGridColumnCountFor.FitIfLarger_PicksLargerOfFitAndDef;
+begin
+  Assert.AreEqual(8, GridColumnCountFor(zmFitIfLarger, 8, 3),
+    'Fit (8) beats default (3) when fit is larger');
+end;
+
+procedure TTestGridColumnCountFor.FitIfLarger_DefBeatsFit;
+begin
+  Assert.AreEqual(6, GridColumnCountFor(zmFitIfLarger, 2, 6),
+    'Default (6) wins when fit (2) would collapse the grid below the user preference');
+end;
+
+procedure TTestGridColumnCountFor.Actual_ReturnsZero;
+begin
+  Assert.AreEqual(0, GridColumnCountFor(zmActual, 4, 7),
+    'zmActual returns 0 - caller interprets as "layout strategy auto-decides"');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestGridLayout);
   TDUnitX.RegisterTestFixture(TTestScrollLayout);
@@ -813,5 +955,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestSmartGridLayout);
   TDUnitX.RegisterTestFixture(TTestLayoutFactory);
   TDUnitX.RegisterTestFixture(TTestComputeSmartGridRows);
+  TDUnitX.RegisterTestFixture(TTestScrollbarPolicy);
+  TDUnitX.RegisterTestFixture(TTestGridColumnCountFor);
 
 end.

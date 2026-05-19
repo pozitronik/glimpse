@@ -33,6 +33,35 @@ type
 
   TLayoutWheelAction = (lwaVerticalScroll, lwaHorizontalScroll, lwaNavigateFrame);
 
+  {Per-mode scrollbar visibility derived from view mode + zoom state.
+   The form previously encoded this as a case-on-mode inline in
+   UpdateFrameViewSize, reading FFrameView state then writing to the
+   scrollbox's HorzScrollBar/VertScrollBar.Visible — Information Expert
+   violation. Lifted here so the per-mode rules live next to the rest
+   of the layout strategies.}
+  TScrollbarPolicy = record
+    HorzVisible: Boolean;
+    VertVisible: Boolean;
+  end;
+
+{Returns the scrollbar visibility a TScrollBox hosting the frame view
+ should adopt for the given view mode + zoom state. AIsZoomed reflects
+ the live ZoomFactor (not the persisted ZoomMode); the two arguments
+ are independent because zmActual at ZoomFactor=1.0 still needs the
+ actual-size scroll rules even though "not zoomed" technically.}
+function GetScrollbarPolicy(AMode: TViewMode; AZoom: TZoomMode; AIsZoomed: Boolean): TScrollbarPolicy;
+
+{Returns the grid column count for the active zoom mode given a
+ zoom-fit candidate (AFitCols) and the user/default-driven candidate
+ (ADefCols). zmFitWindow takes AFitCols verbatim, zmFitIfLarger
+ returns Max(AFitCols, ADefCols) so the grid never collapses below
+ the user's preferred density, anything else returns 0 (caller
+ interprets 0 as "let the layout strategy auto-decide"). Pure;
+ lives next to the layout strategies for the same Information Expert
+ reason as GetScrollbarPolicy.}
+function GridColumnCountFor(AZoom: TZoomMode; AFitCols, ADefCols: Integer): Integer;
+
+type
   {Abstract base: each subclass defines geometry for one view mode.}
   TViewModeLayout = class abstract
   public
@@ -110,6 +139,47 @@ implementation
 
 uses
   System.SysUtils, System.Math, uZoomController;
+
+function GetScrollbarPolicy(AMode: TViewMode; AZoom: TZoomMode; AIsZoomed: Boolean): TScrollbarPolicy;
+begin
+  case AMode of
+    vmScroll:
+      begin
+        Result.HorzVisible := AIsZoomed or (AZoom = zmActual);
+        Result.VertVisible := True;
+      end;
+    vmGrid:
+      begin
+        Result.HorzVisible := AIsZoomed;
+        Result.VertVisible := True;
+      end;
+    vmSmartGrid, vmSingle:
+      begin
+        Result.HorzVisible := AIsZoomed;
+        Result.VertVisible := AIsZoomed;
+      end;
+    vmFilmstrip:
+      begin
+        Result.HorzVisible := True;
+        Result.VertVisible := AIsZoomed or (AZoom = zmActual);
+      end;
+  else
+    Result.HorzVisible := False;
+    Result.VertVisible := False;
+  end;
+end;
+
+function GridColumnCountFor(AZoom: TZoomMode; AFitCols, ADefCols: Integer): Integer;
+begin
+  case AZoom of
+    zmFitWindow:   Result := AFitCols;
+    zmFitIfLarger: Result := Max(AFitCols, ADefCols);
+  else
+    {zmActual (and any future zoom mode) yields 0; UpdateFrameViewSize
+     interprets 0 as "let the layout strategy auto-decide".}
+    Result := 0;
+  end;
+end;
 
 {TViewModeLayout}
 

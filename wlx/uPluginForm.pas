@@ -2241,57 +2241,29 @@ end;
 
 procedure TPluginForm.UpdateFrameViewSize;
 var
-  FitCols, DefCols: Integer;
   VW, VH: Integer;
   Zoomed: Boolean;
+  ScrollPolicy: TScrollbarPolicy;
 begin
   Zoomed := not SameValue(FFrameView.ZoomFactor, 1.0, ZOOM_EPSILON);
 
-  {Configure scrollbox FIRST so ClientWidth/ClientHeight reflect scrollbar state}
-  case FFrameView.ViewMode of
-    vmScroll:
-      begin
-        FScrollBox.HorzScrollBar.Visible := Zoomed or (FFrameView.ZoomMode = zmActual);
-        FScrollBox.VertScrollBar.Visible := True;
-      end;
-    vmGrid:
-      begin
-        FScrollBox.HorzScrollBar.Visible := Zoomed;
-        FScrollBox.VertScrollBar.Visible := True;
-      end;
-    vmSmartGrid, vmSingle:
-      begin
-        FScrollBox.HorzScrollBar.Visible := Zoomed;
-        FScrollBox.VertScrollBar.Visible := Zoomed;
-      end;
-    vmFilmstrip:
-      begin
-        FScrollBox.HorzScrollBar.Visible := True;
-        FScrollBox.VertScrollBar.Visible := Zoomed or (FFrameView.ZoomMode = zmActual);
-      end;
-  end;
+  {Configure scrollbox FIRST so ClientWidth/ClientHeight reflect scrollbar state.
+   Per-mode visibility rule lives in uViewModeLayout (Information Expert).}
+  ScrollPolicy := GetScrollbarPolicy(FFrameView.ViewMode, FFrameView.ZoomMode, Zoomed);
+  FScrollBox.HorzScrollBar.Visible := ScrollPolicy.HorzVisible;
+  FScrollBox.VertScrollBar.Visible := ScrollPolicy.VertVisible;
 
   {Read viewport after scrollbar config}
   VW := FScrollBox.ClientWidth;
   VH := FScrollBox.ClientHeight;
   FFrameView.SetViewport(VW, VH);
 
-  {Calculate column count for grid mode (use frozen base when zoomed)}
+  {Calculate column count for grid mode (use frozen base when zoomed).
+   Non-grid modes pass 0 so the layout strategy auto-decides.}
   if FFrameView.ViewMode = vmGrid then
-  begin
-    case FFrameView.ZoomMode of
-      zmFitWindow:
-        FFrameView.ColumnCount := FFrameView.CalcFitColumns(FFrameView.BaseW, FFrameView.BaseH);
-      zmFitIfLarger:
-        begin
-          FitCols := FFrameView.CalcFitColumns(FFrameView.BaseW, FFrameView.BaseH);
-          DefCols := FFrameView.DefaultColumnCount;
-          FFrameView.ColumnCount := Max(FitCols, DefCols);
-        end;
-      else
-        FFrameView.ColumnCount := 0;
-    end;
-  end
+    FFrameView.ColumnCount := GridColumnCountFor(FFrameView.ZoomMode,
+      FFrameView.CalcFitColumns(FFrameView.BaseW, FFrameView.BaseH),
+      FFrameView.DefaultColumnCount)
   else
     FFrameView.ColumnCount := 0;
 
