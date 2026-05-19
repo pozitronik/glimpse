@@ -12,7 +12,7 @@ uses
   uTypes, uStatusBarLayout, uSettings, uSettingsToggleService, uHotkeys, uHotkeysVcl, uPluginAppearance, uFrameOffsets, uFFmpegExe, uVideoInfo, uCache, uWlxAPI, uFrameNotificationSink,
   uZoomController, uViewModeLogic,
   uExtractionPlanner, uToolbarLayout, uToolbarController, uToolbarGlyphLibrary, uFrameView, uViewModeLayout, uExtractionWorker,
-  uViewportRefreshDebouncer, uLoadTimeRecorder,
+  uViewportRefreshDebouncer, uLoadTimeRecorder, uProgressIndicator,
   uFrameExtractor, uFrameExport, uExtractionController, uProbeCache, uPluginServices,
   uSaveResolutionExtractor, uCommandDescriptors,
   uStatusBarTokens, uStatusBarTemplate, uStatusBarFormatters, uStatusBarRenderer;
@@ -135,8 +135,14 @@ type
      so those sites stay unchanged. The image list itself is owned by
      the controller (via TToolbarGlyphLibrary's TComponent ownership).}
     FToolbarImages: TImageList;
+    {Step 105 (C1, part 3): progress widget lifted into TProgressIndicator.
+     FProgressBar stays as a non-owning alias populated from
+     FProgressIndicator.ProgressBar after the indicator is built — direct
+     .Style / .Max / .Position writes from WithReExtract / UpdateProgress /
+     InitializeExtractionStack's modal-runner lambda keep compiling without
+     wrapper churn.}
+    FProgressIndicator: TProgressIndicator;
     FProgressBar: TProgressBar;
-    FProgressVisible: Boolean;
     {Status bar}
     FStatusBar: TStatusBar;
     {Owns parsing of the user template, panel build-out, and per-panel
@@ -347,9 +353,12 @@ type
     procedure OnFrameDelivered(AIndex: Integer; ABitmap: TBitmap);
     procedure OnExtractionProgress(Sender: TObject);
     procedure UpdateProgress;
-    procedure ShowProgress(const AText: string);
-    procedure HideProgress;
-    procedure RepositionProgressBar;
+    {Computes whether the status bar should be visible after the
+     progress indicator hides itself. Passed to TProgressIndicator's
+     post-hide visibility callback so the indicator doesn't need to
+     know about FSettings.ShowStatusBar or FQuickViewMode /
+     QVHideStatusBar.}
+    function ComputeStatusBarPostHideVisibility: Boolean;
     procedure OnAnimTimer(Sender: TObject);
     procedure OnFrameCountChange(Sender: TObject);
     procedure OnModeButtonClick(Sender: TObject);
@@ -811,11 +820,11 @@ begin
        provides the Cancel button and the central indication.}
       FProgressBar.Style := pbstMarquee;
       FProgressBar.MarqueeInterval := 30;
-      ShowProgress(AText);
+      FProgressIndicator.Show;
       try
         Result := RunWithProgress(Self, AThread, AText);
       finally
-        HideProgress;
+        FProgressIndicator.Hide;
         FProgressBar.Style := pbstNormal;
       end;
     end;
@@ -905,6 +914,7 @@ begin
   FreeAndNil(FToolbarController);
   FreeAndNil(FViewportRefreshDebouncer);
   FreeAndNil(FLoadTimer);
+  FreeAndNil(FProgressIndicator);
   {FStatusBarRenderer is owned by Self (step 59) — inherited TForm.Destroy
    iterates FComponents and frees it. The resolver method-reference
    captures Self; release happens during the inherited pass while
@@ -1155,9 +1165,23 @@ begin
   FStatusBar.ShowHint := True;
   FStatusBar.Visible := False;
 
-  FProgressBar := TProgressBar.Create(FStatusBar);
-  FProgressBar.Parent := FStatusBar;
-  FProgressBar.Visible := False;
+  {Step 105 (C1, part 3): TProgressIndicator owns the TProgressBar
+   widget + visibility flag + Reposition logic. The form's FProgressBar
+   alias points at the indicator's bar so direct .Style/.Max/.Position
+   writes (WithReExtract, UpdateProgress, the modal-runner lambda) work
+   as before.}
+  FProgressIndicator := TProgressIndicator.Create(FStatusBar,
+    ComputeStatusBarPostHideVisibility,
+    function(out AStretch: Boolean; out ALayout: TProgressBarLayout): Boolean
+    begin
+      Result := FSettings <> nil;
+      if Result then
+      begin
+        AStretch := FSettings.StatusBarStretchPanels;
+        ALayout := FSettings.ProgressBarLayout;
+      end;
+    end);
+  FProgressBar := FProgressIndicator.ProgressBar;
 
   {Renderer owns the status bar's panels from here on. The resolver
    reads from FCachedStatusBarValues which UpdateStatusBar refreshes
@@ -1227,7 +1251,7 @@ begin
     Bmp.Free;
   end;
   FStatusBar.Height := ResolveStatusBarHeight(TextH);
-  RepositionProgressBar;
+  FProgressIndicator.Reposition;
 end;
 
 function TPluginForm.ResolveStatusBarHeight(ATextHeight: Integer): Integer;
@@ -1406,19 +1430,20 @@ begin
 
   UpdateViewModeButtons;
   FToolbar.Visible := FSettings.ShowToolbar and not(FQuickViewMode and FSettings.QVHideToolbar);
-  {OR with FProgressVisible so an in-flight progress display does not get
-   cancelled when the user opens / accepts the settings dialog mid-
-   extraction. The bar is shown by ShowProgress (which sets the status
-   bar visible regardless of the user's persisted preference) and only
-   hidden by HideProgress when the run finishes; without this guard,
-   accepting the dialog would force the bar back to its persisted
-   "off" state and the still-running progress would vanish.}
-  FStatusBar.Visible := FProgressVisible or (FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar));
+  {OR with FProgressIndicator.Visible so an in-flight progress display
+   does not get cancelled when the user opens / accepts the settings
+   dialog mid-extraction. The bar is shown by FProgressIndicator.Show
+   (which forces the status bar visible regardless of the user's
+   persisted preference) and only hidden by FProgressIndicator.Hide
+   when the run finishes; without this guard, accepting the dialog
+   would force the bar back to its persisted "off" state and the
+   still-running progress would vanish.}
+  FStatusBar.Visible := FProgressIndicator.Visible or ComputeStatusBarPostHideVisibility;
   {Pick up any change to the progress bar layout setting on the fly,
    so the user sees the new layout before the current run completes
    instead of having to wait for the next extraction.}
-  if FProgressVisible then
-    RepositionProgressBar;
+  if FProgressIndicator.Visible then
+    FProgressIndicator.Reposition;
   Style := TTimestampStyle.FromSettings(FSettings.Timestamp);
   {Live view always renders with the modern rect painter regardless of
    the persisted BackAlpha sentinel — legacy mode is a combined-image-
@@ -1654,7 +1679,7 @@ begin
   UpdateToolbarButtons;
 
   FProgressBar.Style := pbstMarquee;
-  ShowProgress('Extracting...');
+  FProgressIndicator.Show;
   FAnimTimer.Enabled := True;
 
   if FSettings.ScaledExtraction then
@@ -1715,7 +1740,7 @@ begin
         FProgressBar.Min := 0;
         FProgressBar.Max := Total;
         FProgressBar.Position := 0;
-        ShowProgress(AText);
+        FProgressIndicator.Show;
       end;
     Reextractor.OnProgress := procedure(ACurrent, ATotal: Integer)
       begin
@@ -1728,7 +1753,7 @@ begin
     Reextractor.OnDone := procedure
       begin
         FormLog('WithReExtract: OnDone - hiding progress');
-        HideProgress;
+        FProgressIndicator.Hide;
       end;
 
     Frames := Reextractor.ExtractAtTarget(Ctx, Target, AIndices);
@@ -1763,44 +1788,9 @@ begin
   UpdateProgress;
 end;
 
-procedure TPluginForm.ShowProgress(const AText: string);
+function TPluginForm.ComputeStatusBarPostHideVisibility: Boolean;
 begin
-  FStatusBar.Visible := True;
-  FProgressVisible := True;
-  RepositionProgressBar;
-  FProgressBar.Visible := True;
-end;
-
-procedure TPluginForm.HideProgress;
-begin
-  FProgressBar.Visible := False;
-  FProgressVisible := False;
-  FStatusBar.Visible := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
-end;
-
-procedure TPluginForm.RepositionProgressBar;
-const
-  {Tiny inset so the bar doesn't touch the status bar's borders.}
-  Margin = 1;
-var
-  PanelsRight, I: Integer;
-  Bounds: TProgressBarBounds;
-begin
-  if not FProgressVisible then
-    Exit;
-
-  {Right edge of the last panel — the boundary the AfterPanels layout
-   needs to clear. Computed from the live panel widths so adding or
-   removing an SBP_*_W panel in UpdateStatusBar requires no separate
-   bookkeeping here.}
-  PanelsRight := 0;
-  for I := 0 to FStatusBar.Panels.Count - 1 do
-    Inc(PanelsRight, FStatusBar.Panels[I].Width);
-
-  Bounds := ResolveProgressBarBounds(FStatusBar.ClientWidth, FStatusBar.ClientHeight,
-    PanelsRight, FSettings.StatusBarStretchPanels, FSettings.ProgressBarLayout,
-    PROGRESSBAR_MIN_W, Margin);
-  FProgressBar.SetBounds(Bounds.Left, Bounds.Top, Bounds.Width, Bounds.Height);
+  Result := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
 end;
 
 procedure TPluginForm.UpdateProgress;
@@ -1810,9 +1800,9 @@ begin
   begin
     FLoadTimer.Finalize;
     UpdateStatusBar;
-    HideProgress;
+    FProgressIndicator.Hide;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
-  end else if (FExtractCtrl.FramesLoaded > 0) and FProgressVisible then
+  end else if (FExtractCtrl.FramesLoaded > 0) and FProgressIndicator.Visible then
   begin
     FProgressBar.Style := pbstNormal;
     FProgressBar.Max := FExtractCtrl.TotalFrames;
@@ -1832,7 +1822,7 @@ begin
   FExtractCtrl.ProcessPendingFrames;
   FLoadTimer.Finalize;
   UpdateStatusBar;
-  HideProgress;
+  FProgressIndicator.Hide;
   FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   FormLog(Format('  hasPlaceholders=%s timerEnabled=%s', [BoolToStr(FFrameView.HasPlaceholders, True), BoolToStr(FAnimTimer.Enabled, True)]));
 end;
@@ -2200,7 +2190,7 @@ begin
   FLblError.Caption := AMessage;
   FLblError.Visible := True;
   FAnimTimer.Enabled := False;
-  HideProgress;
+  FProgressIndicator.Hide;
 end;
 
 procedure TPluginForm.HideError;
@@ -2422,7 +2412,7 @@ begin
   inherited;
   Realign;
   LayoutToolbar;
-  RepositionProgressBar;
+  FProgressIndicator.Reposition;
   {VCL fires Resize during window creation, before CreateForPlugin finishes
    constructing sub-controls, so FFrameView may not exist yet}
   if not FUpdatingLayout and Assigned(FFrameView) and FFrameView.Visible then
