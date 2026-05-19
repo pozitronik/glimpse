@@ -244,7 +244,7 @@ uses
   System.Math,
   uBitmapSaver, uPathExpand, uFFmpegExe, uFFmpegCmdLine, uFFmpegLocator, uSettingsDlgLogic,
   uSettingsDlgUI, uPluginMessages, uDefaults, uTypes,
-  uWcxPresets;
+  uWcxPresets, uSettingsSaveOrchestrator;
 
 procedure TWcxSettingsForm.SettingsToControls(ASettings: TWcxSettings);
 var
@@ -585,38 +585,47 @@ end;
 
 function TWcxSettingsForm.TrySaveAll: Boolean;
 var
-  BadIdx: Integer;
-  Reason: string;
+  Orchestrator: TSettingsSaveOrchestrator;
+  Outcome: TSettingsSaveResult;
 begin
-  Result := False;
-  if FSettings = nil then
-    Exit;
   {Flush any in-progress edits in the right-hand panel back to the model
    so validation and save see the user's latest input, not the snapshot
    from the last list-selection change.}
   CommitCurrentPreset;
-  if not FPresetModel.ValidateForEditor(BadIdx, Reason) then
-  begin
-    PageControl.ActivePage := TshPresets;
-    if (BadIdx >= 0) and (BadIdx < LbxPresets.Items.Count) then
-    begin
-      LbxPresets.ItemIndex := BadIdx;
-      ShowPreset(BadIdx);
-    end;
-    MessageBox(Handle, PChar(Reason), 'Invalid preset', MB_OK or MB_ICONWARNING);
-    Exit;
+
+  Orchestrator := TSettingsSaveOrchestrator.Create;
+  try
+    Outcome := Orchestrator.Run(FSettings, FPresetModel, FPresetsPath,
+      procedure begin ControlsToSettings(FSettings) end,
+      FOnApply);
+  finally
+    Orchestrator.Free;
   end;
 
-  ControlsToSettings(FSettings);
-  FSettings.Save;
-  if FPresetsPath <> '' then
-    SavePresets(FPresetsPath, FPresetModel.ToArray);
-  {Re-validate the FFmpeg path in case the user changed it; without this
-   the info label keeps showing the validation result from dialog open.}
-  UpdateFFmpegInfo;
-  if Assigned(FOnApply) then
-    FOnApply();
-  Result := True;
+  case Outcome.Kind of
+    ssrValidationFailed:
+      begin
+        PageControl.ActivePage := TshPresets;
+        if (Outcome.ValidationIndex >= 0) and (Outcome.ValidationIndex < LbxPresets.Items.Count) then
+        begin
+          LbxPresets.ItemIndex := Outcome.ValidationIndex;
+          ShowPreset(Outcome.ValidationIndex);
+        end;
+        MessageBox(Handle, PChar(Outcome.ValidationReason), 'Invalid preset', MB_OK or MB_ICONWARNING);
+        Exit(False);
+      end;
+    ssrSuccess:
+      begin
+        {Re-validate the FFmpeg path in case the user changed it; without this
+         the info label keeps showing the validation result from dialog open.}
+        UpdateFFmpegInfo;
+        Exit(True);
+      end;
+  else
+    {ssrSkipped: nothing to save (FSettings was nil); fall through with
+     Result = False.}
+    Exit(False);
+  end;
 end;
 
 procedure TWcxSettingsForm.BtnApplyClick(Sender: TObject);

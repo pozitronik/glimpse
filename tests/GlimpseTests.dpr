@@ -114,6 +114,8 @@ uses
   uWcxExtractionController in '..\wcx\uWcxExtractionController.pas',
   uWcxArchiveCoordinator in '..\wcx\uWcxArchiveCoordinator.pas',
   TestWcxArchiveCoordinator in 'TestWcxArchiveCoordinator.pas',
+  uSettingsSaveOrchestrator in '..\wcx\uSettingsSaveOrchestrator.pas',
+  TestSettingsSaveOrchestrator in 'TestSettingsSaveOrchestrator.pas',
   TestWcxArchiveHandle in 'TestWcxArchiveHandle.pas',
   uWcxListing in '..\wcx\uWcxListing.pas',
   TestWcxListing in 'TestWcxListing.pas',

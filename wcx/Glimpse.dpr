@@ -64,6 +64,7 @@ uses
   uWcxErrorMapping in 'uWcxErrorMapping.pas',
   uWcxExtractionController in 'uWcxExtractionController.pas',
   uWcxArchiveCoordinator in 'uWcxArchiveCoordinator.pas',
+  uSettingsSaveOrchestrator in 'uSettingsSaveOrchestrator.pas',
   uNoShadowHints in '..\src\uNoShadowHints.pas';
 
 exports
