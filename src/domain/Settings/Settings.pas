@@ -6,7 +6,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.UITypes, System.Math,
   BitmapSaver, Types, StatusBarLayout, Defaults, Hotkeys, SettingsGroups, UnicodeIniFile,
-  SettingsInterfaces;
+  SettingsInterfaces, IniStore;
 
 type
   {Inherits from TNoRefCountObject (not TInterfacedObject) because the
@@ -43,6 +43,10 @@ type
 
     procedure Load;
     procedure Save;
+    {The store-explicit core of Load/Save; the parameterless versions
+     are thin file-backed wrappers over these.}
+    procedure LoadFrom(const AIni: IIniFile);
+    procedure SaveTo(const AIni: IIniFile);
     procedure ResetDefaults;
     {Enforces cross-field invariants that per-setter writes cannot
      guarantee. Today: pulls MinFrameSide down to MaxFrameSide when
@@ -295,37 +299,40 @@ begin
     FHotkeys.ResetToDefaults;
 end;
 
+procedure TPluginSettings.LoadFrom(const AIni: IIniFile);
+begin
+  ResetDefaults;
+  FFFmpeg.LoadFrom(AIni, 'ffmpeg');
+  FExtraction.LoadFrom(AIni, 'extraction');
+  FView.LoadFrom(AIni, 'view');
+  FTimestamp.LoadFrom(AIni, 'view', 'ShowTimecode');
+  FSave.LoadFrom(AIni);
+  FBanner.LoadFrom(AIni, 'save');
+  {Clipboard-copy lives in its own [copy] section, separate from [save].
+   Does NOT seed from [save] AtLiveResolution; users on the old INI
+   get the default for the new key without disturbing save settings.}
+  FClipboardFormats.LoadFrom(AIni, 'copy');
+  FCache.LoadFrom(AIni);
+  FQuickView.LoadFrom(AIni, 'quickview');
+  FThumbnails.LoadFrom(AIni, 'thumbnails');
+  FHotkeys.Load(AIni);
+  FStatusBar.LoadFrom(AIni, 'statusbar');
+  FDebugLogEnabled := AIni.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
+  Validate;
+end;
+
+{A missing or empty INI path yields an empty store, and loading from an
+ empty store keeps every default — hence no separate existence check.}
 procedure TPluginSettings.Load;
 var
   Ini: TUnicodeIniFile;
 begin
-  ResetDefaults;
-  if not FileExists(FIniPath) then
-    Exit;
-
   Ini := TUnicodeIniFile.Create(FIniPath);
   try
-    FFFmpeg.LoadFrom(Ini, 'ffmpeg');
-    FExtraction.LoadFrom(Ini, 'extraction');
-    FView.LoadFrom(Ini, 'view');
-    FTimestamp.LoadFrom(Ini, 'view', 'ShowTimecode');
-    FSave.LoadFrom(Ini);
-    FBanner.LoadFrom(Ini, 'save');
-    {Clipboard-copy lives in its own [copy] section, separate from [save].
-     Does NOT seed from [save] AtLiveResolution; users on the old INI
-     get the default for the new key without disturbing save settings.}
-    FClipboardFormats.LoadFrom(Ini, 'copy');
-    FCache.LoadFrom(Ini);
-    FQuickView.LoadFrom(Ini, 'quickview');
-    FThumbnails.LoadFrom(Ini, 'thumbnails');
-    FHotkeys.Load(Ini);
-    FStatusBar.LoadFrom(Ini, 'statusbar');
-
-    FDebugLogEnabled := Ini.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
+    LoadFrom(Ini);
   finally
     Ini.Free;
   end;
-  Validate;
 end;
 
 procedure TPluginSettings.Validate;
@@ -338,32 +345,35 @@ begin
     FSave.MinFrameSide := FSave.MaxFrameSide;
 end;
 
+procedure TPluginSettings.SaveTo(const AIni: IIniFile);
+begin
+  Validate;
+  FFFmpeg.SaveTo(AIni, 'ffmpeg');
+  FExtraction.SaveTo(AIni, 'extraction');
+  FView.SaveTo(AIni, 'view');
+  FTimestamp.SaveTo(AIni, 'view', 'ShowTimecode');
+  FSave.SaveTo(AIni);
+  FBanner.SaveTo(AIni, 'save');
+  FClipboardFormats.SaveTo(AIni, 'copy');
+  FCache.SaveTo(AIni);
+  FQuickView.SaveTo(AIni, 'quickview');
+  FThumbnails.SaveTo(AIni, 'thumbnails');
+  FHotkeys.Save(AIni);
+  FStatusBar.SaveTo(AIni, 'statusbar');
+  AIni.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
+  {Writes are buffered in memory; UpdateFile commits them to the store.}
+  AIni.UpdateFile;
+end;
+
 procedure TPluginSettings.Save;
 var
   Ini: TUnicodeIniFile;
 begin
   if FIniPath = '' then
     Exit;
-  Validate;
   Ini := TUnicodeIniFile.Create(FIniPath);
   try
-    FFFmpeg.SaveTo(Ini, 'ffmpeg');
-    FExtraction.SaveTo(Ini, 'extraction');
-    FView.SaveTo(Ini, 'view');
-    FTimestamp.SaveTo(Ini, 'view', 'ShowTimecode');
-    FSave.SaveTo(Ini);
-    FBanner.SaveTo(Ini, 'save');
-    FClipboardFormats.SaveTo(Ini, 'copy');
-    FCache.SaveTo(Ini);
-    FQuickView.SaveTo(Ini, 'quickview');
-    FThumbnails.SaveTo(Ini, 'thumbnails');
-    FHotkeys.Save(Ini);
-    FStatusBar.SaveTo(Ini, 'statusbar');
-
-    Ini.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
-    {TUnicodeIniFile buffers writes in memory; UpdateFile flushes to disk
-     or new values are discarded on Free.}
-    Ini.UpdateFile;
+    SaveTo(Ini);
   finally
     Ini.Free;
   end;

@@ -282,11 +282,151 @@ type
     procedure TestUseKeyframesRoundTrip;
   end;
 
+  {Round-trips TPluginSettings through an in-memory IIniFile — proves the
+   load/save logic is exercisable with no file on disk.}
+  [TestFixture]
+  TTestSettingsStoreSubstitution = class
+  public
+    [Test] procedure RoundTripsThroughInjectedStore;
+    [Test] procedure LoadFromEmptyStoreKeepsDefaults;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.IOUtils, System.IniFiles, System.UITypes,
-  Types, StatusBarLayout, Settings, Defaults, BitmapSaver, PathExpand, ColorConv;
+  System.Generics.Collections,
+  Types, StatusBarLayout, Settings, Defaults, BitmapSaver, PathExpand, ColorConv,
+  IniStore;
+
+type
+  {In-memory IIniFile so a settings round-trip can be exercised with no
+   file on disk.}
+  TFakeIniFile = class(TInterfacedObject, IIniFile)
+  strict private
+    FValues: TDictionary<string, string>;
+    function Key(const ASection, AIdent: string): string;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function ReadString(const Section, Ident, Default: string): string;
+    procedure WriteString(const Section, Ident, Value: string);
+    function ReadInteger(const Section, Ident: string; Default: Longint): Longint;
+    procedure WriteInteger(const Section, Ident: string; Value: Longint);
+    function ReadBool(const Section, Ident: string; Default: Boolean): Boolean;
+    procedure WriteBool(const Section, Ident: string; Value: Boolean);
+    function ValueExists(const Section, Ident: string): Boolean;
+    procedure UpdateFile;
+  end;
+
+constructor TFakeIniFile.Create;
+begin
+  inherited Create;
+  FValues := TDictionary<string, string>.Create;
+end;
+
+destructor TFakeIniFile.Destroy;
+begin
+  FValues.Free;
+  inherited;
+end;
+
+function TFakeIniFile.Key(const ASection, AIdent: string): string;
+begin
+  Result := ASection + '|' + AIdent;
+end;
+
+function TFakeIniFile.ReadString(const Section, Ident, Default: string): string;
+begin
+  if not FValues.TryGetValue(Key(Section, Ident), Result) then
+    Result := Default;
+end;
+
+procedure TFakeIniFile.WriteString(const Section, Ident, Value: string);
+begin
+  FValues.AddOrSetValue(Key(Section, Ident), Value);
+end;
+
+function TFakeIniFile.ReadInteger(const Section, Ident: string; Default: Longint): Longint;
+begin
+  Result := StrToIntDef(ReadString(Section, Ident, ''), Default);
+end;
+
+procedure TFakeIniFile.WriteInteger(const Section, Ident: string; Value: Longint);
+begin
+  WriteString(Section, Ident, IntToStr(Value));
+end;
+
+function TFakeIniFile.ReadBool(const Section, Ident: string; Default: Boolean): Boolean;
+begin
+  Result := ReadInteger(Section, Ident, Ord(Default)) <> 0;
+end;
+
+procedure TFakeIniFile.WriteBool(const Section, Ident: string; Value: Boolean);
+begin
+  WriteInteger(Section, Ident, Ord(Value));
+end;
+
+function TFakeIniFile.ValueExists(const Section, Ident: string): Boolean;
+begin
+  Result := FValues.ContainsKey(Key(Section, Ident));
+end;
+
+procedure TFakeIniFile.UpdateFile;
+begin
+  {In-memory: nothing to flush.}
+end;
+
+{TTestSettingsStoreSubstitution}
+
+procedure TTestSettingsStoreSubstitution.RoundTripsThroughInjectedStore;
+var
+  Store: IIniFile;
+  Src, Dst: TPluginSettings;
+begin
+  {Save a settings object to an in-memory store, then load a fresh one
+   back from the same store — no file on disk anywhere.}
+  Store := TFakeIniFile.Create;
+  Src := TPluginSettings.Create('');
+  try
+    Src.ShowToolbar := False;
+    Src.ShowStatusBar := False;
+    Src.CacheEnabled := False;
+    Src.SaveFolder := 'C:\GlimpseTest';
+    Src.SaveTo(Store);
+  finally
+    Src.Free;
+  end;
+
+  Dst := TPluginSettings.Create('');
+  try
+    Dst.LoadFrom(Store);
+    Assert.IsFalse(Dst.ShowToolbar, 'ShowToolbar must round-trip through the injected store');
+    Assert.IsFalse(Dst.ShowStatusBar, 'ShowStatusBar must round-trip');
+    Assert.IsFalse(Dst.CacheEnabled, 'CacheEnabled must round-trip');
+    Assert.AreEqual('C:\GlimpseTest', Dst.SaveFolder, 'SaveFolder must round-trip');
+  finally
+    Dst.Free;
+  end;
+end;
+
+procedure TTestSettingsStoreSubstitution.LoadFromEmptyStoreKeepsDefaults;
+var
+  Store: IIniFile;
+  S: TPluginSettings;
+begin
+  {An empty store must leave a freshly-loaded settings object at its
+   defaults — the same outcome as loading a missing file.}
+  Store := TFakeIniFile.Create;
+  S := TPluginSettings.Create('');
+  try
+    S.CacheEnabled := False;
+    S.LoadFrom(Store);
+    Assert.IsTrue(S.CacheEnabled, 'Empty store + LoadFrom must restore the default CacheEnabled');
+  finally
+    S.Free;
+  end;
+end;
 
 procedure TTestPluginSettings.Setup;
 begin
@@ -3211,5 +3351,6 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestPluginSettings);
+  TDUnitX.RegisterTestFixture(TTestSettingsStoreSubstitution);
 
 end.
