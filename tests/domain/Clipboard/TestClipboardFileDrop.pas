@@ -12,6 +12,8 @@ type
     [Test] procedure BuildDropFilesHandle_EmptyReturnsZero;
     [Test] procedure BuildDropFilesHandle_HappyPath;
     [Test] procedure BuildDropFilesHandle_IsWideAndDoubleNullTerminated;
+    [Test] procedure CreateFileDropClipboard_ReturnsLiveInterface;
+    [Test] procedure PutFilePathOnClipboard_EmptyPath_ReturnsFalse;
   end;
 
 implementation
@@ -79,6 +81,23 @@ begin
   finally
     GlobalFree(H);
   end;
+end;
+
+procedure TTestClipboardFileDrop.CreateFileDropClipboard_ReturnsLiveInterface;
+var
+  Clip: IFileDropClipboard;
+begin
+  Clip := CreateFileDropClipboard;
+  Assert.IsTrue(Assigned(Clip),
+    'Factory must return a usable IFileDropClipboard, never nil');
+end;
+
+procedure TTestClipboardFileDrop.PutFilePathOnClipboard_EmptyPath_ReturnsFalse;
+begin
+  {Empty path is rejected by the guard before any clipboard call, so this
+   exercises the interface method without touching the system clipboard.}
+  Assert.IsFalse(CreateFileDropClipboard.PutFilePathOnClipboard(''),
+    'Empty path must fail fast and not open the clipboard');
 end;
 
 initialization

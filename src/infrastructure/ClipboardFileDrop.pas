@@ -1,18 +1,32 @@
-{CF_HDROP "paste as file reference" helpers.}
+{CF_HDROP "paste as file reference" clipboard helpers.}
 unit ClipboardFileDrop;
 
 interface
 
+type
+  {Publishes a file path to the system clipboard as CF_HDROP, so paste
+   targets receive a file reference rather than image bytes.}
+  IFileDropClipboard = interface
+    ['{9B4D1E7A-2C68-4F35-A0D9-7E3B5C81F406}']
+    {Returns False on clipboard-open failure, empty path, or HGLOBAL failure.}
+    function PutFilePathOnClipboard(const AFilePath: string): Boolean;
+  end;
+
 {Returns 0 on GlobalAlloc failure. No clipboard side effects.}
 function BuildDropFilesHandle(const AFilePath: string): NativeUInt;
 
-{Returns False on clipboard-open failure, empty path, or HGLOBAL failure.}
-function PutFilePathOnClipboard(const AFilePath: string): Boolean;
+function CreateFileDropClipboard: IFileDropClipboard;
 
 implementation
 
 uses
   Winapi.Windows, Winapi.ShlObj, Vcl.Clipbrd, ClipboardImage;
+
+type
+  TFileDropClipboard = class(TInterfacedObject, IFileDropClipboard)
+  public
+    function PutFilePathOnClipboard(const AFilePath: string): Boolean;
+  end;
 
 function BuildDropFilesHandle(const AFilePath: string): NativeUInt;
 var
@@ -51,7 +65,9 @@ begin
   end;
 end;
 
-function PutFilePathOnClipboard(const AFilePath: string): Boolean;
+{ TFileDropClipboard }
+
+function TFileDropClipboard.PutFilePathOnClipboard(const AFilePath: string): Boolean;
 var
   H: NativeUInt;
 begin
@@ -78,6 +94,11 @@ begin
   finally
     Clipboard.Close;
   end;
+end;
+
+function CreateFileDropClipboard: IFileDropClipboard;
+begin
+  Result := TFileDropClipboard.Create;
 end;
 
 end.

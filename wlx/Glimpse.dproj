@@ -99,7 +99,7 @@
         <DCCReference Include="..\src\domain\Frame\FrameFileNames.pas"/>
         <DCCReference Include="..\src\domain\Render\BitmapSaver.pas"/>
         <DCCReference Include="..\src\domain\Clipboard\ClipboardImage.pas"/>
-        <DCCReference Include="..\src\domain\Clipboard\ClipboardFileDrop.pas"/>
+        <DCCReference Include="..\src\infrastructure\ClipboardFileDrop.pas"/>
         <DCCReference Include="..\src\domain\Clipboard\ClipboardFormatStrategies.pas"/>
         <DCCReference Include="Controllers\ZoomController.pas"/>
         <DCCReference Include="ViewMode\ViewModeLogic.pas"/>

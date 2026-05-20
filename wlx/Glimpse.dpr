@@ -42,7 +42,7 @@ uses
   FrameFileNames in '..\src\domain\Frame\FrameFileNames.pas',
   BitmapSaver in '..\src\domain\Render\BitmapSaver.pas',
   ClipboardImage in '..\src\domain\Clipboard\ClipboardImage.pas',
-  ClipboardFileDrop in '..\src\domain\Clipboard\ClipboardFileDrop.pas',
+  ClipboardFileDrop in '..\src\infrastructure\ClipboardFileDrop.pas',
   ClipboardFormatStrategies in '..\src\domain\Clipboard\ClipboardFormatStrategies.pas',
   SettingsGroups in '..\src\domain\Settings\SettingsGroups.pas',
   ZoomController in 'Controllers\ZoomController.pas',

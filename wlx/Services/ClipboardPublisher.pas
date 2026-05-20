@@ -153,7 +153,7 @@ begin
   {Reset to cprFailed; promote to cprSuccess only after publish AND
    temp-file bookkeeping both complete.}
   Result := cprFailed;
-  if not PutFilePathOnClipboard(NewPath) then
+  if not CreateFileDropClipboard.PutFilePathOnClipboard(NewPath) then
   begin
     System.SysUtils.DeleteFile(NewPath);
     Exit;

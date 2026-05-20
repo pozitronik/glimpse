@@ -58,7 +58,7 @@ uses
   TestBitmapSaver in 'TestBitmapSaver.pas',
   ClipboardImage in '..\src\domain\Clipboard\ClipboardImage.pas',
   TestClipboardImage in 'TestClipboardImage.pas',
-  ClipboardFileDrop in '..\src\domain\Clipboard\ClipboardFileDrop.pas',
+  ClipboardFileDrop in '..\src\infrastructure\ClipboardFileDrop.pas',
   TestClipboardFileDrop in 'TestClipboardFileDrop.pas',
   ClipboardFormatStrategies in '..\src\domain\Clipboard\ClipboardFormatStrategies.pas',
   TestClipboardFormatStrategies in 'TestClipboardFormatStrategies.pas',
