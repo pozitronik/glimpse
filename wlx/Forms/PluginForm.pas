@@ -13,7 +13,7 @@ uses
   ZoomController,
   ExtractionPlanner, ToolbarLayout, ToolbarController, FrameView,
   ViewportRefreshDebouncer, LoadTimeRecorder, ProgressIndicator,
-  FrameExport, ExtractionController, PluginServices,
+  FrameExport, ExtractionController, PluginServices, FileNavigator,
   CommandDescriptors,
   StatusBarTokens, StatusBarTemplate, StatusBarFormatters, StatusBarRenderer;
 
@@ -99,6 +99,7 @@ type
     FContextCellIndex: Integer;
     FExtractCtrl: TExtractionController;
     FServices: TPluginServices;
+    FFileNavigator: IFileNavigator;
     FAnimTimer: TTimer;
     FViewportRefreshDebouncer: TViewportRefreshDebouncer;
     {Drives cache-override selection so CacheRandomFrames=False suppresses
@@ -320,7 +321,7 @@ implementation
 
 uses
   System.IOUtils, Winapi.ShellAPI,
-  SettingsDlg, FileNavigator, Logging, PathExpand, BannerInfo, TimecodeOverlay,
+  SettingsDlg, Logging, PathExpand, BannerInfo, TimecodeOverlay,
   ProgressModalForm,
   PlatformDetect, Defaults,
   ToolbarBuilder, {still needed for the TToolbarHandles type alias used in CreateToolbar's local H}
@@ -602,6 +603,7 @@ begin
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
   FServices := AServices;
+  FFileNavigator := CreateFileNavigator;
 
   InitializeWindowing(AParentWin);
   InitializeUI;
@@ -1157,7 +1159,7 @@ begin
 
   AValues.Filename := FFileName;
 
-  AValues.FilePositionAvailable := GetFilePosition(FFileName,
+  AValues.FilePositionAvailable := FFileNavigator.GetFilePosition(FFileName,
     FSettings.ExtensionList, AValues.FilePositionIndex, AValues.FilePositionTotal);
 
   AValues.FramesAvailable := Length(FOffsets) > 0;
@@ -2467,7 +2469,7 @@ var
 begin
   if FQuickViewMode and FSettings.QVDisableNavigation then
     Exit;
-  Next := FindAdjacentFile(FFileName, FSettings.ExtensionList, ADelta);
+  Next := FFileNavigator.FindAdjacentFile(FFileName, FSettings.ExtensionList, ADelta);
   if (Next <> '') and not SameText(Next, FFileName) then
     LoadFile(Next);
 end;

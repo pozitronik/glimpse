@@ -1,22 +1,29 @@
 {Sibling-file navigation with an in-memory listing cache keyed by
  (dir, mtime, extensions). NTFS mtime invalidation is automatic.
- Round-robin eviction at CACHE_CAPACITY. Single lock for thread safety.}
+ Round-robin eviction at CACHE_CAPACITY. Each TFileNavigator owns its
+ own cache, guarded by a per-instance lock for thread safety.}
 unit FileNavigator;
 
 interface
 
-{ADelta=+1 next, -1 previous. AExtensions is comma-separated. Empty
- string when fewer than two siblings; wraps around at boundaries.}
-function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
+type
+  {Sibling-file navigation over a directory listing. Each instance owns
+   its cache, so a fresh navigator starts from a clean state.}
+  IFileNavigator = interface
+    ['{6C3F8A2E-1D74-4B59-A8E0-3F7C2B9D5061}']
+    {ADelta=+1 next, -1 previous. AExtensions is comma-separated. Empty
+     string when fewer than two siblings; wraps around at boundaries.}
+    function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
 
-{1-based AIndex within sorted siblings, plus total. False with zeros
- when directory unreadable or current file not in list.}
-function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
+    {1-based AIndex within sorted siblings, plus total. False with zeros
+     when directory unreadable or current file not in list.}
+    function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
 
-{Test-only; production never needs to call this.}
-procedure ClearDirectoryCache;
+    {Number of cached directory listings; exposed for cache-behaviour tests.}
+    function DirectoryCacheSize: Integer;
+  end;
 
-function DirectoryCacheSize: Integer;
+function CreateFileNavigator: IFileNavigator;
 
 implementation
 
@@ -35,11 +42,22 @@ type
     Files: TArray<string>;
   end;
 
-var
-  GCacheLock: TCriticalSection;
-  GCache: array[0..CACHE_CAPACITY - 1] of TDirCacheEntry;
-  GCacheCount: Integer;
-  GCacheNext: Integer;
+  TFileNavigator = class(TInterfacedObject, IFileNavigator)
+  strict private
+    FCacheLock: TCriticalSection;
+    FCache: array[0..CACHE_CAPACITY - 1] of TDirCacheEntry;
+    FCacheCount: Integer;
+    FCacheNext: Integer;
+    function TryGetCached(const AKey: string; out AFiles: TArray<string>): Boolean;
+    procedure StoreInCache(const AKey: string; const AFiles: TArray<string>);
+    function CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
+    function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
+    function DirectoryCacheSize: Integer;
+  end;
 
 {Trimmed, lowercased, sorted, deduplicated for stable cache key.}
 function NormalizedExtKey(const AExtensions: string): string;
@@ -85,59 +103,65 @@ begin
   Result := ADir.ToLower + '|' + DirMTimeKey(ADir) + '|' + NormalizedExtKey(AExtensions);
 end;
 
-function TryGetCached(const AKey: string; out AFiles: TArray<string>): Boolean;
+function IndexOfName(const AFiles: TArray<string>; const AName: string): Integer;
 var
   I: Integer;
 begin
-  for I := 0 to GCacheCount - 1 do
-    if GCache[I].Key = AKey then
+  for I := 0 to High(AFiles) do
+    if CompareText(AFiles[I], AName) = 0 then
+      Exit(I);
+  Result := -1;
+end;
+
+{ TFileNavigator }
+
+constructor TFileNavigator.Create;
+begin
+  inherited Create;
+  FCacheLock := TCriticalSection.Create;
+end;
+
+destructor TFileNavigator.Destroy;
+begin
+  FCacheLock.Free;
+  inherited;
+end;
+
+function TFileNavigator.TryGetCached(const AKey: string; out AFiles: TArray<string>): Boolean;
+var
+  I: Integer;
+begin
+  for I := 0 to FCacheCount - 1 do
+    if FCache[I].Key = AKey then
     begin
-      AFiles := GCache[I].Files;
+      AFiles := FCache[I].Files;
       Exit(True);
     end;
   AFiles := nil;
   Result := False;
 end;
 
-procedure StoreInCache(const AKey: string; const AFiles: TArray<string>);
+procedure TFileNavigator.StoreInCache(const AKey: string; const AFiles: TArray<string>);
 begin
-  GCache[GCacheNext].Key := AKey;
-  GCache[GCacheNext].Files := AFiles;
-  GCacheNext := (GCacheNext + 1) mod CACHE_CAPACITY;
-  if GCacheCount < CACHE_CAPACITY then
-    Inc(GCacheCount);
+  FCache[FCacheNext].Key := AKey;
+  FCache[FCacheNext].Files := AFiles;
+  FCacheNext := (FCacheNext + 1) mod CACHE_CAPACITY;
+  if FCacheCount < CACHE_CAPACITY then
+    Inc(FCacheCount);
 end;
 
-procedure ClearDirectoryCache;
-var
-  I: Integer;
+function TFileNavigator.DirectoryCacheSize: Integer;
 begin
-  GCacheLock.Enter;
+  FCacheLock.Enter;
   try
-    for I := 0 to CACHE_CAPACITY - 1 do
-    begin
-      GCache[I].Key := '';
-      GCache[I].Files := nil;
-    end;
-    GCacheCount := 0;
-    GCacheNext := 0;
+    Result := FCacheCount;
   finally
-    GCacheLock.Leave;
-  end;
-end;
-
-function DirectoryCacheSize: Integer;
-begin
-  GCacheLock.Enter;
-  try
-    Result := GCacheCount;
-  finally
-    GCacheLock.Leave;
+    FCacheLock.Leave;
   end;
 end;
 
 {Shared by FindAdjacentFile and GetFilePosition so ordering matches.}
-function CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
+function TFileNavigator.CollectSupportedFiles(const ADir, AExtensions: string): TArray<string>;
 var
   Key, Ext: string;
   ExtList: TArray<string>;
@@ -151,12 +175,12 @@ begin
     Exit;
 
   Key := BuildCacheKey(ADir, AExtensions);
-  GCacheLock.Enter;
+  FCacheLock.Enter;
   try
     if TryGetCached(Key, Result) then
       Exit;
   finally
-    GCacheLock.Leave;
+    FCacheLock.Leave;
   end;
 
   ExtList := AExtensions.Split([',', ' ']);
@@ -193,25 +217,16 @@ begin
     ExtSet.Free;
   end;
 
-  GCacheLock.Enter;
+  FCacheLock.Enter;
   try
     StoreInCache(Key, Result);
   finally
-    GCacheLock.Leave;
+    FCacheLock.Leave;
   end;
 end;
 
-function IndexOfName(const AFiles: TArray<string>; const AName: string): Integer;
-var
-  I: Integer;
-begin
-  for I := 0 to High(AFiles) do
-    if CompareText(AFiles[I], AName) = 0 then
-      Exit(I);
-  Result := -1;
-end;
-
-function FindAdjacentFile(const ACurrentFile, AExtensions: string; ADelta: Integer): string;
+function TFileNavigator.FindAdjacentFile(const ACurrentFile, AExtensions: string;
+  ADelta: Integer): string;
 var
   Dir, CurName: string;
   Files: TArray<string>;
@@ -232,7 +247,8 @@ begin
   Result := Dir + Files[NewIdx];
 end;
 
-function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
+function TFileNavigator.GetFilePosition(const ACurrentFile, AExtensions: string;
+  out AIndex, ATotal: Integer): Boolean;
 var
   Dir, CurName: string;
   Files: TArray<string>;
@@ -254,11 +270,9 @@ begin
   Result := True;
 end;
 
-initialization
-  GCacheLock := TCriticalSection.Create;
-
-finalization
-  ClearDirectoryCache;
-  GCacheLock.Free;
+function CreateFileNavigator: IFileNavigator;
+begin
+  Result := TFileNavigator.Create;
+end;
 
 end.
