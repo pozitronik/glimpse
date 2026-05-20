@@ -12,6 +12,7 @@ uses
   StatusBarLayout in '..\src\domain\StatusBar\StatusBarLayout.pas',
   Defaults in '..\src\domain\Settings\Defaults.pas',
   SettingsGroups in '..\src\domain\Settings\SettingsGroups.pas',
+  IniStore in '..\src\domain\Settings\IniStore.pas',
   SettingsInterfaces in '..\src\domain\Settings\SettingsInterfaces.pas',
   TestSettingsInterfaces in 'TestSettingsInterfaces.pas',
   Settings in '..\src\domain\Settings\Settings.pas',

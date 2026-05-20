@@ -48,6 +48,7 @@ uses
   FFmpegCmdLine in '..\src\infrastructure\FFmpegCmdLine.pas',
   IniEncoding in '..\src\infrastructure\IniEncoding.pas',
   IniDocument in '..\src\infrastructure\IniDocument.pas',
+  IniStore in '..\src\domain\Settings\IniStore.pas',
   SettingsInterfaces in '..\src\domain\Settings\SettingsInterfaces.pas',
   Settings in '..\src\domain\Settings\Settings.pas',
   SettingsDlgLogic in '..\src\application\SettingsDlgLogic.pas',

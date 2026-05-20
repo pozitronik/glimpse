@@ -14,13 +14,13 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IniFiles,
-  IniDocument;
+  IniStore, IniDocument;
 
 type
   {Descends from TCustomIniFile so the instance can substitute wherever
    the RTL ini-file interface is expected. ReadBool/WriteBool are
    overridden to preserve lenient parsing; the base only accepts 0/1.}
-  TUnicodeIniFile = class(TCustomIniFile)
+  TUnicodeIniFile = class(TCustomIniFile, IIniFile)
   strict private
     FDocument: TIniDocument;
 
@@ -30,6 +30,12 @@ type
      existing call sites keep working while we run our own initialisation.}
     constructor Create(const AFileName: string); reintroduce;
     destructor Destroy; override;
+
+    {IIniFile is exposed for substitution; lifetime stays manual
+     (TCustomIniFile is not refcounted), so _AddRef/_Release are inert.}
+    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+    function _AddRef: Integer; stdcall;
+    function _Release: Integer; stdcall;
 
     function ReadString(const Section, Ident, Default: string): string; override;
     procedure WriteString(const Section, Ident, Value: string); override;
@@ -87,6 +93,24 @@ begin
    did not persist. Use the Dirty property to gate the UpdateFile call.}
   FDocument.Free;
   inherited;
+end;
+
+function TUnicodeIniFile.QueryInterface(const IID: TGUID; out Obj): HResult;
+begin
+  if GetInterface(IID, Obj) then
+    Result := 0
+  else
+    Result := E_NOINTERFACE;
+end;
+
+function TUnicodeIniFile._AddRef: Integer;
+begin
+  Result := -1;
+end;
+
+function TUnicodeIniFile._Release: Integer;
+begin
+  Result := -1;
 end;
 
 procedure TUnicodeIniFile.LoadFromDisk;

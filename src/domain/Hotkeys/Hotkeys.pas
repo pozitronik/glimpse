@@ -8,7 +8,7 @@ interface
 
 uses
   System.Classes, System.SysUtils,
-  UnicodeIniFile;
+  IniStore;
 
 type
   {Tab is intentionally not listed; it is reserved for VCL focus cycling.}
@@ -70,8 +70,8 @@ type
     {Normalises numpad aliases before matching. paNone on no match.}
     function Lookup(AKey: Word; const AShift: TShiftState): TPluginAction;
     {Section [hotkeys], chord separator '|'.}
-    procedure Load(AIni: TUnicodeIniFile);
-    procedure Save(AIni: TUnicodeIniFile);
+    procedure Load(const AIni: IIniFile);
+    procedure Save(const AIni: IIniFile);
     procedure ResetToDefaults;
     procedure Assign(const AOther: THotkeyBindings);
     function FindActionByChord(const AChord: THotkeyChord;
@@ -242,7 +242,7 @@ begin
   Result := paNone;
 end;
 
-procedure THotkeyBindings.Load(AIni: TUnicodeIniFile);
+procedure THotkeyBindings.Load(const AIni: IIniFile);
 var
   A: TPluginAction;
   Raw: string;
@@ -262,7 +262,7 @@ begin
   end;
 end;
 
-procedure THotkeyBindings.Save(AIni: TUnicodeIniFile);
+procedure THotkeyBindings.Save(const AIni: IIniFile);
 var
   A: TPluginAction;
 begin

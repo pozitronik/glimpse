@@ -13,6 +13,7 @@ uses
   Defaults in '..\src\domain\Settings\Defaults.pas',
   WlxAPI in 'Core\WlxAPI.pas',
   PluginExports in 'Core\PluginExports.pas',
+  IniStore in '..\src\domain\Settings\IniStore.pas',
   SettingsInterfaces in '..\src\domain\Settings\SettingsInterfaces.pas',
   Settings in '..\src\domain\Settings\Settings.pas',
   SettingsToggleService in '..\src\domain\Settings\SettingsToggleService.pas',

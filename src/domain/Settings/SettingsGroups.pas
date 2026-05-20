@@ -23,7 +23,7 @@ interface
 
 uses
   System.UITypes,
-  BitmapSaver, StatusBarLayout, Types, UnicodeIniFile;
+  BitmapSaver, StatusBarLayout, Types, IniStore;
 
 type
   {[extraction] group — eight fields shared verbatim between WLX and WCX.
@@ -43,9 +43,9 @@ type
     {Reads the group from AIni. Missing keys fall back to the record's
      current values (callers reset to defaults first). Numeric fields are
      clamped to their documented ranges.}
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
     {Writes the group to AIni. Round-trips exactly through LoadFrom.}
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
     {Builds a TExtractionOptions from this group's UseBmpPipe / HwAccel /
      UseKeyframes / RespectAnamorphic, with the caller-supplied MaxSide.
      The four boolean fields travel together through the extraction
@@ -72,8 +72,8 @@ type
     Position: TBannerPosition;
 
     class function Defaults: TBannerSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
   {Clipboard publish-format group — four toggles controlling which Win32
@@ -90,8 +90,8 @@ type
     PublishCompressedPng: Boolean;    {registered "PNG" format}
 
     class function Defaults: TClipboardFormatsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
   {Timestamp overlay group — eight fields shared between WLX and WCX,
@@ -112,8 +112,8 @@ type
     TextAlpha: Byte;
 
     class function Defaults: TTimestampSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection, AShowKey: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection, AShowKey: string);
   end;
 
   {[ffmpeg] group — three fields covering the WLX-side ffmpeg locator.
@@ -126,8 +126,8 @@ type
     AutoDownloaded: Boolean;
 
     class function Defaults: TFFmpegSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
   {[view] group — eight scalar fields plus the per-ViewMode zoom table.
@@ -152,8 +152,8 @@ type
     ProgressBarLayout: TProgressBarLayout;
 
     class function Defaults: TViewSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
   {[save] group — bitmap-output configuration. SaveFormat selects PNG vs JPEG;
@@ -192,8 +192,8 @@ type
     ExtensionList: string;
 
     class function Defaults: TSaveSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile);
-    procedure SaveTo(AIni: TUnicodeIniFile);
+    procedure LoadFrom(const AIni: IIniFile);
+    procedure SaveTo(const AIni: IIniFile);
   end;
 
   {[cache] group — three persisted cache knobs plus the two
@@ -217,8 +217,8 @@ type
     CacheRandomFrames: Boolean;
 
     class function Defaults: TCacheSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile);
-    procedure SaveTo(AIni: TUnicodeIniFile);
+    procedure LoadFrom(const AIni: IIniFile);
+    procedure SaveTo(const AIni: IIniFile);
   end;
 
   {[quickview] group — three booleans gating Quick View chrome.
@@ -232,8 +232,8 @@ type
     HideStatusBar: Boolean;
 
     class function Defaults: TQuickViewSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
   {[thumbnails] group — four fields configuring TC panel-preview rendering.
@@ -247,8 +247,8 @@ type
     GridFrames: Integer;
 
     class function Defaults: TThumbnailsSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
   {[statusbar] group — user-configurable token template + font +
@@ -267,8 +267,8 @@ type
     HeightApplyMode: TStatusBarHeightApplyMode;
 
     class function Defaults: TStatusBarSettingsGroup; static;
-    procedure LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
-    procedure SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
 
 implementation
@@ -291,7 +291,7 @@ begin
   Result.RespectAnamorphic := DEF_RESPECT_ANAMORPHIC;
 end;
 
-procedure TExtractionSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TExtractionSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 begin
   FramesCount := EnsureRange(AIni.ReadInteger(ASection, 'FramesCount', FramesCount),
     MIN_FRAMES_COUNT, MAX_FRAMES_COUNT);
@@ -317,7 +317,7 @@ begin
   Result.MaxSide := AMaxSide;
 end;
 
-procedure TExtractionSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TExtractionSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteInteger(ASection, 'FramesCount', FramesCount);
   AIni.WriteInteger(ASection, 'SkipEdges', SkipEdgesPercent);
@@ -346,7 +346,7 @@ begin
   Result.Position := DEF_BANNER_POSITION;
 end;
 
-procedure TBannerSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TBannerSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 var
   FallbackFont: string;
 begin
@@ -363,7 +363,7 @@ begin
   Position := StrToBannerPosition(AIni.ReadString(ASection, 'BannerPosition', ''), Position);
 end;
 
-procedure TBannerSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TBannerSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteBool(ASection, 'ShowBanner', Show);
   AIni.WriteString(ASection, 'BannerBackground', ColorToHex(Background));
@@ -384,7 +384,7 @@ begin
   Result.PublishCompressedPng := DEF_PUBLISH_COMPRESSED_PNG;
 end;
 
-procedure TClipboardFormatsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TClipboardFormatsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 begin
   PublishAlphaAwareBitmap := AIni.ReadBool(ASection, 'PublishAlphaAwareBitmap', PublishAlphaAwareBitmap);
   PublishFlattenedBitmap := AIni.ReadBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
@@ -392,7 +392,7 @@ begin
   PublishCompressedPng := AIni.ReadBool(ASection, 'PublishCompressedPng', PublishCompressedPng);
 end;
 
-procedure TClipboardFormatsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TClipboardFormatsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteBool(ASection, 'PublishAlphaAwareBitmap', PublishAlphaAwareBitmap);
   AIni.WriteBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
@@ -420,7 +420,7 @@ begin
   Result.TextAlpha := DEF_TIMESTAMP_TEXT_ALPHA;
 end;
 
-procedure TTimestampSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
+procedure TTimestampSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection, AShowKey: string);
 var
   FallbackFont: string;
   FallbackColor: TColor;
@@ -446,7 +446,7 @@ begin
     MIN_TIMESTAMP_TEXT_ALPHA, MAX_TIMESTAMP_TEXT_ALPHA);
 end;
 
-procedure TTimestampSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection, AShowKey: string);
+procedure TTimestampSettingsGroup.SaveTo(const AIni: IIniFile; const ASection, AShowKey: string);
 begin
   AIni.WriteBool(ASection, AShowKey, Show);
   AIni.WriteString(ASection, 'TimestampCorner', TimestampCornerToStr(Corner));
@@ -466,7 +466,7 @@ begin
   Result.AutoDownloaded := False;
 end;
 
-procedure TFFmpegSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TFFmpegSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 begin
   {Mode falls back to fmAuto when the INI value is empty/unknown — see
    StrToFFmpegMode's one-arg overload. The pre-extraction WLX Load did
@@ -478,7 +478,7 @@ begin
   AutoDownloaded := AIni.ReadBool(ASection, 'AutoDownloaded', AutoDownloaded);
 end;
 
-procedure TFFmpegSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TFFmpegSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteString(ASection, 'Mode', FFmpegModeToStr(Mode));
   AIni.WriteString(ASection, 'ExePath', ExePath);
@@ -510,7 +510,7 @@ begin
   Result.ProgressBarLayout := pblAuto;
 end;
 
-procedure TViewSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TViewSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 var
   VM: TViewMode;
 begin
@@ -533,7 +533,7 @@ begin
     AIni.ReadString(ASection, 'ProgressBarLayout', ''), ProgressBarLayout);
 end;
 
-procedure TViewSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TViewSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 var
   VM: TViewMode;
 begin
@@ -570,7 +570,7 @@ begin
   Result.ExtensionList := DEF_EXTENSION_LIST;
 end;
 
-procedure TSaveSettingsGroup.LoadFrom(AIni: TUnicodeIniFile);
+procedure TSaveSettingsGroup.LoadFrom(const AIni: IIniFile);
 begin
   {[save] section — bitmap-output knobs proper.}
   SaveFormat := StrToSaveFormat(AIni.ReadString('save', 'Format', ''));
@@ -609,7 +609,7 @@ begin
     ExtensionList := DEF_EXTENSION_LIST;
 end;
 
-procedure TSaveSettingsGroup.SaveTo(AIni: TUnicodeIniFile);
+procedure TSaveSettingsGroup.SaveTo(const AIni: IIniFile);
 begin
   AIni.WriteString('save', 'Format', SaveFormatToStr(SaveFormat));
   AIni.WriteInteger('save', 'JpegQuality', JpegQuality);
@@ -642,7 +642,7 @@ begin
   Result.CacheRandomFrames := DEF_CACHE_RANDOM_FRAMES;
 end;
 
-procedure TCacheSettingsGroup.LoadFrom(AIni: TUnicodeIniFile);
+procedure TCacheSettingsGroup.LoadFrom(const AIni: IIniFile);
 begin
   {[cache] section — the three persisted cache fields. MaxSizeMB clamp
    mirrors the pre-extraction WLX Load: 10..10000.}
@@ -659,7 +659,7 @@ begin
   CacheRandomFrames := AIni.ReadBool('extraction', 'CacheRandomFrames', CacheRandomFrames);
 end;
 
-procedure TCacheSettingsGroup.SaveTo(AIni: TUnicodeIniFile);
+procedure TCacheSettingsGroup.SaveTo(const AIni: IIniFile);
 begin
   AIni.WriteBool('cache', 'Enabled', Enabled);
   AIni.WriteString('cache', 'Folder', Folder);
@@ -679,14 +679,14 @@ begin
   Result.HideStatusBar := True;
 end;
 
-procedure TQuickViewSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TQuickViewSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 begin
   DisableNavigation := AIni.ReadBool(ASection, 'DisableNavigation', DisableNavigation);
   HideToolbar := AIni.ReadBool(ASection, 'HideToolbar', HideToolbar);
   HideStatusBar := AIni.ReadBool(ASection, 'HideStatusBar', HideStatusBar);
 end;
 
-procedure TQuickViewSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TQuickViewSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteBool(ASection, 'DisableNavigation', DisableNavigation);
   AIni.WriteBool(ASection, 'HideToolbar', HideToolbar);
@@ -703,7 +703,7 @@ begin
   Result.GridFrames := DEF_THUMBNAIL_GRID_FRAMES;
 end;
 
-procedure TThumbnailsSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TThumbnailsSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 begin
   Enabled := AIni.ReadBool(ASection, 'Enabled', Enabled);
   Mode := StrToThumbnailMode(AIni.ReadString(ASection, 'Mode', ''));
@@ -713,7 +713,7 @@ begin
     MIN_THUMBNAIL_GRID_FRAMES, MAX_THUMBNAIL_GRID_FRAMES);
 end;
 
-procedure TThumbnailsSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TThumbnailsSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteBool(ASection, 'Enabled', Enabled);
   AIni.WriteString(ASection, 'Mode', ThumbnailModeToStr(Mode));
@@ -734,7 +734,7 @@ begin
   Result.HeightApplyMode := DEF_STATUSBAR_HEIGHT_APPLY_MODE;
 end;
 
-procedure TStatusBarSettingsGroup.LoadFrom(AIni: TUnicodeIniFile; const ASection: string);
+procedure TStatusBarSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
 begin
   {Template + FontName: empty/whitespace falls back to the default
    constant rather than the record's current value. Subtle: a user who
@@ -756,7 +756,7 @@ begin
     AIni.ReadString(ASection, 'HeightApplyMode', ''), HeightApplyMode);
 end;
 
-procedure TStatusBarSettingsGroup.SaveTo(AIni: TUnicodeIniFile; const ASection: string);
+procedure TStatusBarSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
 begin
   AIni.WriteString(ASection, 'Template', Template);
   AIni.WriteString(ASection, 'FontName', FontName);

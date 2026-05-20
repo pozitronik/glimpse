@@ -191,11 +191,143 @@ type
     [Test] procedure Load_UnknownApplyMode_KeepsCurrent;
   end;
 
+  {The settings groups depend on the IIniFile abstraction, so they
+   round-trip through any implementation — exercised here with an
+   in-memory fake, no file on disk.}
+  [TestFixture]
+  TTestIniFileSubstitution = class
+  public
+    [Test] procedure GroupRoundTripsThroughInjectedStore;
+    [Test] procedure MissingKeysKeepDefaultsThroughInjectedStore;
+  end;
+
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.UITypes,
-  BitmapSaver, StatusBarLayout, Types, Defaults, SettingsGroups, UnicodeIniFile;
+  System.SysUtils, System.IOUtils, System.UITypes, System.Generics.Collections,
+  BitmapSaver, StatusBarLayout, Types, Defaults, SettingsGroups, UnicodeIniFile,
+  IniStore;
+
+type
+  {In-memory IIniFile so the settings groups can be exercised through
+   the abstraction with no file on disk.}
+  TFakeIniFile = class(TInterfacedObject, IIniFile)
+  strict private
+    FValues: TDictionary<string, string>;
+    function Key(const ASection, AIdent: string): string;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function ReadString(const Section, Ident, Default: string): string;
+    procedure WriteString(const Section, Ident, Value: string);
+    function ReadInteger(const Section, Ident: string; Default: Longint): Longint;
+    procedure WriteInteger(const Section, Ident: string; Value: Longint);
+    function ReadBool(const Section, Ident: string; Default: Boolean): Boolean;
+    procedure WriteBool(const Section, Ident: string; Value: Boolean);
+    function ValueExists(const Section, Ident: string): Boolean;
+    procedure UpdateFile;
+  end;
+
+constructor TFakeIniFile.Create;
+begin
+  inherited Create;
+  FValues := TDictionary<string, string>.Create;
+end;
+
+destructor TFakeIniFile.Destroy;
+begin
+  FValues.Free;
+  inherited;
+end;
+
+function TFakeIniFile.Key(const ASection, AIdent: string): string;
+begin
+  Result := ASection + '|' + AIdent;
+end;
+
+function TFakeIniFile.ReadString(const Section, Ident, Default: string): string;
+begin
+  if not FValues.TryGetValue(Key(Section, Ident), Result) then
+    Result := Default;
+end;
+
+procedure TFakeIniFile.WriteString(const Section, Ident, Value: string);
+begin
+  FValues.AddOrSetValue(Key(Section, Ident), Value);
+end;
+
+function TFakeIniFile.ReadInteger(const Section, Ident: string; Default: Longint): Longint;
+begin
+  Result := StrToIntDef(ReadString(Section, Ident, ''), Default);
+end;
+
+procedure TFakeIniFile.WriteInteger(const Section, Ident: string; Value: Longint);
+begin
+  WriteString(Section, Ident, IntToStr(Value));
+end;
+
+function TFakeIniFile.ReadBool(const Section, Ident: string; Default: Boolean): Boolean;
+begin
+  Result := ReadInteger(Section, Ident, Ord(Default)) <> 0;
+end;
+
+procedure TFakeIniFile.WriteBool(const Section, Ident: string; Value: Boolean);
+begin
+  WriteInteger(Section, Ident, Ord(Value));
+end;
+
+function TFakeIniFile.ValueExists(const Section, Ident: string): Boolean;
+begin
+  Result := FValues.ContainsKey(Key(Section, Ident));
+end;
+
+procedure TFakeIniFile.UpdateFile;
+begin
+  {In-memory: nothing to flush.}
+end;
+
+{TTestIniFileSubstitution}
+
+procedure TTestIniFileSubstitution.GroupRoundTripsThroughInjectedStore;
+var
+  Store: IIniFile;
+  Src, Dst: TExtractionSettingsGroup;
+begin
+  {The four boolean fields carry no clamping, so a flipped value that
+   survives Save->Load proves the data transited the injected store.}
+  Store := TFakeIniFile.Create;
+  Src := TExtractionSettingsGroup.Defaults;
+  Src.UseBmpPipe := not Src.UseBmpPipe;
+  Src.HwAccel := not Src.HwAccel;
+  Src.UseKeyframes := not Src.UseKeyframes;
+  Src.RespectAnamorphic := not Src.RespectAnamorphic;
+  Src.SaveTo(Store, 'extraction');
+
+  Dst := TExtractionSettingsGroup.Defaults;
+  Dst.LoadFrom(Store, 'extraction');
+
+  Assert.AreEqual(Src.UseBmpPipe, Dst.UseBmpPipe, 'UseBmpPipe must round-trip through the injected store');
+  Assert.AreEqual(Src.HwAccel, Dst.HwAccel, 'HwAccel must round-trip');
+  Assert.AreEqual(Src.UseKeyframes, Dst.UseKeyframes, 'UseKeyframes must round-trip');
+  Assert.AreEqual(Src.RespectAnamorphic, Dst.RespectAnamorphic, 'RespectAnamorphic must round-trip');
+end;
+
+procedure TTestIniFileSubstitution.MissingKeysKeepDefaultsThroughInjectedStore;
+var
+  Store: IIniFile;
+  Group: TExtractionSettingsGroup;
+begin
+  {Empty store: LoadFrom must leave every field at the record's current
+   (defaults) value — the "callers reset to defaults first" contract,
+   exercised through a non-TUnicodeIniFile store.}
+  Store := TFakeIniFile.Create;
+  Group := TExtractionSettingsGroup.Defaults;
+  Group.LoadFrom(Store, 'extraction');
+  Assert.AreEqual(TExtractionSettingsGroup.Defaults.MaxWorkers, Group.MaxWorkers,
+    'Missing key must preserve the default MaxWorkers');
+  Assert.AreEqual(TExtractionSettingsGroup.Defaults.HwAccel, Group.HwAccel,
+    'Missing key must preserve the default HwAccel');
+end;
 
 {TTestExtractionSettingsGroup}
 
@@ -2087,5 +2219,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestQuickViewSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestThumbnailsSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestStatusBarSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestIniFileSubstitution);
 
 end.
