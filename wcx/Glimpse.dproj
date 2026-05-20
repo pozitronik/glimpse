@@ -61,7 +61,7 @@
             <Form>WcxSettingsForm</Form>
         </DCCReference>
         <DCCReference Include="..\src\domain\Frame\FrameOffsets.pas"/>
-        <DCCReference Include="..\src\domain\Frame\FFmpegLocator.pas"/>
+        <DCCReference Include="..\src\infrastructure\FFmpegLocator.pas"/>
         <DCCReference Include="..\src\infrastructure\FFmpegExe.pas"/>
         <DCCReference Include="..\src\shared\Logging.pas"/>
         <DCCReference Include="..\src\infrastructure\CacheStorage.pas"/>

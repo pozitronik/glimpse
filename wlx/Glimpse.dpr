@@ -18,7 +18,7 @@ uses
   Settings in '..\src\domain\Settings\Settings.pas',
   SettingsToggleService in '..\src\domain\Settings\SettingsToggleService.pas',
   FrameOffsets in '..\src\domain\Frame\FrameOffsets.pas',
-  FFmpegLocator in '..\src\domain\Frame\FFmpegLocator.pas',
+  FFmpegLocator in '..\src\infrastructure\FFmpegLocator.pas',
   FFmpegExe in '..\src\infrastructure\FFmpegExe.pas',
   FrameView in 'Widgets\FrameView.pas',
   ExtractionWorker in '..\src\domain\Frame\ExtractionWorker.pas',

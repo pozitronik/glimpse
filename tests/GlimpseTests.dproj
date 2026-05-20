@@ -85,7 +85,7 @@
         <DCCReference Include="domain\Hotkeys\TestHotkeysCodec.pas"/>
         <DCCReference Include="domain\Hotkeys\TestHotkeysDisplay.pas"/>
         <DCCReference Include="..\src\domain\Frame\FrameOffsets.pas"/>
-        <DCCReference Include="..\src\domain\Frame\FFmpegLocator.pas"/>
+        <DCCReference Include="..\src\infrastructure\FFmpegLocator.pas"/>
         <DCCReference Include="..\src\infrastructure\FFmpegExe.pas"/>
         <DCCReference Include="infrastructure\TestFFmpegExe.pas"/>
         <DCCReference Include="infrastructure\TestFFmpegProbeParser.pas"/>

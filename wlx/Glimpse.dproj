@@ -71,7 +71,7 @@
         <DCCReference Include="..\src\domain\Settings\Settings.pas"/>
         <DCCReference Include="..\src\domain\Settings\SettingsToggleService.pas"/>
         <DCCReference Include="..\src\domain\Frame\FrameOffsets.pas"/>
-        <DCCReference Include="..\src\domain\Frame\FFmpegLocator.pas"/>
+        <DCCReference Include="..\src\infrastructure\FFmpegLocator.pas"/>
         <DCCReference Include="..\src\infrastructure\FFmpegExe.pas"/>
         <DCCReference Include="Widgets\FrameView.pas"/>
         <DCCReference Include="..\src\domain\Frame\ExtractionWorker.pas"/>
