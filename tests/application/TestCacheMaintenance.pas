@@ -22,11 +22,115 @@ type
     [Test] procedure TestClearAll_NonexistentFrameDir_DoesNotRaise;
   end;
 
+  {Deterministic tests of the store-explicit cores — fake managers, no
+   disk, so summing/clearing both caches is verified without the real
+   %TEMP% probe tree.}
+  [TestFixture]
+  TTestCacheMaintenanceCore = class
+  public
+    [Test] procedure TotalSumsBothManagers;
+    [Test] procedure ClearClearsBothManagers;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.IOUtils, Vcl.Graphics,
-  Cache, CacheMaintenance, FrameCacheFactory;
+  Cache, CacheMaintenance, FrameCacheFactory, ProbeCache;
+
+type
+  {ICacheManager fake: canned total, records whether Clear ran.}
+  TFakeCacheManager = class(TInterfacedObject, ICacheManager)
+  strict private
+    FSize: Int64;
+    FCleared: Boolean;
+  public
+    constructor Create(ASize: Int64);
+    procedure Clear;
+    procedure Evict;
+    function GetTotalSize: Int64;
+    property Cleared: Boolean read FCleared;
+  end;
+
+  {IProbeCacheManager fake: canned total, records whether Clear ran.}
+  TFakeProbeCacheManager = class(TInterfacedObject, IProbeCacheManager)
+  strict private
+    FSize: Int64;
+    FCleared: Boolean;
+  public
+    constructor Create(ASize: Int64);
+    function GetTotalSize: Int64;
+    procedure Clear;
+    property Cleared: Boolean read FCleared;
+  end;
+
+constructor TFakeCacheManager.Create(ASize: Int64);
+begin
+  inherited Create;
+  FSize := ASize;
+end;
+
+procedure TFakeCacheManager.Clear;
+begin
+  FCleared := True;
+end;
+
+procedure TFakeCacheManager.Evict;
+begin
+  {Unused by the cache-maintenance functions.}
+end;
+
+function TFakeCacheManager.GetTotalSize: Int64;
+begin
+  Result := FSize;
+end;
+
+constructor TFakeProbeCacheManager.Create(ASize: Int64);
+begin
+  inherited Create;
+  FSize := ASize;
+end;
+
+function TFakeProbeCacheManager.GetTotalSize: Int64;
+begin
+  Result := FSize;
+end;
+
+procedure TFakeProbeCacheManager.Clear;
+begin
+  FCleared := True;
+end;
+
+{TTestCacheMaintenanceCore}
+
+procedure TTestCacheMaintenanceCore.TotalSumsBothManagers;
+var
+  Frame: ICacheManager;
+  Probe: IProbeCacheManager;
+begin
+  {The total must consult both the frame cache and the probe cache.}
+  Frame := TFakeCacheManager.Create(100);
+  Probe := TFakeProbeCacheManager.Create(250);
+  Assert.AreEqual<Int64>(350, TotalGlimpseCacheBytes(Frame, Probe),
+    'Total must be frame bytes + probe bytes');
+end;
+
+procedure TTestCacheMaintenanceCore.ClearClearsBothManagers;
+var
+  Frame: TFakeCacheManager;
+  Probe: TFakeProbeCacheManager;
+  FrameRef: ICacheManager;
+  ProbeRef: IProbeCacheManager;
+begin
+  {Clearing must reach both caches, not just one.}
+  Frame := TFakeCacheManager.Create(0);
+  Probe := TFakeProbeCacheManager.Create(0);
+  FrameRef := Frame;
+  ProbeRef := Probe;
+  ClearAllGlimpseCaches(FrameRef, ProbeRef);
+  Assert.IsTrue(Frame.Cleared, 'Frame cache must be cleared');
+  Assert.IsTrue(Probe.Cleared, 'Probe cache must be cleared');
+end;
 
 procedure TTestCacheMaintenance.Setup;
 begin
@@ -139,5 +243,6 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestCacheMaintenance);
+  TDUnitX.RegisterTestFixture(TTestCacheMaintenanceCore);
 
 end.

@@ -1,52 +1,66 @@
-{Cross-cutting cache-maintenance domain rules. Sums and clears both
- the user-configurable frame cache and the fixed-location probe cache
+{Cross-cutting cache-maintenance rules. Sums and clears both the
+ user-configurable frame cache and the fixed-location probe cache
  (%TEMP%\Glimpse\probes) as a single user-facing action.}
 unit CacheMaintenance;
 
 interface
 
+uses
+  Cache, ProbeCache;
+
 {Sums every Glimpse-managed cache (frame + probe). Pure read; never raises.}
-function TotalGlimpseCacheBytes(const AFrameDir: string): Int64;
+function TotalGlimpseCacheBytes(const AFrameDir: string): Int64; overload;
+{Store-explicit core: sums the two supplied managers. Lets the dialog's
+ cache-size readout be exercised with substituted caches.}
+function TotalGlimpseCacheBytes(const AFrameCache: ICacheManager;
+  const AProbeCache: IProbeCacheManager): Int64; overload;
 
 {Wipes every Glimpse-managed cache. Best-effort: swallows disk errors
  so the dialog stays responsive.}
-procedure ClearAllGlimpseCaches(const AFrameDir: string);
+procedure ClearAllGlimpseCaches(const AFrameDir: string); overload;
+{Store-explicit core: clears the two supplied managers.}
+procedure ClearAllGlimpseCaches(const AFrameCache: ICacheManager;
+  const AProbeCache: IProbeCacheManager); overload;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  Cache, ProbeCache, FrameCacheFactory;
+  FrameCacheFactory;
+
+{Resolves a frame-cache directory to a manager: the real disk cache when
+ the directory exists, otherwise a null manager that totals and clears
+ to nothing.}
+function FrameCacheManagerFor(const AFrameDir: string): ICacheManager;
+begin
+  if (AFrameDir <> '') and TDirectory.Exists(AFrameDir) then
+    Result := CreateCacheManager(AFrameDir, 0)
+  else
+    Result := TNullFrameCache.Create;
+end;
+
+function TotalGlimpseCacheBytes(const AFrameCache: ICacheManager;
+  const AProbeCache: IProbeCacheManager): Int64;
+begin
+  Result := AFrameCache.GetTotalSize + AProbeCache.GetTotalSize;
+end;
 
 function TotalGlimpseCacheBytes(const AFrameDir: string): Int64;
-var
-  Mgr: ICacheManager;
-  ProbeC: IProbeCacheManager;
 begin
-  Result := 0;
-  if (AFrameDir <> '') and TDirectory.Exists(AFrameDir) then
-  begin
-    Mgr := CreateCacheManager(AFrameDir, 0);
-    Result := Result + Mgr.GetTotalSize;
-  end;
+  Result := TotalGlimpseCacheBytes(FrameCacheManagerFor(AFrameDir),
+    CreateProbeCacheManager);
+end;
 
-  ProbeC := CreateProbeCacheManager;
-  Result := Result + ProbeC.GetTotalSize;
+procedure ClearAllGlimpseCaches(const AFrameCache: ICacheManager;
+  const AProbeCache: IProbeCacheManager);
+begin
+  AFrameCache.Clear;
+  AProbeCache.Clear;
 end;
 
 procedure ClearAllGlimpseCaches(const AFrameDir: string);
-var
-  Mgr: ICacheManager;
-  ProbeC: IProbeCacheManager;
 begin
-  if (AFrameDir <> '') and TDirectory.Exists(AFrameDir) then
-  begin
-    Mgr := CreateCacheManager(AFrameDir, 0);
-    Mgr.Clear;
-  end;
-
-  ProbeC := CreateProbeCacheManager;
-  ProbeC.Clear;
+  ClearAllGlimpseCaches(FrameCacheManagerFor(AFrameDir), CreateProbeCacheManager);
 end;
 
 end.
