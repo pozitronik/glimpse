@@ -100,7 +100,7 @@
         <DCCReference Include="..\src\domain\Hotkeys\HotkeysCodec.pas"/>
         <DCCReference Include="..\src\domain\Hotkeys\HotkeysDisplay.pas"/>
         <DCCReference Include="..\src\application\SettingsDlgLogic.pas"/>
-        <DCCReference Include="..\src\application\SettingsDlgUI.pas"/>
+        <DCCReference Include="..\src\infrastructure\SettingsDlgUI.pas"/>
         <DCCReference Include="Entries\WcxEntryExtractors.pas"/>
         <DCCReference Include="Core\WcxArchiveHandle.pas"/>
         <DCCReference Include="Util\WcxErrorMapping.pas"/>

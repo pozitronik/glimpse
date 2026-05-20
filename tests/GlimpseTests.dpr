@@ -186,7 +186,7 @@ uses
   ThumbnailRender in '..\src\application\ThumbnailRender.pas',
   TestThumbnailRender in 'TestThumbnailRender.pas',
   SettingsDlgLogic in '..\src\application\SettingsDlgLogic.pas',
-  SettingsDlgUI in '..\src\application\SettingsDlgUI.pas',
+  SettingsDlgUI in '..\src\infrastructure\SettingsDlgUI.pas',
   TestSettingsDlgUI in 'TestSettingsDlgUI.pas',
   TestSettingsGroups in 'TestSettingsGroups.pas',
   TestSettingsDlgLogic in 'TestSettingsDlgLogic.pas',

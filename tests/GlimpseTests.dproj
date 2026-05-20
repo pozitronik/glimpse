@@ -133,8 +133,8 @@
         <DCCReference Include="shared\TestPathExpand.pas"/>
         <DCCReference Include="..\wlx\Services\SaveResolutionExtractor.pas"/>
         <DCCReference Include="wlx\Services\TestSaveResolutionExtractor.pas"/>
-        <DCCReference Include="..\src\application\SettingsDlgUI.pas"/>
-        <DCCReference Include="application\TestSettingsDlgUI.pas"/>
+        <DCCReference Include="..\src\infrastructure\SettingsDlgUI.pas"/>
+        <DCCReference Include="infrastructure\TestSettingsDlgUI.pas"/>
         <DCCReference Include="domain\Settings\TestSettingsGroups.pas"/>
         <DCCReference Include="..\src\domain\StatusBar\StatusBarTokens.pas"/>
         <DCCReference Include="..\src\domain\StatusBar\StatusBarTemplate.pas"/>

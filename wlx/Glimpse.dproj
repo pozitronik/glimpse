@@ -155,7 +155,7 @@
         <DCCReference Include="..\src\domain\Render\BitmapResize.pas"/>
         <DCCReference Include="..\src\application\ThumbnailRender.pas"/>
         <DCCReference Include="..\src\application\SettingsDlgLogic.pas"/>
-        <DCCReference Include="..\src\application\SettingsDlgUI.pas"/>
+        <DCCReference Include="..\src\infrastructure\SettingsDlgUI.pas"/>
         <DCCReference Include="Forms\ProgressModalForm.pas"/>
         <DCCReference Include="Services\BitmapWorkThread.pas"/>
         <BuildConfiguration Include="Base">

@@ -1,4 +1,4 @@
-﻿{VCL-dependent helpers shared by the WLX and WCX settings dialogs.
+{VCL-dependent helpers shared by the WLX and WCX settings dialogs.
 
  Each dialog historically carried byte-identical copies of these
  procedures: a colour-picker bound to a TPanel.Color, two font-edit

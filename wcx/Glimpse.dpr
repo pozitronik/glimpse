@@ -52,7 +52,7 @@ uses
   SettingsInterfaces in '..\src\domain\Settings\SettingsInterfaces.pas',
   Settings in '..\src\domain\Settings\Settings.pas',
   SettingsDlgLogic in '..\src\application\SettingsDlgLogic.pas',
-  SettingsDlgUI in '..\src\application\SettingsDlgUI.pas',
+  SettingsDlgUI in '..\src\infrastructure\SettingsDlgUI.pas',
   CmdLineTokens in 'Util\CmdLineTokens.pas',
   WcxPresetValidation in 'Entries\WcxPresetValidation.pas',
   WcxPresetTemplate in 'Entries\WcxPresetTemplate.pas',

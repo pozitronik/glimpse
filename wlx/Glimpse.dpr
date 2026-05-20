@@ -97,7 +97,7 @@ uses
   BitmapResize in '..\src\domain\Render\BitmapResize.pas',
   ThumbnailRender in '..\src\application\ThumbnailRender.pas',
   SettingsDlgLogic in '..\src\application\SettingsDlgLogic.pas',
-  SettingsDlgUI in '..\src\application\SettingsDlgUI.pas',
+  SettingsDlgUI in '..\src\infrastructure\SettingsDlgUI.pas',
   NoShadowHints in '..\src\shared\NoShadowHints.pas',
   PlatformDetect in '..\src\shared\PlatformDetect.pas',
   ProgressModalForm in 'Forms\ProgressModalForm.pas',
