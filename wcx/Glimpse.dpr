@@ -70,7 +70,7 @@ uses
   WcxSettingsRepository in 'Settings\WcxSettingsRepository.pas',
   WcxPresetsRepository in 'Entries\WcxPresetsRepository.pas',
   WcxSettingsControlsBundles in 'Presenters\WcxSettingsControlsBundles.pas',
-  SettingsDialogHelpers in '..\src\application\SettingsDialogHelpers.pas',
+  SettingsDialogHelpers in '..\src\infrastructure\SettingsDialogHelpers.pas',
   WcxSettingsPresenters in 'Presenters\WcxSettingsPresenters.pas',
   NoShadowHints in '..\src\shared\NoShadowHints.pas';
 

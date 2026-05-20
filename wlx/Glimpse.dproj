@@ -88,7 +88,7 @@
         <DCCReference Include="..\src\domain\Cache\ProbeCache.pas"/>
         <DCCReference Include="Commands\EnableRules.pas"/>
         <DCCReference Include="Presenters\SettingsControlsBundles.pas"/>
-        <DCCReference Include="..\src\application\SettingsDialogHelpers.pas"/>
+        <DCCReference Include="..\src\infrastructure\SettingsDialogHelpers.pas"/>
         <DCCReference Include="Presenters\SettingsPresenters.pas"/>
         <DCCReference Include="Forms\SettingsDlg.pas">
             <Form>SettingsForm</Form>

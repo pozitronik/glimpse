@@ -35,7 +35,7 @@ uses
   ProbeCache in '..\src\domain\Cache\ProbeCache.pas',
   EnableRules in 'Commands\EnableRules.pas',
   SettingsControlsBundles in 'Presenters\SettingsControlsBundles.pas',
-  SettingsDialogHelpers in '..\src\application\SettingsDialogHelpers.pas',
+  SettingsDialogHelpers in '..\src\infrastructure\SettingsDialogHelpers.pas',
   SettingsPresenters in 'Presenters\SettingsPresenters.pas',
   SettingsDlg in 'Forms\SettingsDlg.pas',
   CaptureShortcutDlg in 'Forms\CaptureShortcutDlg.pas',

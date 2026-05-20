@@ -194,7 +194,7 @@ uses
   TestEnableRules in 'TestEnableRules.pas',
   SettingsControlsBundles in '..\wlx\Presenters\SettingsControlsBundles.pas',
   TestSettingsControlsBundles in 'TestSettingsControlsBundles.pas',
-  SettingsDialogHelpers in '..\src\application\SettingsDialogHelpers.pas',
+  SettingsDialogHelpers in '..\src\infrastructure\SettingsDialogHelpers.pas',
   TestSettingsDialogHelpers in 'TestSettingsDialogHelpers.pas',
   SettingsPresenters in '..\wlx\Presenters\SettingsPresenters.pas',
   TestSettingsPresenters in 'TestSettingsPresenters.pas',
