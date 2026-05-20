@@ -255,6 +255,50 @@ begin
     Result := 0;
 end;
 
+{TFrameCache logging. The outcome records ferry the facts a log line
+ needs out of the critical section, so DebugLog can run unlocked.}
+
+type
+  TCacheReadLog = record
+    Key: string;
+    PngSize: Integer;
+    Loaded: Boolean;
+    ReadFailed: Boolean;
+    ExceptionMsg: string;
+    BmpW, BmpH, BmpPf: Integer;
+    BmpEmpty: Boolean;
+  end;
+
+  TCacheWriteLog = record
+    Key: string;
+    PngSize: Integer;
+    WriteFailed: Boolean;
+    ExceptionMsg: string;
+  end;
+
+procedure LogCacheRead(const ALog: TCacheReadLog);
+begin
+  if ALog.ReadFailed then
+    DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s', [ALog.Key, ALog.ExceptionMsg]))
+  else if ALog.PngSize = 0 then
+    DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [ALog.Key]))
+  else
+  begin
+    DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [ALog.Key, ALog.PngSize]));
+    if ALog.Loaded then
+      DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d',
+        [ALog.BmpW, ALog.BmpH, BoolToStr(ALog.BmpEmpty, True), ALog.BmpPf]));
+  end;
+end;
+
+procedure LogCacheWrite(const ALog: TCacheWriteLog);
+begin
+  if ALog.WriteFailed then
+    DebugLog('Cache', Format('Put EXCEPTION key=%s %s', [ALog.Key, ALog.ExceptionMsg]))
+  else
+    DebugLog('Cache', Format('  encoded pngSize=%d', [ALog.PngSize]));
+end;
+
 {TFrameCache}
 
 constructor TFrameCache.Create(const AStorage: ICacheStorage;
@@ -286,105 +330,78 @@ end;
 
 function TFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
 var
-  Key: string;
   Data: TBytes;
-  PngSize: Integer;
-  Loaded: Boolean;
-  ReadFailed: Boolean;
-  ExceptionMsg: string;
-  BmpW, BmpH, BmpPf: Integer;
-  BmpEmpty: Boolean;
+  Log: TCacheReadLog;
 begin
   Result := nil;
-  Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes, FFileStat);
-  if Key = '' then
+  Log := Default(TCacheReadLog);
+  Log.Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes, FFileStat);
+  if Log.Key = '' then
     Exit;
-  PngSize := 0;
-  Loaded := False;
-  ReadFailed := False;
-  ExceptionMsg := '';
-  BmpW := 0; BmpH := 0; BmpPf := 0; BmpEmpty := True;
   FLock.Enter;
   try
     try
-      Data := FStorage.Read(Key);
-      PngSize := Length(Data);
-      if PngSize > 0 then
+      Data := FStorage.Read(Log.Key);
+      Log.PngSize := Length(Data);
+      if Log.PngSize > 0 then
       begin
         Result := PngBytesToBitmap(Data);
         if Result <> nil then
         begin
-          Loaded := True;
-          BmpW := Result.Width;
-          BmpH := Result.Height;
-          BmpEmpty := Result.Empty;
-          BmpPf := Ord(Result.PixelFormat);
+          Log.Loaded := True;
+          Log.BmpW := Result.Width;
+          Log.BmpH := Result.Height;
+          Log.BmpEmpty := Result.Empty;
+          Log.BmpPf := Ord(Result.PixelFormat);
         end;
       end;
     except
       on E: Exception do
       begin
-        ReadFailed := True;
-        ExceptionMsg := Format('%s: %s', [E.ClassName, E.Message]);
+        Log.ReadFailed := True;
+        Log.ExceptionMsg := Format('%s: %s', [E.ClassName, E.Message]);
         FreeAndNil(Result);
       end;
     end;
     if Result <> nil then
-      FStorage.Touch(Key);
+      FStorage.Touch(Log.Key);
   finally
     FLock.Leave;
   end;
-  {Log outside the critical section so workers do not serialise on
+  {Logged outside the critical section so workers do not serialise on
    DebugLog I/O.}
-  if ReadFailed then
-    DebugLog('Cache', Format('TryGet EXCEPTION key=%s %s', [Key, ExceptionMsg]))
-  else if PngSize = 0 then
-    DebugLog('Cache', Format('TryGet MISS (no file) key=%s', [Key]))
-  else
-  begin
-    DebugLog('Cache', Format('TryGet key=%s fileBytes=%d', [Key, PngSize]));
-    if Loaded then
-      DebugLog('Cache', Format('  BMP loaded: %dx%d empty=%s pf=%d', [BmpW, BmpH, BoolToStr(BmpEmpty, True), BmpPf]));
-  end;
+  LogCacheRead(Log);
 end;
 
 procedure TFrameCache.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
 var
-  Key: string;
   Data: TBytes;
-  PngSize: Integer;
-  WriteFailed: Boolean;
-  ExceptionMsg: string;
+  Log: TCacheWriteLog;
 begin
   if ABitmap = nil then
     Exit;
-  Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes, FFileStat);
-  if Key = '' then
+  Log := Default(TCacheWriteLog);
+  Log.Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes, FFileStat);
+  if Log.Key = '' then
     Exit;
-  DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
-  PngSize := 0;
-  WriteFailed := False;
-  ExceptionMsg := '';
+  DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Log.Key, ABitmap.Width, ABitmap.Height]));
   FLock.Enter;
   try
     try
       Data := EncodeBitmapToPngBytes(ABitmap);
-      PngSize := Length(Data);
-      FStorage.Write(Key, Data);
+      Log.PngSize := Length(Data);
+      FStorage.Write(Log.Key, Data);
     except
       on E: Exception do
       begin
-        WriteFailed := True;
-        ExceptionMsg := Format('%s: %s', [E.ClassName, E.Message]);
+        Log.WriteFailed := True;
+        Log.ExceptionMsg := Format('%s: %s', [E.ClassName, E.Message]);
       end;
     end;
   finally
     FLock.Leave;
   end;
-  if WriteFailed then
-    DebugLog('Cache', Format('Put EXCEPTION key=%s %s', [Key, ExceptionMsg]))
-  else
-    DebugLog('Cache', Format('  encoded pngSize=%d', [PngSize]));
+  LogCacheWrite(Log);
 end;
 
 procedure TFrameCache.Clear;
