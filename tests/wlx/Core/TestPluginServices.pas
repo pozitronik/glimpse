@@ -53,7 +53,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Types,
   Vcl.Graphics,
-  Cache, FrameExtractor, ProbeCache, Settings, PluginServices;
+  Cache, FrameExtractor, FFmpegExe, ProbeCache, Settings, PluginServices;
 
 {Builds a settings instance pointing at the per-test temp cache dir.
  Lifetime is the caller's responsibility (returns a raw TPluginSettings;

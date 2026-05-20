@@ -11,6 +11,20 @@ type
    raises; the callback must NOT close it.}
   TStdOutConsumer = reference to procedure(AStdOutPipe: THandle);
 
+  {Abstraction over the buffered RunProcess so subprocess-driving code
+   (TFFmpegExe) can be unit-tested against a fake runner.}
+  IProcessRunner = interface
+    ['{C59E3D1F-EC3F-4466-81C9-985D9120D3F7}']
+    function Run(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
+      ATimeoutMs: DWORD; ACancelHandle: THandle): Integer;
+  end;
+
+  TProductionProcessRunner = class(TInterfacedObject, IProcessRunner)
+  public
+    function Run(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
+      ATimeoutMs: DWORD; ACancelHandle: THandle): Integer;
+  end;
+
 {Returns -1 on launch failure, timeout, or cancellation. ACancelHandle
  signal terminates the child via a watcher thread.}
 function RunProcess(const ACommandLine: string; out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): Integer; overload;
@@ -237,6 +251,12 @@ begin
       Splitter.Flush(AOnStdOutLine);
     end,
     AStdErr, ATimeoutMs, ACancelHandle);
+end;
+
+function TProductionProcessRunner.Run(const ACommandLine: string;
+  out AStdOut, AStdErr: TBytes; ATimeoutMs: DWORD; ACancelHandle: THandle): Integer;
+begin
+  Result := RunProcess(ACommandLine, AStdOut, AStdErr, ATimeoutMs, ACancelHandle);
 end;
 
 end.

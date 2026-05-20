@@ -48,7 +48,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Classes,
-  FFmpegExe, VideoProbing, ProbeCache, VideoInfo;
+  VideoProbing, ProbeCache, VideoInfo;
 
 type
   {Stub IVideoProber: returns a canned TVideoInfo and counts calls so
@@ -315,10 +315,11 @@ procedure TTestProbeCache.TestTryGetOrProbeHitsCache;
 var
   Cache: TProbeCache;
   Info, Retrieved: TVideoInfo;
+  Stub: TStubProber;
+  Prober: IVideoProber;
   TmpFile: string;
 begin
-  { Pre-populate the cache so TryGetOrProbe returns without invoking ffmpeg.
-    Passing a bogus ffmpeg path proves the hit path never reaches the subprocess. }
+  { Pre-populate the cache so TryGetOrProbe returns without invoking the prober. }
   TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_hit.tmp');
   TFile.WriteAllText(TmpFile, 'dummy');
   try
@@ -330,14 +331,19 @@ begin
       Info.Height := 720;
       Cache.Put(TmpFile, Info);
 
-      Retrieved := Cache.TryGetOrProbe(TmpFile, '__no_such_ffmpeg__.exe');
+      Stub := TStubProber.Create(Default(TVideoInfo));
+      Prober := Stub;
+      Retrieved := Cache.TryGetOrProbe(TmpFile, Prober);
 
       Assert.IsTrue(Retrieved.IsValid, 'Cached entry must be returned');
       Assert.AreEqual(Double(42.5), Retrieved.Duration, 0.001);
       Assert.AreEqual(1280, Retrieved.Width);
       Assert.AreEqual(720, Retrieved.Height);
+      Assert.AreEqual<Integer>(0, Stub.CallCount,
+        'Prober must not be invoked when the entry is already cached');
     finally
       Cache.Free;
+      Prober := nil;
     end;
   finally
     TFile.Delete(TmpFile);
@@ -347,24 +353,33 @@ end;
 procedure TTestProbeCache.TestTryGetOrProbeMissReturnsInvalidAndSkipsCache;
 var
   Cache: TProbeCache;
-  Retrieved, Check: TVideoInfo;
+  Retrieved, Check, Invalid: TVideoInfo;
+  Stub: TStubProber;
+  Prober: IVideoProber;
   TmpFile: string;
 begin
-  { Cache miss + bogus ffmpeg path: ProbeVideo should yield an invalid result,
-    and Put() must refuse to persist it (Put is a no-op for invalid entries).
-    The next TryGet must still miss. }
+  { Cache miss + a prober that reports failure: TryGetOrProbe must return the
+    invalid result, and Put() must refuse to persist it (Put is a no-op for
+    invalid entries). The next TryGet must still miss. }
   TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_miss_probe.tmp');
   TFile.WriteAllText(TmpFile, 'dummy');
   try
     Cache := TProbeCache.Create(FCacheDir);
     try
-      Retrieved := Cache.TryGetOrProbe(TmpFile, '__no_such_ffmpeg__.exe');
+      Invalid := Default(TVideoInfo);
+      Invalid.Duration := -1;
+      Stub := TStubProber.Create(Invalid);
+      Prober := Stub;
+
+      Retrieved := Cache.TryGetOrProbe(TmpFile, Prober);
       Assert.IsFalse(Retrieved.IsValid, 'Invalid probe result expected');
+      Assert.AreEqual<Integer>(1, Stub.CallCount, 'Prober invoked once on cache miss');
 
       Assert.IsFalse(Cache.TryGet(TmpFile, Check),
         'Invalid result must not have been cached');
     finally
       Cache.Free;
+      Prober := nil;
     end;
   finally
     TFile.Delete(TmpFile);
@@ -588,11 +603,9 @@ begin
 end;
 
 procedure TTestProbeCache.TestInjectedProberFiresOnMissAndCachesResult;
-{Lays out the contract for the 2-arg TProbeCache constructor: on a
- cache miss, TryGetOrProbe must delegate to the injected prober and
- then persist the returned TVideoInfo (so a follow-up call is a hit).
- The AFFmpegPath argument is ignored when a prober is injected, so we
- pass an empty string to make that explicit.}
+{On a cache miss, TryGetOrProbe must delegate to the injected prober
+ and persist the returned TVideoInfo so a follow-up call is a hit
+ served without invoking the prober again.}
 var
   Stub: TStubProber;
   ProberRef: IVideoProber;
@@ -608,19 +621,19 @@ begin
 
   Stub := TStubProber.Create(Canned);
   ProberRef := Stub;
-  Cache := TProbeCache.Create(FCacheDir, ProberRef);
+  Cache := TProbeCache.Create(FCacheDir);
   try
     Probe := TPath.Combine(FCacheDir, 'fixture.mp4');
     ForceDirectories(FCacheDir);
     TFile.WriteAllText(Probe, 'placeholder');
 
-    First := Cache.TryGetOrProbe(Probe, '');
+    First := Cache.TryGetOrProbe(Probe, ProberRef);
     Assert.IsTrue(First.IsValid, 'First call must return the canned info');
     Assert.AreEqual<Integer>(1920, First.Width, 'Canned width must round-trip');
     Assert.AreEqual<Integer>(1, Stub.CallCount, 'Prober invoked exactly once on first miss');
     Assert.AreEqual(Probe, Stub.LastPath, 'Prober receives the requested file path');
 
-    Second := Cache.TryGetOrProbe(Probe, '');
+    Second := Cache.TryGetOrProbe(Probe, ProberRef);
     Assert.IsTrue(Second.IsValid, 'Second call must hit the cache');
     Assert.AreEqual<Integer>(1, Stub.CallCount, 'Prober must not be invoked on cache hit');
   finally
@@ -653,10 +666,10 @@ begin
 
   Stub := TStubProber.Create(Default(TVideoInfo));
   ProberRef := Stub;
-  Cache := TProbeCache.Create(FCacheDir, ProberRef);
+  Cache := TProbeCache.Create(FCacheDir);
   try
     Cache.Put(Probe, Pre);
-    Got := Cache.TryGetOrProbe(Probe, '');
+    Got := Cache.TryGetOrProbe(Probe, ProberRef);
     Assert.IsTrue(Got.IsValid, 'Cache entry must round-trip');
     Assert.AreEqual<Integer>(640, Got.Width);
     Assert.AreEqual<Integer>(0, Stub.CallCount, 'Prober must not fire when entry is already cached');

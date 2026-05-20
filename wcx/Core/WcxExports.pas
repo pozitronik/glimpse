@@ -38,7 +38,7 @@ implementation
 uses
   System.AnsiStrings, System.Classes, System.IOUtils,
   WcxSettings, WcxSettingsDlg, FFmpegLocator,
-  FrameExtractor,
+  FrameExtractor, FFmpegExe,
   Logging, Types,
   WcxEntryExtractors, WcxArchiveHandle,
   WcxFrameCache, PresetExtractReporter, WcxErrorMapping,

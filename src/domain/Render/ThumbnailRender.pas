@@ -8,7 +8,8 @@ interface
 
 uses
   Winapi.Windows, Vcl.Graphics,
-  Types, Settings, FFmpegExe, VideoInfo, ProbeCache, Cache, FrameOffsets;
+  Types, Settings, VideoInfo, ProbeCache, Cache, FrameOffsets, FrameExtractor,
+  VideoProbing;
 
 type
   {Narrow input for RenderThumbnail. The renderer used to take a whole
@@ -62,7 +63,7 @@ function BuildThumbnailExtractionOptions(const AParams: TThumbnailParams; AReqWi
  AProbeCache consolidates probe results across the thumbnail panel and the
  lister form so folder scrolling does not re-spawn ffmpeg for files already
  probed once; never pass nil.}
-function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
+function RenderThumbnail(const AExtractor: IFrameExtractor; const AProber: IVideoProber; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
 
 implementation
 
@@ -146,7 +147,7 @@ end;
 {Resolves the cache + extract pair for a single offset. The cache lookup
  is keyed by offset and MaxSide; on miss, ffmpeg runs, the result is stored,
  and the bitmap is returned. Caller owns the result; nil = failure.}
-function FetchOrExtract(const AFFmpeg: TFFmpegExe; const AFileName: string; AOffset: Double; const AOptions: TExtractionOptions; const ACache: IFrameCache; ATimeoutMs: DWORD): TBitmap;
+function FetchOrExtract(const AExtractor: IFrameExtractor; const AFileName: string; AOffset: Double; const AOptions: TExtractionOptions; const ACache: IFrameCache): TBitmap;
 var
   Key: TFrameCacheKey;
 begin
@@ -155,7 +156,7 @@ begin
   if Result <> nil then
     Exit;
 
-  Result := AFFmpeg.ExtractFrame(AFileName, AOffset, AOptions, ATimeoutMs);
+  Result := AExtractor.ExtractFrame(AFileName, AOffset, AOptions);
   if Result <> nil then
     ACache.Put(Key, Result);
 end;
@@ -190,7 +191,7 @@ begin
   end;
 end;
 
-function RenderThumbnail(const AFFmpeg: TFFmpegExe; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
+function RenderThumbnail(const AExtractor: IFrameExtractor; const AProber: IVideoProber; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
 var
   Info: TVideoInfo;
   Offsets: TFrameOffsetArray;
@@ -200,7 +201,7 @@ var
   I: Integer;
 begin
   Result := nil;
-  if (AFFmpeg = nil) or (ACache = nil) or (AProbeCache = nil) then
+  if (AExtractor = nil) or (AProber = nil) or (ACache = nil) or (AProbeCache = nil) then
     Exit;
   if not AParams.Enabled then
     Exit;
@@ -210,7 +211,7 @@ begin
   {Single try/except wraps the whole pipeline so any failure releases
    in-progress bitmaps. Thumbnail errors must never propagate to TC.}
   try
-    Info := AProbeCache.TryGetOrProbe(AFileName, AFFmpeg.ExePath);
+    Info := AProbeCache.TryGetOrProbe(AFileName, AProber);
     if not Info.IsValid then
       Exit;
 
@@ -229,7 +230,7 @@ begin
     try
       for I := 0 to High(Offsets) do
       begin
-        Frames[I] := FetchOrExtract(AFFmpeg, AFileName, Offsets[I].TimeOffset, Options, ACache, DEF_THUMBNAIL_TIMEOUT_MS);
+        Frames[I] := FetchOrExtract(AExtractor, AFileName, Offsets[I].TimeOffset, Options, ACache);
         {Single mode: a missing frame is a hard failure (no fallback).
          Grid mode: we still try to render whatever frames we got; nil cells
          are tolerated by RenderCombinedImage.}

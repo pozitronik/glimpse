@@ -5,25 +5,22 @@ unit ProbeCache;
 interface
 
 uses
-  FFmpegExe, VideoProbing, VideoInfo;
+  VideoProbing, VideoInfo;
 
 type
   TProbeCache = class
   strict private
     FCacheDir: string;
-    {nil = per-call TFFmpegExe from AFFmpegPath; non-nil = test seam,
-     AFFmpegPath ignored.}
-    FProber: IVideoProber;
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string; static;
     function ProbeKey(const AFilePath: string): string;
   public
-    constructor Create(const ACacheDir: string); overload;
-    constructor Create(const ACacheDir: string; const AProber: IVideoProber); overload;
+    constructor Create(const ACacheDir: string);
     function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
     {Only caches valid results.}
     procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
-    {Cache-then-probe convenience shared by WLX/WCX/thumbnail paths.}
-    function TryGetOrProbe(const AFilePath, AFFmpegPath: string): TVideoInfo;
+    {Cache-then-probe convenience shared by WLX/WCX/thumbnail paths. On a
+     cache miss delegates to AProber and persists a valid result.}
+    function TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
     function GetTotalSize: Int64;
     {Best-effort: directory locks are swallowed.}
     procedure Clear;
@@ -52,12 +49,6 @@ constructor TProbeCache.Create(const ACacheDir: string);
 begin
   inherited Create;
   FCacheDir := ACacheDir;
-end;
-
-constructor TProbeCache.Create(const ACacheDir: string; const AProber: IVideoProber);
-begin
-  Create(ACacheDir);
-  FProber := AProber;
 end;
 
 class function TProbeCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string;
@@ -130,23 +121,11 @@ begin
   end;
 end;
 
-function TProbeCache.TryGetOrProbe(const AFilePath, AFFmpegPath: string): TVideoInfo;
-var
-  FFmpeg: TFFmpegExe;
+function TProbeCache.TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
 begin
   if TryGet(AFilePath, Result) then
     Exit;
-  if FProber <> nil then
-    Result := FProber.ProbeVideo(AFilePath)
-  else
-  begin
-    FFmpeg := TFFmpegExe.Create(AFFmpegPath);
-    try
-      Result := FFmpeg.ProbeVideo(AFilePath);
-    finally
-      FFmpeg.Free;
-    end;
-  end;
+  Result := AProber.ProbeVideo(AFilePath);
   Put(AFilePath, Result);
 end;
 

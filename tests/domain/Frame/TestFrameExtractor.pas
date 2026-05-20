@@ -1,8 +1,6 @@
-{Smoke tests for the TFFmpegFrameExtractor adapter.
- The adapter is a thin forward to TFFmpegExe.ExtractFrame, so the interesting
- behaviour lives in FFmpegExe (covered by TestFFmpegExe). Tests here just
- pin the adapter's construction contract and confirm it returns nil cleanly
- when the underlying ffmpeg exe is missing, rather than raising.}
+{Smoke tests for the production IFrameExtractor implementation (TFFmpegExe).
+ Confirm it constructs as the interface and returns nil cleanly when the
+ underlying ffmpeg exe is missing, rather than raising.}
 unit TestFrameExtractor;
 
 interface
@@ -24,7 +22,7 @@ implementation
 uses
   System.SysUtils,
   Vcl.Graphics,
-  Types, FrameExtractor;
+  Types, FrameExtractor, FFmpegExe;
 
 function MakeOptions: TExtractionOptions;
 begin
@@ -39,7 +37,7 @@ var
 begin
   {Interface handle keeps the refcounted instance alive for the scope —
    implicit release on exit also verifies no leak in Destroy.}
-  Extractor := TFFmpegFrameExtractor.Create('C:\nowhere\ffmpeg.exe');
+  Extractor := TFFmpegExe.Create('C:\nowhere\ffmpeg.exe');
   Assert.IsNotNull(Extractor, 'Construction must yield a non-nil interface');
 end;
 
@@ -51,7 +49,7 @@ begin
   {When the configured ffmpeg exe does not exist, RunProcess under the hood
    fails with a non-zero exit and ExtractFrame returns nil. Guards against a
    regression to "return an empty bitmap" or "raise on missing executable".}
-  Extractor := TFFmpegFrameExtractor.Create('C:\nowhere\ffmpeg_does_not_exist.exe');
+  Extractor := TFFmpegExe.Create('C:\nowhere\ffmpeg_does_not_exist.exe');
   Bmp := Extractor.ExtractFrame('C:\nowhere\video.mp4', 0.0, MakeOptions);
   try
     Assert.IsNull(Bmp, 'Extraction with missing exe must fail closed by returning nil');
@@ -67,7 +65,7 @@ begin
   {Separate assertion style: Assert.WillNotRaise surfaces the specific
    exception class/message when the contract is violated, rather than
    a generic test failure.}
-  Extractor := TFFmpegFrameExtractor.Create('');
+  Extractor := TFFmpegExe.Create('');
   Assert.WillNotRaiseAny(
     procedure
     var

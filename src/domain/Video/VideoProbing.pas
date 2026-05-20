@@ -1,12 +1,12 @@
-{Video-probing interface for TProbeCache. Production wires TFFmpegProber;
- tests inject a stub returning canned TVideoInfo so the cache layer can
- be exercised without spawning ffmpeg.}
+{Video-probing abstraction for the domain. Implemented by TFFmpegExe
+ (infrastructure); tests inject a stub returning canned TVideoInfo so
+ consumers can be exercised without spawning ffmpeg.}
 unit VideoProbing;
 
 interface
 
 uses
-  FFmpegExe, VideoInfo;
+  VideoInfo;
 
 type
   IVideoProber = interface
@@ -16,32 +16,6 @@ type
     function ProbeVideo(const AFilePath: string): TVideoInfo;
   end;
 
-  TFFmpegProber = class(TInterfacedObject, IVideoProber)
-  strict private
-    FFFmpeg: TFFmpegExe;
-  public
-    constructor Create(const AFFmpegPath: string);
-    destructor Destroy; override;
-    function ProbeVideo(const AFilePath: string): TVideoInfo;
-  end;
-
 implementation
-
-constructor TFFmpegProber.Create(const AFFmpegPath: string);
-begin
-  inherited Create;
-  FFFmpeg := TFFmpegExe.Create(AFFmpegPath);
-end;
-
-destructor TFFmpegProber.Destroy;
-begin
-  FFFmpeg.Free;
-  inherited;
-end;
-
-function TFFmpegProber.ProbeVideo(const AFilePath: string): TVideoInfo;
-begin
-  Result := FFFmpeg.ProbeVideo(AFilePath);
-end;
 
 end.

@@ -6,7 +6,7 @@ unit PluginServices;
 interface
 
 uses
-  Cache, FrameExtractor, ProbeCache, Settings;
+  Cache, FrameExtractor, FFmpegExe, ProbeCache, Settings;
 
 type
   IFrameCacheFactory = interface

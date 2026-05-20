@@ -44,23 +44,30 @@ type
     [Test] procedure BuildOptions_RespectAnamorphicMirrorsSettings;
     [Test] procedure BuildOptions_MaxSideFromRequestedCellSize;
 
-    { RenderThumbnail guard conditions (no ffmpeg required) }
-    [Test] procedure RenderThumbnail_NilFFmpeg_ReturnsNil;
+    { RenderThumbnail guard conditions }
+    [Test] procedure RenderThumbnail_NilExtractor_ReturnsNil;
+    [Test] procedure RenderThumbnail_NilProber_ReturnsNil;
     [Test] procedure RenderThumbnail_NilCache_ReturnsNil;
     [Test] procedure RenderThumbnail_NilProbeCache_ReturnsNil;
     [Test] procedure RenderThumbnail_Disabled_ReturnsNil;
     [Test] procedure RenderThumbnail_ZeroWidth_ReturnsNil;
     [Test] procedure RenderThumbnail_ZeroHeight_ReturnsNil;
-    [Test] procedure RenderThumbnail_BadFFmpegPath_ReturnsNil;
+    [Test] procedure RenderThumbnail_ProbeInvalid_ReturnsNil;
+    { RenderThumbnail pipeline — fake extractor + prober, no ffmpeg }
+    [Test] procedure RenderThumbnail_SingleMode_ReturnsBitmap;
+    [Test] procedure RenderThumbnail_SingleMode_ExtractorFails_ReturnsNil;
+    [Test] procedure RenderThumbnail_GridMode_ReturnsBitmap;
+    [Test] procedure RenderThumbnail_Downscale_ResultFitsRequested;
+    [Test] procedure RenderThumbnail_SecondCall_DoesNotReprobe;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  Vcl.Graphics,
-  Types, Settings, Defaults, FFmpegExe, ProbeCache, Cache, FrameOffsets,
-  ThumbnailRender;
+  Winapi.Windows, Vcl.Graphics,
+  Types, Settings, Defaults, ProbeCache, Cache, FrameOffsets,
+  ThumbnailRender, FrameExtractor, VideoProbing, VideoInfo;
 
 function MakeTempProbeCache: TProbeCache;
 begin
@@ -81,6 +88,72 @@ function MakeEnabledThumbnailParams: TThumbnailParams;
 begin
   Result := Default(TThumbnailParams);
   Result.Enabled := True;
+end;
+
+{A TVideoInfo that passes IsValid (Duration > 0).}
+function MakeValidInfo: TVideoInfo;
+begin
+  Result := Default(TVideoInfo);
+  Result.Duration := 100.0;
+  Result.Width := 640;
+  Result.Height := 480;
+  Result.DisplayWidth := 640;
+  Result.DisplayHeight := 480;
+end;
+
+type
+  {Canned IVideoProber: returns a fixed TVideoInfo and counts calls so the
+   probe-cache interaction can be observed without spawning ffmpeg.}
+  TFakeProber = class(TInterfacedObject, IVideoProber)
+  strict private
+    FInfo: TVideoInfo;
+    FCallCount: Integer;
+  public
+    constructor Create(const AInfo: TVideoInfo);
+    function ProbeVideo(const AFilePath: string): TVideoInfo;
+    property CallCount: Integer read FCallCount;
+  end;
+
+  {IFrameExtractor that yields a fresh pf24 bitmap of a fixed size, or nil
+   to simulate an extraction failure.}
+  TFakeExtractor = class(TInterfacedObject, IFrameExtractor)
+  strict private
+    FWidth, FHeight: Integer;
+    FReturnNil: Boolean;
+  public
+    constructor Create(AWidth, AHeight: Integer; AReturnNil: Boolean = False);
+    function ExtractFrame(const AFileName: string; ATimeOffset: Double;
+      const AOptions: TExtractionOptions; ACancelHandle: THandle = 0): TBitmap;
+  end;
+
+constructor TFakeProber.Create(const AInfo: TVideoInfo);
+begin
+  inherited Create;
+  FInfo := AInfo;
+end;
+
+function TFakeProber.ProbeVideo(const AFilePath: string): TVideoInfo;
+begin
+  Inc(FCallCount);
+  Result := FInfo;
+end;
+
+constructor TFakeExtractor.Create(AWidth, AHeight: Integer; AReturnNil: Boolean);
+begin
+  inherited Create;
+  FWidth := AWidth;
+  FHeight := AHeight;
+  FReturnNil := AReturnNil;
+end;
+
+function TFakeExtractor.ExtractFrame(const AFileName: string; ATimeOffset: Double;
+  const AOptions: TExtractionOptions; ACancelHandle: THandle): TBitmap;
+begin
+  if FReturnNil then
+    Exit(nil);
+  Result := TBitmap.Create;
+  Result.PixelFormat := pf24bit;
+  Result.SetSize(FWidth, FHeight);
 end;
 
 { CalcThumbnailOffsets — single mode }
@@ -326,17 +399,37 @@ end;
 
 { RenderThumbnail guards }
 
-procedure TTestThumbnailRender.RenderThumbnail_NilFFmpeg_ReturnsNil;
+procedure TTestThumbnailRender.RenderThumbnail_NilExtractor_ReturnsNil;
 var
   P: TThumbnailParams;
   Cache: IFrameCache;
+  Prober: IVideoProber;
   Probe: TProbeCache;
 begin
   P := MakeEnabledThumbnailParams;
+  Prober := TFakeProber.Create(MakeValidInfo);
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(nil, 'x.mp4', 256, 256, P, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(nil, Prober, 'x.mp4', 256, 256, P, Cache, Probe));
+  finally
+    Probe.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.RenderThumbnail_NilProber_ReturnsNil;
+var
+  P: TThumbnailParams;
+  Cache: IFrameCache;
+  Extractor: IFrameExtractor;
+  Probe: TProbeCache;
+begin
+  P := MakeEnabledThumbnailParams;
+  Extractor := TFakeExtractor.Create(640, 480);
+  Probe := MakeTempProbeCache;
+  try
+    Cache := TNullFrameCache.Create;
+    Assert.IsNull(RenderThumbnail(Extractor, nil, 'x.mp4', 256, 256, P, Cache, Probe));
   finally
     Probe.Free;
   end;
@@ -345,17 +438,18 @@ end;
 procedure TTestThumbnailRender.RenderThumbnail_NilCache_ReturnsNil;
 var
   P: TThumbnailParams;
-  Ff: TFFmpegExe;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
   Probe: TProbeCache;
 begin
   P := MakeEnabledThumbnailParams;
-  Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(MakeValidInfo);
   Probe := MakeTempProbeCache;
   try
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, P, nil, Probe));
+    Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 256, P, nil, Probe));
   finally
     Probe.Free;
-    Ff.Free;
   end;
 end;
 
@@ -363,38 +457,37 @@ procedure TTestThumbnailRender.RenderThumbnail_NilProbeCache_ReturnsNil;
 var
   P: TThumbnailParams;
   Cache: IFrameCache;
-  Ff: TFFmpegExe;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
 begin
   { Probe cache is required — without it the pipeline cannot resolve video
     metadata and must fail fast, consistent with the other nil guards. }
   P := MakeEnabledThumbnailParams;
-  Ff := TFFmpegExe.Create('ffmpeg.exe');
-  try
-    Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, P, Cache, nil));
-  finally
-    Ff.Free;
-  end;
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(MakeValidInfo);
+  Cache := TNullFrameCache.Create;
+  Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 256, P, Cache, nil));
 end;
 
 procedure TTestThumbnailRender.RenderThumbnail_Disabled_ReturnsNil;
 var
   P: TThumbnailParams;
   Cache: IFrameCache;
-  Ff: TFFmpegExe;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
   Probe: TProbeCache;
 begin
   {Default(TThumbnailParams).Enabled is False — exactly the contract this
-   test pins. No need to override.}
+   test pins.}
   P := Default(TThumbnailParams);
-  Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(MakeValidInfo);
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 256, P, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 256, P, Cache, Probe));
   finally
     Probe.Free;
-    Ff.Free;
   end;
 end;
 
@@ -402,18 +495,19 @@ procedure TTestThumbnailRender.RenderThumbnail_ZeroWidth_ReturnsNil;
 var
   P: TThumbnailParams;
   Cache: IFrameCache;
-  Ff: TFFmpegExe;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
   Probe: TProbeCache;
 begin
   P := MakeEnabledThumbnailParams;
-  Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(MakeValidInfo);
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 0, 256, P, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 0, 256, P, Cache, Probe));
   finally
     Probe.Free;
-    Ff.Free;
   end;
 end;
 
@@ -421,40 +515,193 @@ procedure TTestThumbnailRender.RenderThumbnail_ZeroHeight_ReturnsNil;
 var
   P: TThumbnailParams;
   Cache: IFrameCache;
-  Ff: TFFmpegExe;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
   Probe: TProbeCache;
 begin
   P := MakeEnabledThumbnailParams;
-  Ff := TFFmpegExe.Create('ffmpeg.exe');
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(MakeValidInfo);
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'x.mp4', 256, 0, P, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 0, P, Cache, Probe));
   finally
     Probe.Free;
-    Ff.Free;
   end;
 end;
 
-procedure TTestThumbnailRender.RenderThumbnail_BadFFmpegPath_ReturnsNil;
+procedure TTestThumbnailRender.RenderThumbnail_ProbeInvalid_ReturnsNil;
 var
   P: TThumbnailParams;
   Cache: IFrameCache;
-  Ff: TFFmpegExe;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
   Probe: TProbeCache;
 begin
-  { Probe will fail (or yield IsValid=False) on a bogus ffmpeg path; the
-    function must return nil rather than raise. This is the closest we
-    can get to integration testing without shipping a sample video. }
+  { The prober reports failure (Default TVideoInfo has Duration 0, so
+    IsValid is False). The pipeline must return nil without extracting. }
   P := MakeEnabledThumbnailParams;
-  Ff := TFFmpegExe.Create('Z:\nonexistent\ffmpeg.exe');
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(Default(TVideoInfo));
   Probe := MakeTempProbeCache;
   try
     Cache := TNullFrameCache.Create;
-    Assert.IsNull(RenderThumbnail(Ff, 'Z:\nonexistent.mp4', 256, 256, P, Cache, Probe));
+    Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 256, P, Cache, Probe));
   finally
     Probe.Free;
-    Ff.Free;
+  end;
+end;
+
+{ RenderThumbnail pipeline }
+
+procedure TTestThumbnailRender.RenderThumbnail_SingleMode_ReturnsBitmap;
+var
+  P: TThumbnailParams;
+  Cache: IFrameCache;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
+  Probe: TProbeCache;
+  Bmp: TBitmap;
+begin
+  P := MakeEnabledThumbnailParams;
+  P.Mode := tnmSingle;
+  P.Position := 50;
+  Extractor := TFakeExtractor.Create(640, 480);
+  Prober := TFakeProber.Create(MakeValidInfo);
+  Probe := MakeTempProbeCache;
+  try
+    Cache := TNullFrameCache.Create;
+    Bmp := RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 256, P, Cache, Probe);
+    try
+      Assert.IsNotNull(Bmp, 'Single-mode render must produce a bitmap');
+      Assert.IsTrue((Bmp.Width > 0) and (Bmp.Height > 0));
+      Assert.IsTrue((Bmp.Width <= 256) and (Bmp.Height <= 256),
+        'Result must fit the requested cell size');
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Probe.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.RenderThumbnail_SingleMode_ExtractorFails_ReturnsNil;
+var
+  P: TThumbnailParams;
+  Cache: IFrameCache;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
+  Probe: TProbeCache;
+begin
+  { In single mode a nil extraction is a hard failure with no fallback. }
+  P := MakeEnabledThumbnailParams;
+  P.Mode := tnmSingle;
+  Extractor := TFakeExtractor.Create(0, 0, True);
+  Prober := TFakeProber.Create(MakeValidInfo);
+  Probe := MakeTempProbeCache;
+  try
+    Cache := TNullFrameCache.Create;
+    Assert.IsNull(RenderThumbnail(Extractor, Prober, 'x.mp4', 256, 256, P, Cache, Probe));
+  finally
+    Probe.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.RenderThumbnail_GridMode_ReturnsBitmap;
+var
+  P: TThumbnailParams;
+  Cache: IFrameCache;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
+  Probe: TProbeCache;
+  Bmp: TBitmap;
+begin
+  P := MakeEnabledThumbnailParams;
+  P.Mode := tnmGrid;
+  P.GridFrames := 4;
+  Extractor := TFakeExtractor.Create(320, 240);
+  Prober := TFakeProber.Create(MakeValidInfo);
+  Probe := MakeTempProbeCache;
+  try
+    Cache := TNullFrameCache.Create;
+    Bmp := RenderThumbnail(Extractor, Prober, 'x.mp4', 512, 512, P, Cache, Probe);
+    try
+      Assert.IsNotNull(Bmp, 'Grid-mode render must produce a combined bitmap');
+      Assert.IsTrue((Bmp.Width > 0) and (Bmp.Height > 0));
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Probe.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.RenderThumbnail_Downscale_ResultFitsRequested;
+var
+  P: TThumbnailParams;
+  Cache: IFrameCache;
+  Extractor: IFrameExtractor;
+  Prober: IVideoProber;
+  Probe: TProbeCache;
+  Bmp: TBitmap;
+begin
+  { The extractor yields a frame far larger than the requested cell; the
+    pipeline must downscale the result to fit. }
+  P := MakeEnabledThumbnailParams;
+  P.Mode := tnmSingle;
+  Extractor := TFakeExtractor.Create(1920, 1080);
+  Prober := TFakeProber.Create(MakeValidInfo);
+  Probe := MakeTempProbeCache;
+  try
+    Cache := TNullFrameCache.Create;
+    Bmp := RenderThumbnail(Extractor, Prober, 'x.mp4', 128, 128, P, Cache, Probe);
+    try
+      Assert.IsNotNull(Bmp);
+      Assert.IsTrue((Bmp.Width <= 128) and (Bmp.Height <= 128),
+        Format('Result %dx%d must fit within 128x128', [Bmp.Width, Bmp.Height]));
+    finally
+      Bmp.Free;
+    end;
+  finally
+    Probe.Free;
+  end;
+end;
+
+procedure TTestThumbnailRender.RenderThumbnail_SecondCall_DoesNotReprobe;
+var
+  P: TThumbnailParams;
+  Cache: IFrameCache;
+  Extractor: IFrameExtractor;
+  Fake: TFakeProber;
+  Prober: IVideoProber;
+  Probe: TProbeCache;
+  SrcFile: string;
+  Bmp: TBitmap;
+begin
+  { A real source file makes ProbeKey resolvable, so the first probe result
+    is persisted and the second RenderThumbnail call hits the probe cache
+    instead of re-probing. }
+  P := MakeEnabledThumbnailParams;
+  P.Mode := tnmSingle;
+  Extractor := TFakeExtractor.Create(640, 480);
+  Fake := TFakeProber.Create(MakeValidInfo);
+  Prober := Fake;
+  Probe := MakeTempProbeCache;
+  SrcFile := TPath.Combine(TPath.GetTempPath,
+    'glimpse_thumb_src_' + IntToStr(Random(MaxInt)) + '.mp4');
+  TFile.WriteAllText(SrcFile, 'placeholder');
+  try
+    Cache := TNullFrameCache.Create;
+    Bmp := RenderThumbnail(Extractor, Prober, SrcFile, 256, 256, P, Cache, Probe);
+    Bmp.Free;
+    Bmp := RenderThumbnail(Extractor, Prober, SrcFile, 256, 256, P, Cache, Probe);
+    Bmp.Free;
+    Assert.AreEqual<Integer>(1, Fake.CallCount,
+      'Second render must hit the probe cache, not re-probe');
+  finally
+    TFile.Delete(SrcFile);
+    Probe.Free;
   end;
 end;
 

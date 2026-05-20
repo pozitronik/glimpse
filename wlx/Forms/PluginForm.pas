@@ -329,7 +329,7 @@ uses
   ToolbarGlyphLibrary, SaveResolutionExtractor,
   HotkeysVcl, PluginAppearance, FFmpegExe,
   ExtractionWorker, ViewModeLogic, ViewModeLayout,
-  FrameExtractor, ProbeCache,
+  FrameExtractor, ProbeCache, VideoProbing,
   System.Math, Vcl.Clipbrd,
   StatusBarHostBar, KeyInterceptionSubclass;
 
@@ -1459,6 +1459,8 @@ begin
 end;
 
 procedure TPluginForm.LoadFile(const AFileName: string);
+var
+  Prober: IVideoProber;
 begin
   FormLog(Format('LoadFile: %s', [AFileName]));
   FLoadTimer.Start;
@@ -1475,7 +1477,8 @@ begin
     Exit;
   end;
 
-  FVideoInfo := FServices.ProbeCache.TryGetOrProbe(FFileName, FFFmpegPath);
+  Prober := TFFmpegExe.Create(FFFmpegPath);
+  FVideoInfo := FServices.ProbeCache.TryGetOrProbe(FFileName, Prober);
 
   FExporter.UpdateBannerInfo(BuildBannerInfo(FFileName, FVideoInfo));
 

@@ -25,7 +25,8 @@ uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
   Vcl.Graphics,
   Settings, FFmpegLocator, FFmpegExe, PluginForm, PluginServices, Cache, ProbeCache,
-  Logging, ThumbnailRender, ToolbarLayout, PluginContext;
+  Logging, ThumbnailRender, ToolbarLayout, PluginContext, Defaults,
+  VideoProbing, FrameExtractor;
 
 var
   Log: TProc<string>;
@@ -257,7 +258,7 @@ end;
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 var
   Ctx: TPluginContext;
-  FFmpeg: TFFmpegExe;
+  FFmpeg: IVideoProber;
   Bmp: TBitmap;
 begin
   Result := 0;
@@ -272,20 +273,18 @@ begin
     Exit;
 
   try
-    FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath);
-    try
-      Bmp := RenderThumbnail(FFmpeg, AFileName, Width, Height,
-        TThumbnailParams.FromSettings(Ctx.Settings), Ctx.ThumbnailCache, Ctx.ProbeCache);
-      if Bmp <> nil then
-        try
-          {TC takes ownership of the returned HBITMAP — detach so Bmp.Free does not free it.}
-          Result := Bmp.ReleaseHandle;
-        finally
-          Bmp.Free;
-        end;
-    finally
-      FFmpeg.Free;
-    end;
+    {One TFFmpegExe instance, held via its two interfaces — refcount frees
+     it on scope exit. The shorter thumbnail extract budget is baked in.}
+    FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath, DEF_THUMBNAIL_TIMEOUT_MS);
+    Bmp := RenderThumbnail(FFmpeg as IFrameExtractor, FFmpeg, AFileName, Width, Height,
+      TThumbnailParams.FromSettings(Ctx.Settings), Ctx.ThumbnailCache, Ctx.ProbeCache);
+    if Bmp <> nil then
+      try
+        {TC takes ownership of the returned HBITMAP — detach so Bmp.Free does not free it.}
+        Result := Bmp.ReleaseHandle;
+      finally
+        Bmp.Free;
+      end;
   except
     on E: Exception do
     begin

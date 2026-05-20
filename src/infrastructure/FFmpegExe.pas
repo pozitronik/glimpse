@@ -1,42 +1,66 @@
-{ffmpeg.exe driver: spawns the subprocess for probing and single-frame
- extraction. Parsing lives in FFmpegProbeParser; command-line assembly
- in FFmpegCmdLine.}
+{Infrastructure implementation of the domain IVideoProber and
+ IFrameExtractor abstractions: spawns the ffmpeg subprocess for probing
+ and single-frame extraction. Parsing lives in FFmpegProbeParser;
+ command-line assembly in FFmpegCmdLine. The process runner is injectable
+ so this unit's branching can be tested without a real ffmpeg.}
 unit FFmpegExe;
 
 interface
 
 uses
   System.SysUtils, System.Classes, Winapi.Windows, Vcl.Graphics,
-  Types, VideoInfo;
+  Types, VideoInfo, VideoProbing, FrameExtractor, ProcessRunner;
 
 type
-  TFFmpegExe = class
+  TFFmpegExe = class(TInterfacedObject, IVideoProber, IFrameExtractor)
   strict private
     FExePath: string;
+    {Wall-clock budget for one ExtractFrame call. The thumbnail path
+     constructs with a shorter value than the lister's main extraction.}
+    FExtractTimeoutMs: DWORD;
+    FRunner: IProcessRunner;
   public
-    constructor Create(const AExePath: string);
+    {ARunner defaults to the production runner; tests pass a fake.}
+    constructor Create(const AExePath: string; AExtractTimeoutMs: DWORD = 30000;
+      const ARunner: IProcessRunner = nil);
 
-    function ProbeVideo(const AFileName: string): TVideoInfo;
+    {IVideoProber}
+    function ProbeVideo(const AFilePath: string): TVideoInfo;
 
-    {ACancelHandle (typically TEvent.Handle) terminates the ffmpeg child
-     when signalled. Returns nil on failure; caller owns the bitmap.}
-    function ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD = 30000; ACancelHandle: THandle = 0): TBitmap;
+    {IFrameExtractor. ACancelHandle (typically TEvent.Handle) terminates
+     the ffmpeg child when signalled. Returns nil on failure; caller
+     owns the bitmap.}
+    function ExtractFrame(const AFileName: string; ATimeOffset: Double;
+      const AOptions: TExtractionOptions; ACancelHandle: THandle = 0): TBitmap;
 
     property ExePath: string read FExePath;
+  end;
+
+  {Production IFrameExtractorFactory: builds a TFFmpegExe for a requested
+   ffmpeg path. Lets the WLX/WCX shells defer extractor construction.}
+  TProductionFrameExtractorFactory = class(TInterfacedObject, IFrameExtractorFactory)
+  public
+    function CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
   end;
 
 implementation
 
 uses
-  BitmapSaver, ProcessRunner, FFmpegProbeParser, FFmpegCmdLine;
+  BitmapSaver, FFmpegProbeParser, FFmpegCmdLine;
 
-constructor TFFmpegExe.Create(const AExePath: string);
+constructor TFFmpegExe.Create(const AExePath: string; AExtractTimeoutMs: DWORD;
+  const ARunner: IProcessRunner);
 begin
   inherited Create;
   FExePath := AExePath;
+  FExtractTimeoutMs := AExtractTimeoutMs;
+  if ARunner <> nil then
+    FRunner := ARunner
+  else
+    FRunner := TProductionProcessRunner.Create;
 end;
 
-function TFFmpegExe.ProbeVideo(const AFileName: string): TVideoInfo;
+function TFFmpegExe.ProbeVideo(const AFilePath: string): TVideoInfo;
 var
   CmdLine: string;
   StdOut, StdErr: TBytes;
@@ -45,9 +69,9 @@ begin
   Result := Default (TVideoInfo);
   Result.Duration := -1;
 
-  CmdLine := Format('"%s" -nostdin -hide_banner -i "%s"', [FExePath, AFileName]);
+  CmdLine := Format('"%s" -nostdin -hide_banner -i "%s"', [FExePath, AFilePath]);
   {ffmpeg exits with 1 ("no output file specified"); we still get -i info on stderr.}
-  RunProcess(CmdLine, StdOut, StdErr, 10000);
+  FRunner.Run(CmdLine, StdOut, StdErr, 10000, 0);
 
   if Length(StdErr) = 0 then
   begin
@@ -73,7 +97,8 @@ begin
     Result.ErrorMessage := 'Could not parse video metadata';
 end;
 
-function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double; const AOptions: TExtractionOptions; ATimeoutMs: DWORD; ACancelHandle: THandle): TBitmap;
+function TFFmpegExe.ExtractFrame(const AFileName: string; ATimeOffset: Double;
+  const AOptions: TExtractionOptions; ACancelHandle: THandle): TBitmap;
 var
   CmdLine: string;
   StdOut, StdErr: TBytes;
@@ -84,7 +109,7 @@ begin
 
   CmdLine := BuildExtractCmdLine(FExePath, AFileName, ATimeOffset, AOptions);
 
-  ExitCode := RunProcess(CmdLine, StdOut, StdErr, ATimeoutMs, ACancelHandle);
+  ExitCode := FRunner.Run(CmdLine, StdOut, StdErr, FExtractTimeoutMs, ACancelHandle);
   if (ExitCode <> 0) or (Length(StdOut) < 8) then
     Exit;
 
@@ -108,6 +133,11 @@ begin
     on E: Exception do
       FreeAndNil(Result);
   end;
+end;
+
+function TProductionFrameExtractorFactory.CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
+begin
+  Result := TFFmpegExe.Create(AFFmpegPath);
 end;
 
 end.
