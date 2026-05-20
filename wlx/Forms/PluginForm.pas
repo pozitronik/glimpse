@@ -1736,7 +1736,12 @@ var
   Desc: TCommandDescriptor;
 begin
   if not FindCommandByTag(FCommandTable, Cardinal(ATag), Desc) then
+  begin
+    {An unknown tag is a wiring error, not a user-blocked action; log it
+     instead of silently no-opping.}
+    FormLog(Format('TryDispatchCommand: no command for tag %d', [ATag]));
     Exit(False);
+  end;
   Result := PolicyAllows(Desc.EnabledPolicy);
   if not Result then
     Exit;
@@ -1815,7 +1820,10 @@ end;
 
 procedure TPluginForm.DoToggleTimecode;
 begin
-  OnTimecodeButtonClick(nil);
+  FFrameView.ShowTimecode := not FFrameView.ShowTimecode;
+  UpdateTimecodeButton;
+  UpdateFrameViewSize;
+  FSettingsToggle.PersistTimecodeVisible(FFrameView.ShowTimecode);
 end;
 
 procedure TPluginForm.DoToggleMaximize;
@@ -2126,10 +2134,7 @@ end;
 
 procedure TPluginForm.OnTimecodeButtonClick(Sender: TObject);
 begin
-  FFrameView.ShowTimecode := not FFrameView.ShowTimecode;
-  UpdateTimecodeButton;
-  UpdateFrameViewSize;
-  FSettingsToggle.PersistTimecodeVisible(FFrameView.ShowTimecode);
+  DoToggleTimecode;
 end;
 
 procedure TPluginForm.DispatchCommand(ATag: Integer; AContextCellIndex: Integer = -1);
