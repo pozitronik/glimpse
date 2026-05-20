@@ -5,7 +5,7 @@ interface
 
 uses
   System.SysUtils,
-  Types;
+  Types, ProcessRunner;
 
 function BuildExtractCmdLine(const AExePath, AFileName: string; ATimeOffset: Double;
   const AOptions: TExtractionOptions): string;
@@ -15,12 +15,16 @@ function BuildExtractCmdLine(const AExePath, AFileName: string; ATimeOffset: Dou
 function ParseFFmpegVersion(const AText: string): string;
 
 {Returns empty string if the executable is not a valid ffmpeg.}
-function ValidateFFmpeg(const AExePath: string): string;
+function ValidateFFmpeg(const AExePath: string): string; overload;
+
+{Policy core: the -version subprocess runs through ARunner, so exit-code
+ handling and the stdout/stderr fallback are testable with a fake.}
+function ValidateFFmpeg(const AExePath: string; const ARunner: IProcessRunner): string; overload;
 
 implementation
 
 uses
-  ProcessRunner, FFmpegProbeParser;
+  FFmpegProbeParser;
 
 function BuildExtractCmdLine(const AExePath, AFileName: string; ATimeOffset: Double;
   const AOptions: TExtractionOptions): string;
@@ -99,7 +103,7 @@ begin
     Result := Copy(Line, Start, P - Start);
 end;
 
-function ValidateFFmpeg(const AExePath: string): string;
+function ValidateFFmpeg(const AExePath: string; const ARunner: IProcessRunner): string;
 var
   CmdLine: string;
   StdOut, StdErr: TBytes;
@@ -107,7 +111,7 @@ var
 begin
   Result := '';
   CmdLine := Format('"%s" -version', [AExePath]);
-  if RunProcess(CmdLine, StdOut, StdErr, 5000) <> 0 then
+  if ARunner.Run(CmdLine, StdOut, StdErr, 5000, 0) <> 0 then
     Exit;
   if Length(StdOut) > 0 then
     Output := LenientUTF8Decode(StdOut)
@@ -116,6 +120,14 @@ begin
   else
     Exit;
   Result := ParseFFmpegVersion(Output);
+end;
+
+function ValidateFFmpeg(const AExePath: string): string;
+var
+  Runner: IProcessRunner;
+begin
+  Runner := TProductionProcessRunner.Create;
+  Result := ValidateFFmpeg(AExePath, Runner);
 end;
 
 end.

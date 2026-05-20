@@ -27,13 +27,54 @@ type
     [Test] procedure TestBuildExtractCmdLineUseKeyframes;
     [Test] procedure TestBuildExtractCmdLinePngCodec;
     [Test] procedure TestBuildExtractCmdLineTimeOffsetInvariantLocale;
+    { ValidateFFmpeg policy, via a fake IProcessRunner }
+    [Test] procedure Validate_NonZeroExit_ReturnsEmpty;
+    [Test] procedure Validate_ZeroExit_StdOutVersion_ReturnsVersion;
+    [Test] procedure Validate_ZeroExit_EmptyStdOut_FallsBackToStdErr;
+    [Test] procedure Validate_ZeroExit_BothStreamsEmpty_ReturnsEmpty;
+    [Test] procedure Validate_ZeroExit_NonFFmpegOutput_ReturnsEmpty;
   end;
 
 implementation
 
 uses
   System.SysUtils,
-  Types, FFmpegProbeParser, FFmpegCmdLine;
+  Winapi.Windows,
+  Types, FFmpegProbeParser, FFmpegCmdLine, ProcessRunner;
+
+type
+  {Canned IProcessRunner: yields a fixed exit code and stdout/stderr so
+   ValidateFFmpeg's policy is exercised without launching ffmpeg.}
+  TStubProcessRunner = class(TInterfacedObject, IProcessRunner)
+  private
+    FExitCode: Integer;
+    FStdOut, FStdErr: TBytes;
+  public
+    constructor Create(AExitCode: Integer; const AStdOut, AStdErr: TBytes);
+    function Run(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
+      ATimeoutMs: DWORD; ACancelHandle: THandle): Integer;
+  end;
+
+constructor TStubProcessRunner.Create(AExitCode: Integer; const AStdOut, AStdErr: TBytes);
+begin
+  inherited Create;
+  FExitCode := AExitCode;
+  FStdOut := AStdOut;
+  FStdErr := AStdErr;
+end;
+
+function TStubProcessRunner.Run(const ACommandLine: string; out AStdOut, AStdErr: TBytes;
+  ATimeoutMs: DWORD; ACancelHandle: THandle): Integer;
+begin
+  AStdOut := FStdOut;
+  AStdErr := FStdErr;
+  Result := FExitCode;
+end;
+
+function Utf8Bytes(const AText: string): TBytes;
+begin
+  Result := TEncoding.UTF8.GetBytes(AText);
+end;
 
 { TTestFFmpegCmdLine: Version }
 
@@ -228,6 +269,54 @@ begin
   CmdLine := BuildExtractCmdLine('ffmpeg', 'v.mp4', 1.25, Opts);
 
   Assert.Contains(CmdLine, '-ss 1.250 ');
+end;
+
+{ ValidateFFmpeg }
+
+procedure TTestFFmpegCmdLine.Validate_NonZeroExit_ReturnsEmpty;
+var
+  Runner: IProcessRunner;
+begin
+  {A non-zero exit code means the probe failed; any version text in
+   stdout must be ignored.}
+  Runner := TStubProcessRunner.Create(1, Utf8Bytes('ffmpeg version 6.1.1 Copyright'), nil);
+  Assert.AreEqual('', ValidateFFmpeg('C:\ffmpeg.exe', Runner));
+end;
+
+procedure TTestFFmpegCmdLine.Validate_ZeroExit_StdOutVersion_ReturnsVersion;
+var
+  Runner: IProcessRunner;
+begin
+  Runner := TStubProcessRunner.Create(0,
+    Utf8Bytes('ffmpeg version 6.1.1 Copyright (c) 2000-2023'), nil);
+  Assert.AreEqual('6.1.1', ValidateFFmpeg('C:\ffmpeg.exe', Runner));
+end;
+
+procedure TTestFFmpegCmdLine.Validate_ZeroExit_EmptyStdOut_FallsBackToStdErr;
+var
+  Runner: IProcessRunner;
+begin
+  {Some ffmpeg builds print -version output on stderr; with stdout empty
+   the validator must fall back to stderr.}
+  Runner := TStubProcessRunner.Create(0, nil, Utf8Bytes('ffmpeg version 7.0 Copyright'));
+  Assert.AreEqual('7.0', ValidateFFmpeg('C:\ffmpeg.exe', Runner));
+end;
+
+procedure TTestFFmpegCmdLine.Validate_ZeroExit_BothStreamsEmpty_ReturnsEmpty;
+var
+  Runner: IProcessRunner;
+begin
+  Runner := TStubProcessRunner.Create(0, nil, nil);
+  Assert.AreEqual('', ValidateFFmpeg('C:\ffmpeg.exe', Runner));
+end;
+
+procedure TTestFFmpegCmdLine.Validate_ZeroExit_NonFFmpegOutput_ReturnsEmpty;
+var
+  Runner: IProcessRunner;
+begin
+  {Process ran cleanly but it is not ffmpeg; ParseFFmpegVersion rejects it.}
+  Runner := TStubProcessRunner.Create(0, Utf8Bytes('Some other tool v3.2'), nil);
+  Assert.AreEqual('', ValidateFFmpeg('C:\ffmpeg.exe', Runner));
 end;
 
 initialization
