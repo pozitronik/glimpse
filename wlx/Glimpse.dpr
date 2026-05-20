@@ -22,6 +22,7 @@ uses
   FFmpegExe in '..\src\infrastructure\FFmpegExe.pas',
   FrameView in 'Widgets\FrameView.pas',
   FrameCellStore in 'Widgets\FrameCellStore.pas',
+  FrameGeometry in 'Widgets\FrameGeometry.pas',
   ExtractionWorker in '..\src\domain\Frame\ExtractionWorker.pas',
   StatusBarHostBar in 'Widgets\StatusBarHostBar.pas',
   KeyInterceptionSubclass in 'Hotkeys\KeyInterceptionSubclass.pas',

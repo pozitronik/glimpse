@@ -8,7 +8,7 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  Types, Settings, Defaults, FrameOffsets, FrameCellStore, ViewModeLayout, TimecodeOverlay, RenderDefaults;
+  Types, Settings, Defaults, FrameOffsets, FrameCellStore, FrameGeometry, ViewModeLayout, TimecodeOverlay, RenderDefaults;
 
 type
   TCtrlWheelEvent = procedure(Sender: TObject; AWheelDelta: Integer) of object;
@@ -17,39 +17,41 @@ type
   TFrameView = class(TCustomControl)
   strict private
     FCellStore: TFrameCellStore;
+    FGeometry: TFrameGeometry;
   private
-    FViewMode: TViewMode;
-    FZoomMode: TZoomMode;
     FBackColor: TColor;
     FAnimStep: Integer;
-    FCellGap: Integer;
-    FCellMargin: Integer;
-    FColumnCount: Integer;
     FCurrentFrameIndex: Integer;
-    FAspectRatio: Double;
-    FNativeW: Integer;
-    FNativeH: Integer;
-    FViewportW: Integer;
-    FViewportH: Integer;
-    FBaseViewportW: Integer; {frozen viewport for layout when zoomed}
-    FBaseViewportH: Integer;
-    FZoomFactor: Double;
     FStyle: TTimestampStyle;
     FBlendBmp: TBitmap; {reusable 1x1 bitmap for alpha-blended timecode background}
     FTextBlendBmp: TBitmap; {offscreen bitmap for alpha-blended timecode text; resized on demand}
     FOnCtrlWheel: TCtrlWheelEvent;
-    FLayout: TViewModeLayout;
-    function GetBaseW: Integer;
-    function GetBaseH: Integer;
-    function BuildLayoutContext: TViewLayoutContext;
+    function LayoutContext: TViewLayoutContext;
     function TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
-    procedure SetViewMode(AValue: TViewMode);
     procedure SetCellGap(AValue: Integer);
     procedure SetCellMargin(AValue: Integer);
     procedure SetBackColor(AValue: TColor);
     procedure SetTimestampStyle(const AValue: TTimestampStyle);
     function GetShowTimecode: Boolean;
     procedure SetShowTimecode(AValue: Boolean);
+    function GetViewMode: TViewMode;
+    procedure SetViewMode(AValue: TViewMode);
+    function GetZoomMode: TZoomMode;
+    procedure SetZoomMode(AValue: TZoomMode);
+    function GetZoomFactor: Double;
+    procedure SetZoomFactor(AValue: Double);
+    function GetAspectRatio: Double;
+    procedure SetAspectRatio(AValue: Double);
+    function GetNativeW: Integer;
+    procedure SetNativeW(AValue: Integer);
+    function GetNativeH: Integer;
+    procedure SetNativeH(AValue: Integer);
+    function GetColumnCount: Integer;
+    procedure SetColumnCount(AValue: Integer);
+    function GetCellGap: Integer;
+    function GetCellMargin: Integer;
+    function GetBaseW: Integer;
+    function GetBaseH: Integer;
     procedure PaintCell(AIndex: Integer);
     procedure PaintPlaceholder(const ARect: TRect);
     procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
@@ -89,35 +91,23 @@ type
     function CellTimeOffset(AIndex: Integer): Double;
     function CellTimecode(AIndex: Integer): string;
     function CellSelected(AIndex: Integer): Boolean;
-    property ColumnCount: Integer read FColumnCount write FColumnCount;
-    property ViewMode: TViewMode read FViewMode write SetViewMode;
-    property ZoomMode: TZoomMode read FZoomMode write FZoomMode;
-    property AspectRatio: Double read FAspectRatio write FAspectRatio;
-    property NativeW: Integer read FNativeW write FNativeW;
-    property NativeH: Integer read FNativeH write FNativeH;
+    property ColumnCount: Integer read GetColumnCount write SetColumnCount;
+    property ViewMode: TViewMode read GetViewMode write SetViewMode;
+    property ZoomMode: TZoomMode read GetZoomMode write SetZoomMode;
+    property AspectRatio: Double read GetAspectRatio write SetAspectRatio;
+    property NativeW: Integer read GetNativeW write SetNativeW;
+    property NativeH: Integer read GetNativeH write SetNativeH;
     property BackColor: TColor read FBackColor write SetBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
-    property ZoomFactor: Double read FZoomFactor write FZoomFactor;
-    {Named transaction boundary for "the zoom factor is changing." Body
-     is currently just `FZoomFactor := ANewFactor;` — a thin wrapper
-     intended to grow with later refactors (validation, animation, undo
-     hooks). Replaces the direct property write so a debugger break-on
-     "zoom transition" has a single landing site.
-
-     Deliberately does NOT call RecalcSize. Callers always pair the
-     zoom write with form-side UpdateFrameViewSize (which adjusts
-     scrollbox visibility, column count, viewport, and then calls
-     RecalcSize itself). Calling RecalcSize here would cause an extra
-     paint cycle before UpdateFrameViewSize's scrollbox-visibility
-     adjustment settled — a visible flicker.}
+    property ZoomFactor: Double read GetZoomFactor write SetZoomFactor;
     procedure ApplyZoom(ANewFactor: Double);
     {Convenience accessor: the timecode toggle button and settings write-back
      only care about the visible/hidden flag, so it gets a narrow property;
      the rest of the overlay configuration flows through TimestampStyle.}
     property ShowTimecode: Boolean read GetShowTimecode write SetShowTimecode;
     property TimestampStyle: TTimestampStyle read FStyle write SetTimestampStyle;
-    property CellGap: Integer read FCellGap write SetCellGap;
-    property CellMargin: Integer read FCellMargin write SetCellMargin;
+    property CellGap: Integer read GetCellGap write SetCellGap;
+    property CellMargin: Integer read GetCellMargin write SetCellMargin;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
     property PopupMenu;
     property BaseW: Integer read GetBaseW;
@@ -162,9 +152,8 @@ constructor TFrameView.Create(AOwner: TComponent);
 begin
   inherited;
   FCellStore := TFrameCellStore.Create;
+  FGeometry := TFrameGeometry.Create(FCellStore);
   DoubleBuffered := True;
-  FCellGap := DEF_CELL_GAP;
-  FCellMargin := DEF_COMBINED_BORDER;
   FStyle := DefaultTimestampStyle;
   FStyle.Show := True;
   FStyle.FontName := DEF_TIMESTAMP_FONT;
@@ -175,34 +164,97 @@ begin
    user sees on screen; legacy mode is a combined-image-only concern.}
   FStyle.Mode := tsmModern;
   FBackColor := DEF_BACKGROUND;
-  FViewMode := vmGrid;
-  FZoomMode := zmFitWindow;
   FAnimStep := 0;
-  FColumnCount := 0;
   FCurrentFrameIndex := 0;
-  FAspectRatio := DEF_ASPECT_RATIO;
-  FNativeW := 0;
-  FNativeH := 0;
-  FViewportW := 0;
-  FViewportH := 0;
-  FBaseViewportW := 0;
-  FBaseViewportH := 0;
-  FZoomFactor := 1.0;
   FBlendBmp := TBitmap.Create;
   FBlendBmp.PixelFormat := pf24bit;
   FBlendBmp.SetSize(1, 1);
   FTextBlendBmp := TBitmap.Create;
   FTextBlendBmp.PixelFormat := pf24bit;
-  FLayout := CreateViewModeLayout(vmGrid);
 end;
 
 destructor TFrameView.Destroy;
 begin
+  FGeometry.Free;
   FCellStore.Free;
-  FLayout.Free;
   FBlendBmp.Free;
   FTextBlendBmp.Free;
   inherited;
+end;
+
+function TFrameView.GetViewMode: TViewMode;
+begin
+  Result := FGeometry.ViewMode;
+end;
+
+function TFrameView.GetZoomMode: TZoomMode;
+begin
+  Result := FGeometry.ZoomMode;
+end;
+
+procedure TFrameView.SetZoomMode(AValue: TZoomMode);
+begin
+  FGeometry.ZoomMode := AValue;
+end;
+
+function TFrameView.GetZoomFactor: Double;
+begin
+  Result := FGeometry.ZoomFactor;
+end;
+
+procedure TFrameView.SetZoomFactor(AValue: Double);
+begin
+  FGeometry.ZoomFactor := AValue;
+end;
+
+function TFrameView.GetAspectRatio: Double;
+begin
+  Result := FGeometry.AspectRatio;
+end;
+
+procedure TFrameView.SetAspectRatio(AValue: Double);
+begin
+  FGeometry.AspectRatio := AValue;
+end;
+
+function TFrameView.GetNativeW: Integer;
+begin
+  Result := FGeometry.NativeW;
+end;
+
+procedure TFrameView.SetNativeW(AValue: Integer);
+begin
+  FGeometry.NativeW := AValue;
+end;
+
+function TFrameView.GetNativeH: Integer;
+begin
+  Result := FGeometry.NativeH;
+end;
+
+procedure TFrameView.SetNativeH(AValue: Integer);
+begin
+  FGeometry.NativeH := AValue;
+end;
+
+function TFrameView.GetColumnCount: Integer;
+begin
+  Result := FGeometry.ColumnCount;
+end;
+
+procedure TFrameView.SetColumnCount(AValue: Integer);
+begin
+  FGeometry.ColumnCount := AValue;
+end;
+
+function TFrameView.GetCellGap: Integer;
+begin
+  Result := FGeometry.CellGap;
+end;
+
+function TFrameView.GetCellMargin: Integer;
+begin
+  Result := FGeometry.CellMargin;
 end;
 
 procedure TFrameView.WMEraseBkgnd(var Message: TWMEraseBkgnd);
@@ -221,7 +273,7 @@ begin
     Exit;
   end;
 
-  case FLayout.WheelScrollKind of
+  case FGeometry.WheelScrollKind of
     lwaNavigateFrame:
       begin
         if Message.WheelDelta > 0 then
@@ -255,102 +307,42 @@ end;
 
 procedure TFrameView.SetViewport(AW, AH: Integer);
 begin
-  FViewportW := AW;
-  FViewportH := AH;
-  {Freeze base viewport when at zoom=1.0; keep frozen while zoomed so
-   cell sizes stay constant across window resizes}
-  if SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
-  begin
-    FBaseViewportW := AW;
-    FBaseViewportH := AH;
-  end;
+  FGeometry.SetViewport(AW, AH);
 end;
 
 function TFrameView.GetBaseW: Integer;
 begin
-  if (FBaseViewportW > 0) and not SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
-    Result := FBaseViewportW
-  else
-    Result := FViewportW;
+  Result := FGeometry.BaseW;
 end;
 
 function TFrameView.GetBaseH: Integer;
 begin
-  if (FBaseViewportH > 0) and not SameValue(FZoomFactor, 1.0, ZOOM_EPSILON) then
-    Result := FBaseViewportH
-  else
-    Result := FViewportH;
+  Result := FGeometry.BaseH;
 end;
 
-function TFrameView.BuildLayoutContext: TViewLayoutContext;
-var
-  Margin2: Integer;
+function TFrameView.LayoutContext: TViewLayoutContext;
 begin
-  {Margin acts as an outer frame: layouts are given a viewport shrunk by the
-   margin on every side. Cells are then shifted by +margin when drawn, and
-   the control grows by 2*margin in RecalcSize. Keeps all layout math
-   unchanged while the margin logic lives at the TFrameView boundary.}
-  Margin2 := 2 * FCellMargin;
-  Result.BaseW := Max(1, BaseW - Margin2);
-  Result.BaseH := Max(1, BaseH - Margin2);
-  Result.CellCount := FCellStore.Count;
-  Result.CellGap := FCellGap;
-  Result.AspectRatio := FAspectRatio;
-  Result.NativeW := FNativeW;
-  Result.NativeH := FNativeH;
-  Result.ZoomMode := FZoomMode;
-  Result.ZoomFactor := FZoomFactor;
-  Result.ClientWidth := Max(1, ClientWidth - Margin2);
-  Result.ClientHeight := Max(1, ClientHeight - Margin2);
-  Result.CurrentFrameIndex := FCurrentFrameIndex;
-  Result.ViewportW := Max(1, FViewportW - Margin2);
-  Result.ViewportH := Max(1, FViewportH - Margin2);
-  Result.ColumnCount := FColumnCount;
+  Result := FGeometry.BuildContext(ClientWidth, ClientHeight, FCurrentFrameIndex);
 end;
 
 procedure TFrameView.SetViewMode(AValue: TViewMode);
 begin
-  if FViewMode = AValue then
-    Exit;
-  FViewMode := AValue;
-  FreeAndNil(FLayout);
-  FLayout := CreateViewModeLayout(AValue);
+  FGeometry.ViewMode := AValue;
 end;
 
 function TFrameView.DefaultColumnCount: Integer;
 begin
-  if (FViewMode = vmScroll) or (FCellStore.Count <= 1) then
-    Result := 1
-  else
-    Result := Max(1, Floor(Sqrt(FCellStore.Count)));
+  Result := FGeometry.DefaultColumnCount;
 end;
 
 function TFrameView.CalcFitColumns(AViewportW, AViewportH: Integer): Integer;
-var
-  C, Rows, CellW, CellH, TotalH: Integer;
 begin
-  if (FCellStore.Count <= 1) or (AViewportW <= 0) or (AViewportH <= 0) then
-    Exit(1);
-  for C := 1 to FCellStore.Count do
-  begin
-    {Gaps live between cells only: C cells share (C-1) gaps. Outer margin
-     is the caller's job (CellMargin), so the viewport handed in here is
-     already the margin-shrunk usable area.}
-    CellW := Max(1, (AViewportW - Max(C - 1, 0) * FCellGap) div C);
-    CellH := Max(1, Round(CellW * FAspectRatio));
-    Rows := (FCellStore.Count + C - 1) div C;
-    TotalH := Rows * CellH + Max(Rows - 1, 0) * FCellGap;
-    if TotalH <= AViewportH then
-      Exit(C);
-  end;
-  Result := FCellStore.Count;
+  Result := FGeometry.CalcFitColumns(AViewportW, AViewportH);
 end;
 
 function TFrameView.GetCellRect(AIndex: Integer): TRect;
 begin
-  Result := FLayout.GetCellRect(AIndex, BuildLayoutContext);
-  if FCellMargin <> 0 then
-    Result.Offset(FCellMargin, FCellMargin);
+  Result := FGeometry.GetCellRect(AIndex, LayoutContext);
 end;
 
 function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
@@ -381,7 +373,7 @@ begin
   Canvas.Brush.Color := FBackColor;
   Canvas.FillRect(ClientRect);
 
-  if FViewMode = vmSingle then
+  if FGeometry.ViewMode = vmSingle then
   begin
     if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < FCellStore.Count) then
       PaintCell(FCurrentFrameIndex);
@@ -405,7 +397,7 @@ begin
     fcsPlaceholder:
       PaintPlaceholder(R);
     fcsLoaded:
-      if FViewMode = vmSmartGrid then
+      if FGeometry.ViewMode = vmSmartGrid then
         PaintCropToFill(AIndex, R)
       else
         PaintLoadedFrame(AIndex, R);
@@ -555,9 +547,9 @@ end;
 
 procedure TFrameView.SetCellGap(AValue: Integer);
 begin
-  if FCellGap = AValue then
+  if FGeometry.CellGap = AValue then
     Exit;
-  FCellGap := AValue;
+  FGeometry.CellGap := AValue;
   {Cell gap affects component size in every layout mode; recalc so the
    scrollbox picks up the new dimensions and triggers a repaint.}
   RecalcSize;
@@ -568,9 +560,9 @@ procedure TFrameView.SetCellMargin(AValue: Integer);
 begin
   if AValue < 0 then
     AValue := 0;
-  if FCellMargin = AValue then
+  if FGeometry.CellMargin = AValue then
     Exit;
-  FCellMargin := AValue;
+  FGeometry.CellMargin := AValue;
   RecalcSize;
   Invalidate;
 end;
@@ -655,22 +647,16 @@ end;
 
 procedure TFrameView.ApplyZoom(ANewFactor: Double);
 begin
-  FZoomFactor := ANewFactor;
+  FGeometry.ApplyZoom(ANewFactor);
 end;
 
 procedure TFrameView.RecalcSize;
 var
   Sz: TSize;
 begin
-  if FCellStore.Count = 0 then
-  begin
-    Width := FViewportW;
-    Height := FViewportH;
-    Exit;
-  end;
-  Sz := FLayout.RecalcSize(BuildLayoutContext);
-  Width := Sz.CX + 2 * FCellMargin;
-  Height := Sz.CY + 2 * FCellMargin;
+  Sz := FGeometry.ContentSize(LayoutContext);
+  Width := Sz.CX;
+  Height := Sz.CY;
 end;
 
 procedure TFrameView.NavigateFrame(ADelta: Integer);
@@ -722,16 +708,8 @@ begin
 end;
 
 function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
-var
-  P: TPoint;
 begin
-  P := APoint;
-  if FCellMargin <> 0 then
-  begin
-    P.X := P.X - FCellMargin;
-    P.Y := P.Y - FCellMargin;
-  end;
-  Result := FLayout.CellIndexAt(P, BuildLayoutContext);
+  Result := FGeometry.CellIndexAt(APoint, LayoutContext);
 end;
 
 procedure TFrameView.ToggleSelection(AIndex: Integer);
