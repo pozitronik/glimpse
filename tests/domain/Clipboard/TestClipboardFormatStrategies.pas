@@ -53,7 +53,7 @@ implementation
 uses
   System.SysUtils, System.UITypes, System.Classes,
   Winapi.Windows, Vcl.Graphics, Vcl.Clipbrd,
-  ClipboardImage, ClipboardFormatStrategies, SettingsGroups;
+  ClipboardImage, VclClipboard, ClipboardFormatStrategies, SettingsGroups;
 
 {Test helper: opens the system clipboard with the same retry policy
  production code uses (TryClipboardOpenWithRetry). The console DUnitX
@@ -394,7 +394,7 @@ var
 begin
   Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
   try
-    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack, nil, ErrMsg),
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack, nil, CreateImageClipboard, ErrMsg),
       'Empty strategy array must return True (silent skip) per the agreed UX');
     Assert.AreEqual('', ErrMsg,
       'No format failed, so the failing-format out-param must be empty');
@@ -407,7 +407,7 @@ procedure TTestClipboardFormatStrategies.Orchestrator_NilBitmap_ReturnsFalse;
 var
   ErrMsg: string;
 begin
-  Assert.IsFalse(CopyBitmapToClipboard(nil, clBlack, nil, ErrMsg),
+  Assert.IsFalse(CopyBitmapToClipboard(nil, clBlack, nil, CreateImageClipboard, ErrMsg),
     'Nil source must fail cleanly without touching the clipboard');
   Assert.AreEqual('', ErrMsg, 'Nil-source path is not a per-strategy failure');
 end;
@@ -428,7 +428,7 @@ begin
 
     Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
     try
-      Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack, Strategies, ErrMsg));
+      Assert.IsTrue(CopyBitmapToClipboard(Bmp, clBlack, Strategies, CreateImageClipboard, ErrMsg));
       Assert.AreEqual(1, M0.AllocateCount, 'M0.Allocate called once');
       Assert.AreEqual(1, M1.AllocateCount, 'M1.Allocate called once');
       Assert.AreEqual(1, M0.PublishCount, 'M0.Publish called once');
@@ -462,7 +462,7 @@ begin
 
     Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
     try
-      Assert.IsFalse(CopyBitmapToClipboard(Bmp, clBlack, Strategies, ErrMsg),
+      Assert.IsFalse(CopyBitmapToClipboard(Bmp, clBlack, Strategies, CreateImageClipboard, ErrMsg),
         'Allocation failure must abort the whole copy');
       Assert.AreEqual('FailingMock', ErrMsg,
         'Out-param must name the failing strategy so the caller can compose an actionable message');
@@ -501,7 +501,7 @@ begin
 
     Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
     try
-      Assert.IsFalse(CopyBitmapToClipboard(Bmp, clBlack, Strategies, ErrMsg));
+      Assert.IsFalse(CopyBitmapToClipboard(Bmp, clBlack, Strategies, CreateImageClipboard, ErrMsg));
       Assert.AreEqual(1, M0.DiscardCount);
       Assert.AreEqual(1, M1.DiscardCount);
       Assert.AreEqual(1, M2.DiscardCount);

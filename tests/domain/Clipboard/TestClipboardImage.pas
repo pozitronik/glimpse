@@ -17,6 +17,8 @@ type
     [Test] procedure CopyBitmap_Pf32Bit_CfDibCompositesAlphaOntoBackground;
     [Test] procedure CopyBitmap_Pf32Bit_CfDibIsBottomUp;
     [Test] procedure CopyBitmap_Pf32Bit_PublishesCfBitmapSibling;
+    [Test] procedure CopyBitmap_Pf24Bit_RoutesToAssignBitmap;
+    [Test] procedure CopyBitmap_OpenFails_DiscardsStrategiesAndReturnsFalse;
     {Retry contract for the open helper. Earlier the bare except absorbed
      every exception class and burned 200 ms retrying problems that were
      not transient clipboard contention.}
@@ -30,7 +32,48 @@ implementation
 
 uses
   System.SysUtils, System.Types, System.UITypes, Winapi.Windows, Vcl.Graphics, Vcl.Clipbrd,
-  ClipboardImage, ClipboardFormatStrategies, SettingsGroups;
+  ClipboardImage, VclClipboard, ClipboardFormatStrategies, SettingsGroups;
+
+type
+  {Records the IImageClipboard calls so orchestration paths can be
+   checked without a real system clipboard.}
+  TFakeImageClipboard = class(TInterfacedObject, IImageClipboard)
+  public
+    AssignCount, OpenCount, EmptyCount, CloseCount: Integer;
+    OpenSucceeds: Boolean;
+    constructor Create;
+    procedure AssignBitmap(ABitmap: Vcl.Graphics.TBitmap);
+    function TryOpen: Boolean;
+    procedure Empty;
+    procedure Close;
+  end;
+
+constructor TFakeImageClipboard.Create;
+begin
+  inherited Create;
+  OpenSucceeds := True;
+end;
+
+procedure TFakeImageClipboard.AssignBitmap(ABitmap: Vcl.Graphics.TBitmap);
+begin
+  Inc(AssignCount);
+end;
+
+function TFakeImageClipboard.TryOpen: Boolean;
+begin
+  Inc(OpenCount);
+  Result := OpenSucceeds;
+end;
+
+procedure TFakeImageClipboard.Empty;
+begin
+  Inc(EmptyCount);
+end;
+
+procedure TFakeImageClipboard.Close;
+begin
+  Inc(CloseCount);
+end;
 
 {Test-only helper: builds the default all-formats strategy array and
  delegates to CopyBitmapToClipboard. Lets the format-fidelity tests
@@ -45,7 +88,7 @@ var
 begin
   Settings := TClipboardFormatsGroup.Defaults;
   Strategies := BuildClipboardFormatStrategies(Settings, 6);
-  Result := CopyBitmapToClipboard(ABmp, ABackground, Strategies, Err);
+  Result := CopyBitmapToClipboard(ABmp, ABackground, Strategies, CreateImageClipboard, Err);
 end;
 
 {The console DUnitX runner has no message pump, so OpenClipboard can fail
@@ -457,6 +500,58 @@ begin
     end);
   Assert.IsTrue(Result, 'Recovery after a few transient failures must succeed');
   Assert.AreEqual(3, Calls);
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf24Bit_RoutesToAssignBitmap;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Fake: TFakeImageClipboard;
+  Clip: IImageClipboard;
+  Err: string;
+begin
+  {pf24bit must take the one-shot AssignBitmap path and never enter the
+   open/empty/close session.}
+  Fake := TFakeImageClipboard.Create;
+  Clip := Fake;
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(8, 4);
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, TColor($000000), nil, Clip, Err));
+    Assert.AreEqual(1, Fake.AssignCount, 'pf24bit must call AssignBitmap once');
+    Assert.AreEqual(0, Fake.OpenCount, 'pf24bit must not open a clipboard session');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_OpenFails_DiscardsStrategiesAndReturnsFalse;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Fake: TFakeImageClipboard;
+  Clip: IImageClipboard;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  Err: string;
+begin
+  {When the clipboard never opens, the orchestrator must abandon the
+   publish, discard every allocated strategy handle, and report False
+   without calling Empty or Close.}
+  Fake := TFakeImageClipboard.Create;
+  Fake.OpenSucceeds := False;
+  Clip := Fake;
+  Strategies := BuildClipboardFormatStrategies(TClipboardFormatsGroup.Defaults, 6);
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 255, 0, 0, 200);
+    Assert.IsFalse(CopyBitmapToClipboard(Bmp, TColor($000000), Strategies, Clip, Err),
+      'Open failure must make the copy fail');
+    Assert.AreEqual(1, Fake.OpenCount, 'TryOpen must have been attempted');
+    Assert.AreEqual(0, Fake.EmptyCount, 'Empty must not run when open failed');
+    Assert.AreEqual(0, Fake.CloseCount, 'Close must not run when the session was never entered');
+  finally
+    Bmp.Free;
+  end;
 end;
 
 initialization

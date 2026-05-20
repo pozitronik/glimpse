@@ -64,7 +64,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.UITypes,
-  ClipboardImage, ClipboardFileDrop, ClipboardFormatStrategies,
+  ClipboardImage, VclClipboard, ClipboardFileDrop, ClipboardFormatStrategies,
   SettingsGroups, Defaults, BitmapSaver, Logging;
 
 function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
@@ -184,7 +184,7 @@ begin
     begin
       Strategies := BuildClipboardFormatStrategies(FormatSettings, PngCompression);
       AOut.Success := ClipboardImage.CopyBitmapToClipboard(ABmp, ABackground,
-        Strategies, FailedFormat);
+        Strategies, CreateImageClipboard, FailedFormat);
       {Carry failing-strategy name back to the main thread via ErrorMsg.}
       if not AOut.Success then
         AOut.ErrorMsg := FailedFormat;

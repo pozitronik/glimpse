@@ -20,7 +20,7 @@ function CreateFileDropClipboard: IFileDropClipboard;
 implementation
 
 uses
-  Winapi.Windows, Winapi.ShlObj, Vcl.Clipbrd, ClipboardImage;
+  Winapi.Windows, Winapi.ShlObj, Vcl.Clipbrd, VclClipboard;
 
 type
   TFileDropClipboard = class(TInterfacedObject, IFileDropClipboard)
