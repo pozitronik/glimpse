@@ -1469,7 +1469,10 @@ begin
   Prober := TFFmpegExe.Create(FFFmpegPath);
   FVideoInfo := FServices.ProbeCache.TryGetOrProbe(FFileName, Prober);
 
-  FExporter.UpdateBannerInfo(BuildBannerInfo(FFileName, FVideoInfo));
+  var BannerBytes: Int64 := 0;
+  if TFile.Exists(FFileName) then
+    BannerBytes := TFile.GetSize(FFileName);
+  FExporter.UpdateBannerInfo(BuildBannerInfo(FFileName, BannerBytes, FVideoInfo));
 
   UpdateStatusBar;
 

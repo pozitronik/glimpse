@@ -215,7 +215,10 @@ begin
     if (Result <> nil) and Settings.ShowBanner then
     begin
       BannerStyle := TBannerStyle.FromSettings(Settings.Banner);
-      WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(AContext.FileName, AContext.VideoInfo)), BannerStyle);
+      var BannerBytes: Int64 := 0;
+      if TFile.Exists(AContext.FileName) then
+        BannerBytes := TFile.GetSize(AContext.FileName);
+      WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(AContext.FileName, BannerBytes, AContext.VideoInfo)), BannerStyle);
       Result.Free;
       Result := WithBanner;
     end;

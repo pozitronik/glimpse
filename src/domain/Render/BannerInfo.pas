@@ -25,14 +25,14 @@ type
     AudioBitrateKbps: Integer;
   end;
 
-function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
+function BuildBannerInfo(const AFileName: string; AFileSizeBytes: Int64; const AVideoInfo: TVideoInfo): TBannerInfo;
 
 function FormatBannerLines(const AInfo: TBannerInfo): TArray<string>;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils,
+  System.SysUtils,
   FrameOffsets;
 
 function FormatFileSize(ABytes: Int64): string;
@@ -50,12 +50,11 @@ begin
     Result := Format('%d B', [ABytes]);
 end;
 
-function BuildBannerInfo(const AFileName: string; const AVideoInfo: TVideoInfo): TBannerInfo;
+function BuildBannerInfo(const AFileName: string; AFileSizeBytes: Int64; const AVideoInfo: TVideoInfo): TBannerInfo;
 begin
   Result := Default (TBannerInfo);
   Result.FileName := AFileName;
-  if TFile.Exists(AFileName) then
-    Result.FileSizeBytes := TFile.GetSize(AFileName);
+  Result.FileSizeBytes := AFileSizeBytes;
   Result.DurationSec := AVideoInfo.Duration;
   Result.Width := AVideoInfo.Width;
   Result.Height := AVideoInfo.Height;
