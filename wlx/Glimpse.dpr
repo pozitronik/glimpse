@@ -23,6 +23,7 @@ uses
   FrameView in 'Widgets\FrameView.pas',
   FrameCellStore in 'Widgets\FrameCellStore.pas',
   FrameGeometry in 'Widgets\FrameGeometry.pas',
+  FrameViewRenderer in 'Widgets\FrameViewRenderer.pas',
   ExtractionWorker in '..\src\domain\Frame\ExtractionWorker.pas',
   StatusBarHostBar in 'Widgets\StatusBarHostBar.pas',
   KeyInterceptionSubclass in 'Hotkeys\KeyInterceptionSubclass.pas',

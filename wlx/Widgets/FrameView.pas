@@ -8,29 +8,29 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  Types, Settings, Defaults, FrameOffsets, FrameCellStore, FrameGeometry, ViewModeLayout, TimecodeOverlay, RenderDefaults;
+  Types, Settings, Defaults, FrameOffsets, FrameCellStore, FrameGeometry,
+  FrameViewRenderer, ViewModeLayout, TimecodeOverlay, RenderDefaults;
 
 type
   TCtrlWheelEvent = procedure(Sender: TObject; AWheelDelta: Integer) of object;
 
-  {Custom control that renders frame cells in various layout modes.}
+  {Custom control that renders frame cells in various layout modes. It owns
+   the cell store, geometry and renderer collaborators and wires them to the
+   VCL window; the cell data, sizing math and painting live in those.}
   TFrameView = class(TCustomControl)
   strict private
     FCellStore: TFrameCellStore;
     FGeometry: TFrameGeometry;
+    FRenderer: TFrameViewRenderer;
   private
-    FBackColor: TColor;
-    FAnimStep: Integer;
     FCurrentFrameIndex: Integer;
-    FStyle: TTimestampStyle;
-    FBlendBmp: TBitmap; {reusable 1x1 bitmap for alpha-blended timecode background}
-    FTextBlendBmp: TBitmap; {offscreen bitmap for alpha-blended timecode text; resized on demand}
     FOnCtrlWheel: TCtrlWheelEvent;
     function LayoutContext: TViewLayoutContext;
-    function TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
     procedure SetCellGap(AValue: Integer);
     procedure SetCellMargin(AValue: Integer);
+    function GetBackColor: TColor;
     procedure SetBackColor(AValue: TColor);
+    function GetTimestampStyle: TTimestampStyle;
     procedure SetTimestampStyle(const AValue: TTimestampStyle);
     function GetShowTimecode: Boolean;
     procedure SetShowTimecode(AValue: Boolean);
@@ -52,13 +52,6 @@ type
     function GetCellMargin: Integer;
     function GetBaseW: Integer;
     function GetBaseH: Integer;
-    procedure PaintCell(AIndex: Integer);
-    procedure PaintPlaceholder(const ARect: TRect);
-    procedure PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
-    procedure PaintCropToFill(AIndex: Integer; const ARect: TRect);
-    procedure PaintArc(const ARect: TRect);
-    procedure PaintTimecode(AIndex: Integer; const ACellRect: TRect);
-    procedure PaintErrorCell(const ARect: TRect);
     procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
     procedure WMMouseWheel(var Message: TWMMouseWheel); message WM_MOUSEWHEEL;
   protected
@@ -97,7 +90,7 @@ type
     property AspectRatio: Double read GetAspectRatio write SetAspectRatio;
     property NativeW: Integer read GetNativeW write SetNativeW;
     property NativeH: Integer read GetNativeH write SetNativeH;
-    property BackColor: TColor read FBackColor write SetBackColor;
+    property BackColor: TColor read GetBackColor write SetBackColor;
     property CurrentFrameIndex: Integer read FCurrentFrameIndex write FCurrentFrameIndex;
     property ZoomFactor: Double read GetZoomFactor write SetZoomFactor;
     procedure ApplyZoom(ANewFactor: Double);
@@ -105,7 +98,7 @@ type
      only care about the visible/hidden flag, so it gets a narrow property;
      the rest of the overlay configuration flows through TimestampStyle.}
     property ShowTimecode: Boolean read GetShowTimecode write SetShowTimecode;
-    property TimestampStyle: TTimestampStyle read FStyle write SetTimestampStyle;
+    property TimestampStyle: TTimestampStyle read GetTimestampStyle write SetTimestampStyle;
     property CellGap: Integer read GetCellGap write SetCellGap;
     property CellMargin: Integer read GetCellMargin write SetCellMargin;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
@@ -123,68 +116,34 @@ const
 implementation
 
 uses
-  System.SysUtils, System.Math,
-  Vcl.Forms,
-  ZoomController;
-
-const
-  TIMECODE_H = 20;
-
-  {Painting colors}
-  CLR_CELL_BG = TColor($002D2D2D); {dark gray cell/placeholder background}
-  CLR_ARC = TColor($00707070); {loading spinner arc}
-  CLR_ERROR_TEXT = TColor($004040FF); {error cell label}
-  CLR_SELECTION = TColor($00F7C34F); {#4FC3F7 light blue selection border}
-  SELECTION_BORDER_W = 2;
-
-  {Painting fonts and sizes}
-  FONT_NAME = 'Segoe UI';
-  FONT_TIMECODE = 8;
-  FONT_ERROR = 9;
-  TIMECODE_PADDING = 8; {horizontal padding inside timecode label}
-  ARC_PEN_WIDTH = 3;
-  ARC_RADIUS_DIV = 8; {spinner radius = min(cell dim) div this}
-  MIN_ARC_RADIUS = 5; {skip spinner if cell too small}
-  ARC_ANGLE_STEP = 45.0; {spinner rotation angle per animation tick}
-  ANIM_STEP_COUNT = Round(360.0 / ARC_ANGLE_STEP);
+  Vcl.Forms;
 
 constructor TFrameView.Create(AOwner: TComponent);
 begin
   inherited;
   FCellStore := TFrameCellStore.Create;
   FGeometry := TFrameGeometry.Create(FCellStore);
+  FRenderer := TFrameViewRenderer.Create(Canvas, FCellStore, FGeometry);
   DoubleBuffered := True;
-  FStyle := DefaultTimestampStyle;
-  FStyle.Show := True;
-  FStyle.FontName := DEF_TIMESTAMP_FONT;
-  FStyle.FontSize := DEF_TIMESTAMP_FONT_SIZE;
-  FStyle.FontStyles := []; {live-view timecodes render non-bold (canvas default)}
-  FStyle.BackAlpha := DEF_TC_BACK_ALPHA;
-  {Live view always uses the modern rect renderer to match what the
-   user sees on screen; legacy mode is a combined-image-only concern.}
-  FStyle.Mode := tsmModern;
-  FBackColor := DEF_BACKGROUND;
-  FAnimStep := 0;
   FCurrentFrameIndex := 0;
-  FBlendBmp := TBitmap.Create;
-  FBlendBmp.PixelFormat := pf24bit;
-  FBlendBmp.SetSize(1, 1);
-  FTextBlendBmp := TBitmap.Create;
-  FTextBlendBmp.PixelFormat := pf24bit;
 end;
 
 destructor TFrameView.Destroy;
 begin
+  FRenderer.Free;
   FGeometry.Free;
   FCellStore.Free;
-  FBlendBmp.Free;
-  FTextBlendBmp.Free;
   inherited;
 end;
 
 function TFrameView.GetViewMode: TViewMode;
 begin
   Result := FGeometry.ViewMode;
+end;
+
+procedure TFrameView.SetViewMode(AValue: TViewMode);
+begin
+  FGeometry.ViewMode := AValue;
 end;
 
 function TFrameView.GetZoomMode: TZoomMode;
@@ -257,6 +216,53 @@ begin
   Result := FGeometry.CellMargin;
 end;
 
+function TFrameView.GetBaseW: Integer;
+begin
+  Result := FGeometry.BaseW;
+end;
+
+function TFrameView.GetBaseH: Integer;
+begin
+  Result := FGeometry.BaseH;
+end;
+
+function TFrameView.GetBackColor: TColor;
+begin
+  Result := FRenderer.BackColor;
+end;
+
+procedure TFrameView.SetBackColor(AValue: TColor);
+begin
+  if FRenderer.BackColor = AValue then
+    Exit;
+  FRenderer.BackColor := AValue;
+  Invalidate;
+end;
+
+function TFrameView.GetTimestampStyle: TTimestampStyle;
+begin
+  Result := FRenderer.TimestampStyle;
+end;
+
+procedure TFrameView.SetTimestampStyle(const AValue: TTimestampStyle);
+begin
+  if FRenderer.ApplyTimestampStyle(AValue) then
+    Invalidate;
+end;
+
+function TFrameView.GetShowTimecode: Boolean;
+begin
+  Result := FRenderer.ShowTimecode;
+end;
+
+procedure TFrameView.SetShowTimecode(AValue: Boolean);
+begin
+  if FRenderer.ShowTimecode = AValue then
+    Exit;
+  FRenderer.ShowTimecode := AValue;
+  Invalidate;
+end;
+
 procedure TFrameView.WMEraseBkgnd(var Message: TWMEraseBkgnd);
 begin
   Message.Result := 1;
@@ -310,24 +316,9 @@ begin
   FGeometry.SetViewport(AW, AH);
 end;
 
-function TFrameView.GetBaseW: Integer;
-begin
-  Result := FGeometry.BaseW;
-end;
-
-function TFrameView.GetBaseH: Integer;
-begin
-  Result := FGeometry.BaseH;
-end;
-
 function TFrameView.LayoutContext: TViewLayoutContext;
 begin
   Result := FGeometry.BuildContext(ClientWidth, ClientHeight, FCurrentFrameIndex);
-end;
-
-procedure TFrameView.SetViewMode(AValue: TViewMode);
-begin
-  FGeometry.ViewMode := AValue;
 end;
 
 function TFrameView.DefaultColumnCount: Integer;
@@ -345,204 +336,9 @@ begin
   Result := FGeometry.GetCellRect(AIndex, LayoutContext);
 end;
 
-function TFrameView.TimecodeRectFromCell(const ACellRect: TRect; AIndex: Integer): TRect;
-var
-  TW: Integer;
-begin
-  Canvas.Font.Name := FStyle.FontName;
-  Canvas.Font.Size := FStyle.FontSize;
-  Canvas.Font.Style := FStyle.FontStyles;
-  TW := Canvas.TextWidth(FCellStore.Timecode(AIndex)) + TIMECODE_PADDING;
-  case FStyle.Corner of
-    tcTopLeft:
-      Result := Rect(ACellRect.Left, ACellRect.Top, ACellRect.Left + TW, ACellRect.Top + TIMECODE_H);
-    tcTopRight:
-      Result := Rect(ACellRect.Right - TW, ACellRect.Top, ACellRect.Right, ACellRect.Top + TIMECODE_H);
-    tcBottomRight:
-      Result := Rect(ACellRect.Right - TW, ACellRect.Bottom - TIMECODE_H, ACellRect.Right, ACellRect.Bottom);
-    else {tcBottomLeft}
-      Result := Rect(ACellRect.Left, ACellRect.Bottom - TIMECODE_H, ACellRect.Left + TW, ACellRect.Bottom);
-  end;
-end;
-
 procedure TFrameView.Paint;
-var
-  I: Integer;
-  Clip, Dummy: TRect;
 begin
-  Canvas.Brush.Color := FBackColor;
-  Canvas.FillRect(ClientRect);
-
-  if FGeometry.ViewMode = vmSingle then
-  begin
-    if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < FCellStore.Count) then
-      PaintCell(FCurrentFrameIndex);
-  end else begin
-    {Skip cells that are entirely outside the clip region. In scroll/filmstrip
-     modes only a few cells are visible at a time, so this avoids GDI overhead
-     for up to 99 off-screen cells.}
-    Clip := Canvas.ClipRect;
-    for I := 0 to FCellStore.Count - 1 do
-      if IntersectRect(Dummy, GetCellRect(I), Clip) then
-        PaintCell(I);
-  end;
-end;
-
-procedure TFrameView.PaintCell(AIndex: Integer);
-var
-  R: TRect;
-begin
-  R := GetCellRect(AIndex);
-  case FCellStore.State(AIndex) of
-    fcsPlaceholder:
-      PaintPlaceholder(R);
-    fcsLoaded:
-      if FGeometry.ViewMode = vmSmartGrid then
-        PaintCropToFill(AIndex, R)
-      else
-        PaintLoadedFrame(AIndex, R);
-    fcsError:
-      PaintErrorCell(R);
-  end;
-  PaintTimecode(AIndex, R);
-  if FCellStore.Selected(AIndex) then
-  begin
-    Canvas.Pen.Color := CLR_SELECTION;
-    Canvas.Pen.Width := SELECTION_BORDER_W;
-    Canvas.Pen.Style := psSolid;
-    Canvas.Brush.Style := bsClear;
-    R.Inflate(-SELECTION_BORDER_W div 2, -SELECTION_BORDER_W div 2);
-    Canvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
-  end;
-end;
-
-procedure TFrameView.PaintPlaceholder(const ARect: TRect);
-begin
-  Canvas.Brush.Color := CLR_CELL_BG;
-  Canvas.Pen.Style := psClear;
-  Canvas.Rectangle(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom);
-  PaintArc(ARect);
-end;
-
-procedure TFrameView.PaintLoadedFrame(AIndex: Integer; const ARect: TRect);
-var
-  Bmp: TBitmap;
-  DstR: TRect;
-  Scale: Double;
-  DW, DH: Integer;
-begin
-  Bmp := FCellStore.Bitmap(AIndex);
-  if Bmp = nil then
-  begin
-    PaintPlaceholder(ARect);
-    Exit;
-  end;
-  {Scale to fit cell, maintaining aspect ratio}
-  Scale := Min(ARect.Width / Max(1, Bmp.Width), ARect.Height / Max(1, Bmp.Height));
-  DW := Round(Bmp.Width * Scale);
-  DH := Round(Bmp.Height * Scale);
-  DstR.Left := ARect.Left + (ARect.Width - DW) div 2;
-  DstR.Top := ARect.Top + (ARect.Height - DH) div 2;
-  DstR.Right := DstR.Left + DW;
-  DstR.Bottom := DstR.Top + DH;
-
-  {Fill letterbox area}
-  Canvas.Brush.Color := CLR_CELL_BG;
-  Canvas.FillRect(ARect);
-  Canvas.StretchDraw(DstR, Bmp);
-end;
-
-procedure TFrameView.PaintCropToFill(AIndex: Integer; const ARect: TRect);
-var
-  Bmp: TBitmap;
-  SrcR: TRect;
-  Scale: Double;
-  SrcW, SrcH: Integer;
-begin
-  Bmp := FCellStore.Bitmap(AIndex);
-  if Bmp = nil then
-  begin
-    PaintPlaceholder(ARect);
-    Exit;
-  end;
-  {Scale so smaller dimension fills the cell, crop the excess}
-  Scale := Max(ARect.Width / Max(1, Bmp.Width), ARect.Height / Max(1, Bmp.Height));
-  SrcW := Min(Bmp.Width, Round(ARect.Width / Scale));
-  SrcH := Min(Bmp.Height, Round(ARect.Height / Scale));
-  SrcR.Left := (Bmp.Width - SrcW) div 2;
-  SrcR.Top := (Bmp.Height - SrcH) div 2;
-  SrcR.Right := SrcR.Left + SrcW;
-  SrcR.Bottom := SrcR.Top + SrcH;
-
-  {HALFTONE averages source pixels properly; default BLACKONWHITE ANDs
-   channel values independently, corrupting colors when downscaling}
-  SetStretchBltMode(Canvas.Handle, HALFTONE);
-  SetBrushOrgEx(Canvas.Handle, 0, 0, nil);
-  Canvas.CopyRect(ARect, Bmp.Canvas, SrcR);
-end;
-
-procedure TFrameView.PaintArc(const ARect: TRect);
-var
-  CX, CY, Radius, I: Integer;
-  StartAngle, Angle: Double;
-  X, Y: Integer;
-const
-  ARC_SPAN = 90.0;
-  SEGMENTS = 12;
-begin
-  CX := (ARect.Left + ARect.Right) div 2;
-  CY := (ARect.Top + ARect.Bottom) div 2;
-  Radius := Min(ARect.Width, ARect.Height) div ARC_RADIUS_DIV;
-  if Radius < MIN_ARC_RADIUS then
-    Exit;
-
-  StartAngle := FAnimStep * ARC_ANGLE_STEP;
-  Canvas.Pen.Color := CLR_ARC;
-  Canvas.Pen.Width := ARC_PEN_WIDTH;
-  Canvas.Pen.Style := psSolid;
-
-  for I := 0 to SEGMENTS do
-  begin
-    Angle := DegToRad(StartAngle + I * ARC_SPAN / SEGMENTS);
-    X := CX + Round(Radius * Cos(Angle));
-    Y := CY - Round(Radius * Sin(Angle));
-    if I = 0 then
-      Canvas.MoveTo(X, Y)
-    else
-      Canvas.LineTo(X, Y);
-  end;
-end;
-
-procedure TFrameView.SetBackColor(AValue: TColor);
-begin
-  if FBackColor = AValue then
-    Exit;
-  FBackColor := AValue;
-  Invalidate;
-end;
-
-procedure TFrameView.SetTimestampStyle(const AValue: TTimestampStyle);
-begin
-  {Field-by-field compare rather than a single record-equality check because
-   TTimestampStyle contains a managed string (FontName) that should be compared
-   by value. Bail out of the invalidate when nothing visible changed.}
-  if (FStyle.Show = AValue.Show) and (FStyle.Corner = AValue.Corner) and (FStyle.FontName = AValue.FontName) and (FStyle.FontSize = AValue.FontSize) and (FStyle.FontStyles = AValue.FontStyles) and (FStyle.BackColor = AValue.BackColor) and (FStyle.BackAlpha = AValue.BackAlpha) and (FStyle.TextColor = AValue.TextColor) and (FStyle.TextAlpha = AValue.TextAlpha) then
-    Exit;
-  FStyle := AValue;
-  Invalidate;
-end;
-
-function TFrameView.GetShowTimecode: Boolean;
-begin
-  Result := FStyle.Show;
-end;
-
-procedure TFrameView.SetShowTimecode(AValue: Boolean);
-begin
-  if FStyle.Show = AValue then
-    Exit;
-  FStyle.Show := AValue;
-  Invalidate;
+  FRenderer.Paint(ClientRect, FCurrentFrameIndex);
 end;
 
 procedure TFrameView.SetCellGap(AValue: Integer);
@@ -565,44 +361,6 @@ begin
   FGeometry.CellMargin := AValue;
   RecalcSize;
   Invalidate;
-end;
-
-procedure TFrameView.PaintTimecode(AIndex: Integer; const ACellRect: TRect);
-var
-  R: TRect;
-  EffectiveStyle: TTimestampStyle;
-begin
-  if not FStyle.Show then
-    Exit;
-  if FStyle.Corner = tcNone then
-    Exit;
-  if FCellStore.Timecode(AIndex) = '' then
-    Exit;
-
-  R := TimecodeRectFromCell(ACellRect, AIndex);
-
-  {Pending cells dim the configured text color to half luminance so the
-   load-fade cue stays visible with any user-chosen hue.}
-  EffectiveStyle := FStyle;
-  if FCellStore.State(AIndex) <> fcsLoaded then
-    EffectiveStyle.TextColor := RGB(GetRValue(FStyle.TextColor) shr 1, GetGValue(FStyle.TextColor) shr 1, GetBValue(FStyle.TextColor) shr 1);
-
-  DrawTimecodeOverlay(Canvas, R, FCellStore.Timecode(AIndex), EffectiveStyle, FBlendBmp, FTextBlendBmp);
-end;
-
-procedure TFrameView.PaintErrorCell(const ARect: TRect);
-var
-  R: TRect;
-begin
-  Canvas.Brush.Color := CLR_CELL_BG;
-  Canvas.Pen.Style := psClear;
-  Canvas.Rectangle(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom);
-  Canvas.Font.Name := FONT_NAME;
-  Canvas.Font.Size := FONT_ERROR;
-  Canvas.Font.Color := CLR_ERROR_TEXT;
-  Canvas.Brush.Style := bsClear;
-  R := ARect;
-  DrawText(Canvas.Handle, 'Error', -1, R, DT_CENTER or DT_VCENTER or DT_SINGLELINE);
 end;
 
 procedure TFrameView.SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
@@ -641,7 +399,7 @@ end;
 
 procedure TFrameView.AdvanceAnimation;
 begin
-  FAnimStep := (FAnimStep + 1) mod ANIM_STEP_COUNT;
+  FRenderer.AdvanceAnimation;
   Invalidate;
 end;
 
