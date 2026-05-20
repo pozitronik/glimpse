@@ -95,7 +95,7 @@ end;
 procedure TTestPluginContext.TestProbeCacheSetterFreesPrevious;
 var
   Ctx: TPluginContext;
-  Cache: TProbeCache;
+  Cache: IProbeCache;
 begin
   Ctx := TPluginContext.Instance;
   Assert.IsNull(Ctx.ProbeCache, 'Default ProbeCache is nil');

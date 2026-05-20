@@ -8,7 +8,26 @@ uses
   VideoProbing, VideoInfo;
 
 type
-  TProbeCache = class
+  {Probe-result cache surface used by the WLX/WCX/thumbnail render paths.}
+  IProbeCache = interface
+    ['{3F6A9C12-4E7B-4D58-9A2C-1B8E5D7F0A63}']
+    function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
+    {Only caches valid results.}
+    procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
+    {Cache-then-probe convenience. On a cache miss delegates to AProber
+     and persists a valid result.}
+    function TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
+  end;
+
+  {Separate from IProbeCache so probe callers do not see admin ops.}
+  IProbeCacheManager = interface
+    ['{7D2E4B81-5C39-4A6F-B0D1-6E3A8F92C415}']
+    function GetTotalSize: Int64;
+    {Best-effort: directory locks are swallowed.}
+    procedure Clear;
+  end;
+
+  TProbeCache = class(TInterfacedObject, IProbeCache, IProbeCacheManager)
   strict private
     FCacheDir: string;
     class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string; static;
@@ -16,17 +35,18 @@ type
   public
     constructor Create(const ACacheDir: string);
     function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
-    {Only caches valid results.}
     procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
-    {Cache-then-probe convenience shared by WLX/WCX/thumbnail paths. On a
-     cache miss delegates to AProber and persists a valid result.}
     function TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
     function GetTotalSize: Int64;
-    {Best-effort: directory locks are swallowed.}
     procedure Clear;
   end;
 
+{Fixed %TEMP%\Glimpse\probes directory backing the production probe cache.}
 function DefaultProbeCacheDir: string;
+{Production probe cache, rooted at DefaultProbeCacheDir.}
+function CreateProbeCache: IProbeCache;
+{Same cache through its admin facet, for size/clear callers.}
+function CreateProbeCacheManager: IProbeCacheManager;
 
 implementation
 
@@ -219,6 +239,16 @@ begin
   finally
     Lines.Free;
   end;
+end;
+
+function CreateProbeCache: IProbeCache;
+begin
+  Result := TProbeCache.Create(DefaultProbeCacheDir);
+end;
+
+function CreateProbeCacheManager: IProbeCacheManager;
+begin
+  Result := TProbeCache.Create(DefaultProbeCacheDir);
 end;
 
 end.

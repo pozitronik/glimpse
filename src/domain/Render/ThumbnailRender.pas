@@ -63,7 +63,7 @@ function BuildThumbnailExtractionOptions(const AParams: TThumbnailParams; AReqWi
  AProbeCache consolidates probe results across the thumbnail panel and the
  lister form so folder scrolling does not re-spawn ffmpeg for files already
  probed once; never pass nil.}
-function RenderThumbnail(const AExtractor: IFrameExtractor; const AProber: IVideoProber; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
+function RenderThumbnail(const AExtractor: IFrameExtractor; const AProber: IVideoProber; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: IProbeCache): TBitmap;
 
 implementation
 
@@ -191,7 +191,7 @@ begin
   end;
 end;
 
-function RenderThumbnail(const AExtractor: IFrameExtractor; const AProber: IVideoProber; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: TProbeCache): TBitmap;
+function RenderThumbnail(const AExtractor: IFrameExtractor; const AProber: IVideoProber; const AFileName: string; AReqWidth, AReqHeight: Integer; const AParams: TThumbnailParams; const ACache: IFrameCache; const AProbeCache: IProbeCache): TBitmap;
 var
   Info: TVideoInfo;
   Offsets: TFrameOffsetArray;

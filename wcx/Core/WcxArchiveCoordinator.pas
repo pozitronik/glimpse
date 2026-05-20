@@ -84,16 +84,12 @@ end;
 
 function TProductionProbeService.Probe(const AFileName, AFFmpegPath: string): TVideoInfo;
 var
-  ProbeC: TProbeCache;
+  ProbeC: IProbeCache;
   Prober: IVideoProber;
 begin
-  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
-  try
-    Prober := TFFmpegExe.Create(AFFmpegPath);
-    Result := ProbeC.TryGetOrProbe(AFileName, Prober);
-  finally
-    ProbeC.Free;
-  end;
+  ProbeC := CreateProbeCache;
+  Prober := TFFmpegExe.Create(AFFmpegPath);
+  Result := ProbeC.TryGetOrProbe(AFileName, Prober);
 end;
 
 {TWcxArchiveCoordinator}

@@ -98,7 +98,6 @@ type
      PickActionCell's selection-first fallback.}
     FContextCellIndex: Integer;
     FExtractCtrl: TExtractionController;
-    {Form takes ownership of FServices.ProbeCache and frees it in Destroy.}
     FServices: TPluginServices;
     FAnimTimer: TTimer;
     FViewportRefreshDebouncer: TViewportRefreshDebouncer;
@@ -599,9 +598,7 @@ begin
   Randomize;
 
   {Capture caller-provided dependencies before the Initialize phases
-   start reading them. FServices owns its ProbeCache from this assignment
-   onward; the destructor frees it. Factory interface fields are
-   refcount-managed by the record copy.}
+   start reading them.}
   FSettings := ASettings;
   FFFmpegPath := AFFmpegPath;
   FServices := AServices;
@@ -678,11 +675,7 @@ end;
 
 procedure TPluginForm.InitializeExtractionStack;
 begin
-  {ProbeCache lives in the services container; form took ownership at
-   construction (FServices := AServices in CreateForPlugin), so the
-   destructor is responsible for freeing it.
-
-   Create extraction controller with the cache produced by the injected
+  {Create extraction controller with the cache produced by the injected
    factory. The TWindowMessageSink wraps the form's HWND so worker
    threads can post WM_FRAME_READY / WM_EXTRACTION_DONE without needing
    the HWND directly. The cache-vs-null choice that used to live in an
@@ -789,10 +782,6 @@ begin
   if Assigned(FAnimTimer) then
     FAnimTimer.Enabled := False;
   FExtractCtrl.Free;
-  {ProbeCache ownership was transferred from DoListLoad into FServices
-   at construction; this is the matching release.}
-  FServices.ProbeCache.Free;
-  FServices.ProbeCache := nil;
   if Assigned(FFrameView) then
     FFrameView.ClearCells;
   FExporter.Free;

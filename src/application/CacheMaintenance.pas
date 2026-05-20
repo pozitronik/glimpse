@@ -21,7 +21,7 @@ uses
 function TotalGlimpseCacheBytes(const AFrameDir: string): Int64;
 var
   Mgr: ICacheManager;
-  ProbeC: TProbeCache;
+  ProbeC: IProbeCacheManager;
 begin
   Result := 0;
   if (AFrameDir <> '') and TDirectory.Exists(AFrameDir) then
@@ -30,18 +30,14 @@ begin
     Result := Result + Mgr.GetTotalSize;
   end;
 
-  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
-  try
-    Result := Result + ProbeC.GetTotalSize;
-  finally
-    ProbeC.Free;
-  end;
+  ProbeC := CreateProbeCacheManager;
+  Result := Result + ProbeC.GetTotalSize;
 end;
 
 procedure ClearAllGlimpseCaches(const AFrameDir: string);
 var
   Mgr: ICacheManager;
-  ProbeC: TProbeCache;
+  ProbeC: IProbeCacheManager;
 begin
   if (AFrameDir <> '') and TDirectory.Exists(AFrameDir) then
   begin
@@ -49,12 +45,8 @@ begin
     Mgr.Clear;
   end;
 
-  ProbeC := TProbeCache.Create(DefaultProbeCacheDir);
-  try
-    ProbeC.Clear;
-  finally
-    ProbeC.Free;
-  end;
+  ProbeC := CreateProbeCacheManager;
+  ProbeC.Clear;
 end;
 
 end.

@@ -14,12 +14,12 @@ type
     function CreateCache(const ASettings: TPluginSettings): IFrameCache;
   end;
 
-  {Form takes ownership of ProbeCache and frees it in its destructor.
-   Factories are refcount-managed; record copy semantics handle the refcounts.}
+  {All fields are refcount-managed; record copy semantics handle the
+   refcounts.}
   TPluginServices = record
     FrameCacheFactory: IFrameCacheFactory;
     FrameExtractorFactory: IFrameExtractorFactory;
-    ProbeCache: TProbeCache;
+    ProbeCache: IProbeCache;
   end;
 
   TProductionFrameCacheFactory = class(TInterfacedObject, IFrameCacheFactory)
@@ -48,7 +48,7 @@ function CreateProductionServices: TPluginServices;
 begin
   Result.FrameCacheFactory := TProductionFrameCacheFactory.Create;
   Result.FrameExtractorFactory := TProductionFrameExtractorFactory.Create;
-  Result.ProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
+  Result.ProbeCache := CreateProbeCache;
 end;
 
 end.

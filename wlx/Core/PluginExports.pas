@@ -46,24 +46,16 @@ function DoListLoad(ParentWin: HWND; const AFileName: string; ShowFlags: Integer
 var
   Form: TPluginForm;
   Services: TPluginServices;
-  ServicesPassed: Boolean;
 begin
   Result := 0;
-  ServicesPassed := False;
   Log(Format('DoListLoad: ParentWin=$%s File=%s Flags=%d', [IntToHex(ParentWin), AFileName, ShowFlags]));
   try
     Log(Format('DoListLoad: ffmpegPath=%s', [TPluginContext.Instance.FFmpegPath]));
-    {Form takes ownership of Services.ProbeCache once CreateForPlugin returns;
-     a constructor failure before that assignment leaves the ProbeCache ours,
-     hence the defensive Free in the outer except branch.}
+    {Services is a managed local: its ProbeCache and factory interfaces
+     are refcount-released on every exit path, including exceptions.}
     Services := CreateProductionServices;
-    try
-      Form := TPluginForm.CreateForPlugin(ParentWin, AFileName,
-        TPluginContext.Instance.Settings, TPluginContext.Instance.FFmpegPath, Services);
-      ServicesPassed := True;
-    except
-      raise;
-    end;
+    Form := TPluginForm.CreateForPlugin(ParentWin, AFileName,
+      TPluginContext.Instance.Settings, TPluginContext.Instance.FFmpegPath, Services);
     Form.ApplyListerParams(ShowFlags);
     Result := Form.Handle;
     Log(Format('DoListLoad: Form created, Handle=$%s IsWindow=%s Visible=%s Parent=$%s', [IntToHex(Result), BoolToStr(IsWindow(Result), True), BoolToStr(IsWindowVisible(Result), True), IntToHex(GetParent(Result))]));
@@ -71,8 +63,6 @@ begin
     on E: Exception do
     begin
       Log(Format('DoListLoad: EXCEPTION %s: %s', [E.ClassName, E.Message]));
-      if not ServicesPassed and Assigned(Services.ProbeCache) then
-        FreeAndNil(Services.ProbeCache);
       MessageBox(ParentWin, PChar(Format('Glimpse: %s', [E.Message])), 'Glimpse', MB_OK or MB_ICONERROR);
     end;
   end;
@@ -229,7 +219,7 @@ begin
   Log(Format('  FFmpegPath=%s', [Ctx.FFmpegPath]));
 
   if Ctx.ProbeCache = nil then
-    Ctx.ProbeCache := TProbeCache.Create(DefaultProbeCacheDir);
+    Ctx.ProbeCache := CreateProbeCache;
 
   {Run cache eviction once per session. Wrapped in try/except: an invalid
    cache folder must not crash TC.}

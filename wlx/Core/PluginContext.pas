@@ -17,9 +17,8 @@ type
     FPluginDir: string;
     FFFmpegPath: string;
     FThumbnailCache: IFrameCache;
-    FProbeCache: TProbeCache;
+    FProbeCache: IProbeCache;
     procedure SetSettings(AValue: TPluginSettings);
-    procedure SetProbeCache(AValue: TProbeCache);
   public
     constructor Create;
     destructor Destroy; override;
@@ -32,8 +31,7 @@ type
     property PluginDir: string read FPluginDir write FPluginDir;
     property FFmpegPath: string read FFFmpegPath write FFFmpegPath;
     property ThumbnailCache: IFrameCache read FThumbnailCache write FThumbnailCache;
-    {Setter frees the previous instance like Settings.}
-    property ProbeCache: TProbeCache read FProbeCache write SetProbeCache;
+    property ProbeCache: IProbeCache read FProbeCache write FProbeCache;
   end;
 
 implementation
@@ -50,7 +48,7 @@ end;
 destructor TPluginContext.Destroy;
 begin
   FThumbnailCache := nil;
-  FreeAndNil(FProbeCache);
+  FProbeCache := nil;
   FreeAndNil(FSettings);
   inherited;
 end;
@@ -73,14 +71,6 @@ begin
     Exit;
   FSettings.Free;
   FSettings := AValue;
-end;
-
-procedure TPluginContext.SetProbeCache(AValue: TProbeCache);
-begin
-  if FProbeCache = AValue then
-    Exit;
-  FProbeCache.Free;
-  FProbeCache := AValue;
 end;
 
 end.

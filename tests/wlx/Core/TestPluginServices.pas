@@ -36,9 +36,7 @@ type
      spawn ffmpeg - we only verify the construction contract.}
     [Test] procedure TestProductionFrameExtractorFactory_ReturnsExtractor;
     {Convenience constructor: every field the form's CreateForPlugin
-     will read must be non-nil. ProbeCache is freed explicitly at the
-     end of the test so the leak detector stays quiet (in production
-     the form's destructor handles this; tests have no form).}
+     will read must be non-nil.}
     [Test] procedure TestCreateProductionServices_PopulatesAllFields;
     {Production cache factory honours CacheMaxSizeMB by writing the
      value to the TFrameCache's policy. Smoke test: a returned cache
@@ -185,15 +183,9 @@ var
   Services: TPluginServices;
 begin
   Services := CreateProductionServices;
-  try
-    Assert.IsNotNull(Services.FrameCacheFactory, 'FrameCacheFactory must be wired');
-    Assert.IsNotNull(Services.FrameExtractorFactory, 'FrameExtractorFactory must be wired');
-    Assert.IsNotNull(Services.ProbeCache, 'ProbeCache must be wired');
-  finally
-    {ProbeCache ownership normally transfers to the form. Tests have no
-     form, so free it here to keep the leak detector silent.}
-    Services.ProbeCache.Free;
-  end;
+  Assert.IsNotNull(Services.FrameCacheFactory, 'FrameCacheFactory must be wired');
+  Assert.IsNotNull(Services.FrameExtractorFactory, 'FrameExtractorFactory must be wired');
+  Assert.IsNotNull(Services.ProbeCache, 'ProbeCache must be wired');
 end;
 
 procedure TTestPluginServices.TestProductionFrameCacheFactory_RespectsCacheMaxSizeMB;
