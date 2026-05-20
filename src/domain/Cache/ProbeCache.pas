@@ -63,6 +63,80 @@ begin
   Result := TPath.Combine(TPath.GetTempPath, 'Glimpse' + PathDelim + 'probes');
 end;
 
+{TVideoInfo persistence: conversion to and from the probe file's
+ name=value lines.}
+
+procedure SerializeVideoInfo(ADest: TStrings; const AInfo: TVideoInfo);
+begin
+  ADest.Add('Duration=' + FloatToStr(AInfo.Duration, InvFmt));
+  ADest.Add('Width=' + IntToStr(AInfo.Width));
+  ADest.Add('Height=' + IntToStr(AInfo.Height));
+  ADest.Add('SampleAspectN=' + IntToStr(AInfo.SampleAspectN));
+  ADest.Add('SampleAspectD=' + IntToStr(AInfo.SampleAspectD));
+  ADest.Add('DisplayWidth=' + IntToStr(AInfo.DisplayWidth));
+  ADest.Add('DisplayHeight=' + IntToStr(AInfo.DisplayHeight));
+  ADest.Add('VideoCodec=' + AInfo.VideoCodec);
+  ADest.Add('VideoBitrateKbps=' + IntToStr(AInfo.VideoBitrateKbps));
+  ADest.Add('Fps=' + FloatToStr(AInfo.Fps, InvFmt));
+  ADest.Add('Bitrate=' + IntToStr(AInfo.Bitrate));
+  ADest.Add('AudioCodec=' + AInfo.AudioCodec);
+  ADest.Add('AudioSampleRate=' + IntToStr(AInfo.AudioSampleRate));
+  ADest.Add('AudioChannels=' + AInfo.AudioChannels);
+  ADest.Add('AudioBitrateKbps=' + IntToStr(AInfo.AudioBitrateKbps));
+end;
+
+function DeserializeVideoInfo(ASource: TStrings): TVideoInfo;
+begin
+  Result := Default(TVideoInfo);
+  Result.Duration := StrToFloatDef(ASource.Values['Duration'], -1, InvFmt);
+  Result.Width := StrToIntDef(ASource.Values['Width'], 0);
+  Result.Height := StrToIntDef(ASource.Values['Height'], 0);
+  Result.SampleAspectN := StrToIntDef(ASource.Values['SampleAspectN'], 1);
+  Result.SampleAspectD := StrToIntDef(ASource.Values['SampleAspectD'], 1);
+  Result.DisplayWidth := StrToIntDef(ASource.Values['DisplayWidth'], 0);
+  Result.DisplayHeight := StrToIntDef(ASource.Values['DisplayHeight'], 0);
+  {Pre-SAR cache entries lack explicit DisplayWidth/Height; rederive.}
+  if (Result.DisplayWidth <= 0) or (Result.DisplayHeight <= 0) then
+    Result.RecalcDisplayDimensions;
+  Result.VideoCodec := ASource.Values['VideoCodec'];
+  Result.VideoBitrateKbps := StrToIntDef(ASource.Values['VideoBitrateKbps'], 0);
+  Result.Fps := StrToFloatDef(ASource.Values['Fps'], 0, InvFmt);
+  Result.Bitrate := StrToIntDef(ASource.Values['Bitrate'], 0);
+  Result.AudioCodec := ASource.Values['AudioCodec'];
+  Result.AudioSampleRate := StrToIntDef(ASource.Values['AudioSampleRate'], 0);
+  Result.AudioChannels := ASource.Values['AudioChannels'];
+  Result.AudioBitrateKbps := StrToIntDef(ASource.Values['AudioBitrateKbps'], 0);
+end;
+
+{Atomic write via a sibling .tmp + MoveFileEx so a crash mid-write
+ cannot leave a partial file that poisons future reads.}
+procedure AtomicWriteTextFile(const APath: string; ALines: TStrings);
+var
+  TempPath: string;
+begin
+  TempPath := APath + '.' + TGUID.NewGuid.ToString + '.tmp';
+  try
+    TDirectory.CreateDirectory(ExtractFilePath(APath));
+    ALines.SaveToFile(TempPath, TEncoding.UTF8);
+    if not MoveFileEx(PChar(TempPath), PChar(APath), MOVEFILE_REPLACE_EXISTING) then
+    begin
+      try
+        if TFile.Exists(TempPath) then
+          TFile.Delete(TempPath);
+      except
+        {Best-effort temp cleanup}
+      end;
+    end;
+  except
+    try
+      if TFile.Exists(TempPath) then
+        TFile.Delete(TempPath);
+    except
+      {Best-effort temp cleanup}
+    end;
+  end;
+end;
+
 {TProbeCache}
 
 constructor TProbeCache.Create(const ACacheDir: string);
@@ -117,24 +191,7 @@ begin
     except
       Exit;
     end;
-    AInfo.Duration := StrToFloatDef(Lines.Values['Duration'], -1, InvFmt);
-    AInfo.Width := StrToIntDef(Lines.Values['Width'], 0);
-    AInfo.Height := StrToIntDef(Lines.Values['Height'], 0);
-    AInfo.SampleAspectN := StrToIntDef(Lines.Values['SampleAspectN'], 1);
-    AInfo.SampleAspectD := StrToIntDef(Lines.Values['SampleAspectD'], 1);
-    AInfo.DisplayWidth := StrToIntDef(Lines.Values['DisplayWidth'], 0);
-    AInfo.DisplayHeight := StrToIntDef(Lines.Values['DisplayHeight'], 0);
-    {Pre-SAR cache entries lack explicit DisplayWidth/Height; rederive.}
-    if (AInfo.DisplayWidth <= 0) or (AInfo.DisplayHeight <= 0) then
-      AInfo.RecalcDisplayDimensions;
-    AInfo.VideoCodec := Lines.Values['VideoCodec'];
-    AInfo.VideoBitrateKbps := StrToIntDef(Lines.Values['VideoBitrateKbps'], 0);
-    AInfo.Fps := StrToFloatDef(Lines.Values['Fps'], 0, InvFmt);
-    AInfo.Bitrate := StrToIntDef(Lines.Values['Bitrate'], 0);
-    AInfo.AudioCodec := Lines.Values['AudioCodec'];
-    AInfo.AudioSampleRate := StrToIntDef(Lines.Values['AudioSampleRate'], 0);
-    AInfo.AudioChannels := Lines.Values['AudioChannels'];
-    AInfo.AudioBitrateKbps := StrToIntDef(Lines.Values['AudioBitrateKbps'], 0);
+    AInfo := DeserializeVideoInfo(Lines);
     Result := AInfo.IsValid;
   finally
     Lines.Free;
@@ -183,7 +240,7 @@ end;
 
 procedure TProbeCache.Put(const AFilePath: string; const AInfo: TVideoInfo);
 var
-  Key, Path, Dir, TempPath: string;
+  Key, Path: string;
   Lines: TStringList;
 begin
   if not AInfo.IsValid then
@@ -194,48 +251,11 @@ begin
     Exit;
 
   Path := ShardedKeyPath(FCacheDir, Key, '.probe');
-  Dir := ExtractFilePath(Path);
 
   Lines := TStringList.Create;
   try
-    Lines.Add('Duration=' + FloatToStr(AInfo.Duration, InvFmt));
-    Lines.Add('Width=' + IntToStr(AInfo.Width));
-    Lines.Add('Height=' + IntToStr(AInfo.Height));
-    Lines.Add('SampleAspectN=' + IntToStr(AInfo.SampleAspectN));
-    Lines.Add('SampleAspectD=' + IntToStr(AInfo.SampleAspectD));
-    Lines.Add('DisplayWidth=' + IntToStr(AInfo.DisplayWidth));
-    Lines.Add('DisplayHeight=' + IntToStr(AInfo.DisplayHeight));
-    Lines.Add('VideoCodec=' + AInfo.VideoCodec);
-    Lines.Add('VideoBitrateKbps=' + IntToStr(AInfo.VideoBitrateKbps));
-    Lines.Add('Fps=' + FloatToStr(AInfo.Fps, InvFmt));
-    Lines.Add('Bitrate=' + IntToStr(AInfo.Bitrate));
-    Lines.Add('AudioCodec=' + AInfo.AudioCodec);
-    Lines.Add('AudioSampleRate=' + IntToStr(AInfo.AudioSampleRate));
-    Lines.Add('AudioChannels=' + AInfo.AudioChannels);
-    Lines.Add('AudioBitrateKbps=' + IntToStr(AInfo.AudioBitrateKbps));
-    {Atomic write via sibling .tmp + MoveFileEx so a crash mid-write
-     cannot leave a partial .probe that poisons future TryGets.}
-    TempPath := Path + '.' + TGUID.NewGuid.ToString + '.tmp';
-    try
-      TDirectory.CreateDirectory(Dir);
-      Lines.SaveToFile(TempPath, TEncoding.UTF8);
-      if not MoveFileEx(PChar(TempPath), PChar(Path), MOVEFILE_REPLACE_EXISTING) then
-      begin
-        try
-          if TFile.Exists(TempPath) then
-            TFile.Delete(TempPath);
-        except
-          {Best-effort temp cleanup}
-        end;
-      end;
-    except
-      try
-        if TFile.Exists(TempPath) then
-          TFile.Delete(TempPath);
-      except
-        {Best-effort temp cleanup}
-      end;
-    end;
+    SerializeVideoInfo(Lines, AInfo);
+    AtomicWriteTextFile(Path, Lines);
   finally
     Lines.Free;
   end;
