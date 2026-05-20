@@ -26,7 +26,7 @@ uses
   Vcl.Graphics,
   Settings, FFmpegLocator, FFmpegExe, PluginForm, PluginServices, Cache, ProbeCache,
   Logging, ThumbnailRender, ToolbarLayout, PluginContext, Defaults,
-  VideoProbing, FrameExtractor;
+  VideoProbing, FrameExtractor, FrameCacheFactory;
 
 var
   Log: TProc<string>;
@@ -241,7 +241,7 @@ begin
       CreateCacheManager(CacheDir, Ctx.Settings.CacheMaxSizeMB).Evict;
       Log(Format('  CacheDir=%s', [CacheDir]));
       {Same directory + budget as the main cache so eviction is shared.}
-      Ctx.ThumbnailCache := TFrameCache.Create(CacheDir, Ctx.Settings.CacheMaxSizeMB);
+      Ctx.ThumbnailCache := CreateFrameCache(CacheDir, Ctx.Settings.CacheMaxSizeMB);
     except
       on E: Exception do
       begin

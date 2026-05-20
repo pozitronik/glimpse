@@ -41,7 +41,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Classes, System.Generics.Collections,
   Winapi.Windows, Vcl.Graphics,
-  Types, Cache, FrameOffsets, FrameExtractor, ProgressReporter,
+  Types, Cache, FrameCacheFactory, FrameOffsets, FrameExtractor, ProgressReporter,
   SaveResolutionExtractor;
 
 type
@@ -603,7 +603,7 @@ begin
   CacheDir := TPath.Combine(TPath.GetTempPath, 'VT_SaveExtRoundTrip_' + TGuid.NewGuid.ToString);
   TDirectory.CreateDirectory(CacheDir);
   try
-    Cache := TFrameCache.Create(CacheDir, 100);
+    Cache := CreateFrameCache(CacheDir, 100);
     Ext := TMockExtractor.Create;
     Sub := TSaveResolutionExtractor.Create(Cache, Ext);
     try

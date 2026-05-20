@@ -1,6 +1,7 @@
-{Disk cache for extracted video frames. Composes ICacheStorage,
- TLruEvictionPolicy, and PNG encoding. TFrameCache owns only the lock,
- the bitmap-to-bytes encoding, and the hash-key computation.}
+{Frame cache for extracted video frames over an injected ICacheStorage.
+ Composes the storage with an IEvictionPolicy and PNG encoding;
+ TFrameCache owns only the lock, the bitmap-to-bytes encoding, and the
+ hash-key computation.}
 unit Cache;
 
 interface
@@ -91,16 +92,20 @@ type
    inside the critical section.}
   TFrameCache = class(TFrameCacheBase, ICacheManager)
   strict private
-    FCacheDir: string;
     FStorage: ICacheStorage;
-    FPolicy: TLruEvictionPolicy;
+    FPolicy: IEvictionPolicy;
+    FFileStat: IFileStat;
     FLock: TCriticalSection;
   public
-    constructor Create(const ACacheDir: string; AMaxSizeMB: Integer);
+    {Storage, eviction policy and file-stat are injected; tests pass
+     fakes to run without a filesystem.}
+    constructor Create(const AStorage: ICacheStorage;
+      const APolicy: IEvictionPolicy; const AFileStat: IFileStat);
     destructor Destroy; override;
 
-    {Returns empty when the file cannot be stat'd.}
-    class function FrameKey(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string; static;
+    {Returns empty when the file cannot be stat'd. AStat supplies the
+     source-file identity (size and mtime) folded into the key.}
+    class function FrameKey(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean; const AStat: IFileStat): string; static;
 
     function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
@@ -108,16 +113,12 @@ type
     procedure Clear;
     procedure Evict;
     function GetTotalSize: Int64;
-
-    property CacheDir: string read FCacheDir;
   end;
-
-function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICacheManager;
 
 implementation
 
 uses
-  System.IOUtils, System.Classes,
+  System.Classes,
   Vcl.Imaging.pngimage,
   Logging, CacheKey, BitmapSaver;
 
@@ -256,38 +257,31 @@ end;
 
 {TFrameCache}
 
-constructor TFrameCache.Create(const ACacheDir: string; AMaxSizeMB: Integer);
+constructor TFrameCache.Create(const AStorage: ICacheStorage;
+  const APolicy: IEvictionPolicy; const AFileStat: IFileStat);
 begin
   inherited Create;
   FLock := TCriticalSection.Create;
-  FCacheDir := ACacheDir;
-  FStorage := TDiskCacheStorage.Create(ACacheDir, '.png');
-  FPolicy := TLruEvictionPolicy.Create(Int64(AMaxSizeMB) * 1024 * 1024);
-  DebugLog('Cache', Format('Create: dir=%s maxMB=%d', [ACacheDir, AMaxSizeMB]));
+  FStorage := AStorage;
+  FPolicy := APolicy;
+  FFileStat := AFileStat;
 end;
 
 destructor TFrameCache.Destroy;
 begin
-  FPolicy.Free;
   FLock.Free;
   inherited;
 end;
 
-class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): string;
+class function TFrameCache.FrameKey(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean; const AStat: IFileStat): string;
 var
   FileSize: Int64;
   FileTime: TDateTime;
 begin
   Result := '';
-  try
-    if not TFile.Exists(AFilePath) then
-      Exit;
-    FileSize := TFile.GetSize(AFilePath);
-    FileTime := TFile.GetLastWriteTime(AFilePath);
-    Result := CacheHashKey(BuildFrameCacheKeyString(AFilePath, FileSize, FileTime, ATimeOffset, AMaxSide, AUseKeyframes));
-  except
-    {File inaccessible - return empty, caller treats as cache miss}
-  end;
+  if not AStat.TryStat(AFilePath, FileSize, FileTime) then
+    Exit;
+  Result := CacheHashKey(BuildFrameCacheKeyString(AFilePath, FileSize, FileTime, ATimeOffset, AMaxSide, AUseKeyframes));
 end;
 
 function TFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
@@ -302,7 +296,7 @@ var
   BmpEmpty: Boolean;
 begin
   Result := nil;
-  Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes);
+  Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes, FFileStat);
   if Key = '' then
     Exit;
   PngSize := 0;
@@ -364,7 +358,7 @@ var
 begin
   if ABitmap = nil then
     Exit;
-  Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes);
+  Key := FrameKey(AKey.FilePath, AKey.TimeOffset, AKey.MaxSide, AKey.UseKeyframes, FFileStat);
   if Key = '' then
     Exit;
   DebugLog('Cache', Format('Put key=%s bmp=%dx%d', [Key, ABitmap.Width, ABitmap.Height]));
@@ -427,11 +421,6 @@ begin
   finally
     FLock.Leave;
   end;
-end;
-
-function CreateCacheManager(const ACacheDir: string; AMaxSizeMB: Integer): ICacheManager;
-begin
-  Result := TFrameCache.Create(ACacheDir, AMaxSizeMB);
 end;
 
 end.

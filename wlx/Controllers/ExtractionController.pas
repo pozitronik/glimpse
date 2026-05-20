@@ -53,7 +53,7 @@ const
 implementation
 
 uses
-  System.SysUtils, Logging, Settings, PathExpand;
+  System.SysUtils, Logging, Settings, PathExpand, FrameCacheFactory;
 
 var
   CtrlLog: TProc<string>;
@@ -179,7 +179,7 @@ end;
 procedure TExtractionController.RecreateCache(AEnabled: Boolean; const ACacheFolder: string; AMaxSizeMB: Integer);
 begin
   if AEnabled then
-    FCache := TFrameCache.Create(EffectiveCacheFolder(ACacheFolder), AMaxSizeMB)
+    FCache := CreateFrameCache(EffectiveCacheFolder(ACacheFolder), AMaxSizeMB)
   else
     FCache := TNullFrameCache.Create;
 end;

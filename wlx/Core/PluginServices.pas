@@ -31,12 +31,15 @@ function CreateProductionServices: TPluginServices;
 
 implementation
 
+uses
+  FrameCacheFactory;
+
 {TProductionFrameCacheFactory}
 
 function TProductionFrameCacheFactory.CreateCache(const ASettings: TPluginSettings): IFrameCache;
 begin
   if ASettings.CacheEnabled then
-    Result := TFrameCache.Create(EffectiveCacheFolder(ASettings.CacheFolder), ASettings.CacheMaxSizeMB)
+    Result := CreateFrameCache(EffectiveCacheFolder(ASettings.CacheFolder), ASettings.CacheMaxSizeMB)
   else
     Result := TNullFrameCache.Create;
 end;

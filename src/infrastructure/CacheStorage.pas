@@ -28,6 +28,15 @@ type
     function List: TArray<TCacheEntryInfo>;
   end;
 
+  {Source-file identity for cache-key derivation. The production
+   implementation does the filesystem stat; a stub lets the frame cache
+   be tested without a real source file on disk.}
+  IFileStat = interface
+    ['{8BB1203C-22F5-4CDF-9163-46CC76524D76}']
+    {False when the file does not exist or cannot be stat'd.}
+    function TryStat(const APath: string; out ASize: Int64; out AModified: TDateTime): Boolean;
+  end;
+
   TDiskCacheStorage = class(TInterfacedObject, ICacheStorage)
   strict private
     FRoot: string;
@@ -42,6 +51,12 @@ type
     procedure Clear;
     procedure Touch(const AKey: string);
     function List: TArray<TCacheEntryInfo>;
+  end;
+
+  {Production IFileStat — a thin wrapper over the RTL filesystem calls.}
+  TFileSystemStat = class(TInterfacedObject, IFileStat)
+  public
+    function TryStat(const APath: string; out ASize: Int64; out AModified: TDateTime): Boolean;
   end;
 
 implementation
@@ -220,6 +235,26 @@ begin
   end;
   SetLength(Acc, Count);
   Result := Acc;
+end;
+
+{TFileSystemStat}
+
+function TFileSystemStat.TryStat(const APath: string; out ASize: Int64;
+  out AModified: TDateTime): Boolean;
+begin
+  Result := False;
+  ASize := 0;
+  AModified := 0;
+  try
+    if not TFile.Exists(APath) then
+      Exit;
+    ASize := TFile.GetSize(APath);
+    AModified := TFile.GetLastWriteTime(APath);
+    Result := True;
+  except
+    {File inaccessible — treat as "cannot stat".}
+    Result := False;
+  end;
 end;
 
 end.

@@ -83,6 +83,7 @@
         <DCCReference Include="..\src\infrastructure\CacheStorage.pas"/>
         <DCCReference Include="..\src\infrastructure\LruEvictionPolicy.pas"/>
         <DCCReference Include="..\src\domain\Cache\Cache.pas"/>
+        <DCCReference Include="..\src\infrastructure\FrameCacheFactory.pas"/>
         <DCCReference Include="..\src\domain\Cache\CacheKey.pas"/>
         <DCCReference Include="..\src\domain\Cache\ProbeCache.pas"/>
         <DCCReference Include="Commands\EnableRules.pas"/>

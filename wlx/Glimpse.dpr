@@ -29,6 +29,7 @@ uses
   CacheStorage in '..\src\infrastructure\CacheStorage.pas',
   LruEvictionPolicy in '..\src\infrastructure\LruEvictionPolicy.pas',
   Cache in '..\src\domain\Cache\Cache.pas',
+  FrameCacheFactory in '..\src\infrastructure\FrameCacheFactory.pas',
   CacheKey in '..\src\domain\Cache\CacheKey.pas',
   ProbeCache in '..\src\domain\Cache\ProbeCache.pas',
   EnableRules in 'Commands\EnableRules.pas',

@@ -7,7 +7,14 @@ uses
   CacheStorage;
 
 type
-  TLruEvictionPolicy = class
+  {Cache-eviction strategy over ICacheStorage. Injected into TFrameCache
+   so the cache can be tested with a substitute policy.}
+  IEvictionPolicy = interface
+    ['{9C4D7A21-3E8F-4B5A-A1D6-2F7E0C8B6534}']
+    procedure Evict(const AStorage: ICacheStorage);
+  end;
+
+  TLruEvictionPolicy = class(TInterfacedObject, IEvictionPolicy)
   strict private
     FMaxSizeBytes: Int64;
   public

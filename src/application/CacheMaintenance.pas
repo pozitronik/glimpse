@@ -16,7 +16,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  Cache, ProbeCache;
+  Cache, ProbeCache, FrameCacheFactory;
 
 function TotalGlimpseCacheBytes(const AFrameDir: string): Int64;
 var

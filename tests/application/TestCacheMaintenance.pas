@@ -26,7 +26,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, Vcl.Graphics,
-  Cache, CacheMaintenance;
+  Cache, CacheMaintenance, FrameCacheFactory;
 
 procedure TTestCacheMaintenance.Setup;
 begin
@@ -63,9 +63,9 @@ end;
 
 procedure TTestCacheMaintenance.TestTotalBytes_AfterFrameCachePut_IncludesPutBytes;
 var
-  Cache: TFrameCache;
+  Cache: IFrameCache;
   Bmp: TBitmap;
-  TestFile, NewPath: string;
+  TestFile: string;
   Before, After: Int64;
 begin
   {Put a small bitmap into a frame cache under FFrameCacheDir, then
@@ -75,19 +75,16 @@ begin
   TestFile := TPath.Combine(FFrameCacheDir, 'video.mp4');
   TFile.WriteAllText(TestFile, 'fake video file');
 
-  Cache := TFrameCache.Create(FFrameCacheDir, 100);
+  Cache := CreateFrameCache(FFrameCacheDir, 100);
+  Before := TotalGlimpseCacheBytes(FFrameCacheDir);
+  Bmp := TBitmap.Create;
   try
-    Before := TotalGlimpseCacheBytes(FFrameCacheDir);
-    Bmp := TBitmap.Create;
-    try
-      Bmp.SetSize(32, 32);
-      Cache.Put(TFrameCacheKey.Create(TestFile, 1.0, 0, False), Bmp);
-    finally
-      Bmp.Free;
-    end;
+    Bmp.SetSize(32, 32);
+    Cache.Put(TFrameCacheKey.Create(TestFile, 1.0, 0, False), Bmp);
   finally
-    Cache.Free;
+    Bmp.Free;
   end;
+  Cache := nil;
 
   After := TotalGlimpseCacheBytes(FFrameCacheDir);
   Assert.IsTrue(After > Before,
@@ -103,7 +100,7 @@ end;
 
 procedure TTestCacheMaintenance.TestClearAll_AfterPut_DropsFrameCacheTotalToZero;
 var
-  Cache: TFrameCache;
+  Cache: IFrameCache;
   Bmp: TBitmap;
   TestFile: string;
   Mgr: ICacheManager;
@@ -116,19 +113,16 @@ begin
   TestFile := TPath.Combine(FFrameCacheDir, 'video.mp4');
   TFile.WriteAllText(TestFile, 'fake video file');
 
-  Cache := TFrameCache.Create(FFrameCacheDir, 100);
+  Cache := CreateFrameCache(FFrameCacheDir, 100);
+  Bmp := TBitmap.Create;
   try
-    Bmp := TBitmap.Create;
-    try
-      Bmp.SetSize(32, 32);
-      Cache.Put(TFrameCacheKey.Create(TestFile, 1.0, 0, False), Bmp);
-    finally
-      Bmp.Free;
-    end;
-    Assert.IsTrue(Cache.GetTotalSize > 0, 'Sanity: Put must produce bytes');
+    Bmp.SetSize(32, 32);
+    Cache.Put(TFrameCacheKey.Create(TestFile, 1.0, 0, False), Bmp);
   finally
-    Cache.Free;
+    Bmp.Free;
   end;
+  Assert.IsTrue((Cache as ICacheManager).GetTotalSize > 0, 'Sanity: Put must produce bytes');
+  Cache := nil;
 
   ClearAllGlimpseCaches(FFrameCacheDir);
 
