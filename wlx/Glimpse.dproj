@@ -152,7 +152,7 @@
         <DCCReference Include="Core\PluginDllPin.pas"/>
         <DCCReference Include="..\src\domain\Video\VideoProbing.pas"/>
         <DCCReference Include="..\src\domain\Render\BitmapResize.pas"/>
-        <DCCReference Include="..\src\domain\Render\ThumbnailRender.pas"/>
+        <DCCReference Include="..\src\application\ThumbnailRender.pas"/>
         <DCCReference Include="..\src\application\SettingsDlgLogic.pas"/>
         <DCCReference Include="..\src\application\SettingsDlgUI.pas"/>
         <DCCReference Include="Forms\ProgressModalForm.pas"/>

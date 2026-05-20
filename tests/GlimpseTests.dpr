@@ -182,7 +182,7 @@ uses
   TestProbeCache in 'TestProbeCache.pas',
   BitmapResize in '..\src\domain\Render\BitmapResize.pas',
   TestBitmapResize in 'TestBitmapResize.pas',
-  ThumbnailRender in '..\src\domain\Render\ThumbnailRender.pas',
+  ThumbnailRender in '..\src\application\ThumbnailRender.pas',
   TestThumbnailRender in 'TestThumbnailRender.pas',
   SettingsDlgLogic in '..\src\application\SettingsDlgLogic.pas',
   SettingsDlgUI in '..\src\application\SettingsDlgUI.pas',

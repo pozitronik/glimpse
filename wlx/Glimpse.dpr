@@ -94,7 +94,7 @@ uses
   PluginDllPin in 'Core\PluginDllPin.pas',
   VideoProbing in '..\src\domain\Video\VideoProbing.pas',
   BitmapResize in '..\src\domain\Render\BitmapResize.pas',
-  ThumbnailRender in '..\src\domain\Render\ThumbnailRender.pas',
+  ThumbnailRender in '..\src\application\ThumbnailRender.pas',
   SettingsDlgLogic in '..\src\application\SettingsDlgLogic.pas',
   SettingsDlgUI in '..\src\application\SettingsDlgUI.pas',
   NoShadowHints in '..\src\shared\NoShadowHints.pas',
