@@ -8,25 +8,15 @@ uses
   System.Classes, System.Types,
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
-  Types, Settings, Defaults, FrameOffsets, ViewModeLayout, TimecodeOverlay, RenderDefaults;
+  Types, Settings, Defaults, FrameOffsets, FrameCellStore, ViewModeLayout, TimecodeOverlay, RenderDefaults;
 
 type
-  TFrameCellState = (fcsPlaceholder, fcsLoaded, fcsError);
-
-  TFrameCell = record
-    State: TFrameCellState;
-    Bitmap: TBitmap;
-    Timecode: string;
-    TimeOffset: Double;
-    Selected: Boolean;
-  end;
-
   TCtrlWheelEvent = procedure(Sender: TObject; AWheelDelta: Integer) of object;
 
   {Custom control that renders frame cells in various layout modes.}
   TFrameView = class(TCustomControl)
   strict private
-    FCells: TArray<TFrameCell>;
+    FCellStore: TFrameCellStore;
   private
     FViewMode: TViewMode;
     FZoomMode: TZoomMode;
@@ -171,6 +161,7 @@ const
 constructor TFrameView.Create(AOwner: TComponent);
 begin
   inherited;
+  FCellStore := TFrameCellStore.Create;
   DoubleBuffered := True;
   FCellGap := DEF_CELL_GAP;
   FCellMargin := DEF_COMBINED_BORDER;
@@ -207,7 +198,7 @@ end;
 
 destructor TFrameView.Destroy;
 begin
-  ClearCells;
+  FCellStore.Free;
   FLayout.Free;
   FBlendBmp.Free;
   FTextBlendBmp.Free;
@@ -302,7 +293,7 @@ begin
   Margin2 := 2 * FCellMargin;
   Result.BaseW := Max(1, BaseW - Margin2);
   Result.BaseH := Max(1, BaseH - Margin2);
-  Result.CellCount := Length(FCells);
+  Result.CellCount := FCellStore.Count;
   Result.CellGap := FCellGap;
   Result.AspectRatio := FAspectRatio;
   Result.NativeW := FNativeW;
@@ -328,31 +319,31 @@ end;
 
 function TFrameView.DefaultColumnCount: Integer;
 begin
-  if (FViewMode = vmScroll) or (Length(FCells) <= 1) then
+  if (FViewMode = vmScroll) or (FCellStore.Count <= 1) then
     Result := 1
   else
-    Result := Max(1, Floor(Sqrt(Length(FCells))));
+    Result := Max(1, Floor(Sqrt(FCellStore.Count)));
 end;
 
 function TFrameView.CalcFitColumns(AViewportW, AViewportH: Integer): Integer;
 var
   C, Rows, CellW, CellH, TotalH: Integer;
 begin
-  if (Length(FCells) <= 1) or (AViewportW <= 0) or (AViewportH <= 0) then
+  if (FCellStore.Count <= 1) or (AViewportW <= 0) or (AViewportH <= 0) then
     Exit(1);
-  for C := 1 to Length(FCells) do
+  for C := 1 to FCellStore.Count do
   begin
     {Gaps live between cells only: C cells share (C-1) gaps. Outer margin
      is the caller's job (CellMargin), so the viewport handed in here is
      already the margin-shrunk usable area.}
     CellW := Max(1, (AViewportW - Max(C - 1, 0) * FCellGap) div C);
     CellH := Max(1, Round(CellW * FAspectRatio));
-    Rows := (Length(FCells) + C - 1) div C;
+    Rows := (FCellStore.Count + C - 1) div C;
     TotalH := Rows * CellH + Max(Rows - 1, 0) * FCellGap;
     if TotalH <= AViewportH then
       Exit(C);
   end;
-  Result := Length(FCells);
+  Result := FCellStore.Count;
 end;
 
 function TFrameView.GetCellRect(AIndex: Integer): TRect;
@@ -369,7 +360,7 @@ begin
   Canvas.Font.Name := FStyle.FontName;
   Canvas.Font.Size := FStyle.FontSize;
   Canvas.Font.Style := FStyle.FontStyles;
-  TW := Canvas.TextWidth(FCells[AIndex].Timecode) + TIMECODE_PADDING;
+  TW := Canvas.TextWidth(FCellStore.Timecode(AIndex)) + TIMECODE_PADDING;
   case FStyle.Corner of
     tcTopLeft:
       Result := Rect(ACellRect.Left, ACellRect.Top, ACellRect.Left + TW, ACellRect.Top + TIMECODE_H);
@@ -392,14 +383,14 @@ begin
 
   if FViewMode = vmSingle then
   begin
-    if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < Length(FCells)) then
+    if (FCurrentFrameIndex >= 0) and (FCurrentFrameIndex < FCellStore.Count) then
       PaintCell(FCurrentFrameIndex);
   end else begin
     {Skip cells that are entirely outside the clip region. In scroll/filmstrip
      modes only a few cells are visible at a time, so this avoids GDI overhead
      for up to 99 off-screen cells.}
     Clip := Canvas.ClipRect;
-    for I := 0 to High(FCells) do
+    for I := 0 to FCellStore.Count - 1 do
       if IntersectRect(Dummy, GetCellRect(I), Clip) then
         PaintCell(I);
   end;
@@ -410,7 +401,7 @@ var
   R: TRect;
 begin
   R := GetCellRect(AIndex);
-  case FCells[AIndex].State of
+  case FCellStore.State(AIndex) of
     fcsPlaceholder:
       PaintPlaceholder(R);
     fcsLoaded:
@@ -422,7 +413,7 @@ begin
       PaintErrorCell(R);
   end;
   PaintTimecode(AIndex, R);
-  if FCells[AIndex].Selected then
+  if FCellStore.Selected(AIndex) then
   begin
     Canvas.Pen.Color := CLR_SELECTION;
     Canvas.Pen.Width := SELECTION_BORDER_W;
@@ -448,7 +439,7 @@ var
   Scale: Double;
   DW, DH: Integer;
 begin
-  Bmp := FCells[AIndex].Bitmap;
+  Bmp := FCellStore.Bitmap(AIndex);
   if Bmp = nil then
   begin
     PaintPlaceholder(ARect);
@@ -476,7 +467,7 @@ var
   Scale: Double;
   SrcW, SrcH: Integer;
 begin
-  Bmp := FCells[AIndex].Bitmap;
+  Bmp := FCellStore.Bitmap(AIndex);
   if Bmp = nil then
   begin
     PaintPlaceholder(ARect);
@@ -593,7 +584,7 @@ begin
     Exit;
   if FStyle.Corner = tcNone then
     Exit;
-  if FCells[AIndex].Timecode = '' then
+  if FCellStore.Timecode(AIndex) = '' then
     Exit;
 
   R := TimecodeRectFromCell(ACellRect, AIndex);
@@ -601,10 +592,10 @@ begin
   {Pending cells dim the configured text color to half luminance so the
    load-fade cue stays visible with any user-chosen hue.}
   EffectiveStyle := FStyle;
-  if FCells[AIndex].State <> fcsLoaded then
+  if FCellStore.State(AIndex) <> fcsLoaded then
     EffectiveStyle.TextColor := RGB(GetRValue(FStyle.TextColor) shr 1, GetGValue(FStyle.TextColor) shr 1, GetBValue(FStyle.TextColor) shr 1);
 
-  DrawTimecodeOverlay(Canvas, R, FCells[AIndex].Timecode, EffectiveStyle, FBlendBmp, FTextBlendBmp);
+  DrawTimecodeOverlay(Canvas, R, FCellStore.Timecode(AIndex), EffectiveStyle, FBlendBmp, FTextBlendBmp);
 end;
 
 procedure TFrameView.PaintErrorCell(const ARect: TRect);
@@ -623,110 +614,37 @@ begin
 end;
 
 procedure TFrameView.SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
-var
-  I: Integer;
 begin
-  {Free bitmaps from any retained cells before resizing; otherwise
-   reducing ACount loses references to the bitmaps in slots [ACount..]
-   and shrinking-then-regrowing leaks them.}
-  for I := 0 to High(FCells) do
-    FCells[I].Bitmap.Free;
-  SetLength(FCells, ACount);
-  for I := 0 to ACount - 1 do
-  begin
-    FCells[I].State := fcsPlaceholder;
-    FCells[I].Bitmap := nil;
-    {Reset selection: a SetCellCount call signals "new file" or
-     "frame count changed"; selections from the previous layout must
-     not bleed through.}
-    FCells[I].Selected := False;
-    if (AOffsets <> nil) and (I < Length(AOffsets)) then
-    begin
-      FCells[I].Timecode := FormatTimecode(AOffsets[I].TimeOffset);
-      FCells[I].TimeOffset := AOffsets[I].TimeOffset;
-    end else begin
-      FCells[I].Timecode := '';
-      FCells[I].TimeOffset := 0;
-    end;
-  end;
+  FCellStore.SetCellCount(ACount, AOffsets);
   FCurrentFrameIndex := 0;
 end;
 
 procedure TFrameView.SetFrame(AIndex: Integer; ABitmap: TBitmap);
-var
-  Copy: TBitmap;
-  Y, BytesPerRow: Integer;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FCells)) then
-  begin
-    ABitmap.Free;
-    Exit;
-  end;
-
-  {Contract: ABitmap must be pf24bit. The extraction worker always
-   produces pf24bit, but a hard runtime check catches a future regression
-   loudly instead of silently corrupting the cell. The scanline memcpy
-   below would otherwise read 3 bytes per pixel out of a 4-bytes-per-
-   pixel source, mis-aligning every pixel after the first.}
-  if ABitmap.PixelFormat <> pf24bit then
-  begin
-    ABitmap.Free;
-    raise EArgumentException.CreateFmt('TFrameView.SetFrame requires pf24bit input, got pixel-format ord=%d', [Ord(ABitmap.PixelFormat)]);
-  end;
-
-  {Copy pixel data via raw memory, bypassing GDI entirely.
-   Canvas.Draw on a bitmap created by another thread intermittently
-   fails because the GDI DC handle is not reliably usable cross-thread.}
-  Copy := TBitmap.Create;
-  Copy.PixelFormat := pf24bit;
-  Copy.SetSize(ABitmap.Width, ABitmap.Height);
-  BytesPerRow := ABitmap.Width * 3;
-  for Y := 0 to ABitmap.Height - 1 do
-    Move(ABitmap.ScanLine[Y]^, Copy.ScanLine[Y]^, BytesPerRow);
-  ABitmap.Free;
-
-  FCells[AIndex].State := fcsLoaded;
-  FCells[AIndex].Bitmap := Copy;
+  FCellStore.SetFrame(AIndex, ABitmap);
   Invalidate;
 end;
 
 procedure TFrameView.SetCellError(AIndex: Integer);
 begin
-  if (AIndex >= 0) and (AIndex < Length(FCells)) then
-  begin
-    FCells[AIndex].State := fcsError;
-    Invalidate;
-  end;
+  FCellStore.SetCellError(AIndex);
+  Invalidate;
 end;
 
 procedure TFrameView.ClearCells;
-var
-  I: Integer;
 begin
-  for I := 0 to High(FCells) do
-    FreeAndNil(FCells[I].Bitmap);
-  SetLength(FCells, 0);
+  FCellStore.Clear;
   FCurrentFrameIndex := 0;
 end;
 
 function TFrameView.HasPlaceholders: Boolean;
-var
-  I: Integer;
 begin
-  for I := 0 to High(FCells) do
-    if FCells[I].State = fcsPlaceholder then
-      Exit(True);
-  Result := False;
+  Result := FCellStore.HasPlaceholders;
 end;
 
 function TFrameView.HasLoadedCells: Boolean;
-var
-  I: Integer;
 begin
-  for I := 0 to High(FCells) do
-    if FCells[I].State = fcsLoaded then
-      Exit(True);
-  Result := False;
+  Result := FCellStore.HasLoadedCells;
 end;
 
 procedure TFrameView.AdvanceAnimation;
@@ -744,7 +662,7 @@ procedure TFrameView.RecalcSize;
 var
   Sz: TSize;
 begin
-  if Length(FCells) = 0 then
+  if FCellStore.Count = 0 then
   begin
     Width := FViewportW;
     Height := FViewportH;
@@ -759,13 +677,13 @@ procedure TFrameView.NavigateFrame(ADelta: Integer);
 var
   NewIdx: Integer;
 begin
-  if Length(FCells) = 0 then
+  if FCellStore.Count = 0 then
     Exit;
   NewIdx := FCurrentFrameIndex + ADelta;
   if NewIdx < 0 then
     NewIdx := 0
-  else if NewIdx >= Length(FCells) then
-    NewIdx := Length(FCells) - 1;
+  else if NewIdx >= FCellStore.Count then
+    NewIdx := FCellStore.Count - 1;
   if NewIdx <> FCurrentFrameIndex then
   begin
     FCurrentFrameIndex := NewIdx;
@@ -775,35 +693,32 @@ end;
 
 function TFrameView.CellCount: Integer;
 begin
-  Result := Length(FCells);
+  Result := FCellStore.Count;
 end;
 
 function TFrameView.CellState(AIndex: Integer): TFrameCellState;
 begin
-  Result := FCells[AIndex].State;
+  Result := FCellStore.State(AIndex);
 end;
 
 function TFrameView.CellBitmap(AIndex: Integer): TBitmap;
 begin
-  Result := FCells[AIndex].Bitmap;
+  Result := FCellStore.Bitmap(AIndex);
 end;
 
 function TFrameView.CellTimeOffset(AIndex: Integer): Double;
 begin
-  Result := FCells[AIndex].TimeOffset;
+  Result := FCellStore.TimeOffset(AIndex);
 end;
 
 function TFrameView.CellTimecode(AIndex: Integer): string;
 begin
-  Result := FCells[AIndex].Timecode;
+  Result := FCellStore.Timecode(AIndex);
 end;
 
 function TFrameView.CellSelected(AIndex: Integer): Boolean;
 begin
-  {Defensive guard: callers (mouse hit-test, paint loops) occasionally
-   pass -1 for "no cell at point". Without the range check the reader
-   crashes in Debug (range error) or returns garbage in Release.}
-  Result := (AIndex >= 0) and (AIndex < Length(FCells)) and FCells[AIndex].Selected;
+  Result := FCellStore.Selected(AIndex);
 end;
 
 function TFrameView.CellIndexAt(const APoint: TPoint): Integer;
@@ -821,39 +736,25 @@ end;
 
 procedure TFrameView.ToggleSelection(AIndex: Integer);
 begin
-  if (AIndex >= 0) and (AIndex < Length(FCells)) then
-  begin
-    FCells[AIndex].Selected := not FCells[AIndex].Selected;
-    Invalidate;
-  end;
+  FCellStore.ToggleSelection(AIndex);
+  Invalidate;
 end;
 
 procedure TFrameView.SelectAll;
-var
-  I: Integer;
 begin
-  for I := 0 to High(FCells) do
-    FCells[I].Selected := True;
+  FCellStore.SelectAll;
   Invalidate;
 end;
 
 procedure TFrameView.DeselectAll;
-var
-  I: Integer;
 begin
-  for I := 0 to High(FCells) do
-    FCells[I].Selected := False;
+  FCellStore.DeselectAll;
   Invalidate;
 end;
 
 function TFrameView.SelectedCount: Integer;
-var
-  I: Integer;
 begin
-  Result := 0;
-  for I := 0 to High(FCells) do
-    if FCells[I].Selected then
-      Inc(Result);
+  Result := FCellStore.SelectedCount;
 end;
 
 procedure TFrameView.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);

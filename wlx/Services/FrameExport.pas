@@ -6,7 +6,7 @@ interface
 uses
   System.SysUtils, System.Classes,
   Vcl.Graphics,
-  FrameView, Settings, BitmapSaver, BannerInfo,
+  FrameView, FrameCellStore, Settings, BitmapSaver, BannerInfo,
   BitmapWorkThread, SaveDialogPresenter, ClipboardPublisher,
   FrameRenderPipeline, FrameDimensionPredictor;
 

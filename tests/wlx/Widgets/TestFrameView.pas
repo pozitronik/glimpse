@@ -209,7 +209,7 @@ uses
   System.SysUtils, System.Types, System.Math, System.Classes,
   Winapi.Windows, Winapi.Messages,
   Vcl.Forms, Vcl.Graphics, Vcl.Controls,
-  FrameView, FrameOffsets, Types, Settings;
+  FrameView, FrameCellStore, FrameOffsets, Types, Settings;
 
 { Helper: create a TFrameView with a temporary parent so it has a valid ClientWidth }
 function CreateTestFrameView(AWidth: Integer; AMode: TViewMode): TFrameView;

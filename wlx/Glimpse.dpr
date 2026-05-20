@@ -21,6 +21,7 @@ uses
   FFmpegLocator in '..\src\infrastructure\FFmpegLocator.pas',
   FFmpegExe in '..\src\infrastructure\FFmpegExe.pas',
   FrameView in 'Widgets\FrameView.pas',
+  FrameCellStore in 'Widgets\FrameCellStore.pas',
   ExtractionWorker in '..\src\domain\Frame\ExtractionWorker.pas',
   StatusBarHostBar in 'Widgets\StatusBarHostBar.pas',
   KeyInterceptionSubclass in 'Hotkeys\KeyInterceptionSubclass.pas',

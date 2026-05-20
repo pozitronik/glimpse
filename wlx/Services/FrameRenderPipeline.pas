@@ -12,7 +12,7 @@ interface
 uses
   System.Types,
   Vcl.Graphics,
-  FrameView, SettingsInterfaces, BannerInfo,
+  FrameView, FrameCellStore, SettingsInterfaces, BannerInfo,
   CombinedGrid, TimecodeOverlay, FrameOffsets;
 
 type

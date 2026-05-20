@@ -74,6 +74,7 @@
         <DCCReference Include="..\src\infrastructure\FFmpegLocator.pas"/>
         <DCCReference Include="..\src\infrastructure\FFmpegExe.pas"/>
         <DCCReference Include="Widgets\FrameView.pas"/>
+        <DCCReference Include="Widgets\FrameCellStore.pas"/>
         <DCCReference Include="..\src\domain\Frame\ExtractionWorker.pas"/>
         <DCCReference Include="Widgets\StatusBarHostBar.pas"/>
         <DCCReference Include="Hotkeys\KeyInterceptionSubclass.pas"/>
