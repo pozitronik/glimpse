@@ -7,7 +7,8 @@ uses
   System.Classes, System.SyncObjs, System.Generics.Collections,
   Vcl.Graphics,
   FrameOffsets, ExtractionWorker, FrameExtractor, Cache,
-  ExtractionPlanner, Types, FrameNotificationSink;
+  ExtractionPlanner, Types, FrameNotificationSink,
+  Settings, PluginServices;
 
 type
   {Callback: frame arrived from worker thread (ABitmap = nil signals error)}
@@ -23,12 +24,13 @@ type
     FPendingFrames: TList<TPendingFrame>;
     FPendingLock: TCriticalSection;
     FCache: IFrameCache;
+    FCacheFactory: IFrameCacheFactory;
     {Production wires TWindowMessageSink (form HWND); tests inject a capture sink.}
     FSink: IFrameNotificationSink;
     FOnFrameDelivered: TFrameDeliveryEvent;
     FOnProgress: TNotifyEvent;
   public
-    constructor Create(const ASink: IFrameNotificationSink; const ACache: IFrameCache);
+    constructor Create(const ASink: IFrameNotificationSink; const ACache: IFrameCache; const ACacheFactory: IFrameCacheFactory);
     destructor Destroy; override;
     procedure Start(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; AMaxWorkers, AMaxThreads: Integer; const AOptions: TExtractionOptions; const ACacheOverride: IFrameCache = nil);
     procedure Stop;
@@ -37,7 +39,7 @@ type
     {Frees undelivered bitmaps and discards stale Win32 notifications.}
     procedure DrainPendingFrameMessages;
     {Replaces the active cache instance.}
-    procedure RecreateCache(AEnabled: Boolean; const ACacheFolder: string; AMaxSizeMB: Integer);
+    procedure RecreateCache(const ASettings: TPluginSettings);
     property FramesLoaded: Integer read FFramesLoaded;
     property TotalFrames: Integer read FTotalFrames;
     property Cache: IFrameCache read FCache;
@@ -53,18 +55,19 @@ const
 implementation
 
 uses
-  System.SysUtils, Logging, Settings, PathExpand, FrameCacheFactory;
+  System.SysUtils, Logging;
 
 var
   CtrlLog: TProc<string>;
 
 {TExtractionController}
 
-constructor TExtractionController.Create(const ASink: IFrameNotificationSink; const ACache: IFrameCache);
+constructor TExtractionController.Create(const ASink: IFrameNotificationSink; const ACache: IFrameCache; const ACacheFactory: IFrameCacheFactory);
 begin
   inherited Create;
   FSink := ASink;
   FCache := ACache;
+  FCacheFactory := ACacheFactory;
   FPendingFrames := TList<TPendingFrame>.Create;
   FPendingLock := TCriticalSection.Create;
 end;
@@ -176,12 +179,9 @@ begin
     FSink.DrainPending;
 end;
 
-procedure TExtractionController.RecreateCache(AEnabled: Boolean; const ACacheFolder: string; AMaxSizeMB: Integer);
+procedure TExtractionController.RecreateCache(const ASettings: TPluginSettings);
 begin
-  if AEnabled then
-    FCache := CreateFrameCache(EffectiveCacheFolder(ACacheFolder), AMaxSizeMB)
-  else
-    FCache := TNullFrameCache.Create;
+  FCache := FCacheFactory.CreateCache(ASettings);
 end;
 
 initialization

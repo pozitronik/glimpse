@@ -686,7 +686,8 @@ begin
    TProductionFrameCacheFactory.CreateCache, keeping this site agnostic
    of the concrete cache class so tests can wire a fake factory.}
   FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
-    FServices.FrameCacheFactory.CreateCache(FSettings));
+    FServices.FrameCacheFactory.CreateCache(FSettings),
+    FServices.FrameCacheFactory);
   FExtractCtrl.OnFrameDelivered := OnFrameDelivered;
   FExtractCtrl.OnProgress := OnExtractionProgress;
 
@@ -2425,7 +2426,7 @@ begin
 
   {Recreate cache if cache settings changed}
   if scCacheChanged in Changes then
-    FExtractCtrl.RecreateCache(FSettings.CacheEnabled, FSettings.CacheFolder, FSettings.CacheMaxSizeMB);
+    FExtractCtrl.RecreateCache(FSettings);
 
   {FFmpeg path changed: update and reload from scratch (LoadFile re-probes
    the video, which is needed when ffmpeg was previously missing)}
