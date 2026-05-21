@@ -470,9 +470,14 @@ function TFrameRenderPipeline.RenderWithBanner(ABmp: TBitmap): TBitmap;
 begin
   if FBannerStyleProvider.GetShowBanner then
   begin
-    Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo),
-      TBannerStyle.FromSettings(FBannerStyleProvider.GetBanner));
-    ABmp.Free;
+    {try/finally so a raising AttachBanner (the OOM path callers catch)
+     still frees ABmp — callers pass it inline with no variable to free.}
+    try
+      Result := AttachBanner(ABmp, FormatBannerLines(FBannerInfo),
+        TBannerStyle.FromSettings(FBannerStyleProvider.GetBanner));
+    finally
+      ABmp.Free;
+    end;
   end
   else
     Result := ABmp;

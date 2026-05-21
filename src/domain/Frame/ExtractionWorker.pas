@@ -12,9 +12,16 @@ uses
   FrameNotificationSink;
 
 type
+  {A frame result passed from a worker thread to TExtractionController
+   through the shared pending-frame queue.}
   TPendingFrame = record
     Index: Integer;
-    Bitmap: TBitmap; {nil = extraction error}
+    {Heap bitmap (nil signals an extraction error). On enqueue, ownership
+     passes to TExtractionController: ProcessPendingFrames transfers it to
+     OnFrameDelivered, DrainPendingFrameMessages frees any left undelivered.
+     A worker frees Bitmap itself only when it cannot enqueue (cancel or
+     exception before FQueue.Add).}
+    Bitmap: TBitmap;
   end;
 
   TExtractionThread = class(TThread)
@@ -23,6 +30,10 @@ type
     FFileName: string;
     FOffsets: TFrameOffsetArray;
     FSink: IFrameNotificationSink;
+    {Shared pending-frame queue and its lock, both owned by
+     TExtractionController. The worker only appends; the controller drains
+     the queue and frees the queued bitmaps, so TExtractionThread.Destroy
+     must not touch FQueue.}
     FQueue: TList<TPendingFrame>;
     FQueueLock: TCriticalSection;
     FCache: IFrameCache;
@@ -118,6 +129,10 @@ begin
         Source := 'none';
 
         CacheKey := TFrameCacheKey.Create(FFileName, FOffsets[I].TimeOffset, FOptions.MaxSide, FOptions.UseKeyframes);
+        {Bmp is a fresh, worker-owned bitmap either way: TryGet decodes a
+         new copy per call (it never shares a cached instance) and Put only
+         encodes Bmp without retaining it, so enqueuing Bmp cannot
+         double-free a cache entry.}
         Bmp := FCache.TryGet(CacheKey);
         if Bmp <> nil then
           Source := 'cache';
