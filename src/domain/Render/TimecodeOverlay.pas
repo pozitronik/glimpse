@@ -295,6 +295,10 @@ begin
     R.Right := X + CellW;
   if R.Bottom > Y + CellH then
     R.Bottom := Y + CellH;
+  {A cell smaller than the text inset collapses R after clamping; a
+   non-positive scratch bitmap is invalid and there is nothing to draw.}
+  if (R.Width <= 0) or (R.Height <= 0) then
+    Exit;
   TextBmp := TBitmap.Create;
   try
     TextBmp.PixelFormat := pf24bit;

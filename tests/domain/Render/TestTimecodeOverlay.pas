@@ -63,6 +63,9 @@ type
     [Test] procedure DrawTimecodeOverlay_PartialBackAlpha_DoesNotCrash;
     [Test] procedure DrawTimecodeOverlay_PartialTextAlpha_BlendsWithoutCrash;
     [Test] procedure DrawLegacyTimecodeOverlay_PartialTextAlpha_DoesNotCrash;
+    {M14: a cell narrower than the legacy text inset must not build a
+     scratch bitmap with a non-positive dimension.}
+    [Test] procedure DrawLegacyTimecodeOverlay_TinyCell_DoesNotCrash;
     {Per-corner positioning: TModernRectPainter has a 4-way case on
      AStyle.Corner. Exercising each corner ensures the rect-math for
      all four lands.}
@@ -772,6 +775,31 @@ begin
     Style.Mode := tsmLegacy;
     DrawCellTimecode(Bmp.Canvas, Rect(0, 0, 120, 60), 1.0, Style);
     Assert.Pass('legacy partial-text-alpha path completed without crashing');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestTimecodeOverlay.DrawLegacyTimecodeOverlay_TinyCell_DoesNotCrash;
+var
+  Bmp: TBitmap;
+  Style: TTimestampStyle;
+begin
+  {A 2x2 cell is narrower than the 4px legacy text inset, so the clipped
+   draw rect collapses to a negative width/height. The painter must skip
+   rather than call SetSize with a non-positive dimension.}
+  Bmp := TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(64, 64);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 64, 64));
+
+    Style := TimestampForGateTest(True, tcTopLeft, 0);
+    Style.TextColor := clYellow;
+    Style.TextAlpha := 128; {partial alpha -> the offscreen-scratch path}
+    DrawLegacyTimecodeOverlay(Bmp.Canvas, Rect(0, 0, 2, 2), '12:00:00', Style);
+    Assert.Pass('legacy painter survived a 2x2 cell without a bad SetSize');
   finally
     Bmp.Free;
   end;
