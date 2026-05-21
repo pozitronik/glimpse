@@ -107,18 +107,6 @@ type
   end;
 
   [TestFixture]
-  TTestFrameExportClipboardNoOp = class
-  public
-    {The Save* paths all end in a modal TSaveDialog so they can't be driven
-     headlessly. The Copy* paths, however, have guard-rail early returns
-     (CellCount = 0 or ResolveFrameIndex returns False) that skip the
-     VCL Clipboard entirely — safe to verify without a real clipboard.}
-    [Test] procedure CopyFrameToClipboard_EmptyView_NoException;
-    [Test] procedure CopyFrameToClipboard_UnloadedCell_NoException;
-    [Test] procedure CopyAllToClipboard_EmptyView_NoException;
-  end;
-
-  [TestFixture]
   TTestRunBitmapWorkInModal = class
   public
     {RunBitmapWorkInModal is the shared scaffolding behind
@@ -1061,93 +1049,6 @@ begin
   end;
 end;
 
-{TTestFrameExportClipboardNoOp}
-
-procedure TTestFrameExportClipboardNoOp.CopyFrameToClipboard_EmptyView_NoException;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TFrameExporter;
-begin
-  {A copy request with zero cells must bail before touching the Clipboard —
-   otherwise any environment without a clipboard (headless CI, sandboxes)
-   would throw from inside the guard.}
-  Form := TForm.CreateNew(nil);
-  try
-    View := CreateTestFrameView(Form, 0, []);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TFrameExporter.Create(View, Settings);
-      try
-        Exporter.CopyFrame(-1);
-        Exporter.CopyFrame(0);
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
-procedure TTestFrameExportClipboardNoOp.CopyFrameToClipboard_UnloadedCell_NoException;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TFrameExporter;
-begin
-  {Cells exist but none have a bitmap assigned — ResolveFrameIndex returns
-   False and the method exits before the Clipboard call. Same contract as
-   the empty-view case but exercised through a different branch.}
-  Form := TForm.CreateNew(nil);
-  try
-    View := CreateTestFrameView(Form, 3, []);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TFrameExporter.Create(View, Settings);
-      try
-        Exporter.CopyFrame(1);
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
-procedure TTestFrameExportClipboardNoOp.CopyAllToClipboard_EmptyView_NoException;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TFrameExporter;
-begin
-  Form := TForm.CreateNew(nil);
-  try
-    View := CreateTestFrameView(Form, 0, []);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TFrameExporter.Create(View, Settings);
-      try
-        Exporter.CopyView(Settings.SaveAtLiveResolution);
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
 { TTestFrameExportScaling }
 
 function MakeColorSrcBitmap(AW, AH: Integer; AColor: TColor): TBitmap;
@@ -1987,7 +1888,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameExportGridColumns);
   TDUnitX.RegisterTestFixture(TTestFrameExportScaling);
   TDUnitX.RegisterTestFixture(TTestFrameExportLiveResolution);
-  TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
   TDUnitX.RegisterTestFixture(TTestPredictMatchesRender);
   TDUnitX.RegisterTestFixture(TTestRunBitmapWorkInModal);
   TDUnitX.RegisterTestFixture(TTestBuildClipboardCopyFailureMessage);

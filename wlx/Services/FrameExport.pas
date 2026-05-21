@@ -8,7 +8,7 @@ uses
   Vcl.Graphics,
   FrameView, FrameCellStore, ExportTargetResolver, Settings, BitmapSaver, BannerInfo,
   BitmapWorkThread, SaveDialogPresenter, ClipboardPublisher,
-  FrameRenderPipeline, FrameDimensionPredictor, FrameSaver, FrameExportTypes;
+  FrameRenderPipeline, FrameDimensionPredictor, FrameSaver, FrameCopier, FrameExportTypes;
 
 type
   {Re-exported from FrameExportTypes so existing FrameExport imports keep
@@ -46,6 +46,7 @@ type
     FRenderPipeline: TFrameRenderPipeline;
     FDimensionPredictor: TFrameDimensionPredictor;
     FSaver: TFrameSaver;
+    FCopier: TFrameCopier;
     function GetOnAsyncTaskRun: TAsyncTaskRunner;
     procedure SetOnAsyncTaskRun(const AValue: TAsyncTaskRunner);
   protected
@@ -107,11 +108,6 @@ type
 
 implementation
 
-uses
-  System.UITypes,
-  Vcl.Dialogs,
-  FrameFileNames, Types;
-
 {Thin pass-throughs so existing call sites that resolved these via
  FrameExport continue to compile after the publisher extraction.}
 function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
@@ -152,10 +148,12 @@ begin
   FDimensionPredictor := TFrameDimensionPredictor.Create(AFrameView,
     ASettings, ASettings, FRenderPipeline);
   FSaver := TFrameSaver.Create(AFrameView, ASettings, FResolver, FSaveDialog, FRenderPipeline);
+  FCopier := TFrameCopier.Create(AFrameView, ASettings, FResolver, FClipboardPublisher, FRenderPipeline);
 end;
 
 destructor TFrameExporter.Destroy;
 begin
+  FCopier.Free;
   FSaver.Free;
   FDimensionPredictor.Free;
   FRenderPipeline.Free;
@@ -281,151 +279,13 @@ begin
 end;
 
 procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer; AReExtract: TReExtractAction);
-var
-  Idx: Integer;
-  CopyLiveRes: Boolean;
-  WriteAction: TProc;
 begin
-  if not ResolveFrameIndex(AContextCellIndex, Idx) then
-    Exit;
-
-  {Single-frame uses CF_BITMAP only (broadest compatibility, frames are
-   opaque pf24bit). CopyView needs CF_DIBV5 for cell-gap transparency —
-   do NOT collapse the two paths.}
-  CopyLiveRes := FSettings.CopyAtLiveResolution;
-
-  WriteAction := procedure
-    var
-      Tmp, Source: TBitmap;
-      OwnsSource: Boolean;
-      ErrMsg: string;
-    begin
-      if CopyLiveRes then
-      begin
-        Source := RenderCellAtLiveSize(Idx);
-        OwnsSource := True;
-      end
-      else
-      begin
-        Source := FRenderPipeline.PickSaveBitmap(Idx, False);
-        OwnsSource := False;
-      end;
-      try
-        if FSettings.ClipboardAsFileReference then
-        begin
-          {Publisher takes ownership; clone unowned source first because
-           cell bitmaps belong to FFrameView (the worker frees on completion).}
-          if OwnsSource then
-          begin
-            if FClipboardPublisher.PublishAsFileReference(Source) = cprFailed then
-              MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
-            {Publisher set Source to nil — avoid double-free.}
-            OwnsSource := False;
-          end
-          else
-          begin
-            Tmp := TBitmap.Create;
-            try
-              Tmp.Assign(Source);
-              if FClipboardPublisher.PublishAsFileReference(Tmp) = cprFailed then
-                MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
-            finally
-              {Publisher set Tmp to nil on success / kept ownership on cancel —
-               Free on nil is safe.}
-              Tmp.Free;
-            end;
-          end;
-        end
-        else
-        begin
-          {Same owned-vs-clone rule as the file-reference branch above.}
-          if OwnsSource then
-          begin
-            if FClipboardPublisher.PublishAsImage(Source, FSettings.Background, ErrMsg) = cprFailed then
-              MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
-            OwnsSource := False;
-          end
-          else
-          begin
-            Tmp := TBitmap.Create;
-            try
-              Tmp.Assign(Source);
-              if FClipboardPublisher.PublishAsImage(Tmp, FSettings.Background, ErrMsg) = cprFailed then
-                MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
-            finally
-              Tmp.Free;
-            end;
-          end;
-        end;
-      finally
-        if OwnsSource then
-        begin
-          Tmp := Source;
-          Tmp.Free;
-        end;
-      end;
-    end;
-
-  if (not CopyLiveRes) and Assigned(AReExtract) then
-    AReExtract([Idx], WriteAction)
-  else
-    WriteAction;
+  FCopier.CopyFrame(AContextCellIndex, AReExtract);
 end;
 
 procedure TFrameExporter.CopyView(AForceLiveRes: Boolean; AReExtract: TReExtractAction);
-var
-  WriteAction: TProc;
 begin
-  if FFrameView.CellCount = 0 then
-    Exit;
-  if FFrameView.ViewMode = vmSingle then
-  begin
-    CopyFrame(FFrameView.CurrentFrameIndex);
-    Exit;
-  end;
-
-  {Copy-side resolution intent (AForceLiveRes) used to be installed by
-   temp-flipping FSettings.SaveAtLiveResolution for the duration of
-   this call. That was a cross-cutting hazard for concurrent readers
-   of SaveAtLiveResolution; the render path now takes the intent as a
-   parameter so we pass AForceLiveRes through directly.}
-
-  WriteAction := procedure
-    var
-      Bmp: TBitmap;
-      ErrMsg: string;
-    begin
-      {Same OOM-safety wrapper as SaveView. CopyBitmapToClipboard fails
-       silently when GlobalAlloc returns 0 — surface that path explicitly.}
-      try
-        Bmp := RenderWithBanner(RenderCombinedFromCells(AForceLiveRes));
-        try
-          FRenderPipeline.ApplyCombinedSizeCap(Bmp);
-          {Strategy array from ClipboardFormats: legacy targets see opaque
-           pixels flattened against FSettings.Background; alpha-aware
-           targets see transparent cell gaps via CF_DIBV5.}
-          if FSettings.ClipboardAsFileReference then
-          begin
-            if FClipboardPublisher.PublishAsFileReference(Bmp) = cprFailed then
-              MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
-          end
-          else if FClipboardPublisher.PublishAsImage(Bmp, FSettings.Background, ErrMsg) = cprFailed then
-            MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, True), mtError, [mbOK], 0);
-        finally
-          Bmp.Free;
-        end;
-      except
-        on E: EOutOfMemory do
-          MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
-        on E: EOutOfResources do
-          MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
-      end;
-    end;
-
-  if (not AForceLiveRes) and Assigned(AReExtract) then
-    AReExtract(BuildSaveIndicesAllLoaded, WriteAction)
-  else
-    WriteAction;
+  FCopier.CopyView(AForceLiveRes, AReExtract);
 end;
 
 end.
