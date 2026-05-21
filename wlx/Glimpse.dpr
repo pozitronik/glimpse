@@ -69,6 +69,8 @@ uses
   FrameExtractor in '..\src\domain\Frame\FrameExtractor.pas',
   ViewModeLayout in 'ViewMode\ViewModeLayout.pas',
   ExportTargetResolver in 'Services\ExportTargetResolver.pas',
+  FrameExportTypes in 'Services\FrameExportTypes.pas',
+  FrameSaver in 'Services\FrameSaver.pas',
   FrameExport in 'Services\FrameExport.pas',
   SaveDialogPresenter in 'Presenters\SaveDialogPresenter.pas',
   ClipboardPublisher in 'Services\ClipboardPublisher.pas',

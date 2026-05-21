@@ -95,6 +95,8 @@
         <DCCReference Include="..\wlx\Widgets\FrameGeometry.pas"/>
         <DCCReference Include="..\wlx\Widgets\FrameViewRenderer.pas"/>
         <DCCReference Include="..\wlx\Services\ExportTargetResolver.pas"/>
+        <DCCReference Include="..\wlx\Services\FrameExportTypes.pas"/>
+        <DCCReference Include="..\wlx\Services\FrameSaver.pas"/>
         <DCCReference Include="..\src\domain\Frame\ExtractionWorker.pas"/>
         <DCCReference Include="..\wlx\Widgets\StatusBarHostBar.pas"/>
         <DCCReference Include="..\wlx\Hotkeys\KeyInterceptionSubclass.pas"/>
@@ -110,6 +112,7 @@
         <DCCReference Include="wlx\Widgets\TestFrameGeometry.pas"/>
         <DCCReference Include="wlx\Widgets\TestFrameViewRenderer.pas"/>
         <DCCReference Include="wlx\Services\TestExportTargetResolver.pas"/>
+        <DCCReference Include="wlx\Services\TestFrameSaver.pas"/>
         <DCCReference Include="..\src\Logging.pas"/>
         <DCCReference Include="..\src\domain\Cache\Cache.pas"/>
         <DCCReference Include="..\src\domain\Cache\CacheKey.pas"/>

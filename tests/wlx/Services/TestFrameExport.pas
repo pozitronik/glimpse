@@ -86,27 +86,6 @@ type
   end;
 
   [TestFixture]
-  TTestFrameExportSaveFramesToDir = class
-  strict private
-    FTempDir: string;
-    function CountFiles(const APattern: string): Integer;
-  public
-    [Setup] procedure Setup;
-    [TearDown] procedure TearDown;
-
-    {SaveFramesToDir is the dialog-free leaf of the SaveFrames pipeline:
-     it iterates loaded cells (or selected loaded cells when
-     ASelectedOnly is True), formats per-frame names, and writes through
-     BitmapSaver. Tests here verify the file count, selection
-     filtering, and the placeholder-skip rule.}
-    [Test] procedure SavesAllLoadedFramesAsSeparateFiles;
-    [Test] procedure SkipsPlaceholderCells;
-    [Test] procedure SelectedOnly_OnlyWritesSelectedLoadedCells;
-    [Test] procedure NoSelectedAndSelectedOnly_WritesNothing;
-    [Test] procedure FormatExtensionMatchesArgument;
-  end;
-
-  [TestFixture]
   TTestPredictMatchesRender = class
   public
     {Pinning tests: PredictCombinedSize duplicates layout math from three
@@ -203,7 +182,6 @@ type
     function TestRenderCellAtLiveSize(AIndex: Integer): TBitmap;
     function TestRenderGridCombinedAtLiveResolution: TBitmap;
     function TestRenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean = False): TBitmap;
-    procedure TestSaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   end;
 
 function TTestableExporter.TestRenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
@@ -239,12 +217,6 @@ end;
 function TTestableExporter.TestRenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
 begin
   Result := RenderSmartCombinedFromCells(ALiveResolutionIntent);
-end;
-
-procedure TTestableExporter.TestSaveFramesToDir(const ADir: string;
-  AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
-begin
-  SaveFramesToDir(ADir, AFormat, ASelectedOnly, AFileName);
 end;
 
 { Helper: creates a temporary TFrameView parented to a form }
@@ -1628,174 +1600,6 @@ begin
   end;
 end;
 
-{ TTestFrameExportSaveFramesToDir }
-
-procedure TTestFrameExportSaveFramesToDir.Setup;
-begin
-  FTempDir := IncludeTrailingPathDelimiter(
-    System.IOUtils.TPath.Combine(System.IOUtils.TPath.GetTempPath,
-      'VT_FrameExportSaveDir_' + TGuid.NewGuid.ToString));
-  System.IOUtils.TDirectory.CreateDirectory(FTempDir);
-end;
-
-procedure TTestFrameExportSaveFramesToDir.TearDown;
-begin
-  if (FTempDir <> '') and System.IOUtils.TDirectory.Exists(FTempDir) then
-    System.IOUtils.TDirectory.Delete(FTempDir, True);
-end;
-
-function TTestFrameExportSaveFramesToDir.CountFiles(const APattern: string): Integer;
-begin
-  Result := Length(System.IOUtils.TDirectory.GetFiles(FTempDir, APattern));
-end;
-
-procedure TTestFrameExportSaveFramesToDir.SavesAllLoadedFramesAsSeparateFiles;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TTestableExporter;
-begin
-  Form := TForm.CreateNew(nil);
-  try
-    {3 cells, all loaded}
-    View := CreateTestFrameView(Form, 3, [0, 1, 2]);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TTestableExporter.Create(View, Settings);
-      try
-        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, False, 'video.mp4');
-        Assert.AreEqual(3, CountFiles('*.png'),
-          'Every loaded cell must produce a PNG');
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
-procedure TTestFrameExportSaveFramesToDir.SkipsPlaceholderCells;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TTestableExporter;
-begin
-  Form := TForm.CreateNew(nil);
-  try
-    {5 cells, only 2 loaded (indices 0 and 3); the other three are
-     placeholders and must be skipped.}
-    View := CreateTestFrameView(Form, 5, [0, 3]);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TTestableExporter.Create(View, Settings);
-      try
-        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, False, 'video.mp4');
-        Assert.AreEqual(2, CountFiles('*.png'),
-          'Placeholder cells must be skipped');
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
-procedure TTestFrameExportSaveFramesToDir.SelectedOnly_OnlyWritesSelectedLoadedCells;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TTestableExporter;
-begin
-  Form := TForm.CreateNew(nil);
-  try
-    View := CreateTestFrameView(Form, 4, [0, 1, 2, 3]);
-    View.ToggleSelection(1);
-    View.ToggleSelection(3);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TTestableExporter.Create(View, Settings);
-      try
-        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, True, 'video.mp4');
-        Assert.AreEqual(2, CountFiles('*.png'),
-          'Only selected loaded cells must be saved');
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
-procedure TTestFrameExportSaveFramesToDir.NoSelectedAndSelectedOnly_WritesNothing;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TTestableExporter;
-begin
-  Form := TForm.CreateNew(nil);
-  try
-    View := CreateTestFrameView(Form, 3, [0, 1, 2]);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TTestableExporter.Create(View, Settings);
-      try
-        Exporter.TestSaveFramesToDir(FTempDir, sfPNG, True, 'video.mp4');
-        Assert.AreEqual(0, CountFiles('*.png'),
-          'ASelectedOnly with no selection writes nothing; production callers gate with SelectedCount>0 first');
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
-procedure TTestFrameExportSaveFramesToDir.FormatExtensionMatchesArgument;
-var
-  Form: TForm;
-  View: TFrameView;
-  Settings: TPluginSettings;
-  Exporter: TTestableExporter;
-begin
-  Form := TForm.CreateNew(nil);
-  try
-    View := CreateTestFrameView(Form, 2, [0, 1]);
-    Settings := CreateSettingsWithBanner(False);
-    try
-      Exporter := TTestableExporter.Create(View, Settings);
-      try
-        Exporter.TestSaveFramesToDir(FTempDir, sfJPEG, False, 'video.mp4');
-        Assert.AreEqual(2, CountFiles('*.jpg'),
-          'AFormat=sfJPEG must produce .jpg files via GenerateFrameFileName');
-        Assert.AreEqual(0, CountFiles('*.png'),
-          'No .png files must be produced when AFormat=sfJPEG');
-      finally
-        Exporter.Free;
-      end;
-    finally
-      Settings.Free;
-    end;
-  finally
-    Form.Free;
-  end;
-end;
-
 { TTestPredictMatchesRender }
 
 procedure AssertPredictEqualsRender(AMode: TViewMode; AForceLive: Boolean; ACellCount: Integer);
@@ -2183,7 +1987,6 @@ initialization
   TDUnitX.RegisterTestFixture(TTestFrameExportGridColumns);
   TDUnitX.RegisterTestFixture(TTestFrameExportScaling);
   TDUnitX.RegisterTestFixture(TTestFrameExportLiveResolution);
-  TDUnitX.RegisterTestFixture(TTestFrameExportSaveFramesToDir);
   TDUnitX.RegisterTestFixture(TTestFrameExportClipboardNoOp);
   TDUnitX.RegisterTestFixture(TTestPredictMatchesRender);
   TDUnitX.RegisterTestFixture(TTestRunBitmapWorkInModal);

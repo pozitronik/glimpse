@@ -8,13 +8,12 @@ uses
   Vcl.Graphics,
   FrameView, FrameCellStore, ExportTargetResolver, Settings, BitmapSaver, BannerInfo,
   BitmapWorkThread, SaveDialogPresenter, ClipboardPublisher,
-  FrameRenderPipeline, FrameDimensionPredictor;
+  FrameRenderPipeline, FrameDimensionPredictor, FrameSaver, FrameExportTypes;
 
 type
-  {Invoked after the save dialog accepts so re-extraction happens only when
-   the user has committed. Host sets/clears FOverrideFrames around AAction
-   so PickSaveBitmap picks up the re-extracted bitmaps. Nil = skip re-extract.}
-  TReExtractAction = reference to procedure(const AIndices: TArray<Integer>; AAction: TProc);
+  {Re-exported from FrameExportTypes so existing FrameExport imports keep
+   resolving the type.}
+  TReExtractAction = FrameExportTypes.TReExtractAction;
 
   TAsyncTaskRunner = ClipboardPublisher.TAsyncTaskRunner;
   TClipboardPublishResult = ClipboardPublisher.TClipboardPublishResult;
@@ -46,6 +45,7 @@ type
     FClipboardPublisher: TClipboardPublisher;
     FRenderPipeline: TFrameRenderPipeline;
     FDimensionPredictor: TFrameDimensionPredictor;
+    FSaver: TFrameSaver;
     function GetOnAsyncTaskRun: TAsyncTaskRunner;
     procedure SetOnAsyncTaskRun(const AValue: TAsyncTaskRunner);
   protected
@@ -58,7 +58,6 @@ type
     function RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
     function RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
     function RenderWithBanner(ABmp: TBitmap): TBitmap;
-    procedure SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
   public
     constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
     destructor Destroy; override;
@@ -152,10 +151,12 @@ begin
     ASettings, ASettings, ASettings, ASettings);
   FDimensionPredictor := TFrameDimensionPredictor.Create(AFrameView,
     ASettings, ASettings, FRenderPipeline);
+  FSaver := TFrameSaver.Create(AFrameView, ASettings, FResolver, FSaveDialog, FRenderPipeline);
 end;
 
 destructor TFrameExporter.Destroy;
 begin
+  FSaver.Free;
   FDimensionPredictor.Free;
   FRenderPipeline.Free;
   FClipboardPublisher.Free;
@@ -264,161 +265,19 @@ begin
   Result := FDimensionPredictor.FormatPredictedSize(AForceLiveRes);
 end;
 
-procedure TFrameExporter.SaveFramesToDir(const ADir: string; AFormat: TSaveFormat; ASelectedOnly: Boolean; const AFileName: string);
-var
-  I: Integer;
-  Tmp: TBitmap;
-  TargetPath: string;
-begin
-  for I := 0 to FFrameView.CellCount - 1 do
-  begin
-    if ASelectedOnly and not FFrameView.CellSelected(I) then
-      Continue;
-    if FFrameView.CellState(I) <> fcsLoaded then
-      Continue;
-    TargetPath := ADir + GenerateFrameFileName(AFileName, I, FFrameView.CellTimeOffset(I), AFormat);
-    if FSettings.SaveAtLiveResolution then
-    begin
-      Tmp := RenderCellAtLiveSize(I);
-      try
-        BitmapSaver.SaveBitmapToFile(Tmp, TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
-      finally
-        Tmp.Free;
-      end;
-    end
-    else
-      BitmapSaver.SaveBitmapToFile(FRenderPipeline.PickSaveBitmap(I, False), TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
-  end;
-end;
-
 procedure TFrameExporter.SaveFrame(const AFileName: string; AContextCellIndex: Integer; AReExtract: TReExtractAction);
-var
-  Idx: Integer;
-  Fmt: TSaveFormat;
-  Path: string;
-  WriteAction: TProc;
 begin
-  if not ResolveFrameIndex(AContextCellIndex, Idx) then
-    Exit;
-
-  {Dialog FIRST so the user gets immediate feedback; the seconds-long
-   re-extract runs only after the user commits AND picks native resolution.}
-  if not FSaveDialog.Show('Save frame', GenerateFrameFileName(AFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat), True, FSettings.SaveAtLiveResolution, Path, Fmt) then
-    Exit;
-
-  WriteAction := procedure
-    var
-      Tmp: TBitmap;
-    begin
-      if FSettings.SaveAtLiveResolution then
-      begin
-        Tmp := RenderCellAtLiveSize(Idx);
-        try
-          BitmapSaver.SaveBitmapToFile(Tmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
-        finally
-          Tmp.Free;
-        end;
-      end
-      else
-        BitmapSaver.SaveBitmapToFile(FRenderPipeline.PickSaveBitmap(Idx, False), Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
-    end;
-
-  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
-    AReExtract([Idx], WriteAction)
-  else
-    WriteAction;
+  FSaver.SaveFrame(AFileName, AContextCellIndex, AReExtract);
 end;
 
 procedure TFrameExporter.SaveFrames(const AFileName: string; AReExtract: TReExtractAction);
-var
-  I, FirstIdx: Integer;
-  Path: string;
-  Fmt: TSaveFormat;
-  SelectedOnly: Boolean;
-  WriteAction: TProc;
-  Indices: TArray<Integer>;
 begin
-  if FFrameView.CellCount = 0 then
-    Exit;
-
-  {Selection-aware: any selection = save just those; else every loaded frame.}
-  SelectedOnly := FFrameView.SelectedCount > 0;
-
-  {Sample filename uses the first frame that will actually be written.}
-  FirstIdx := 0;
-  if SelectedOnly then
-    for I := 0 to FFrameView.CellCount - 1 do
-      if FFrameView.CellSelected(I) then
-      begin
-        FirstIdx := I;
-        Break;
-      end;
-
-  if not FSaveDialog.Show('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.SaveFormat), False, FSettings.SaveAtLiveResolution, Path, Fmt) then
-    Exit;
-
-  WriteAction := procedure
-    begin
-      SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, SelectedOnly, AFileName);
-    end;
-
-  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
-  begin
-    Indices := BuildSaveIndicesSelectedOrAll;
-    AReExtract(Indices, WriteAction);
-  end
-  else
-    WriteAction;
+  FSaver.SaveFrames(AFileName, AReExtract);
 end;
 
 procedure TFrameExporter.SaveView(const AFileName: string; AInitialLiveRes: Boolean; AReExtract: TReExtractAction);
-var
-  Fmt: TSaveFormat;
-  Path, BaseName: string;
-  WriteAction: TProc;
 begin
-  if FFrameView.CellCount = 0 then
-    Exit;
-
-  {vmSingle's "view" is a single frame; route to SaveFrame. The per-call
-   AInitialLiveRes is intentionally NOT threaded through — the view/frame
-   distinction collapses here.}
-  if FFrameView.ViewMode = vmSingle then
-  begin
-    SaveFrame(AFileName, FFrameView.CurrentFrameIndex, AReExtract);
-    Exit;
-  end;
-
-  BaseName := ChangeFileExt(ExtractFileName(AFileName), '');
-  if not FSaveDialog.Show('Save view', BaseName + '_view.png', True, AInitialLiveRes, Path, Fmt) then
-    Exit;
-
-  WriteAction := procedure
-    var
-      Bmp: TBitmap;
-    begin
-      {Native combined images can exhaust 32-bit address space; surface
-       a domain-specific error instead of the generic OS message.}
-      try
-        Bmp := RenderWithBanner(RenderCombinedFromCells(FSettings.SaveAtLiveResolution));
-        try
-          FRenderPipeline.ApplyCombinedSizeCap(Bmp);
-          BitmapSaver.SaveBitmapToFile(Bmp, Path, Fmt, FSettings.JpegQuality, FSettings.PngCompression);
-        finally
-          Bmp.Free;
-        end;
-      except
-        on E: EOutOfMemory do
-          MessageDlg(Format('Out of memory while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large for this build. Lower the Scale target in Settings, reduce the frame count, or use the 64-bit plugin variant.', [E.Message]), mtError, [mbOK], 0);
-        on E: EOutOfResources do
-          MessageDlg(Format('Out of system resources while building the combined image (%s).' + sLineBreak + sLineBreak + 'The image is too large. Lower the Scale target in Settings or reduce the frame count.', [E.Message]), mtError, [mbOK], 0);
-      end;
-    end;
-
-  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
-    AReExtract(BuildSaveIndicesAllLoaded, WriteAction)
-  else
-    WriteAction;
+  FSaver.SaveView(AFileName, AInitialLiveRes, AReExtract);
 end;
 
 procedure TFrameExporter.CopyFrame(AContextCellIndex: Integer; AReExtract: TReExtractAction);
