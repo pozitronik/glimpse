@@ -169,9 +169,11 @@ begin
     if H.FFmpegPath = '' then
     begin
       AOpenResult := E_EOPEN;
-      {Handle does not own Settings; free explicitly to prevent leak.}
-      H.Settings.Free;
-      H.Free;
+      {Handle does not own Settings; free explicitly to prevent leak.
+       FreeAndNil so a raising destructor cannot leave the except block
+       a dangling pointer to re-free.}
+      FreeAndNil(H.Settings);
+      FreeAndNil(H);
       Exit;
     end;
 
@@ -183,8 +185,8 @@ begin
     if not H.VideoInfo.IsValid then
     begin
       AOpenResult := E_BAD_ARCHIVE;
-      H.Settings.Free;
-      H.Free;
+      FreeAndNil(H.Settings);
+      FreeAndNil(H);
       Exit;
     end;
 
