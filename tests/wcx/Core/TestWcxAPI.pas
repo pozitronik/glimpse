@@ -33,6 +33,9 @@ type
      lock so two threads cannot interleave directory deletion and field
      assignments.}
     [Test] procedure InvalidateFrameCache_Concurrent_DoesNotCrash;
+    {H64: concurrent first callers of the lazy Instance getter must all
+     receive one instance, not race into building several.}
+    [Test] procedure InstanceGetter_ConcurrentFirstCallers_ShareOneInstance;
     {Regression: when DoOpenArchive's body raises after PreExtractFrames has
      populated the cache, the except branch must invalidate it. Without
      that, a subsequent OpenArchive on the same file finds a stale cache
@@ -365,6 +368,69 @@ begin
   finally
     if TDirectory.Exists(TempDir) then
       TDirectory.Delete(TempDir, True);
+  end;
+end;
+
+type
+  {Each thread grabs TWcxFrameCache.Instance once, after a shared start
+   gate, so the H64 concurrency test can compare what every caller got.}
+  TInstanceGrabThread = class(TThread)
+  strict private
+    FStart: TEvent;
+    FGrabbed: TWcxFrameCache;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(AStart: TEvent);
+    property Grabbed: TWcxFrameCache read FGrabbed;
+  end;
+
+constructor TInstanceGrabThread.Create(AStart: TEvent);
+begin
+  FStart := AStart;
+  inherited Create(False);
+end;
+
+procedure TInstanceGrabThread.Execute;
+begin
+  FStart.WaitFor(INFINITE);
+  FGrabbed := TWcxFrameCache.Instance;
+end;
+
+procedure TTestWcxAPI.InstanceGetter_ConcurrentFirstCallers_ShareOneInstance;
+const
+  THREAD_COUNT = 8;
+var
+  Threads: array [0 .. THREAD_COUNT - 1] of TInstanceGrabThread;
+  StartGate: TEvent;
+  Handles: array [0 .. THREAD_COUNT - 1] of THandle;
+  I: Integer;
+  First: TWcxFrameCache;
+begin
+  {With FInstance reset, several threads charging into Instance at once
+   must all receive the SAME object — an unsynchronised lazy getter could
+   build (and leak) more than one, each with its own lock.}
+  TWcxFrameCache.ReleaseInstance;
+  StartGate := TEvent.Create(nil, True, False, '');
+  try
+    for I := 0 to THREAD_COUNT - 1 do
+    begin
+      Threads[I] := TInstanceGrabThread.Create(StartGate);
+      Handles[I] := Threads[I].Handle;
+    end;
+    StartGate.SetEvent;
+    WaitForMultipleObjects(THREAD_COUNT, @Handles[0], True, 30000);
+
+    First := Threads[0].Grabbed;
+    Assert.IsNotNull(First, 'Instance must return a non-nil cache');
+    for I := 0 to THREAD_COUNT - 1 do
+    begin
+      Assert.IsTrue(Threads[I].Grabbed = First,
+        'Every concurrent first caller must receive the same instance');
+      Threads[I].Free;
+    end;
+  finally
+    StartGate.Free;
   end;
 end;
 

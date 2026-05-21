@@ -82,6 +82,11 @@ implementation
 uses
   System.IOUtils, Logging;
 
+var
+  {Guards the lazy construction of FInstance in the Instance getter so
+   two concurrent first callers cannot build two caches.}
+  GInstanceLock: TCriticalSection;
+
 procedure WcxCacheLog(const AMsg: string);
 begin
   DebugLog('WCX', AMsg);
@@ -110,14 +115,24 @@ end;
 
 class function TWcxFrameCache.Instance: TWcxFrameCache;
 begin
-  if FInstance = nil then
-    FInstance := TWcxFrameCache.Create;
-  Result := FInstance;
+  GInstanceLock.Enter;
+  try
+    if FInstance = nil then
+      FInstance := TWcxFrameCache.Create;
+    Result := FInstance;
+  finally
+    GInstanceLock.Leave;
+  end;
 end;
 
 class procedure TWcxFrameCache.ReleaseInstance;
 begin
-  FreeAndNil(FInstance);
+  GInstanceLock.Enter;
+  try
+    FreeAndNil(FInstance);
+  finally
+    GInstanceLock.Leave;
+  end;
 end;
 
 procedure TWcxFrameCache.InvalidateLocked;
@@ -262,11 +277,14 @@ end;
 
 initialization
 
+GInstanceLock := TCriticalSection.Create;
+
 finalization
 
 {Consumers that link WcxFrameCache without WcxExports (the test exe)
  still get a clean shutdown; FreeAndNil is idempotent so the
  WcxExports finalization call later is harmless.}
 TWcxFrameCache.ReleaseInstance;
+GInstanceLock.Free;
 
 end.
