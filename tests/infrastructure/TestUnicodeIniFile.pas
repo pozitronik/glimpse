@@ -71,6 +71,9 @@ type
      TCustomIniFile reference — Write/Read round-trip via the base
      reference proves every abstract member is overridden correctly.}
     [Test] procedure TestSubstitutesAsTCustomIniFile;
+    {LSP regression: lenient bool tokens must survive a read through a
+     TCustomIniFile-typed reference, not just the concrete type.}
+    [Test] procedure TestSubstituteReadBoolKeepsLenientParsing;
     {Pin the "Key=Value" emission format of ReadSectionValues.}
     [Test] procedure TestReadSectionValuesEmitsKeyEqualsValuePairs;
   end;
@@ -805,6 +808,30 @@ begin
 
     Base.EraseSection('s');
     Assert.IsFalse(Base.SectionExists('s'), 'EraseSection via base ref');
+  finally
+    Concrete.Free;
+  end;
+end;
+
+procedure TTestUnicodeIniFile.TestSubstituteReadBoolKeepsLenientParsing;
+var
+  Path: string;
+  Concrete: TUnicodeIniFile;
+  Base: TCustomIniFile;
+begin
+  {Regression for the LSP split: the base ReadBool accepts only 0/1, so
+   a lenient token ("Yes"/"Off") read through a TCustomIniFile reference
+   only parses correctly if ReadBool overrides the base virtual slot.}
+  Path := TPath.Combine(FTempDir, 'subst_bool.ini');
+  Concrete := TUnicodeIniFile.Create(Path);
+  try
+    Base := Concrete;
+    Base.WriteString('s', 'yes_flag', 'Yes');
+    Base.WriteString('s', 'off_flag', 'Off');
+    Assert.IsTrue(Base.ReadBool('s', 'yes_flag', False),
+      '"Yes" must read True through the base reference');
+    Assert.IsFalse(Base.ReadBool('s', 'off_flag', True),
+      '"Off" must read False through the base reference');
   finally
     Concrete.Free;
   end;

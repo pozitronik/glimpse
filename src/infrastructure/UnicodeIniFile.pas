@@ -39,22 +39,18 @@ type
 
     function ReadString(const Section, Ident, Default: string): string; override;
     procedure WriteString(const Section, Ident, Value: string); override;
-    {Non-virtual on the base; reintroduce so typed-as-TUnicodeIniFile
-     callers use the lenient line-list-direct paths (True/Yes/On/1 -> True).
-     Callers typed as TCustomIniFile fall through to the stricter 0/1
-     base impl — same risk as not overriding at all, accepted to keep
-     the substitution promise.}
-    function ReadInteger(const Section, Ident: string; Default: Longint): Longint; reintroduce;
-    function ReadBool(const Section, Ident: string; Default: Boolean): Boolean; reintroduce;
-    procedure WriteInteger(const Section, Ident: string; Value: Longint); reintroduce;
-    procedure WriteBool(const Section, Ident: string; Value: Boolean); reintroduce;
+    {Overridden to keep lenient bool parsing: the base ReadBool accepts
+     only 0/1, ours also honours True/False/Yes/No/On/Off.}
+    function ReadInteger(const Section, Ident: string; Default: Longint): Longint; override;
+    function ReadBool(const Section, Ident: string; Default: Boolean): Boolean; override;
+    procedure WriteInteger(const Section, Ident: string; Value: Longint); override;
+    procedure WriteBool(const Section, Ident: string; Value: Boolean); override;
 
     procedure ReadSections(Strings: TStrings); override;
     procedure ReadSection(const Section: string; Strings: TStrings); override;
     procedure ReadSectionValues(const Section: string; Strings: TStrings); override;
-    {Non-virtual on the base; reintroduce to keep the line-list-direct path.}
-    function ValueExists(const Section, Ident: string): Boolean; reintroduce;
-    function SectionExists(const Section: string): Boolean; reintroduce;
+    function ValueExists(const Section, Ident: string): Boolean; override;
+    function SectionExists(const Section: string): Boolean; override;
     procedure DeleteKey(const Section, Ident: string); override;
     procedure EraseSection(const Section: string); override;
     procedure Clear;
