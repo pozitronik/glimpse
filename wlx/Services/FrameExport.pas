@@ -6,7 +6,7 @@ interface
 uses
   System.SysUtils, System.Classes,
   Vcl.Graphics,
-  FrameView, FrameCellStore, Settings, BitmapSaver, BannerInfo,
+  FrameView, FrameCellStore, ExportTargetResolver, Settings, BitmapSaver, BannerInfo,
   BitmapWorkThread, SaveDialogPresenter, ClipboardPublisher,
   FrameRenderPipeline, FrameDimensionPredictor;
 
@@ -41,6 +41,7 @@ type
   strict private
     FFrameView: TFrameView;
     FSettings: TPluginSettings;
+    FResolver: TExportTargetResolver;
     FSaveDialog: TSaveDialogPresenter;
     FClipboardPublisher: TClipboardPublisher;
     FRenderPipeline: TFrameRenderPipeline;
@@ -110,27 +111,7 @@ implementation
 uses
   System.UITypes,
   Vcl.Dialogs,
-  FrameFileNames, Types,
-  FrameSelectionPolicy;
-
-type
-  {Production IFrameViewQuery adapter over a TFrameView. The selection
-   policy operates on this thin read-only view so its rules live in a
-   VCL-free unit. Lifetime tied to the owning TFrameExporter via the
-   adapter being constructed and freed per ResolveFrameIndex /
-   PickActionCell call (the adapter is stateless beyond holding a
-   FFrameView reference, so per-call construction is cheap).}
-  TFrameViewQueryAdapter = class(TInterfacedObject, IFrameViewQuery)
-  strict private
-    FFrameView: TFrameView;
-  public
-    constructor Create(AFrameView: TFrameView);
-    function CellCount: Integer;
-    function CurrentFrameIndex: Integer;
-    function CellIsLoaded(AIndex: Integer): Boolean;
-    function CellSelected(AIndex: Integer): Boolean;
-    function IsSingleView: Boolean;
-  end;
+  FrameFileNames, Types;
 
 {Thin pass-throughs so existing call sites that resolved these via
  FrameExport continue to compile after the publisher extraction.}
@@ -159,6 +140,7 @@ begin
   inherited Create;
   FFrameView := AFrameView;
   FSettings := ASettings;
+  FResolver := TExportTargetResolver.Create(AFrameView);
   {Step 109 (N3, ISP): the facade still takes TPluginSettings (so the
    form's existing call site doesn't change), but each sub-presenter
    constructor now takes the narrow interface slice it actually needs.
@@ -178,6 +160,7 @@ begin
   FRenderPipeline.Free;
   FClipboardPublisher.Free;
   FSaveDialog.Free;
+  FResolver.Free;
   inherited Destroy;
 end;
 
@@ -192,87 +175,28 @@ begin
 end;
 
 function TFrameExporter.ResolveFrameIndex(AContextCellIndex: Integer; out AIndex: Integer): Boolean;
-var
-  View: IFrameViewQuery;
 begin
-  {Explicit local needed: passing TFrameViewQueryAdapter.Create directly
-   into a const-interface param skips the AddRef/Release pair and leaks.}
-  View := TFrameViewQueryAdapter.Create(FFrameView);
-  Result := TFrameSelectionPolicy.ResolveFrameIndex(View, AContextCellIndex, AIndex);
+  Result := FResolver.ResolveFrameIndex(AContextCellIndex, AIndex);
 end;
 
 function TFrameExporter.PickActionCell(AContextCellIndex: Integer): Integer;
-var
-  View: IFrameViewQuery;
 begin
-  View := TFrameViewQueryAdapter.Create(FFrameView);
-  Result := TFrameSelectionPolicy.PickActionCell(View, AContextCellIndex);
-end;
-
-{ TFrameViewQueryAdapter }
-
-constructor TFrameViewQueryAdapter.Create(AFrameView: TFrameView);
-begin
-  inherited Create;
-  FFrameView := AFrameView;
-end;
-
-function TFrameViewQueryAdapter.CellCount: Integer;
-begin
-  Result := FFrameView.CellCount;
-end;
-
-function TFrameViewQueryAdapter.CurrentFrameIndex: Integer;
-begin
-  Result := FFrameView.CurrentFrameIndex;
-end;
-
-function TFrameViewQueryAdapter.CellIsLoaded(AIndex: Integer): Boolean;
-begin
-  Result := (AIndex >= 0) and (AIndex < FFrameView.CellCount)
-    and (FFrameView.CellState(AIndex) = fcsLoaded);
-end;
-
-function TFrameViewQueryAdapter.CellSelected(AIndex: Integer): Boolean;
-begin
-  Result := FFrameView.CellSelected(AIndex);
-end;
-
-function TFrameViewQueryAdapter.IsSingleView: Boolean;
-begin
-  Result := FFrameView.ViewMode = vmSingle;
+  Result := FResolver.PickActionCell(AContextCellIndex);
 end;
 
 function TFrameExporter.BuildSaveIndicesSingle(AContextCellIndex: Integer): TArray<Integer>;
-var
-  Idx: Integer;
 begin
-  if ResolveFrameIndex(AContextCellIndex, Idx) then
-    Result := TArray<Integer>.Create(Idx)
-  else
-    SetLength(Result, 0);
+  Result := FResolver.BuildSaveIndicesSingle(AContextCellIndex);
 end;
 
 function TFrameExporter.BuildSaveIndicesAllLoaded: TArray<Integer>;
-var
-  I: Integer;
 begin
-  SetLength(Result, 0);
-  for I := 0 to FFrameView.CellCount - 1 do
-    if FFrameView.CellState(I) = fcsLoaded then
-      Result := Result + [I];
+  Result := FResolver.BuildSaveIndicesAllLoaded;
 end;
 
 function TFrameExporter.BuildSaveIndicesSelectedOrAll: TArray<Integer>;
-var
-  I: Integer;
-  SelectedOnly: Boolean;
 begin
-  SetLength(Result, 0);
-  SelectedOnly := FFrameView.SelectedCount > 0;
-  for I := 0 to FFrameView.CellCount - 1 do
-    if (FFrameView.CellState(I) = fcsLoaded) and ((not SelectedOnly) or FFrameView.CellSelected(I)) then
-      Result := Result + [I];
+  Result := FResolver.BuildSaveIndicesSelectedOrAll;
 end;
 
 function TFrameExporter.ScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
