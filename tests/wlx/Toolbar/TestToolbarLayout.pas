@@ -37,6 +37,7 @@ type
     [Test] procedure Menu_NoSeparator_WhenOnlyActions;
     [Test] procedure Menu_ShuffleAppearsRightAfterRefresh;
     [Test] procedure Menu_ShuffleDisabled_WhenNoFrames;
+    [Test] procedure Menu_ViewVariantsFollowTheirActionsFromConstArrays;
     { BuildViewVariantsMenu + SAVE_VIEW_VARIANTS / COPY_VIEW_VARIANTS }
     [Test] procedure ViewVariants_SaveItemsMatchConstArray;
     [Test] procedure ViewVariants_CopyItemsMatchConstArray;
@@ -558,6 +559,49 @@ begin
         Exit;
       end;
     Assert.Fail('Shuffle item not found');
+  finally
+    Menu.Free;
+  end;
+end;
+
+procedure TTestToolbarLayout.Menu_ViewVariantsFollowTheirActionsFromConstArrays;
+var
+  Menu: TPopupMenu;
+  I, SaveIdx, CopyIdx, V: Integer;
+begin
+  {The Save view / Copy view variant items injected into the overflow menu
+   must come from SAVE_VIEW_VARIANTS / COPY_VIEW_VARIANTS, so a new variant
+   lands here from a single const-array edit rather than hardcoded items.}
+  Menu := TPopupMenu.Create(nil);
+  try
+    PopulateHamburgerMenu(Menu, MakeState(0, vmGrid, False, True),
+      nil, nil, nil, nil);
+    SaveIdx := -1;
+    CopyIdx := -1;
+    for I := 0 to Menu.Items.Count - 1 do
+    begin
+      if Menu.Items[I].Tag = CM_SAVE_VIEW then
+        SaveIdx := I;
+      if Menu.Items[I].Tag = CM_COPY_VIEW then
+        CopyIdx := I;
+    end;
+    Assert.IsTrue(SaveIdx >= 0, 'Save view item must be present');
+    Assert.IsTrue(CopyIdx >= 0, 'Copy view item must be present');
+
+    for V := 0 to High(SAVE_VIEW_VARIANTS) do
+    begin
+      Assert.AreEqual(SAVE_VIEW_VARIANTS[V].Tag, Integer(Menu.Items[SaveIdx + 1 + V].Tag),
+        'Save view variant tag must come from SAVE_VIEW_VARIANTS');
+      Assert.AreEqual(SAVE_VIEW_VARIANTS[V].Caption, Menu.Items[SaveIdx + 1 + V].Caption,
+        'Save view variant caption must come from SAVE_VIEW_VARIANTS');
+    end;
+    for V := 0 to High(COPY_VIEW_VARIANTS) do
+    begin
+      Assert.AreEqual(COPY_VIEW_VARIANTS[V].Tag, Integer(Menu.Items[CopyIdx + 1 + V].Tag),
+        'Copy view variant tag must come from COPY_VIEW_VARIANTS');
+      Assert.AreEqual(COPY_VIEW_VARIANTS[V].Caption, Menu.Items[CopyIdx + 1 + V].Caption,
+        'Copy view variant caption must come from COPY_VIEW_VARIANTS');
+    end;
   finally
     Menu.Free;
   end;

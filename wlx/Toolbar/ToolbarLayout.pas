@@ -180,7 +180,7 @@ var
   VM: TViewMode;
   ZM: TZoomMode;
   MI, SubMI, Sep: TMenuItem;
-  I: Integer;
+  I, V: Integer;
   HasModeItems, AddedActions: Boolean;
 begin
   AMenu.Items.Clear;
@@ -276,41 +276,30 @@ begin
       AMenu.Items.Add(MI);
     end;
 
-    {Inject Save view's variants alongside it in the overflow.}
+    {Inject Save view's variants alongside it in the overflow, from the
+     shared SAVE_VIEW_VARIANTS array so a new variant needs no edit here.}
     if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
-    begin
-      MI := TMenuItem.Create(AMenu);
-      MI.Caption := CAPTION_SAVE_VIEW_LIVE;
-      MI.Tag := CM_SAVE_VIEW_LIVE;
-      MI.OnClick := AOnActionClick;
-      MI.Enabled := AState.HasFrames;
-      AMenu.Items.Add(MI);
+      for V := 0 to High(SAVE_VIEW_VARIANTS) do
+      begin
+        MI := TMenuItem.Create(AMenu);
+        MI.Caption := SAVE_VIEW_VARIANTS[V].Caption;
+        MI.Tag := SAVE_VIEW_VARIANTS[V].Tag;
+        MI.OnClick := AOnActionClick;
+        MI.Enabled := AState.HasFrames;
+        AMenu.Items.Add(MI);
+      end;
 
-      MI := TMenuItem.Create(AMenu);
-      MI.Caption := CAPTION_SAVE_VIEW_NATIVE;
-      MI.Tag := CM_SAVE_VIEW_NATIVE;
-      MI.OnClick := AOnActionClick;
-      MI.Enabled := AState.HasFrames;
-      AMenu.Items.Add(MI);
-    end;
-
-    {Inject Copy view's variants, mirroring Save view.}
+    {Inject Copy view's variants, mirroring Save view, from COPY_VIEW_VARIANTS.}
     if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
-    begin
-      MI := TMenuItem.Create(AMenu);
-      MI.Caption := CAPTION_COPY_VIEW_LIVE;
-      MI.Tag := CM_COPY_VIEW_LIVE;
-      MI.OnClick := AOnActionClick;
-      MI.Enabled := AState.HasFrames;
-      AMenu.Items.Add(MI);
-
-      MI := TMenuItem.Create(AMenu);
-      MI.Caption := CAPTION_COPY_VIEW_NATIVE;
-      MI.Tag := CM_COPY_VIEW_NATIVE;
-      MI.OnClick := AOnActionClick;
-      MI.Enabled := AState.HasFrames;
-      AMenu.Items.Add(MI);
-    end;
+      for V := 0 to High(COPY_VIEW_VARIANTS) do
+      begin
+        MI := TMenuItem.Create(AMenu);
+        MI.Caption := COPY_VIEW_VARIANTS[V].Caption;
+        MI.Tag := COPY_VIEW_VARIANTS[V].Tag;
+        MI.OnClick := AOnActionClick;
+        MI.Enabled := AState.HasFrames;
+        AMenu.Items.Add(MI);
+      end;
   end;
 end;
 
