@@ -18,6 +18,7 @@ type
     [Test] procedure TestPutThenGet;
     [Test] procedure TestAllFieldsRoundTrip;
     [Test] procedure TestInvalidResultNotCached;
+    [Test] procedure TestForeignProbeFileRejected;
     [Test] procedure TestMissOnNonexistentFile;
     [Test] procedure TestStaleAfterFileChange;
     [Test] procedure TestShardedDirectory;
@@ -139,6 +140,43 @@ begin
       Assert.AreEqual(1920, Retrieved.Width);
       Assert.AreEqual(1080, Retrieved.Height);
       Assert.IsTrue(Retrieved.IsValid);
+    finally
+      Cache.Free;
+    end;
+  finally
+    TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestProbeCache.TestForeignProbeFileRejected;
+var
+  Cache: TProbeCache;
+  Info, Retrieved: TVideoInfo;
+  TmpFile: string;
+  ProbeFiles: TArray<string>;
+begin
+  {A .probe file lacking the format marker (a foreign file, or one from
+   before format versioning) must be treated as a miss, not deserialised
+   into a fabricated TVideoInfo.}
+  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_foreign.tmp');
+  TFile.WriteAllText(TmpFile, 'dummy');
+  try
+    Cache := TProbeCache.Create(FCacheDir);
+    try
+      Info := Default(TVideoInfo);
+      Info.Duration := 120.5;
+      Info.Width := 1920;
+      Info.Height := 1080;
+      Cache.Put(TmpFile, Info);
+
+      {Overwrite the just-written .probe with marker-less foreign text
+       that still carries a positive Duration line.}
+      ProbeFiles := TDirectory.GetFiles(FCacheDir, '*.probe', TSearchOption.soAllDirectories);
+      Assert.AreEqual<Integer>(1, Length(ProbeFiles), 'Put must have written one .probe file');
+      TFile.WriteAllText(ProbeFiles[0], 'Duration=999'#13#10'Width=640'#13#10, TEncoding.UTF8);
+
+      Assert.IsFalse(Cache.TryGet(TmpFile, Retrieved),
+        'A .probe file without the format marker must be rejected');
     finally
       Cache.Free;
     end;

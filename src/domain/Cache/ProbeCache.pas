@@ -55,6 +55,10 @@ uses
 
 const
   MOVEFILE_REPLACE_EXISTING = 1;
+  {Identifies a Glimpse-written probe file and its format revision; a
+   file lacking this marker is foreign or pre-versioning and rejected.}
+  PROBE_FORMAT_KEY = 'GlimpseProbe';
+  PROBE_FORMAT_VERSION = '1';
 
 function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
 
@@ -68,6 +72,7 @@ end;
 
 procedure SerializeVideoInfo(ADest: TStrings; const AInfo: TVideoInfo);
 begin
+  ADest.Add(PROBE_FORMAT_KEY + '=' + PROBE_FORMAT_VERSION);
   ADest.Add('Duration=' + FloatToStr(AInfo.Duration, InvFmt));
   ADest.Add('Width=' + IntToStr(AInfo.Width));
   ADest.Add('Height=' + IntToStr(AInfo.Height));
@@ -191,6 +196,10 @@ begin
     except
       Exit;
     end;
+    {Reject a foreign or pre-versioning file: without the marker its
+     name=value lines cannot be trusted as a real probe result.}
+    if Lines.Values[PROBE_FORMAT_KEY] <> PROBE_FORMAT_VERSION then
+      Exit;
     AInfo := DeserializeVideoInfo(Lines);
     Result := AInfo.IsValid;
   finally
