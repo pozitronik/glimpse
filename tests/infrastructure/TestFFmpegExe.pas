@@ -127,7 +127,7 @@ var
   FFmpeg: IVideoProber;
   Info: TVideoInfo;
 begin
-  FFmpeg := TFFmpegExe.Create('ffmpeg.exe', 30000,
+  FFmpeg := TFFmpegExe.Create('ffmpeg.exe',
     TFakeProcessRunner.Create(1, nil, Utf8Bytes(SAMPLE_FFMPEG_STDERR)));
   Info := FFmpeg.ProbeVideo('any.mp4');
   Assert.IsTrue(Info.IsValid, 'Canned probe output must yield a valid result');
@@ -143,7 +143,7 @@ var
   FFmpeg: IVideoProber;
   Info: TVideoInfo;
 begin
-  FFmpeg := TFFmpegExe.Create('ffmpeg.exe', 30000,
+  FFmpeg := TFFmpegExe.Create('ffmpeg.exe',
     TFakeProcessRunner.Create(1, nil, nil));
   Info := FFmpeg.ProbeVideo('any.mp4');
   Assert.IsFalse(Info.IsValid);
@@ -155,7 +155,7 @@ var
   FFmpeg: IVideoProber;
   Info: TVideoInfo;
 begin
-  FFmpeg := TFFmpegExe.Create('ffmpeg.exe', 30000,
+  FFmpeg := TFFmpegExe.Create('ffmpeg.exe',
     TFakeProcessRunner.Create(1, nil, Utf8Bytes('not ffmpeg output at all')));
   Info := FFmpeg.ProbeVideo('any.mp4');
   Assert.IsFalse(Info.IsValid);
@@ -167,7 +167,7 @@ var
   FFmpeg: IFrameExtractor;
   Bmp: TBitmap;
 begin
-  FFmpeg := TFFmpegExe.Create('ffmpeg.exe', 30000,
+  FFmpeg := TFFmpegExe.Create('ffmpeg.exe',
     TFakeProcessRunner.Create(0, MakeBmpBytes(8, 6), nil));
   Bmp := FFmpeg.ExtractFrame('any.mp4', 1.0, BmpPipeOptions);
   try
@@ -185,7 +185,7 @@ var
   Bmp: TBitmap;
 begin
   {Fewer than 8 bytes cannot be an image; ExtractFrame must fail closed.}
-  FFmpeg := TFFmpegExe.Create('ffmpeg.exe', 30000,
+  FFmpeg := TFFmpegExe.Create('ffmpeg.exe',
     TFakeProcessRunner.Create(0, TBytes.Create(1, 2, 3), nil));
   Bmp := FFmpeg.ExtractFrame('any.mp4', 1.0, BmpPipeOptions);
   try
@@ -202,7 +202,7 @@ var
 begin
   {A non-zero exit (or runner -1 for timeout/cancel) must yield nil even
    when the stdout payload would otherwise decode.}
-  FFmpeg := TFFmpegExe.Create('ffmpeg.exe', 30000,
+  FFmpeg := TFFmpegExe.Create('ffmpeg.exe',
     TFakeProcessRunner.Create(-1, MakeBmpBytes(8, 6), nil));
   Bmp := FFmpeg.ExtractFrame('any.mp4', 1.0, BmpPipeOptions);
   try
@@ -233,7 +233,7 @@ begin
   Assert.IsTrue(TFile.Exists(VideoPath),
     'Test data missing: ' + VideoPath);
 
-  FFmpeg := TFFmpegExe.Create(FFmpegPath);
+  FFmpeg := TFFmpegExe.Create(FFmpegPath, TProductionProcessRunner.Create);
   try
     Info := FFmpeg.ProbeVideo(VideoPath);
     Assert.IsTrue(Info.IsValid, 'Probe must succeed: ' + Info.ErrorMessage);

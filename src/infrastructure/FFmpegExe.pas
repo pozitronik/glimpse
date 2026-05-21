@@ -20,9 +20,9 @@ type
     FExtractTimeoutMs: DWORD;
     FRunner: IProcessRunner;
   public
-    {ARunner defaults to the production runner; tests pass a fake.}
-    constructor Create(const AExePath: string; AExtractTimeoutMs: DWORD = 30000;
-      const ARunner: IProcessRunner = nil);
+    {ARunner is mandatory: production factories pass TProductionProcessRunner, tests a fake.}
+    constructor Create(const AExePath: string; const ARunner: IProcessRunner;
+      AExtractTimeoutMs: DWORD = 30000);
 
     {IVideoProber}
     function ProbeVideo(const AFilePath: string): TVideoInfo;
@@ -55,16 +55,13 @@ implementation
 uses
   BitmapSaver, FFmpegProbeParser, FFmpegCmdLine;
 
-constructor TFFmpegExe.Create(const AExePath: string; AExtractTimeoutMs: DWORD;
-  const ARunner: IProcessRunner);
+constructor TFFmpegExe.Create(const AExePath: string; const ARunner: IProcessRunner;
+  AExtractTimeoutMs: DWORD);
 begin
   inherited Create;
   FExePath := AExePath;
+  FRunner := ARunner;
   FExtractTimeoutMs := AExtractTimeoutMs;
-  if ARunner <> nil then
-    FRunner := ARunner
-  else
-    FRunner := TProductionProcessRunner.Create;
 end;
 
 function TFFmpegExe.ProbeVideo(const AFilePath: string): TVideoInfo;
@@ -144,12 +141,12 @@ end;
 
 function TProductionFrameExtractorFactory.CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
 begin
-  Result := TFFmpegExe.Create(AFFmpegPath);
+  Result := TFFmpegExe.Create(AFFmpegPath, TProductionProcessRunner.Create);
 end;
 
 function TProductionVideoProberFactory.CreateProber(const AFFmpegPath: string): IVideoProber;
 begin
-  Result := TFFmpegExe.Create(AFFmpegPath);
+  Result := TFFmpegExe.Create(AFFmpegPath, TProductionProcessRunner.Create);
 end;
 
 end.

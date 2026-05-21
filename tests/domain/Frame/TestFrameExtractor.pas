@@ -22,7 +22,7 @@ implementation
 uses
   System.SysUtils,
   Vcl.Graphics,
-  Types, FrameExtractor, FFmpegExe;
+  Types, FrameExtractor, FFmpegExe, ProcessRunner;
 
 function MakeOptions: TExtractionOptions;
 begin
@@ -37,7 +37,7 @@ var
 begin
   {Interface handle keeps the refcounted instance alive for the scope —
    implicit release on exit also verifies no leak in Destroy.}
-  Extractor := TFFmpegExe.Create('C:\nowhere\ffmpeg.exe');
+  Extractor := TFFmpegExe.Create('C:\nowhere\ffmpeg.exe', TProductionProcessRunner.Create);
   Assert.IsNotNull(Extractor, 'Construction must yield a non-nil interface');
 end;
 
@@ -49,7 +49,7 @@ begin
   {When the configured ffmpeg exe does not exist, RunProcess under the hood
    fails with a non-zero exit and ExtractFrame returns nil. Guards against a
    regression to "return an empty bitmap" or "raise on missing executable".}
-  Extractor := TFFmpegExe.Create('C:\nowhere\ffmpeg_does_not_exist.exe');
+  Extractor := TFFmpegExe.Create('C:\nowhere\ffmpeg_does_not_exist.exe', TProductionProcessRunner.Create);
   Bmp := Extractor.ExtractFrame('C:\nowhere\video.mp4', 0.0, MakeOptions);
   try
     Assert.IsNull(Bmp, 'Extraction with missing exe must fail closed by returning nil');
@@ -65,7 +65,7 @@ begin
   {Separate assertion style: Assert.WillNotRaise surfaces the specific
    exception class/message when the contract is violated, rather than
    a generic test failure.}
-  Extractor := TFFmpegExe.Create('');
+  Extractor := TFFmpegExe.Create('', TProductionProcessRunner.Create);
   Assert.WillNotRaiseAny(
     procedure
     var

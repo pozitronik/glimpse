@@ -24,7 +24,7 @@ implementation
 uses
   System.SysUtils, System.AnsiStrings, System.IOUtils, Vcl.Controls,
   Vcl.Graphics,
-  Settings, FFmpegLocator, FFmpegExe, PluginForm, PluginServices, Cache, ProbeCache,
+  Settings, FFmpegLocator, FFmpegExe, ProcessRunner, PluginForm, PluginServices, Cache, ProbeCache,
   Logging, ThumbnailRender, ToolbarLayout, PluginContext, Defaults,
   VideoProbing, FrameExtractor, FrameCacheFactory, ProbeCacheFactory;
 
@@ -265,7 +265,8 @@ begin
   try
     {One TFFmpegExe instance, held via its two interfaces — refcount frees
      it on scope exit. The shorter thumbnail extract budget is baked in.}
-    FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath, DEF_THUMBNAIL_TIMEOUT_MS);
+    FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath, TProductionProcessRunner.Create,
+      DEF_THUMBNAIL_TIMEOUT_MS);
     Bmp := RenderThumbnail(FFmpeg as IFrameExtractor, FFmpeg, AFileName, Width, Height,
       TThumbnailParams.FromSettings(Ctx.Settings), Ctx.ThumbnailCache, Ctx.ProbeCache);
     if Bmp <> nil then

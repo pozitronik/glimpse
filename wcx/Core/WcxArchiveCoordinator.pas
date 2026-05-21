@@ -66,7 +66,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  ProbeCache, ProbeCacheFactory, FFmpegLocator, FFmpegExe, VideoProbing,
+  ProbeCache, ProbeCacheFactory, FFmpegLocator, FFmpegExe, ProcessRunner, VideoProbing,
   PathExpand,
   FrameOffsets,
   WcxListing,
@@ -138,7 +138,7 @@ var
   Prober: IVideoProber;
 begin
   ProbeC := CreateProbeCache;
-  Prober := TFFmpegExe.Create(AFFmpegPath);
+  Prober := TFFmpegExe.Create(AFFmpegPath, TProductionProcessRunner.Create);
   Result := ProbeC.TryGetOrProbe(AFileName, Prober);
 end;
 
