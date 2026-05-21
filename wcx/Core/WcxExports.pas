@@ -53,6 +53,7 @@ var
   GProbeService: IProbeService;
   GFrameExtractorFactory: IFrameExtractorFactory;
   GBitmapSaver: IBitmapSaverRouter;
+  GFailureReporter: IPresetExtractFailureReporter;
 
 procedure WcxLog(const AMsg: string);
 begin
@@ -66,7 +67,7 @@ var
 begin
   {Thunk: only translates the ABI integer handle to a class pointer and
    wires the module-global factories into the per-call coordinator.}
-  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory, GBitmapSaver, TWcxFrameCache.Instance);
+  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory, GBitmapSaver, TWcxFrameCache.Instance, GFailureReporter);
   try
     H := Coord.OpenArchive(AFileName, AOpenMode, GIniPath, AOpenResult);
     if H <> nil then
@@ -267,8 +268,7 @@ GSettingsProvider := TProductionWcxSettingsProvider.Create;
 GProbeService := TProductionProbeService.Create;
 GFrameExtractorFactory := TProductionFrameExtractorFactory.Create;
 GBitmapSaver := TVclBitmapSaverRouter.Create;
-
-SetPresetFailureReporter(TMessageBoxFailureReporter.Create);
+GFailureReporter := TMessageBoxFailureReporter.Create;
 
 {Start silent. DoOpenArchive re-reads the "[debug] LogEnabled" key on
  every open so a hand-edit takes effect without restarting TC.}
@@ -280,8 +280,8 @@ Randomize;
 
 finalization
 
-SetPresetFailureReporter(nil);
 {Reverse construction order so any transitive references drop cleanly.}
+GFailureReporter := nil;
 GBitmapSaver := nil;
 GFrameExtractorFactory := nil;
 GProbeService := nil;

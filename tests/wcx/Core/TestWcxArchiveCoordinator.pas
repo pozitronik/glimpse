@@ -74,6 +74,10 @@ type
      IWcxFrameCache, not the TWcxFrameCache singleton.}
     [Test] procedure TestOpenArchive_OnException_InvalidatesInjectedFrameCache;
 
+    {Failure reporter is injected: the coordinator wires the supplied
+     IPresetExtractFailureReporter onto the handle.}
+    [Test] procedure TestOpenArchive_FailureReporterInjected_WiredOntoHandle;
+
     {ProcessFile + CloseArchive are class methods — stateless against
      the handle.}
     [Test] procedure TestProcessFile_PKSkip_AdvancesCursorReturnsSuccess;
@@ -91,7 +95,7 @@ uses
   System.SysUtils, System.IOUtils, System.Classes,
   Winapi.Windows, Vcl.Graphics,
   Types, WcxAPI, WcxArchiveHandle, WcxSettings, WcxEntryExtractors, WcxFrameCache,
-  FrameExtractor, VideoInfo,
+  FrameExtractor, VideoInfo, PresetExtractReporter,
   WcxArchiveCoordinator;
 
 const
@@ -304,7 +308,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -344,7 +348,7 @@ begin
   Info.Duration := 0;
   ProbeService.ResultInfo := Info;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     Assert.AreEqual(Integer(E_BAD_ARCHIVE), OpenResult, 'Invalid video info must surface as E_BAD_ARCHIVE');
@@ -368,7 +372,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -402,7 +406,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -438,7 +442,7 @@ begin
   ProbeService.ResultInfo := MakeValidVideoInfo;
   ExpectedSize := TFile.GetSize(FVideoPath);
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -473,7 +477,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -511,7 +515,7 @@ begin
   ProbeService.ResultInfo := MakeValidVideoInfo;
   Router := TVclBitmapSaverRouter.Create;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, Router, TFakeWcxFrameCache.Create);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, Router, TFakeWcxFrameCache.Create, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -550,7 +554,7 @@ begin
   FrameCache := TFakeWcxFrameCache.Create;
 
   Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService,
-    ExtractorFactory, TVclBitmapSaverRouter.Create, FrameCache);
+    ExtractorFactory, TVclBitmapSaverRouter.Create, FrameCache, TMessageBoxFailureReporter.Create);
   try
     H := Coord.OpenArchive(TPath.Combine(FTempDir, 'no_such_video.mp4'), 0,
       FIniPath, OpenResult);
@@ -559,6 +563,42 @@ begin
       'A mid-open exception must surface as E_BAD_ARCHIVE');
     Assert.AreEqual(1, FrameCache.InvalidateCallCount,
       'The except handler must invalidate the injected frame cache');
+  finally
+    Coord.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestOpenArchive_FailureReporterInjected_WiredOntoHandle;
+var
+  SettingsProvider: TFakeSettingsProvider;
+  ProbeService: TFakeProbeService;
+  ExtractorFactory: TFakeFrameExtractorFactory;
+  Reporter: IPresetExtractFailureReporter;
+  Coord: TWcxArchiveCoordinator;
+  H: TArchiveHandle;
+  OpenResult: Integer;
+begin
+  SettingsProvider := TFakeSettingsProvider.Create;
+  ProbeService := TFakeProbeService.Create;
+  ExtractorFactory := TFakeFrameExtractorFactory.Create;
+  ProbeService.ResultInfo := MakeValidVideoInfo;
+  Reporter := TMessageBoxFailureReporter.Create;
+
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService,
+    ExtractorFactory, TVclBitmapSaverRouter.Create, TFakeWcxFrameCache.Create, Reporter);
+  try
+    H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
+    try
+      Assert.IsNotNull(H, 'Open must succeed for the injection assertion to hold');
+      Assert.IsTrue(H.FailureReporter = Reporter,
+        'Handle must carry the injected failure reporter');
+    finally
+      if H <> nil then
+      begin
+        H.Settings.Free;
+        H.Free;
+      end;
+    end;
   finally
     Coord.Free;
   end;

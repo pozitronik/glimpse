@@ -28,12 +28,6 @@ function SummarizeFFmpegError(const AErrorMessage: string; AExitCode: Integer): 
 function MakeFailureMessage(const APresetName, AOutputPath: string;
   const AResult: TPresetExtractResult): string;
 
-{Process-global active reporter, swappable in tests. Lives here rather
- than in WcxExports so WcxEntryExtractors can reach it without
- back-linking into the dispatcher unit.}
-function GetPresetFailureReporter: IPresetExtractFailureReporter;
-procedure SetPresetFailureReporter(const AReporter: IPresetExtractFailureReporter);
-
 implementation
 
 uses
@@ -76,44 +70,5 @@ begin
   MessageBox(GetForegroundWindow, PChar(AMsg), 'Glimpse preset extraction failed',
     MB_OK or MB_ICONWARNING);
 end;
-
-type
-  {Null Object: the reporter in force when none has been installed —
-   the test executable, or after SetPresetFailureReporter(nil). Keeps
-   GetPresetFailureReporter non-nil so callers can Report unguarded.}
-  TNullPresetFailureReporter = class(TInterfacedObject, IPresetExtractFailureReporter)
-  public
-    procedure Report(const AMsg: string);
-  end;
-
-procedure TNullPresetFailureReporter.Report(const AMsg: string);
-begin
-end;
-
-var
-  GReporter: IPresetExtractFailureReporter;
-
-function GetPresetFailureReporter: IPresetExtractFailureReporter;
-begin
-  Result := GReporter;
-end;
-
-procedure SetPresetFailureReporter(const AReporter: IPresetExtractFailureReporter);
-begin
-  {nil installs the Null Object, never an actual nil, so the getter
-   always returns a usable reporter.}
-  if Assigned(AReporter) then
-    GReporter := AReporter
-  else
-    GReporter := TNullPresetFailureReporter.Create;
-end;
-
-initialization
-
-GReporter := TNullPresetFailureReporter.Create;
-
-finalization
-
-GReporter := nil;
 
 end.

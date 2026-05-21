@@ -8,7 +8,7 @@ interface
 
 uses
   WcxAPI, WcxSettings, BitmapSaver, FrameExtractor, FrameOffsets,
-  VideoInfo, WcxPresets, Types,
+  VideoInfo, WcxPresets, Types, PresetExtractReporter,
   {Vcl.Graphics last so its TBitmap shadows Winapi.Windows.tagBITMAP
    pulled in transitively by WcxAPI; otherwise TBitmap is ambiguous.}
   Vcl.Graphics;
@@ -36,6 +36,7 @@ type
     function GetProcessDataProcW: TProcessDataProcW;
     function GetFrameExtractor: IFrameExtractor;
     function GetBitmapSaver: IBitmapSaverRouter;
+    function GetFailureReporter: IPresetExtractFailureReporter;
 
     property FileName: string read GetFileName;
     property FFmpegPath: string read GetFFmpegPath;
@@ -50,6 +51,7 @@ type
     property ProcessDataProcW: TProcessDataProcW read GetProcessDataProcW;
     property FrameExtractor: IFrameExtractor read GetFrameExtractor;
     property BitmapSaver: IBitmapSaverRouter read GetBitmapSaver;
+    property FailureReporter: IPresetExtractFailureReporter read GetFailureReporter;
   end;
 
   {AListingIndex is passed (rather than read from the extractor) because
@@ -137,7 +139,7 @@ uses
   FrameFileNames, BannerInfo, BannerPainter, CombinedGrid, TimecodeOverlay,
   BitmapResize, Logging,
   WcxPresetTemplate, WcxPresetExtractor, WcxProgressBridge,
-  PresetExtractReporter, WcxErrorMapping;
+  WcxErrorMapping;
 
 procedure WcxEntryLog(const AMsg: string);
 begin
@@ -392,7 +394,7 @@ end;
 {Cancel maps to E_EWRITE because TC suppresses its own dialog on
  E_EWRITE-from-cancel, leaving us silent. Real errors also map to
  E_EWRITE so TC shows its generic write-error dialog after we have
- already surfaced the specific cause via GetPresetFailureReporter.}
+ already surfaced the specific cause via the failure reporter.}
 function TPresetEntry.Extract(const AContext: IWcxExtractionContext;
   const ADestPath, ADestName: string): Integer;
 const
@@ -459,7 +461,7 @@ begin
 
     {TC's own follow-up dialog is generic ("Bad data" / "Write error");
      surface the actual ffmpeg cause so the user can fix the preset.}
-    GetPresetFailureReporter.Report(MakeFailureMessage(Preset.Name, FullPath, ExtractResult));
+    AContext.FailureReporter.Report(MakeFailureMessage(Preset.Name, FullPath, ExtractResult));
 
     {ExitCode<>0 means ffmpeg refused (bad codec, no stream) — closer to
      bad data. ExitCode=0 with Success=False means the rename step

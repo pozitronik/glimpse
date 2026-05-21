@@ -51,7 +51,7 @@ implementation
 uses
   Winapi.Windows, System.SysUtils, System.IOUtils, System.Classes, Vcl.Graphics,
   Types, BitmapSaver, FrameExtractor, FrameOffsets, VideoInfo,
-  WcxAPI, WcxSettings, WcxPresets, WcxEntryExtractors;
+  WcxAPI, WcxSettings, WcxPresets, WcxEntryExtractors, PresetExtractReporter;
 
 type
   {Captures one Save call. Never touches disk so frame/combined extract
@@ -105,6 +105,7 @@ type
     FProcessDataProcW: TProcessDataProcW;
     FFrameExtractor: IFrameExtractor;
     FBitmapSaver: IBitmapSaverRouter;
+    FFailureReporter: IPresetExtractFailureReporter;
   public
     constructor Create;
     destructor Destroy; override;
@@ -121,6 +122,7 @@ type
     function GetProcessDataProcW: TProcessDataProcW;
     function GetFrameExtractor: IFrameExtractor;
     function GetBitmapSaver: IBitmapSaverRouter;
+    function GetFailureReporter: IPresetExtractFailureReporter;
 
     procedure SetFileName(const AValue: string);
     procedure SetFFmpegPath(const AValue: string);
@@ -244,6 +246,11 @@ end;
 function TFakeContext.GetBitmapSaver: IBitmapSaverRouter;
 begin
   Result := FBitmapSaver;
+end;
+
+function TFakeContext.GetFailureReporter: IPresetExtractFailureReporter;
+begin
+  Result := FFailureReporter;
 end;
 
 procedure TFakeContext.SetFileName(const AValue: string);

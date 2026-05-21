@@ -11,6 +11,7 @@ uses
   WcxArchiveHandle,
   WcxEntryExtractors,
   WcxFrameCache,
+  PresetExtractReporter,
   FrameExtractor,
   VideoInfo;
 
@@ -37,12 +38,14 @@ type
     FFrameExtractorFactory: IFrameExtractorFactory;
     FBitmapSaver: IBitmapSaverRouter;
     FFrameCache: IWcxFrameCache;
+    FFailureReporter: IPresetExtractFailureReporter;
   public
     constructor Create(const ASettingsProvider: IWcxSettingsProvider;
       const AProbeService: IProbeService;
       const AFrameExtractorFactory: IFrameExtractorFactory;
       const ABitmapSaver: IBitmapSaverRouter;
-      const AFrameCache: IWcxFrameCache);
+      const AFrameCache: IWcxFrameCache;
+      const AFailureReporter: IPresetExtractFailureReporter);
     function OpenArchive(const AFileName: string; AOpenMode: Integer;
       const AIniPath: string;
       out AOpenResult: Integer): TArchiveHandle;
@@ -145,7 +148,8 @@ constructor TWcxArchiveCoordinator.Create(const ASettingsProvider: IWcxSettingsP
   const AProbeService: IProbeService;
   const AFrameExtractorFactory: IFrameExtractorFactory;
   const ABitmapSaver: IBitmapSaverRouter;
-  const AFrameCache: IWcxFrameCache);
+  const AFrameCache: IWcxFrameCache;
+  const AFailureReporter: IPresetExtractFailureReporter);
 begin
   inherited Create;
   FSettingsProvider := ASettingsProvider;
@@ -153,6 +157,7 @@ begin
   FFrameExtractorFactory := AFrameExtractorFactory;
   FBitmapSaver := ABitmapSaver;
   FFrameCache := AFrameCache;
+  FFailureReporter := AFailureReporter;
 end;
 
 function TWcxArchiveCoordinator.OpenArchive(const AFileName: string; AOpenMode: Integer;
@@ -187,6 +192,7 @@ begin
 
     H.FrameExtractor := FFrameExtractorFactory.CreateExtractor(H.FFmpegPath);
     H.BitmapSaver := FBitmapSaver;
+    H.FailureReporter := FFailureReporter;
 
     H.VideoInfo := FProbeService.Probe(AFileName, H.FFmpegPath);
 

@@ -15,7 +15,8 @@ uses
   FrameExtractor,
   FrameOffsets,
   VideoInfo,
-  WcxEntryExtractors;
+  WcxEntryExtractors,
+  PresetExtractReporter;
 
 type
   TArchiveHandle = class(TNoRefCountObject, IWcxExtractionContext)
@@ -48,6 +49,7 @@ type
      archive. Interface-typed so lifetime is automatic.}
     FrameExtractor: IFrameExtractor;
     BitmapSaver: IBitmapSaverRouter;
+    FailureReporter: IPresetExtractFailureReporter;
 
   strict private
     {Strict-private to force all access through AdvanceCursor /
@@ -87,6 +89,7 @@ type
     function GetProcessDataProcW: TProcessDataProcW;
     function GetFrameExtractor: IFrameExtractor;
     function GetBitmapSaver: IBitmapSaverRouter;
+    function GetFailureReporter: IPresetExtractFailureReporter;
   end;
 
 implementation
@@ -195,6 +198,11 @@ end;
 function TArchiveHandle.GetBitmapSaver: IBitmapSaverRouter;
 begin
   Result := BitmapSaver;
+end;
+
+function TArchiveHandle.GetFailureReporter: IPresetExtractFailureReporter;
+begin
+  Result := FailureReporter;
 end;
 
 end.
