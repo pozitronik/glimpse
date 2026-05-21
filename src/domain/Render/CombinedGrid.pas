@@ -198,30 +198,35 @@ begin
 
   Sz := ComputeCombinedImageSize(FrameCount, Cols, CellW, CellH, Border, AGrid.CellGap);
   Result := TBitmap.Create;
-  Result.PixelFormat := pf24bit;
-  Result.SetSize(Sz.X, Sz.Y);
-  Result.Canvas.Brush.Color := AGrid.Background;
-  Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
+  try
+    Result.PixelFormat := pf24bit;
+    Result.SetSize(Sz.X, Sz.Y);
+    Result.Canvas.Brush.Color := AGrid.Background;
+    Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
 
-  for I := 0 to FrameCount - 1 do
-  begin
-    if AFrames[I] = nil then
-      Continue;
-    Row := I div Cols;
-    Col := I mod Cols;
-    X := Border + Col * (CellW + AGrid.CellGap);
-    Y := Border + Row * (CellH + AGrid.CellGap);
-    Result.Canvas.Draw(X, Y, AFrames[I]);
+    for I := 0 to FrameCount - 1 do
+    begin
+      if AFrames[I] = nil then
+        Continue;
+      Row := I div Cols;
+      Col := I mod Cols;
+      X := Border + Col * (CellW + AGrid.CellGap);
+      Y := Border + Row * (CellH + AGrid.CellGap);
+      Result.Canvas.Draw(X, Y, AFrames[I]);
 
-    if I < Length(AOffsets) then
-      DrawCellTimecode(Result.Canvas, Rect(X, Y, X + CellW, Y + CellH), AOffsets[I].TimeOffset, ATimestamp);
-  end;
+      if I < Length(AOffsets) then
+        DrawCellTimecode(Result.Canvas, Rect(X, Y, X + CellW, Y + CellH), AOffsets[I].TimeOffset, ATimestamp);
+    end;
 
-  if AGrid.BackgroundAlpha < 255 then
-  begin
-    Lifted := LiftToAlphaAware(Result, AGrid, AFrames, Cols, CellW, CellH, Border);
+    if AGrid.BackgroundAlpha < 255 then
+    begin
+      Lifted := LiftToAlphaAware(Result, AGrid, AFrames, Cols, CellW, CellH, Border);
+      Result.Free;
+      Result := Lifted;
+    end;
+  except
     Result.Free;
-    Result := Lifted;
+    raise;
   end;
 end;
 
