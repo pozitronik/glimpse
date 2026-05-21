@@ -5,7 +5,7 @@ interface
 uses
   DUnitX.TestFramework, System.SysUtils, System.IOUtils, System.Classes,
   System.SyncObjs, System.Generics.Collections, Winapi.Windows,
-  Vcl.Graphics, Cache, CacheStorage, LruEvictionPolicy, FrameCacheFactory;
+  Vcl.Graphics, Cache, CacheContracts, CacheStorage, LruEvictionPolicy, FrameCacheFactory;
 
 type
   [TestFixture]

@@ -9,7 +9,7 @@ interface
 uses
   System.SysUtils, System.SyncObjs,
   Vcl.Graphics,
-  CacheStorage, LruEvictionPolicy;
+  CacheContracts;
 
 type
   TFrameCacheKey = record

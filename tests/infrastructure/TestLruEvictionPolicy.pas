@@ -24,7 +24,7 @@ implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
-  CacheStorage, LruEvictionPolicy;
+  CacheContracts, LruEvictionPolicy;
 
 type
   {Test-only in-memory ICacheStorage. Lets the policy be exercised

@@ -6,37 +6,9 @@ unit CacheStorage;
 interface
 
 uses
-  System.SysUtils;
+  System.SysUtils, CacheContracts;
 
 type
-  TCacheEntryInfo = record
-    Key: string;
-    Size: Int64;
-    AccessTime: TDateTime;
-  end;
-
-  {Read returns empty bytes on miss or failure (indistinguishable by
-   design). Write is atomic — readers see prior or new bytes, never
-   torn. Delete/Clear are best-effort.}
-  ICacheStorage = interface
-    ['{C7A4F1E8-5B2D-4E3A-9F6C-1D8E2A5B7C9F}']
-    function Read(const AKey: string): TBytes;
-    procedure Write(const AKey: string; const AData: TBytes);
-    procedure Delete(const AKey: string);
-    procedure Clear;
-    procedure Touch(const AKey: string);
-    function List: TArray<TCacheEntryInfo>;
-  end;
-
-  {Source-file identity for cache-key derivation. The production
-   implementation does the filesystem stat; a stub lets the frame cache
-   be tested without a real source file on disk.}
-  IFileStat = interface
-    ['{8BB1203C-22F5-4CDF-9163-46CC76524D76}']
-    {False when the file does not exist or cannot be stat'd.}
-    function TryStat(const APath: string; out ASize: Int64; out AModified: TDateTime): Boolean;
-  end;
-
   TDiskCacheStorage = class(TInterfacedObject, ICacheStorage)
   strict private
     FRoot: string;
