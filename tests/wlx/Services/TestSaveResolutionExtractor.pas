@@ -28,6 +28,7 @@ type
     [Test] procedure MixedHitAndMissBothPopulated;
     [Test] procedure ExtractorFailureLeavesEntryNil;
     [Test] procedure OutOfRangeIndexIsSkipped;
+    [Test] procedure IndexBeyondCellCountIsSkippedNotOverflowed;
     [Test] procedure ProgressCallbacksFire;
     [Test] procedure DoneCallbackFiresEvenOnEarlyExit;
     {Pin that ExtractAtTarget does not share the extractor's TBitmap with
@@ -648,6 +649,33 @@ begin
     Cache := nil;
     if TDirectory.Exists(CacheDir) then
       TDirectory.Delete(CacheDir, True);
+  end;
+end;
+
+procedure TTestSaveResolutionExtractor.IndexBeyondCellCountIsSkippedNotOverflowed;
+var
+  Cache: IFrameCache;
+  Ext: IFrameExtractor;
+  Sub: TSaveResolutionExtractor;
+  Ctx: TSaveResolutionContext;
+  Result: TArray<TBitmap>;
+begin
+  {CellCount and Offsets are supplied independently; when CellCount is
+   smaller than Length(Offsets), an index valid for Offsets but beyond
+   the CellCount-sized result array must be skipped, not written OOB.}
+  Cache := TMockCache.Create;
+  Ext := TMockExtractor.Create;
+  Sub := TSaveResolutionExtractor.Create(Cache, Ext);
+  try
+    Ctx := MakeContext(5);
+    Ctx.CellCount := 2;
+    Result := Sub.ExtractAtTarget(Ctx, 1920, [3]);
+    Assert.AreEqual(2, Integer(Length(Result)),
+      'Result stays sized to CellCount');
+    Assert.IsNull(Result[0]);
+    Assert.IsNull(Result[1]);
+  finally
+    Sub.Free;
   end;
 end;
 

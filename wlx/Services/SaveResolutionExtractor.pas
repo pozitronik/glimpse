@@ -96,7 +96,9 @@ begin
     for I := 0 to Total - 1 do
     begin
       Idx := AIndices[I];
-      if (Idx < 0) or (Idx >= Length(ACtx.Offsets)) then
+      {Offsets and CellCount are supplied independently; guard the
+       result-array index too, not just the Offsets index.}
+      if (Idx < 0) or (Idx >= Length(ACtx.Offsets)) or (Idx >= Length(Result)) then
         Continue;
 
       Key := TFrameCacheKey.Create(ACtx.FileName, ACtx.Offsets[Idx].TimeOffset, ATargetMaxSide, ACtx.UseKeyframes);
