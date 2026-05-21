@@ -59,73 +59,31 @@ end;
 
 procedure TFrameCopier.WriteFrameToClipboard(AIndex: Integer; ACopyLiveRes: Boolean);
 var
-  Tmp, Source: TBitmap;
-  OwnsSource: Boolean;
+`  ToPublish: TBitmap;
   ErrMsg: string;
 begin
+  {Acquire one bitmap this method owns: RenderCellAtLiveSize returns a
+   fresh bitmap; PickSaveBitmap returns an FFrameView-owned cell, so it is
+   cloned below. The publisher takes ownership of whatever it is handed.}
   if ACopyLiveRes then
-  begin
-    Source := FRenderPipeline.RenderCellAtLiveSize(AIndex);
-    OwnsSource := True;
-  end
+    ToPublish := FRenderPipeline.RenderCellAtLiveSize(AIndex)
   else
-  begin
-    Source := FRenderPipeline.PickSaveBitmap(AIndex, False);
-    OwnsSource := False;
-  end;
+    ToPublish := TBitmap.Create;
   try
+    if not ACopyLiveRes then
+      ToPublish.Assign(FRenderPipeline.PickSaveBitmap(AIndex, False));
+    {PublishAs* take ToPublish unconditionally and nil it; the finally
+     Free is a nil-safe guard for the path where a publish raises before
+     taking ownership.}
     if FSettings.ClipboardAsFileReference then
     begin
-      {Publisher takes ownership; clone unowned source first because
-       cell bitmaps belong to FFrameView (the worker frees on completion).}
-      if OwnsSource then
-      begin
-        if FClipboardPublisher.PublishAsFileReference(Source) = cprFailed then
-          MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
-        {Publisher set Source to nil — avoid double-free.}
-        OwnsSource := False;
-      end
-      else
-      begin
-        Tmp := TBitmap.Create;
-        try
-          Tmp.Assign(Source);
-          if FClipboardPublisher.PublishAsFileReference(Tmp) = cprFailed then
-            MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
-        finally
-          {Publisher set Tmp to nil on success / kept ownership on cancel —
-           Free on nil is safe.}
-          Tmp.Free;
-        end;
-      end;
+      if FClipboardPublisher.PublishAsFileReference(ToPublish) = cprFailed then
+        MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
     end
-    else
-    begin
-      {Same owned-vs-clone rule as the file-reference branch above.}
-      if OwnsSource then
-      begin
-        if FClipboardPublisher.PublishAsImage(Source, FSettings.Background, ErrMsg) = cprFailed then
-          MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
-        OwnsSource := False;
-      end
-      else
-      begin
-        Tmp := TBitmap.Create;
-        try
-          Tmp.Assign(Source);
-          if FClipboardPublisher.PublishAsImage(Tmp, FSettings.Background, ErrMsg) = cprFailed then
-            MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
-        finally
-          Tmp.Free;
-        end;
-      end;
-    end;
+    else if FClipboardPublisher.PublishAsImage(ToPublish, FSettings.Background, ErrMsg) = cprFailed then
+      MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
   finally
-    if OwnsSource then
-    begin
-      Tmp := Source;
-      Tmp.Free;
-    end;
+    ToPublish.Free;
   end;
 end;
 
