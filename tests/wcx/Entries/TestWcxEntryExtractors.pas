@@ -16,6 +16,7 @@ type
     [Test] procedure TestFrameEntryReportedSizeZeroWhenNoCache;
     [Test] procedure TestFrameEntryReportedSizeZeroWhenOutOfRange;
     [Test] procedure TestFrameEntryExtractEmptyPathsReturnsECreate;
+    [Test] procedure TestFrameEntryExtractOutOfRangeIndexReturnsBadData;
     [Test] procedure TestFrameEntryExtractCallsFrameExtractorAndSaver;
     [Test] procedure TestFrameEntryExtractReturnsBadDataOnNilBitmap;
     [Test] procedure TestFrameEntryExtractUsesCacheWhenTempPathPresent;
@@ -380,6 +381,23 @@ begin
   Ctx.SetOffsets(MakeOffsets(1));
   Entry := TFrameEntry.Create('frame.png', 0);
   Assert.AreEqual(E_ECREATE, Entry.Extract(ICtx, '', ''));
+end;
+
+procedure TTestWcxEntryExtractors.TestFrameEntryExtractOutOfRangeIndexReturnsBadData;
+var
+  Ctx: TFakeContext;
+  ICtx: IWcxExtractionContext;
+  Entry: IWcxEntryExtractor;
+begin
+  {FrameIndex past the end of Offsets (offsets empty, or re-probed to a
+   shorter count) must fail fast with E_BAD_DATA instead of letting an
+   out-of-bounds Offsets[] read escape into the WCX ABI. Mirrors the
+   TPresetEntry index guard.}
+  Ctx := TFakeContext.Create;
+  ICtx := Ctx;
+  Ctx.SetOffsets(MakeOffsets(3));
+  Entry := TFrameEntry.Create('frame.png', 5);
+  Assert.AreEqual(E_BAD_DATA, Entry.Extract(ICtx, 'C:\out', ''));
 end;
 
 procedure TTestWcxEntryExtractors.TestFrameEntryExtractCallsFrameExtractorAndSaver;

@@ -272,6 +272,8 @@ var
   Settings: TWcxSettings;
 begin
   Settings := AContext.Settings;
+  if (FFrameIndex < 0) or (FFrameIndex >= Length(AContext.Offsets)) then
+    Exit(E_BAD_DATA);
   if ADestName <> '' then
     FullPath := ADestName
   else if ADestPath <> '' then
