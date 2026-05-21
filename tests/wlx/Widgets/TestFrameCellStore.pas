@@ -47,6 +47,7 @@ type
     [Test] procedure ToggleSelection_OutOfRange_DoesNotRaise;
     [Test] procedure Selected_NegativeIndex_ReturnsFalse;
     [Test] procedure Selected_IndexBeyondCount_ReturnsFalse;
+    [Test] procedure ReadersOutOfRangeIndex_ReturnSafeDefaults;
     [Test] procedure SelectAll_SelectsEveryCell;
     [Test] procedure DeselectAll_ClearsEveryCell;
     [Test] procedure SelectedCount_CountsSelectedCells;
@@ -277,6 +278,22 @@ procedure TTestFrameCellStore.Selected_IndexBeyondCount_ReturnsFalse;
 begin
   FStore.SetCellCount(2, nil);
   Assert.IsFalse(FStore.Selected(99));
+end;
+
+procedure TTestFrameCellStore.ReadersOutOfRangeIndex_ReturnSafeDefaults;
+begin
+  {State/Bitmap/TimeOffset/Timecode must tolerate the -1 ("no cell at
+   point") and beyond-count indices their callers occasionally pass,
+   exactly as Selected does, instead of indexing FCells out of bounds.}
+  FStore.SetCellCount(2, nil);
+  Assert.AreEqual(Ord(fcsPlaceholder), Ord(FStore.State(-1)));
+  Assert.AreEqual(Ord(fcsPlaceholder), Ord(FStore.State(99)));
+  Assert.IsNull(FStore.Bitmap(-1));
+  Assert.IsNull(FStore.Bitmap(99));
+  Assert.AreEqual(0.0, FStore.TimeOffset(-1), 0.001);
+  Assert.AreEqual(0.0, FStore.TimeOffset(99), 0.001);
+  Assert.AreEqual('', FStore.Timecode(-1));
+  Assert.AreEqual('', FStore.Timecode(99));
 end;
 
 procedure TTestFrameCellStore.SelectAll_SelectsEveryCell;

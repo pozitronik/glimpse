@@ -153,21 +153,31 @@ end;
 
 function TFrameCellStore.State(AIndex: Integer): TFrameCellState;
 begin
+  {Out-of-range guard: callers occasionally pass -1 ("no cell at point")
+   from the mouse hit-test, exactly as Selected documents.}
+  if (AIndex < 0) or (AIndex >= Length(FCells)) then
+    Exit(Default(TFrameCellState));
   Result := FCells[AIndex].State;
 end;
 
 function TFrameCellStore.Bitmap(AIndex: Integer): TBitmap;
 begin
+  if (AIndex < 0) or (AIndex >= Length(FCells)) then
+    Exit(nil);
   Result := FCells[AIndex].Bitmap;
 end;
 
 function TFrameCellStore.TimeOffset(AIndex: Integer): Double;
 begin
+  if (AIndex < 0) or (AIndex >= Length(FCells)) then
+    Exit(0);
   Result := FCells[AIndex].TimeOffset;
 end;
 
 function TFrameCellStore.Timecode(AIndex: Integer): string;
 begin
+  if (AIndex < 0) or (AIndex >= Length(FCells)) then
+    Exit('');
   Result := FCells[AIndex].Timecode;
 end;
 
