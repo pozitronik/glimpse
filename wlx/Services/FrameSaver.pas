@@ -77,7 +77,13 @@ begin
     end;
   end
   else
-    BitmapSaver.SaveBitmapToFile(FRenderPipeline.PickSaveBitmap(AIndex, False), APath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+  begin
+    {PickSaveBitmap returns a borrowed FFrameView-owned cell (nil for a
+     not-loaded cell); skip a nil rather than hand it to the saver.}
+    Tmp := FRenderPipeline.PickSaveBitmap(AIndex, False);
+    if Tmp <> nil then
+      BitmapSaver.SaveBitmapToFile(Tmp, APath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+  end;
 end;
 
 procedure TFrameSaver.WriteCombinedView(const APath: string; AFormat: TSaveFormat);
@@ -125,7 +131,11 @@ begin
       end;
     end
     else
-      BitmapSaver.SaveBitmapToFile(FRenderPipeline.PickSaveBitmap(I, False), TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+    begin
+      Tmp := FRenderPipeline.PickSaveBitmap(I, False);
+      if Tmp <> nil then
+        BitmapSaver.SaveBitmapToFile(Tmp, TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+    end;
   end;
 end;
 
