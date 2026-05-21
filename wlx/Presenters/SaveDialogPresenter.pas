@@ -15,6 +15,15 @@ type
   TSaveDialogPresenter = class
   strict private
     FSavePolicy: ISaveFormatPolicy;
+    {Show's two OS-specific branches and the accept-commit step they share.}
+    function ShowModernDialog(const ATitle, ADefaultName: string;
+      AOverwritePrompt, AInitialLiveRes: Boolean;
+      out APath: string; out AFormat: TSaveFormat): Boolean;
+    function ShowLegacyDialog(const ATitle, ADefaultName: string;
+      AOverwritePrompt, AInitialLiveRes: Boolean;
+      out APath: string; out AFormat: TSaveFormat): Boolean;
+    procedure CommitChosenSave(const AFileName: string; AFormatIndex: Integer;
+      ALiveRes: Boolean; out APath: string; out AFormat: TSaveFormat);
   public
     constructor Create(const ASavePolicy: ISaveFormatPolicy);
     {AInitialLiveRes seeds the inline check button on modern Windows
@@ -102,81 +111,79 @@ end;
 function TSaveDialogPresenter.Show(const ATitle, ADefaultName: string;
   AOverwritePrompt: Boolean; AInitialLiveRes: Boolean;
   out APath: string; out AFormat: TSaveFormat): Boolean;
+begin
+  {Modern dialog on Vista+ (Win32MajorVersion >= 6); falls through to the
+   legacy TSaveDialog when the modern one refuses to instantiate (pre-Vista
+   or unusual COM environments). The legacy path has no inline checkbox.}
+  if Win32MajorVersion >= 6 then
+  try
+    Exit(ShowModernDialog(ATitle, ADefaultName, AOverwritePrompt, AInitialLiveRes, APath, AFormat));
+  except
+    on EPlatformVersionException do ; {Defer to the legacy dialog below.}
+  end;
+
+  Result := ShowLegacyDialog(ATitle, ADefaultName, AOverwritePrompt, AInitialLiveRes, APath, AFormat);
+end;
+
+function TSaveDialogPresenter.ShowModernDialog(const ATitle, ADefaultName: string;
+  AOverwritePrompt, AInitialLiveRes: Boolean;
+  out APath: string; out AFormat: TSaveFormat): Boolean;
 var
   ModernDlg: TFileSaveDialog;
   Hook: TLiveResDialogHook;
   PngType, JpegType: TFileTypeItem;
-  LegacyDlg: TSaveDialog;
-  ModernHandled: Boolean;
 begin
   Result := False;
-  ModernHandled := False;
-
-  {Falls through to legacy TSaveDialog when the modern one refuses (pre-Vista
-   or unusual COM environments). Legacy path has no inline checkbox.}
-  if Win32MajorVersion >= 6 then
-  begin
+  ModernDlg := TFileSaveDialog.Create(nil);
+  try
+    Hook := TLiveResDialogHook.Create(ModernDlg, AInitialLiveRes);
     try
-      ModernDlg := TFileSaveDialog.Create(nil);
-      try
-        Hook := TLiveResDialogHook.Create(ModernDlg, AInitialLiveRes);
-        try
-          ModernDlg.Title := ATitle;
+      ModernDlg.Title := ATitle;
 
-          PngType := ModernDlg.FileTypes.Add;
-          PngType.DisplayName := 'PNG image';
-          PngType.FileMask := '*.png';
-          JpegType := ModernDlg.FileTypes.Add;
-          JpegType.DisplayName := 'JPEG image';
-          JpegType.FileMask := '*.jpg';
+      PngType := ModernDlg.FileTypes.Add;
+      PngType.DisplayName := 'PNG image';
+      PngType.FileMask := '*.png';
+      JpegType := ModernDlg.FileTypes.Add;
+      JpegType.DisplayName := 'JPEG image';
+      JpegType.FileMask := '*.jpg';
 
-          case FSavePolicy.GetSaveFormat of
-            sfJPEG:
-              ModernDlg.FileTypeIndex := 2;
-            else
-              ModernDlg.FileTypeIndex := 1;
-          end;
-          ModernDlg.DefaultExtension := 'png';
-          ModernDlg.FileName := ADefaultName;
-          if FSavePolicy.GetSaveFolder <> '' then
-            ModernDlg.DefaultFolder := ExpandEnvVars(FSavePolicy.GetSaveFolder);
-          if AOverwritePrompt then
-            ModernDlg.Options := ModernDlg.Options + [fdoOverWritePrompt]
-          else
-            ModernDlg.Options := ModernDlg.Options - [fdoOverWritePrompt];
-
-          Hook.Attach;
-
-          if ModernDlg.Execute then
-          begin
-            case ModernDlg.FileTypeIndex of
-              2:
-                AFormat := sfJPEG;
-              else
-                AFormat := sfPNG;
-            end;
-            APath := ModernDlg.FileName;
-            FSavePolicy.SetSaveFolder(ExtractFilePath(ModernDlg.FileName));
-            FSavePolicy.SetSaveAtLiveResolution(Hook.FinalState);
-            FSavePolicy.Save;
-            Result := True;
-          end;
-          ModernHandled := True;
-        finally
-          Hook.Free;
-        end;
-      finally
-        ModernDlg.Free;
+      case FSavePolicy.GetSaveFormat of
+        sfJPEG:
+          ModernDlg.FileTypeIndex := 2;
+        else
+          ModernDlg.FileTypeIndex := 1;
       end;
-    except
-      on EPlatformVersionException do
-        ModernHandled := False; {Defer to legacy dialog below.}
+      ModernDlg.DefaultExtension := 'png';
+      ModernDlg.FileName := ADefaultName;
+      if FSavePolicy.GetSaveFolder <> '' then
+        ModernDlg.DefaultFolder := ExpandEnvVars(FSavePolicy.GetSaveFolder);
+      if AOverwritePrompt then
+        ModernDlg.Options := ModernDlg.Options + [fdoOverWritePrompt]
+      else
+        ModernDlg.Options := ModernDlg.Options - [fdoOverWritePrompt];
+
+      Hook.Attach;
+
+      if ModernDlg.Execute then
+      begin
+        CommitChosenSave(ModernDlg.FileName, ModernDlg.FileTypeIndex, Hook.FinalState, APath, AFormat);
+        Result := True;
+      end;
+    finally
+      Hook.Free;
     end;
+  finally
+    ModernDlg.Free;
   end;
+end;
 
-  if ModernHandled then
-    Exit;
-
+function TSaveDialogPresenter.ShowLegacyDialog(const ATitle, ADefaultName: string;
+  AOverwritePrompt, AInitialLiveRes: Boolean;
+  out APath: string; out AFormat: TSaveFormat): Boolean;
+var
+  LegacyDlg: TSaveDialog;
+begin
+  Result := False;
   LegacyDlg := TSaveDialog.Create(nil);
   try
     LegacyDlg.Title := ATitle;
@@ -196,22 +203,31 @@ begin
 
     if LegacyDlg.Execute then
     begin
-      case LegacyDlg.FilterIndex of
-        2:
-          AFormat := sfJPEG;
-        else
-          AFormat := sfPNG;
-      end;
-      APath := LegacyDlg.FileName;
-      FSavePolicy.SetSaveFolder(ExtractFilePath(LegacyDlg.FileName));
-      {Legacy dialog has no inline override; caller's seed becomes persisted choice.}
-      FSavePolicy.SetSaveAtLiveResolution(AInitialLiveRes);
-      FSavePolicy.Save;
+      {Legacy dialog has no inline override; the caller's seed becomes the
+       persisted choice.}
+      CommitChosenSave(LegacyDlg.FileName, LegacyDlg.FilterIndex, AInitialLiveRes, APath, AFormat);
       Result := True;
     end;
   finally
     LegacyDlg.Free;
   end;
+end;
+
+{Maps the dialog's 1-based format index to TSaveFormat, then persists the
+ accepted folder and live-resolution choice through the policy.}
+procedure TSaveDialogPresenter.CommitChosenSave(const AFileName: string;
+  AFormatIndex: Integer; ALiveRes: Boolean; out APath: string; out AFormat: TSaveFormat);
+begin
+  case AFormatIndex of
+    2:
+      AFormat := sfJPEG;
+    else
+      AFormat := sfPNG;
+  end;
+  APath := AFileName;
+  FSavePolicy.SetSaveFolder(ExtractFilePath(AFileName));
+  FSavePolicy.SetSaveAtLiveResolution(ALiveRes);
+  FSavePolicy.Save;
 end;
 
 end.
