@@ -190,7 +190,10 @@ end;
 
 procedure BindWcxOutputFromControls(ASettings: TWcxSettings; const AControls: TWcxOutputControls);
 begin
-  ASettings.SaveFormat := TSaveFormat(AControls.CbxFormat.ItemIndex);
+  {ItemIndex is -1 when the combo has no selection; casting -1 to the
+   enum is invalid, so keep the existing value in that case.}
+  if AControls.CbxFormat.ItemIndex >= 0 then
+    ASettings.SaveFormat := TSaveFormat(AControls.CbxFormat.ItemIndex);
   ASettings.JpegQuality := AControls.UdJpegQuality.Position;
   ASettings.PngCompression := AControls.UdPngCompression.Position;
   {Narrowing from Integer; safe because the control clamps Position to
@@ -264,7 +267,8 @@ begin
   ASettings.BannerBackground := AControls.PnlBannerBackground.Color;
   ASettings.BannerTextColor := AControls.PnlBannerTextColor.Color;
   ASettings.BannerFontAutoSize := AControls.ChkBannerAutoSize.Checked;
-  ASettings.BannerPosition := TBannerPosition(AControls.CbxBannerPosition.ItemIndex);
+  if AControls.CbxBannerPosition.ItemIndex >= 0 then
+    ASettings.BannerPosition := TBannerPosition(AControls.CbxBannerPosition.ItemIndex);
 end;
 
 {Limits}

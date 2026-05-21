@@ -21,6 +21,7 @@ type
     [Test] procedure FFmpeg_Roundtrip_DirectAssignment;
     [Test] procedure Mode_Roundtrip_TogglesUnderlyingBitmask;
     [Test] procedure Output_Roundtrip_PinsFormatAndShowFileSizes;
+    [Test] procedure Output_EmptyFormatCombo_LeavesSaveFormatUnchanged;
     [Test] procedure Combined_Roundtrip_PinsColumnsAndBackground;
     [Test] procedure Timestamp_Roundtrip_PinsShowTimestamp;
     [Test] procedure Banner_Roundtrip_PinsAllFields;
@@ -218,6 +219,34 @@ begin
   finally
     R.Free;
     S.Free;
+    Form.Free;
+  end;
+end;
+
+procedure TTestWcxSettingsControlsBundles.Output_EmptyFormatCombo_LeavesSaveFormatUnchanged;
+var
+  Form: TForm;
+  B: TWcxOutputControls;
+  R: TWcxSettings;
+begin
+  {A combo with no selection has ItemIndex = -1; casting -1 to TSaveFormat
+   is invalid, so BindWcxOutputFromControls must leave SaveFormat as-is.}
+  Form := TForm.CreateNew(nil);
+  R := TWcxSettings.Create('');
+  try
+    B.CbxFormat := MakeComboBox(Form, 2);
+    B.UdJpegQuality := MakeUpDown(Form, 1, 100);
+    B.UdPngCompression := MakeUpDown(Form, 0, 9);
+    B.UdBackgroundAlpha := MakeUpDown(Form, 0, 255);
+    B.ChkShowFileSizes := MakeCheckBox(Form);
+    B.CbxFormat.ItemIndex := -1;
+
+    R.SaveFormat := sfJPEG;
+    BindWcxOutputFromControls(R, B);
+    Assert.IsTrue(R.SaveFormat = sfJPEG,
+      'An empty format combo must not overwrite SaveFormat with an invalid cast');
+  finally
+    R.Free;
     Form.Free;
   end;
 end;
