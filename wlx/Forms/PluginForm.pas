@@ -327,7 +327,7 @@ uses
   ToolbarBuilder, {still needed for the TToolbarHandles type alias used in CreateToolbar's local H}
   ProgressReporter, FormProgressReporter, OverrideFramesScope,
   ToolbarGlyphLibrary, SaveResolutionExtractor,
-  HotkeysVcl, PluginAppearance, FFmpegExe,
+  HotkeysVcl, PluginAppearance,
   ExtractionWorker, ViewModeLogic, ViewModeLayout,
   FrameExtractor, ProbeCache, VideoProbing,
   System.Math, Vcl.Clipbrd,
@@ -1470,7 +1470,7 @@ begin
     Exit;
   end;
 
-  Prober := TFFmpegExe.Create(FFFmpegPath);
+  Prober := FServices.ProberFactory.CreateProber(FFFmpegPath);
   FVideoInfo := FServices.ProbeCache.TryGetOrProbe(FFileName, Prober);
 
   var BannerBytes: Int64 := 0;

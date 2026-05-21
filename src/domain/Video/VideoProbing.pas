@@ -16,6 +16,13 @@ type
     function ProbeVideo(const AFilePath: string): TVideoInfo;
   end;
 
+  {Defers TFFmpegExe construction so prober consumers depend on the
+   abstraction. Production: TProductionVideoProberFactory in FFmpegExe.}
+  IVideoProberFactory = interface
+    ['{6E2A9C41-7B58-4F0D-A3E6-1C9B5D8F0273}']
+    function CreateProber(const AFFmpegPath: string): IVideoProber;
+  end;
+
 implementation
 
 end.

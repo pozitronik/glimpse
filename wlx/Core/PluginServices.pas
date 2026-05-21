@@ -6,7 +6,7 @@ unit PluginServices;
 interface
 
 uses
-  Cache, FrameExtractor, FFmpegExe, ProbeCache, Settings;
+  Cache, FrameExtractor, FFmpegExe, ProbeCache, VideoProbing, Settings;
 
 type
   IFrameCacheFactory = interface
@@ -19,6 +19,7 @@ type
   TPluginServices = record
     FrameCacheFactory: IFrameCacheFactory;
     FrameExtractorFactory: IFrameExtractorFactory;
+    ProberFactory: IVideoProberFactory;
     ProbeCache: IProbeCache;
   end;
 
@@ -48,6 +49,7 @@ function CreateProductionServices: TPluginServices;
 begin
   Result.FrameCacheFactory := TProductionFrameCacheFactory.Create;
   Result.FrameExtractorFactory := TProductionFrameExtractorFactory.Create;
+  Result.ProberFactory := TProductionVideoProberFactory.Create;
   Result.ProbeCache := CreateProbeCache;
 end;
 

@@ -35,6 +35,9 @@ type
      IFrameExtractor. We do not invoke ExtractFrame here - that would
      spawn ffmpeg - we only verify the construction contract.}
     [Test] procedure TestProductionFrameExtractorFactory_ReturnsExtractor;
+    {Production prober factory always produces a non-nil IVideoProber.
+     ProbeVideo is not invoked here - that would spawn ffmpeg.}
+    [Test] procedure TestProductionVideoProberFactory_ReturnsProber;
     {Convenience constructor: every field the form's CreateForPlugin
      will read must be non-nil.}
     [Test] procedure TestCreateProductionServices_PopulatesAllFields;
@@ -51,7 +54,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.Types,
   Vcl.Graphics,
-  Cache, FrameExtractor, FFmpegExe, ProbeCache, Settings, PluginServices;
+  Cache, FrameExtractor, FFmpegExe, ProbeCache, VideoProbing, Settings, PluginServices;
 
 {Builds a settings instance pointing at the per-test temp cache dir.
  Lifetime is the caller's responsibility (returns a raw TPluginSettings;
@@ -178,6 +181,18 @@ begin
   Assert.IsNotNull(Extractor, 'Extractor factory must produce a non-nil instance');
 end;
 
+procedure TTestPluginServices.TestProductionVideoProberFactory_ReturnsProber;
+var
+  Factory: IVideoProberFactory;
+  Prober: IVideoProber;
+begin
+  Factory := TProductionVideoProberFactory.Create;
+  {Synthetic path: the factory just stores it; ProbeVideo (which would
+   spawn ffmpeg) is never called.}
+  Prober := Factory.CreateProber('C:\synthetic\ffmpeg.exe');
+  Assert.IsNotNull(Prober, 'Prober factory must produce a non-nil instance');
+end;
+
 procedure TTestPluginServices.TestCreateProductionServices_PopulatesAllFields;
 var
   Services: TPluginServices;
@@ -185,6 +200,7 @@ begin
   Services := CreateProductionServices;
   Assert.IsNotNull(Services.FrameCacheFactory, 'FrameCacheFactory must be wired');
   Assert.IsNotNull(Services.FrameExtractorFactory, 'FrameExtractorFactory must be wired');
+  Assert.IsNotNull(Services.ProberFactory, 'ProberFactory must be wired');
   Assert.IsNotNull(Services.ProbeCache, 'ProbeCache must be wired');
 end;
 

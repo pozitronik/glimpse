@@ -43,6 +43,13 @@ type
     function CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
   end;
 
+  {Production IVideoProberFactory: builds a TFFmpegExe for a requested
+   ffmpeg path. Lets the WLX shell defer prober construction.}
+  TProductionVideoProberFactory = class(TInterfacedObject, IVideoProberFactory)
+  public
+    function CreateProber(const AFFmpegPath: string): IVideoProber;
+  end;
+
 implementation
 
 uses
@@ -136,6 +143,11 @@ begin
 end;
 
 function TProductionFrameExtractorFactory.CreateExtractor(const AFFmpegPath: string): IFrameExtractor;
+begin
+  Result := TFFmpegExe.Create(AFFmpegPath);
+end;
+
+function TProductionVideoProberFactory.CreateProber(const AFFmpegPath: string): IVideoProber;
 begin
   Result := TFFmpegExe.Create(AFFmpegPath);
 end;
