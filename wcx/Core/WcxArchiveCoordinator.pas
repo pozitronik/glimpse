@@ -9,6 +9,7 @@ uses
   WcxAPI,
   WcxSettings,
   WcxArchiveHandle,
+  WcxEntryExtractors,
   FrameExtractor,
   VideoInfo;
 
@@ -33,10 +34,12 @@ type
     FSettingsProvider: IWcxSettingsProvider;
     FProbeService: IProbeService;
     FFrameExtractorFactory: IFrameExtractorFactory;
+    FBitmapSaver: IBitmapSaverRouter;
   public
     constructor Create(const ASettingsProvider: IWcxSettingsProvider;
       const AProbeService: IProbeService;
-      const AFrameExtractorFactory: IFrameExtractorFactory);
+      const AFrameExtractorFactory: IFrameExtractorFactory;
+      const ABitmapSaver: IBitmapSaverRouter);
     function OpenArchive(const AFileName: string; AOpenMode: Integer;
       const AIniPath: string;
       out AOpenResult: Integer): TArchiveHandle;
@@ -64,8 +67,7 @@ uses
   WcxListing,
   WcxPresets,
   WcxExtractionController,
-  Logging,
-  WcxEntryExtractors;
+  Logging;
 
 procedure CoordLog(const AMsg: string);
 begin
@@ -139,12 +141,14 @@ end;
 
 constructor TWcxArchiveCoordinator.Create(const ASettingsProvider: IWcxSettingsProvider;
   const AProbeService: IProbeService;
-  const AFrameExtractorFactory: IFrameExtractorFactory);
+  const AFrameExtractorFactory: IFrameExtractorFactory;
+  const ABitmapSaver: IBitmapSaverRouter);
 begin
   inherited Create;
   FSettingsProvider := ASettingsProvider;
   FProbeService := AProbeService;
   FFrameExtractorFactory := AFrameExtractorFactory;
+  FBitmapSaver := ABitmapSaver;
 end;
 
 function TWcxArchiveCoordinator.OpenArchive(const AFileName: string; AOpenMode: Integer;
@@ -178,7 +182,7 @@ begin
     end;
 
     H.FrameExtractor := FFrameExtractorFactory.CreateExtractor(H.FFmpegPath);
-    H.BitmapSaver := TVclBitmapSaverRouter.Create;
+    H.BitmapSaver := FBitmapSaver;
 
     H.VideoInfo := FProbeService.Probe(AFileName, H.FFmpegPath);
 

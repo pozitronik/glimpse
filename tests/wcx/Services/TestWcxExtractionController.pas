@@ -23,6 +23,7 @@ type
 
     [Test] procedure TestExtractSeparateToCacheHappyPathWritesEachFrame;
     [Test] procedure TestExtractSeparateToCacheSkipsNilFrames;
+    [Test] procedure TestExtractSeparateToCacheRoutesThroughInjectedRouter;
   end;
 
 implementation
@@ -30,7 +31,7 @@ implementation
 uses
   Winapi.Windows, System.SysUtils, System.IOUtils, Vcl.Graphics,
   Types, BitmapSaver, FrameExtractor, FrameOffsets, VideoInfo,
-  WcxAPI, WcxSettings, WcxArchiveHandle,
+  WcxAPI, WcxSettings, WcxArchiveHandle, WcxEntryExtractors,
   WcxFrameCache, WcxExtractionController;
 
 type
@@ -46,6 +47,17 @@ type
     function ExtractFrame(const AFileName: string; ATimeOffset: Double;
       const AOptions: TExtractionOptions; ACancelHandle: THandle = 0): TBitmap;
     property CallCount: Integer read FCallCount;
+  end;
+
+  {Records Save calls without encoding a real image; writes a 1-byte
+   placeholder so the controller's TFile.GetSize readback still
+   succeeds. Pins that the controller routes through H.BitmapSaver.}
+  TFakeBitmapSaverRouter = class(TInterfacedObject, IBitmapSaverRouter)
+  strict private
+    FSaveCallCount: Integer;
+  public
+    procedure Save(ABitmap: TBitmap; const APath: string; const AOptions: TSaveOptions);
+    property SaveCallCount: Integer read FSaveCallCount;
   end;
 
 constructor TFakeExtractor.Create(AReturnNilOnIndex: Integer);
@@ -66,6 +78,14 @@ begin
   Result := TBitmap.Create;
   Result.PixelFormat := pf24bit;
   Result.SetSize(8, 8);
+end;
+
+procedure TFakeBitmapSaverRouter.Save(ABitmap: TBitmap; const APath: string;
+  const AOptions: TSaveOptions);
+begin
+  Inc(FSaveCallCount);
+  {Placeholder file so the extract-to-cache TFile.GetSize readback succeeds.}
+  TFile.WriteAllText(APath, 'x');
 end;
 
 function MakeOffsets(ACount: Integer): TFrameOffsetArray;
@@ -98,6 +118,9 @@ begin
   Result.FileName := 'C:\v\sample.mkv';
   Result.Settings := Settings;
   Result.Offsets := MakeOffsets(AFrameCount);
+  {Production wiring sets this in OpenArchive before PreExtractFrames;
+   the extract-to-cache procedures write each bitmap through it.}
+  Result.BitmapSaver := TVclBitmapSaverRouter.Create;
 end;
 
 procedure FreeHandleAndSettings(AHandle: TArchiveHandle);
@@ -276,6 +299,36 @@ begin
       Assert.AreEqual(Int64(0), Sizes[0]);
       Assert.IsTrue(Paths[1] <> '', 'second slot still populated');
       Assert.IsTrue(Sizes[1] > 0);
+    finally
+      Session.Free;
+    end;
+  finally
+    FreeHandleAndSettings(H);
+  end;
+end;
+
+procedure TTestWcxExtractionController.TestExtractSeparateToCacheRoutesThroughInjectedRouter;
+var
+  H: TArchiveHandle;
+  Extractor: IFrameExtractor;
+  Router: TFakeBitmapSaverRouter;
+  Session: TWcxCacheExtractionSession;
+begin
+  {Pins DIP-2: ExtractSeparateToCache must write through H.BitmapSaver,
+   not the BitmapSaver.SaveBitmapToFile free function. A reverted
+   controller would leave the fake's call count at zero.}
+  H := MakeHandle(2, True, False);
+  try
+    Router := TFakeBitmapSaverRouter.Create;
+    {Replaces the real router MakeHandle installs; the handle field then
+     owns the fake via interface refcount.}
+    H.BitmapSaver := Router;
+    Extractor := TFakeExtractor.Create;
+    Session := BeginPreparedSession(H.FileName, 2);
+    try
+      ExtractSeparateToCache(H, Extractor, Session);
+      Assert.AreEqual(2, Router.SaveCallCount,
+        'each frame must be written through the injected IBitmapSaverRouter');
     finally
       Session.Free;
     end;

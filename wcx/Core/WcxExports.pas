@@ -52,6 +52,7 @@ var
   GSettingsProvider: IWcxSettingsProvider;
   GProbeService: IProbeService;
   GFrameExtractorFactory: IFrameExtractorFactory;
+  GBitmapSaver: IBitmapSaverRouter;
 
 procedure WcxLog(const AMsg: string);
 begin
@@ -65,7 +66,7 @@ var
 begin
   {Thunk: only translates the ABI integer handle to a class pointer and
    wires the module-global factories into the per-call coordinator.}
-  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory, GBitmapSaver);
   try
     H := Coord.OpenArchive(AFileName, AOpenMode, GIniPath, AOpenResult);
     if H <> nil then
@@ -265,6 +266,7 @@ GIniPath := ChangeFileExt(GetModuleName(HInstance), '.ini');
 GSettingsProvider := TProductionWcxSettingsProvider.Create;
 GProbeService := TProductionProbeService.Create;
 GFrameExtractorFactory := TProductionFrameExtractorFactory.Create;
+GBitmapSaver := TVclBitmapSaverRouter.Create;
 
 SetPresetFailureReporter(TMessageBoxFailureReporter.Create);
 
@@ -280,6 +282,7 @@ finalization
 
 SetPresetFailureReporter(nil);
 {Reverse construction order so any transitive references drop cleanly.}
+GBitmapSaver := nil;
 GFrameExtractorFactory := nil;
 GProbeService := nil;
 GSettingsProvider := nil;

@@ -66,6 +66,10 @@ type
      (not the configured-but-unresolved INI value).}
     [Test] procedure TestOpenArchive_ProbeService_CalledOnceWithResolvedFFmpegPath;
 
+    {Bitmap-saver router is injected: the coordinator wires the supplied
+     IBitmapSaverRouter onto the handle rather than constructing its own.}
+    [Test] procedure TestOpenArchive_BitmapSaverRouterInjected_NotConstructedInternally;
+
     {ProcessFile + CloseArchive are class methods — stateless against
      the handle.}
     [Test] procedure TestProcessFile_PKSkip_AdvancesCursorReturnsSuccess;
@@ -270,7 +274,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -310,7 +314,7 @@ begin
   Info.Duration := 0;
   ProbeService.ResultInfo := Info;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     Assert.AreEqual(Integer(E_BAD_ARCHIVE), OpenResult, 'Invalid video info must surface as E_BAD_ARCHIVE');
@@ -334,7 +338,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -368,7 +372,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -404,7 +408,7 @@ begin
   ProbeService.ResultInfo := MakeValidVideoInfo;
   ExpectedSize := TFile.GetSize(FVideoPath);
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -439,7 +443,7 @@ begin
   ExtractorFactory := TFakeFrameExtractorFactory.Create;
   ProbeService.ResultInfo := MakeValidVideoInfo;
 
-  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory);
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, TVclBitmapSaverRouter.Create);
   try
     H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
     try
@@ -449,6 +453,41 @@ begin
         'Probe service must receive the source video file path');
       Assert.AreEqual(FFFmpegStubPath, ProbeService.LastFFmpegPath,
         'Probe service must receive the resolved ffmpeg path, not the raw INI value');
+    finally
+      if H <> nil then
+      begin
+        H.Settings.Free;
+        H.Free;
+      end;
+    end;
+  finally
+    Coord.Free;
+  end;
+end;
+
+procedure TTestWcxArchiveCoordinator.TestOpenArchive_BitmapSaverRouterInjected_NotConstructedInternally;
+var
+  SettingsProvider: TFakeSettingsProvider;
+  ProbeService: TFakeProbeService;
+  ExtractorFactory: TFakeFrameExtractorFactory;
+  Router: IBitmapSaverRouter;
+  Coord: TWcxArchiveCoordinator;
+  H: TArchiveHandle;
+  OpenResult: Integer;
+begin
+  SettingsProvider := TFakeSettingsProvider.Create;
+  ProbeService := TFakeProbeService.Create;
+  ExtractorFactory := TFakeFrameExtractorFactory.Create;
+  ProbeService.ResultInfo := MakeValidVideoInfo;
+  Router := TVclBitmapSaverRouter.Create;
+
+  Coord := TWcxArchiveCoordinator.Create(SettingsProvider, ProbeService, ExtractorFactory, Router);
+  try
+    H := Coord.OpenArchive(FVideoPath, 0, FIniPath, OpenResult);
+    try
+      Assert.IsNotNull(H, 'Open must succeed for the injection assertion to hold');
+      Assert.IsTrue(H.BitmapSaver = Router,
+        'Handle must carry the injected router, not a coordinator-constructed one');
     finally
       if H <> nil then
       begin
