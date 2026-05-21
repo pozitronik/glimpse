@@ -7,9 +7,9 @@ interface
 uses
   Types;
 
-{Maps a virtual key code to a view mode.
- Supports Ord('1')..Ord('5') and VK_NUMPAD1..VK_NUMPAD5.
- Returns False if the key does not map to any mode.}
+{Maps a virtual key code to a view mode: digit '1'..'9' and the numpad
+ equivalents, indexed by TViewMode ordinal so the accepted range tracks
+ High(TViewMode). Returns False if the key does not map to any mode.}
 function KeyToViewMode(AKey: Word; out AMode: TViewMode): Boolean;
 
 {Cycles to the next zoom mode: FitWindow -> FitIfLarger -> Actual -> FitWindow.}
@@ -35,26 +35,22 @@ implementation
 uses
   Winapi.Windows, WlxAPI;
 
-const
-  KEY_TO_MODE: array [0 .. 4] of TViewMode = (vmSmartGrid, vmGrid, vmScroll, vmFilmstrip, vmSingle);
-
 function KeyToViewMode(AKey: Word; out AMode: TViewMode): Boolean;
 var
   Idx: Integer;
 begin
   case AKey of
-    Ord('1') .. Ord('5'):
+    Ord('1') .. Ord('9'):
       Idx := AKey - Ord('1');
-    VK_NUMPAD1 .. VK_NUMPAD5:
+    VK_NUMPAD1 .. VK_NUMPAD9:
       Idx := AKey - VK_NUMPAD1;
-    else
-      begin
-        Result := False;
-        Exit;
-      end;
+  else
+    Exit(False);
   end;
-  AMode := KEY_TO_MODE[Idx];
-  Result := True;
+  {Idx is a TViewMode ordinal; accept only as many digits as the enum has.}
+  Result := Idx <= Ord(High(TViewMode));
+  if Result then
+    AMode := TViewMode(Idx);
 end;
 
 function NextZoomMode(ACurrent: TZoomMode): TZoomMode;

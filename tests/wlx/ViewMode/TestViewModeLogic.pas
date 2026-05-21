@@ -21,6 +21,7 @@ type
     [Test] procedure TestKeyToViewModeNumpad5;
     [Test] procedure TestKeyToViewModeInvalidKey;
     [Test] procedure TestKeyToViewModeLetterKey;
+    [Test] procedure TestKeyToViewModeRangeFollowsViewModeCardinality;
     [Test] procedure TestNextZoomModeFitWindow;
     [Test] procedure TestNextZoomModeFitIfLarger;
     [Test] procedure TestNextZoomModeActual;
@@ -124,6 +125,18 @@ procedure TTestViewModeLogic.TestKeyToViewModeLetterKey;
 var M: TViewMode;
 begin
   Assert.IsFalse(KeyToViewMode(Ord('A'), M), 'Letter key is not valid');
+end;
+
+procedure TTestViewModeLogic.TestKeyToViewModeRangeFollowsViewModeCardinality;
+var M: TViewMode;
+begin
+  {The accepted digit range tracks High(TViewMode): the digit for the
+   last mode maps, the next digit is rejected — no hard-coded count.}
+  Assert.IsTrue(KeyToViewMode(Word(Ord('1') + Ord(High(TViewMode))), M),
+    'The digit for the last view mode must map');
+  Assert.IsTrue(M = High(TViewMode));
+  Assert.IsFalse(KeyToViewMode(Word(Ord('1') + Ord(High(TViewMode)) + 1), M),
+    'The digit one past the last view mode must be rejected');
 end;
 
 procedure TTestViewModeLogic.TestNextZoomModeFitWindow;
