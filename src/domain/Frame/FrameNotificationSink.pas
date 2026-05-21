@@ -1,6 +1,6 @@
-{Notification sink interface that decouples workers from any specific
- transport. Production uses TWindowMessageSink (PostMessage); tests use
- a capture-only sink.}
+{Notification interfaces that decouple workers and the controller from
+ any specific transport. Production uses TWindowMessageSink (PostMessage);
+ tests use a capture-only sink.}
 unit FrameNotificationSink;
 
 interface
@@ -13,18 +13,23 @@ const
   WM_EXTRACTION_DONE = WM_USER + 101;
 
 type
-  IFrameNotificationSink = interface
+  {Worker-thread role: workers post frame-ready and extraction-done
+   signals. Implementations must be thread-safe.}
+  IFrameNotifier = interface
     ['{F1AD7E20-3B14-4C90-A2D8-7E1F9C0B5E83}']
-    {Worker thread; must be thread-safe.}
     procedure NotifyFramesReady;
-    {Last finishing worker; must be thread-safe.}
+    {Posted by the last finishing worker.}
     procedure NotifyExtractionDone;
-    {Controller (main thread); discards in-flight notifications so the
-     next extraction starts clean.}
+  end;
+
+  {Controller (main thread) role: discards in-flight notifications so the
+   next extraction starts clean.}
+  IFrameNotificationDrain = interface
+    ['{B8D5F2C9-AE73-4047-C6F1-2D9E5071B3CA}']
     procedure DrainPending;
   end;
 
-  TWindowMessageSink = class(TInterfacedObject, IFrameNotificationSink)
+  TWindowMessageSink = class(TInterfacedObject, IFrameNotifier, IFrameNotificationDrain)
   strict private
     FHwnd: HWND;
   public

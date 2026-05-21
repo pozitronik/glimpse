@@ -677,15 +677,19 @@ begin
 end;
 
 procedure TPluginForm.InitializeExtractionStack;
+var
+  Sink: TWindowMessageSink;
 begin
   {Create extraction controller with the cache produced by the injected
-   factory. The TWindowMessageSink wraps the form's HWND so worker
-   threads can post WM_FRAME_READY / WM_EXTRACTION_DONE without needing
-   the HWND directly. The cache-vs-null choice that used to live in an
-   inline if FSettings.CacheEnabled branch now lives inside
+   factory. One TWindowMessageSink wraps the form's HWND and is passed as
+   both the controller's notifier and drain facets, so worker threads can
+   post WM_FRAME_READY / WM_EXTRACTION_DONE without needing the HWND
+   directly. The cache-vs-null choice that used to live in an inline
+   if FSettings.CacheEnabled branch now lives inside
    TProductionFrameCacheFactory.CreateCache, keeping this site agnostic
    of the concrete cache class so tests can wire a fake factory.}
-  FExtractCtrl := TExtractionController.Create(TWindowMessageSink.Create(Handle),
+  Sink := TWindowMessageSink.Create(Handle);
+  FExtractCtrl := TExtractionController.Create(Sink, Sink,
     FServices.FrameCacheFactory.CreateCache(FSettings),
     FServices.FrameCacheFactory);
   FExtractCtrl.OnFrameDelivered := OnFrameDelivered;

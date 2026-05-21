@@ -25,12 +25,15 @@ type
     FPendingLock: TCriticalSection;
     FCache: IFrameCache;
     FCacheFactory: IFrameCacheFactory;
-    {Production wires TWindowMessageSink (form HWND); tests inject a capture sink.}
-    FSink: IFrameNotificationSink;
+    {Production wires one TWindowMessageSink as both facets; tests inject
+     a capture sink. FNotifier is forwarded to worker threads; FDrain is
+     used by DrainPendingFrameMessages.}
+    FNotifier: IFrameNotifier;
+    FDrain: IFrameNotificationDrain;
     FOnFrameDelivered: TFrameDeliveryEvent;
     FOnProgress: TNotifyEvent;
   public
-    constructor Create(const ASink: IFrameNotificationSink; const ACache: IFrameCache; const ACacheFactory: IFrameCacheFactory);
+    constructor Create(const ANotifier: IFrameNotifier; const ADrain: IFrameNotificationDrain; const ACache: IFrameCache; const ACacheFactory: IFrameCacheFactory);
     destructor Destroy; override;
     procedure Start(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; AMaxWorkers, AMaxThreads: Integer; const AOptions: TExtractionOptions; const ACacheOverride: IFrameCache = nil);
     procedure Stop;
@@ -62,10 +65,11 @@ var
 
 {TExtractionController}
 
-constructor TExtractionController.Create(const ASink: IFrameNotificationSink; const ACache: IFrameCache; const ACacheFactory: IFrameCacheFactory);
+constructor TExtractionController.Create(const ANotifier: IFrameNotifier; const ADrain: IFrameNotificationDrain; const ACache: IFrameCache; const ACacheFactory: IFrameCacheFactory);
 begin
   inherited Create;
-  FSink := ASink;
+  FNotifier := ANotifier;
+  FDrain := ADrain;
   FCache := ACache;
   FCacheFactory := ACacheFactory;
   FPendingFrames := TList<TPendingFrame>.Create;
@@ -105,7 +109,7 @@ begin
   for W := 0 to High(Chunks) do
   begin
     Chunk := Copy(AOffsets, Chunks[W].Start, Chunks[W].Len);
-    FWorkerThreads[W] := TExtractionThread.Create(AExtractor, AFileName, Chunk, FSink, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount, AOptions);
+    FWorkerThreads[W] := TExtractionThread.Create(AExtractor, AFileName, Chunk, FNotifier, FPendingFrames, FPendingLock, ThreadCache, @FActiveWorkerCount, AOptions);
   end;
 
   {Start all threads after creation to minimize scheduling skew}
@@ -175,8 +179,8 @@ begin
   finally
     FPendingLock.Leave;
   end;
-  if FSink <> nil then
-    FSink.DrainPending;
+  if FDrain <> nil then
+    FDrain.DrainPending;
 end;
 
 procedure TExtractionController.RecreateCache(const ASettings: TPluginSettings);

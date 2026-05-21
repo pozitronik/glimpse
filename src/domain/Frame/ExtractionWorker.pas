@@ -1,5 +1,5 @@
 {Worker thread that extracts video frames via ffmpeg.exe. Results go to
- a thread-safe queue; an injected sink decides how to notify (Win32
+ a thread-safe queue; an injected notifier decides how to notify (Win32
  PostMessage in production, in-memory capture in tests).}
 unit ExtractionWorker;
 
@@ -29,7 +29,7 @@ type
     FExtractor: IFrameExtractor;
     FFileName: string;
     FOffsets: TFrameOffsetArray;
-    FSink: IFrameNotificationSink;
+    FNotifier: IFrameNotifier;
     {Shared pending-frame queue and its lock, both owned by
      TExtractionController. The worker only appends; the controller drains
      the queue and frees the queued bitmaps, so TExtractionThread.Destroy
@@ -47,7 +47,7 @@ type
     procedure Execute; override;
     procedure TerminatedSet; override;
   public
-    constructor Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; const ASink: IFrameNotificationSink; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
+    constructor Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; const ANotifier: IFrameNotifier; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
     destructor Destroy; override;
   end;
 
@@ -72,14 +72,14 @@ begin
   DebugLog('Thread', AMsg);
 end;
 
-constructor TExtractionThread.Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; const ASink: IFrameNotificationSink; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
+constructor TExtractionThread.Create(const AExtractor: IFrameExtractor; const AFileName: string; const AOffsets: TFrameOffsetArray; const ANotifier: IFrameNotifier; AQueue: TList<TPendingFrame>; AQueueLock: TCriticalSection; const ACache: IFrameCache; AActiveWorkerCount: PInteger; const AOptions: TExtractionOptions);
 begin
   inherited Create(True); {suspended}
   FreeOnTerminate := False;
   FExtractor := AExtractor;
   FFileName := AFileName;
   FOffsets := Copy(AOffsets);
-  FSink := ASink;
+  FNotifier := ANotifier;
   FQueue := AQueue;
   FQueueLock := AQueueLock;
   FCache := ACache;
@@ -174,16 +174,16 @@ begin
       finally
         FQueueLock.Leave;
       end;
-      if FSink <> nil then
-        FSink.NotifyFramesReady;
+      if FNotifier <> nil then
+        FNotifier.NotifyFramesReady;
     end;
   finally
     {Signal even when Terminated; skipping on cancel left WMExtractionDone
      unsignalled in races between Terminate and natural completion. The
      controller drains stale signals before each new extraction.}
     IsLast := AtomicDecrement(FActiveWorkerCount^) = 0;
-    if ShouldPostDone(IsLast, Terminated) and (FSink <> nil) then
-      FSink.NotifyExtractionDone;
+    if ShouldPostDone(IsLast, Terminated) and (FNotifier <> nil) then
+      FNotifier.NotifyExtractionDone;
   end;
 end;
 
