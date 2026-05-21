@@ -72,6 +72,49 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
+{Re-read on each open so hand-edits to [debug] LogEnabled in Glimpse.ini
+ take effect without restarting TC.}
+procedure ConfigureDebugLog(ASettings: TWcxSettings);
+begin
+  if ASettings.DebugLogEnabled then
+    TDebugLog.Instance.Configure(ChangeFileExt(GetModuleName(HInstance), '.log'))
+  else
+    TDebugLog.Instance.Configure('');
+end;
+
+function ResolveFFmpegPath(ASettings: TWcxSettings; const AIniPath: string): string;
+begin
+  Result := FindFFmpegExe(ExtractFilePath(AIniPath), ExpandEnvVars(ASettings.FFmpegExePath));
+end;
+
+{Captured once so subsequent reads stay consistent if the source file
+ changes mid-session.}
+procedure CaptureSourceFileMetadata(AHandle: TArchiveHandle; const AFileName: string);
+begin
+  AHandle.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
+  try
+    AHandle.SourceFileSize := TFile.GetSize(AFileName);
+  except
+    AHandle.SourceFileSize := 0;
+  end;
+end;
+
+{Skip preset IO when ShowPresets is off so legacy installs avoid the disk
+ read.}
+function LoadPresetsForOpen(ASettings: TWcxSettings; const AIniPath: string): TWcxPresetArray;
+begin
+  if ASettings.ShowPresets then
+  begin
+    Result := LoadPresets(PresetsIniPath(AIniPath));
+    CoordLog(Format('Presets: ShowPresets=ON, path="%s", loaded=%d', [PresetsIniPath(AIniPath), Length(Result)]));
+  end
+  else
+  begin
+    Result := nil;
+    CoordLog(Format('Presets: ShowPresets=OFF (read from "%s")', [AIniPath]));
+  end;
+end;
+
 {TProductionWcxSettingsProvider}
 
 function TProductionWcxSettingsProvider.CreateSettings(const AIniPath: string): TWcxSettings;
@@ -119,14 +162,9 @@ begin
     H.ResetCursor;
 
     H.Settings := FSettingsProvider.CreateSettings(AIniPath);
-    {Re-read on each open so hand-edits to [debug] LogEnabled in
-     Glimpse.ini take effect without restarting TC.}
-    if H.Settings.DebugLogEnabled then
-      TDebugLog.Instance.Configure(ChangeFileExt(GetModuleName(HInstance), '.log'))
-    else
-      TDebugLog.Instance.Configure('');
+    ConfigureDebugLog(H.Settings);
 
-    H.FFmpegPath := FindFFmpegExe(ExtractFilePath(AIniPath), ExpandEnvVars(H.Settings.FFmpegExePath));
+    H.FFmpegPath := ResolveFFmpegPath(H.Settings, AIniPath);
 
     if H.FFmpegPath = '' then
     begin
@@ -151,24 +189,8 @@ begin
     end;
 
     H.Offsets := BuildFrameOffsets(H.VideoInfo.Duration, H.Settings.FramesCount, H.Settings.SkipEdgesPercent, H.Settings.RandomPercent, H.Settings.RandomExtraction);
-    H.FileTime := DateTimeToFileDate(TFile.GetLastWriteTime(AFileName));
-    {Captured once so subsequent reads stay consistent if the source
-     file changes mid-session.}
-    try
-      H.SourceFileSize := TFile.GetSize(AFileName);
-    except
-      H.SourceFileSize := 0;
-    end;
-
-    {Skip preset IO when ShowPresets is off so legacy installs avoid
-     the disk read.}
-    if H.Settings.ShowPresets then
-    begin
-      H.Presets := LoadPresets(PresetsIniPath(AIniPath));
-      CoordLog(Format('Presets: ShowPresets=ON, path="%s", loaded=%d', [PresetsIniPath(AIniPath), Length(H.Presets)]));
-    end
-    else
-      CoordLog(Format('Presets: ShowPresets=OFF (read from "%s")', [AIniPath]));
+    CaptureSourceFileMetadata(H, AFileName);
+    H.Presets := LoadPresetsForOpen(H.Settings, AIniPath);
     H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined, H.Settings.ShowPresets, H.Settings.SaveFormat, H.Presets);
 
     if H.Settings.ShowFileSizes then
