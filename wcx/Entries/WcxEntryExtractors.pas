@@ -199,28 +199,32 @@ begin
     TimestampStyle.FontStyles := [fsBold];
 
     Result := RenderCombinedImage(Frames, Offsets, GridStyle, TimestampStyle);
-
-    {Resize BEFORE the banner so the banner stays at full width and is
-     not counted toward the limit.}
-    if Result <> nil then
-    begin
-      Resized := DownscaleBitmapToFit(Result, Settings.CombinedMaxSide);
-      if Resized <> nil then
+    try
+      {Resize BEFORE the banner so the banner stays at full width and is
+       not counted toward the limit.}
+      if Result <> nil then
       begin
-        Result.Free;
-        Result := Resized;
+        Resized := DownscaleBitmapToFit(Result, Settings.CombinedMaxSide);
+        if Resized <> nil then
+        begin
+          Result.Free;
+          Result := Resized;
+        end;
       end;
-    end;
 
-    if (Result <> nil) and Settings.ShowBanner then
-    begin
-      BannerStyle := TBannerStyle.FromSettings(Settings.Banner);
-      var BannerBytes: Int64 := 0;
-      if TFile.Exists(AContext.FileName) then
-        BannerBytes := TFile.GetSize(AContext.FileName);
-      WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(AContext.FileName, BannerBytes, AContext.VideoInfo)), BannerStyle);
+      if (Result <> nil) and Settings.ShowBanner then
+      begin
+        BannerStyle := TBannerStyle.FromSettings(Settings.Banner);
+        var BannerBytes: Int64 := 0;
+        if TFile.Exists(AContext.FileName) then
+          BannerBytes := TFile.GetSize(AContext.FileName);
+        WithBanner := AttachBanner(Result, FormatBannerLines(BuildBannerInfo(AContext.FileName, BannerBytes, AContext.VideoInfo)), BannerStyle);
+        Result.Free;
+        Result := WithBanner;
+      end;
+    except
       Result.Free;
-      Result := WithBanner;
+      raise;
     end;
   finally
     for I := 0 to Length(Frames) - 1 do
