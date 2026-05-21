@@ -68,6 +68,10 @@ type
     [Test] procedure ExcMap_GenericException_FallsThroughToWriteError;
     [Test] procedure ExcMap_OSError_FallsThroughToWriteError;
     [Test] procedure ExcMap_DerivedFromFileNotFound_MapsToOpenError;
+    {ReadHeader / ReadHeaderExW must reject a 0 (invalid) archive handle
+     instead of dereferencing it — TC passes 0 when OpenArchive failed.}
+    [Test] procedure ReadHeader_ZeroHandle_ReturnsBadArchive;
+    [Test] procedure ReadHeaderExW_ZeroHandle_ReturnsBadArchive;
   end;
 
 implementation
@@ -449,6 +453,26 @@ procedure TTestWcxAPI.ExcMap_DerivedFromFileNotFound_MapsToOpenError;
 begin
   Assert.AreEqual(E_EOPEN, ExceptionClassToWcxError(EFileNotFoundSubclass),
     'Subclass of a mapped exception must resolve via the InheritsFrom walk');
+end;
+
+{ ReadHeader handle guards }
+
+procedure TTestWcxAPI.ReadHeader_ZeroHandle_ReturnsBadArchive;
+var
+  HeaderData: THeaderData;
+begin
+  {TC passes hArcData = 0 when OpenArchive failed; ReadHeader must not
+   cast it to TArchiveHandle and dereference. Expect E_BAD_ARCHIVE.}
+  FillChar(HeaderData, SizeOf(HeaderData), 0);
+  Assert.AreEqual(E_BAD_ARCHIVE, ReadHeader(0, HeaderData));
+end;
+
+procedure TTestWcxAPI.ReadHeaderExW_ZeroHandle_ReturnsBadArchive;
+var
+  HeaderData: THeaderDataExW;
+begin
+  FillChar(HeaderData, SizeOf(HeaderData), 0);
+  Assert.AreEqual(E_BAD_ARCHIVE, ReadHeaderExW(0, HeaderData));
 end;
 
 end.

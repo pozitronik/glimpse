@@ -95,6 +95,8 @@ var
   H: TArchiveHandle;
   Name: AnsiString;
 begin
+  if hArcData = 0 then
+    Exit(E_BAD_ARCHIVE);
   H := TArchiveHandle(hArcData);
   if H.IsExhausted then
     Exit(E_END_ARCHIVE);
@@ -118,6 +120,8 @@ var
   Name: string;
   Size: Int64;
 begin
+  if hArcData = 0 then
+    Exit(E_BAD_ARCHIVE);
   H := TArchiveHandle(hArcData);
   if H.IsExhausted then
     Exit(E_END_ARCHIVE);
