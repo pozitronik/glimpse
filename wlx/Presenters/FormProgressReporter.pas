@@ -23,7 +23,7 @@ type
 implementation
 
 uses
-  Vcl.ComCtrls, Vcl.Forms;
+  Vcl.Forms;
 
 constructor TFormProgressReporter.Create(AIndicator: TProgressIndicator);
 begin
@@ -34,16 +34,13 @@ end;
 procedure TFormProgressReporter.Start(const AStatusText: string; ATotalSteps: Integer);
 begin
   {AStatusText is ignored: the form's progress widget has no label panel.}
-  FIndicator.ProgressBar.Style := pbstNormal;
-  FIndicator.ProgressBar.Min := 0;
-  FIndicator.ProgressBar.Max := ATotalSteps;
-  FIndicator.ProgressBar.Position := 0;
+  FIndicator.BeginSteps(ATotalSteps);
   FIndicator.Show;
 end;
 
 procedure TFormProgressReporter.Advance(AStepIndex: Integer);
 begin
-  FIndicator.ProgressBar.Position := AStepIndex;
+  FIndicator.SetStep(AStepIndex);
 end;
 
 procedure TFormProgressReporter.Pump;

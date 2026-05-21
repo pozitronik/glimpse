@@ -25,6 +25,11 @@ type
     procedure Show; virtual;
     procedure Hide; virtual;
     procedure Reposition; virtual;
+    {Configure the bar for a determinate run of ATotalSteps, then track
+     progress with SetStep. The Null base no-ops both, so callers need no
+     subclass check.}
+    procedure BeginSteps(ATotalSteps: Integer); virtual;
+    procedure SetStep(AStepIndex: Integer); virtual;
     property ProgressBar: TProgressBar read GetProgressBar;
     property Visible: Boolean read GetVisible;
   end;
@@ -48,6 +53,8 @@ type
     procedure Hide; override;
     {No-op when the indicator is not visible.}
     procedure Reposition; override;
+    procedure BeginSteps(ATotalSteps: Integer); override;
+    procedure SetStep(AStepIndex: Integer); override;
   end;
 
 implementation
@@ -77,6 +84,14 @@ begin
 end;
 
 procedure TProgressIndicator.Reposition;
+begin
+end;
+
+procedure TProgressIndicator.BeginSteps(ATotalSteps: Integer);
+begin
+end;
+
+procedure TProgressIndicator.SetStep(AStepIndex: Integer);
 begin
 end;
 
@@ -138,6 +153,19 @@ begin
   Bounds := ResolveProgressBarBounds(FStatusBar.ClientWidth, FStatusBar.ClientHeight,
     PanelsRight, Stretch, Layout, PROGRESSBAR_MIN_W, PROGRESSBAR_MARGIN);
   FProgressBar.SetBounds(Bounds.Left, Bounds.Top, Bounds.Width, Bounds.Height);
+end;
+
+procedure TStatusBarProgressIndicator.BeginSteps(ATotalSteps: Integer);
+begin
+  FProgressBar.Style := pbstNormal;
+  FProgressBar.Min := 0;
+  FProgressBar.Max := ATotalSteps;
+  FProgressBar.Position := 0;
+end;
+
+procedure TStatusBarProgressIndicator.SetStep(AStepIndex: Integer);
+begin
+  FProgressBar.Position := AStepIndex;
 end;
 
 end.

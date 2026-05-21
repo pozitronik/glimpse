@@ -59,7 +59,7 @@ end;
 
 procedure TFrameCopier.WriteFrameToClipboard(AIndex: Integer; ACopyLiveRes: Boolean);
 var
-`  ToPublish: TBitmap;
+  ToPublish: TBitmap;
   ErrMsg: string;
 begin
   {Acquire one bitmap this method owns: RenderCellAtLiveSize returns a
