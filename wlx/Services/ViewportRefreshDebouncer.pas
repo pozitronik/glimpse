@@ -30,6 +30,7 @@ type
       const AShouldRefresh: TPreconditionCheck;
       const AComputeMaxSide: TMaxSideComputer;
       const AOnRefresh: TViewportRefreshAction);
+    destructor Destroy; override;
     {Kick (or re-kick) the debounce countdown.}
     procedure Schedule;
     {Sets the baseline for the next debounce-fire size comparison.}
@@ -52,6 +53,19 @@ begin
   FTimer.Interval := ADebounceMs;
   FTimer.OnTimer := TimerFired;
   FTimer.Enabled := False;
+end;
+
+destructor TViewportRefreshDebouncer.Destroy;
+begin
+  {FTimer is owned by AOwner; drop the callback so a WM_TIMER still
+   queued when this debouncer is freed cannot fire TimerFired into
+   freed memory.}
+  if Assigned(FTimer) then
+  begin
+    FTimer.Enabled := False;
+    FTimer.OnTimer := nil;
+  end;
+  inherited;
 end;
 
 procedure TViewportRefreshDebouncer.Schedule;
