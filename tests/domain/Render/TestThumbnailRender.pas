@@ -67,15 +67,16 @@ implementation
 uses
   System.SysUtils, System.IOUtils,
   Winapi.Windows, Vcl.Graphics,
-  Types, Settings, Defaults, ProbeCache, Cache, FrameOffsets,
+  Types, Settings, Defaults, ProbeCache, Cache, CacheStorage, FrameOffsets,
   ThumbnailRender, FrameExtractor, VideoProbing, VideoInfo;
 
 function MakeTempProbeCache: IProbeCache;
 begin
-  { Per-test probe cache in a throwaway temp dir so tests remain isolated.
-    TDirectory is not created here; TProbeCache only writes on Put(). }
-  Result := TProbeCache.Create(TPath.Combine(TPath.GetTempPath,
-    'glimpse_thumb_probe_' + IntToStr(Random(MaxInt))));
+  {Per-test probe cache in a throwaway temp dir so tests remain isolated.}
+  Result := TProbeCache.Create(
+    TDiskCacheStorage.Create(TPath.Combine(TPath.GetTempPath,
+      'glimpse_thumb_probe_' + IntToStr(Random(MaxInt))), '.probe'),
+    TFileSystemStat.Create);
 end;
 
 {Returns a TThumbnailParams with Enabled=True so the pipeline reaches

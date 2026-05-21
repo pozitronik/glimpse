@@ -24,7 +24,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils,
+  System.SysUtils,
   Settings, ProbeCache,
   PluginContext;
 
@@ -99,7 +99,9 @@ var
 begin
   Ctx := TPluginContext.Instance;
   Assert.IsNull(Ctx.ProbeCache, 'Default ProbeCache is nil');
-  Cache := TProbeCache.Create(TPath.GetTempPath);
+  {Storage and stat are irrelevant here: the test only exercises the
+   context's ProbeCache property, never the cache itself.}
+  Cache := TProbeCache.Create(nil, nil);
   Ctx.ProbeCache := Cache;
   Assert.AreSame(Cache, Ctx.ProbeCache);
 end;

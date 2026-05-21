@@ -6,65 +6,157 @@ uses
   DUnitX.TestFramework;
 
 type
+  {TProbeCache policy tests. Storage and source-file stat are injected as
+   fakes, so every test runs without touching the real filesystem. The
+   disk-layer behaviour (sharding, atomic writes, missing directories) is
+   TDiskCacheStorage's and is covered by TestCache.}
   [TestFixture]
   TTestProbeCache = class
-  private
-    FCacheDir: string;
-    procedure CleanUp;
   public
-    [Setup] procedure Setup;
-    [TearDown] procedure TearDown;
-    [Test] procedure TestMissOnEmpty;
+    [Test] procedure TestMissOnEmptyStorage;
     [Test] procedure TestPutThenGet;
     [Test] procedure TestAllFieldsRoundTrip;
     [Test] procedure TestInvalidResultNotCached;
-    [Test] procedure TestForeignProbeFileRejected;
-    [Test] procedure TestMissOnNonexistentFile;
-    [Test] procedure TestStaleAfterFileChange;
-    [Test] procedure TestShardedDirectory;
-    [Test] procedure TestDefaultProbeCacheDir;
+    [Test] procedure TestForeignContentRejected;
+    [Test] procedure TestMissWhenFileCannotBeStatted;
+    [Test] procedure TestStaleAfterFileIdentityChanges;
     [Test] procedure TestFloatLocaleIndependence;
+    [Test] procedure TestPutOverwritesPreviousEntry;
     [Test] procedure TestTryGetOrProbeHitsCache;
-    [Test] procedure TestTryGetOrProbeMissReturnsInvalidAndSkipsCache;
+    [Test] procedure TestTryGetOrProbeMissInvalidNotCached;
+    [Test] procedure TestTryGetOrProbeMissProbesAndCaches;
     [Test] procedure TestGetTotalSizeEmpty;
     [Test] procedure TestGetTotalSizeAfterPut;
-    [Test] procedure TestGetTotalSizeOnMissingDir;
     [Test] procedure TestClearWipesEntries;
-    [Test] procedure TestClearOnMissingDirNoException;
-    {Atomic write: Put writes to a sibling .tmp and renames into place. A
-     successful Put must leave only the final .probe file; the .tmp must
-     be gone. Earlier Lines.SaveToFile wrote straight to the target, so a
-     mid-write crash left a partial file that TryGet treated as valid
-     (cache poisoning until the source file's mtime changed).}
-    [Test] procedure TestPutLeavesNoTempFiles;
-    [Test] procedure TestPutOverwritesPreviousEntryAtomically;
-    {IVideoProber injection: TryGetOrProbe on cache miss delegates to
-     the injected prober rather than constructing a TFFmpegExe inline.
-     Lets the cache layer be exercised without spawning ffmpeg.}
-    [Test] procedure TestInjectedProberFiresOnMissAndCachesResult;
-    [Test] procedure TestInjectedProberNotCalledOnCacheHit;
+    [Test] procedure TestDefaultProbeCacheDir;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Classes,
-  VideoProbing, ProbeCache, VideoInfo;
+  System.SysUtils, System.DateUtils, System.Generics.Collections,
+  CacheContracts, VideoProbing, VideoInfo, ProbeCache, ProbeCacheFactory;
 
 type
-  {Stub IVideoProber: returns a canned TVideoInfo and counts calls so
-   the cache's miss-vs-hit dispatch can be observed without ffmpeg.}
+  {In-memory ICacheStorage: lets TProbeCache's policy be exercised with no
+   real disk.}
+  TFakeProbeStorage = class(TInterfacedObject, ICacheStorage)
+  strict private
+    FEntries: TDictionary<string, TBytes>;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Read(const AKey: string): TBytes;
+    procedure Write(const AKey: string; const AData: TBytes);
+    procedure Delete(const AKey: string);
+    procedure Clear;
+    procedure Touch(const AKey: string);
+    function List: TArray<TCacheEntryInfo>;
+  end;
+
+  {IFileStat stub with canned size/mtime. Size is mutable so a test can
+   simulate the source file changing under the cache. AOk=False models a
+   file that cannot be stat'd.}
+  TStubFileStat = class(TInterfacedObject, IFileStat)
+  strict private
+    FSize: Int64;
+    FModified: TDateTime;
+    FOk: Boolean;
+  public
+    constructor Create(AOk: Boolean = True);
+    function TryStat(const APath: string; out ASize: Int64; out AModified: TDateTime): Boolean;
+    property Size: Int64 read FSize write FSize;
+  end;
+
+  {Stub IVideoProber: returns a canned TVideoInfo and counts calls so the
+   cache's miss-vs-hit dispatch can be observed without ffmpeg.}
   TStubProber = class(TInterfacedObject, IVideoProber)
   strict private
     FInfo: TVideoInfo;
     FCallCount: Integer;
-    FLastPath: string;
   public
     constructor Create(const AInfo: TVideoInfo);
     function ProbeVideo(const AFilePath: string): TVideoInfo;
     property CallCount: Integer read FCallCount;
-    property LastPath: string read FLastPath;
   end;
+
+{ TFakeProbeStorage }
+
+constructor TFakeProbeStorage.Create;
+begin
+  inherited Create;
+  FEntries := TDictionary<string, TBytes>.Create;
+end;
+
+destructor TFakeProbeStorage.Destroy;
+begin
+  FEntries.Free;
+  inherited;
+end;
+
+function TFakeProbeStorage.Read(const AKey: string): TBytes;
+begin
+  if not FEntries.TryGetValue(AKey, Result) then
+    Result := nil;
+end;
+
+procedure TFakeProbeStorage.Write(const AKey: string; const AData: TBytes);
+begin
+  FEntries.AddOrSetValue(AKey, AData);
+end;
+
+procedure TFakeProbeStorage.Delete(const AKey: string);
+begin
+  FEntries.Remove(AKey);
+end;
+
+procedure TFakeProbeStorage.Clear;
+begin
+  FEntries.Clear;
+end;
+
+procedure TFakeProbeStorage.Touch(const AKey: string);
+begin
+  {Probe cache never touches; ICacheStorage still requires the method.}
+end;
+
+function TFakeProbeStorage.List: TArray<TCacheEntryInfo>;
+var
+  Pair: TPair<string, TBytes>;
+  Info: TCacheEntryInfo;
+  I: Integer;
+begin
+  SetLength(Result, FEntries.Count);
+  I := 0;
+  for Pair in FEntries do
+  begin
+    Info.Key := Pair.Key;
+    Info.Size := Length(Pair.Value);
+    Info.AccessTime := 0;
+    Result[I] := Info;
+    Inc(I);
+  end;
+end;
+
+{ TStubFileStat }
+
+constructor TStubFileStat.Create(AOk: Boolean);
+begin
+  inherited Create;
+  FOk := AOk;
+  FSize := 1024;
+  FModified := EncodeDate(2025, 1, 1);
+end;
+
+function TStubFileStat.TryStat(const APath: string; out ASize: Int64;
+  out AModified: TDateTime): Boolean;
+begin
+  ASize := FSize;
+  AModified := FModified;
+  Result := FOk;
+end;
+
+{ TStubProber }
 
 constructor TStubProber.Create(const AInfo: TVideoInfo);
 begin
@@ -75,113 +167,48 @@ end;
 function TStubProber.ProbeVideo(const AFilePath: string): TVideoInfo;
 begin
   Inc(FCallCount);
-  FLastPath := AFilePath;
   Result := FInfo;
+end;
+
+{Builds a valid TVideoInfo carrying the given duration.}
+function MakeInfo(ADuration: Double): TVideoInfo;
+begin
+  Result := Default(TVideoInfo);
+  Result.Duration := ADuration;
+  Result.Width := 1920;
+  Result.Height := 1080;
 end;
 
 { TTestProbeCache }
 
-procedure TTestProbeCache.Setup;
-begin
-  FCacheDir := TPath.Combine(TPath.GetTempPath,
-    'glimpse_probe_test_' + IntToStr(Random(MaxInt)));
-end;
-
-procedure TTestProbeCache.TearDown;
-begin
-  CleanUp;
-end;
-
-procedure TTestProbeCache.CleanUp;
-begin
-  if TDirectory.Exists(FCacheDir) then
-    TDirectory.Delete(FCacheDir, True);
-end;
-
-procedure TTestProbeCache.TestMissOnEmpty;
+procedure TTestProbeCache.TestMissOnEmptyStorage;
 var
   Cache: TProbeCache;
   Info: TVideoInfo;
-  TmpFile: string;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_miss.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Assert.IsFalse(Cache.TryGet(TmpFile, Info));
-    finally
-      Cache.Free;
-    end;
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Info), 'Empty storage must miss');
   finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
   end;
 end;
 
 procedure TTestProbeCache.TestPutThenGet;
 var
   Cache: TProbeCache;
-  Info, Retrieved: TVideoInfo;
-  TmpFile: string;
+  Retrieved: TVideoInfo;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_put.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 120.5;
-      Info.Width := 1920;
-      Info.Height := 1080;
-
-      Cache.Put(TmpFile, Info);
-      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
-      Assert.AreEqual(Double(120.5), Retrieved.Duration, 0.001);
-      Assert.AreEqual(1920, Retrieved.Width);
-      Assert.AreEqual(1080, Retrieved.Height);
-      Assert.IsTrue(Retrieved.IsValid);
-    finally
-      Cache.Free;
-    end;
+    Cache.Put('movie.mp4', MakeInfo(120.5));
+    Assert.IsTrue(Cache.TryGet('movie.mp4', Retrieved), 'A put entry must round-trip');
+    Assert.AreEqual(Double(120.5), Retrieved.Duration, 0.001);
+    Assert.AreEqual(1920, Retrieved.Width);
+    Assert.AreEqual(1080, Retrieved.Height);
+    Assert.IsTrue(Retrieved.IsValid);
   finally
-    TFile.Delete(TmpFile);
-  end;
-end;
-
-procedure TTestProbeCache.TestForeignProbeFileRejected;
-var
-  Cache: TProbeCache;
-  Info, Retrieved: TVideoInfo;
-  TmpFile: string;
-  ProbeFiles: TArray<string>;
-begin
-  {A .probe file lacking the format marker (a foreign file, or one from
-   before format versioning) must be treated as a miss, not deserialised
-   into a fabricated TVideoInfo.}
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_foreign.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
-  try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 120.5;
-      Info.Width := 1920;
-      Info.Height := 1080;
-      Cache.Put(TmpFile, Info);
-
-      {Overwrite the just-written .probe with marker-less foreign text
-       that still carries a positive Duration line.}
-      ProbeFiles := TDirectory.GetFiles(FCacheDir, '*.probe', TSearchOption.soAllDirectories);
-      Assert.AreEqual<Integer>(1, Length(ProbeFiles), 'Put must have written one .probe file');
-      TFile.WriteAllText(ProbeFiles[0], 'Duration=999'#13#10'Width=640'#13#10, TEncoding.UTF8);
-
-      Assert.IsFalse(Cache.TryGet(TmpFile, Retrieved),
-        'A .probe file without the format marker must be rejected');
-    finally
-      Cache.Free;
-    end;
-  finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
   end;
 end;
 
@@ -189,54 +216,46 @@ procedure TTestProbeCache.TestAllFieldsRoundTrip;
 var
   Cache: TProbeCache;
   Info, Retrieved: TVideoInfo;
-  TmpFile: string;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_fields.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 3661.123;
-      Info.Width := 720;
-      Info.Height := 576;
-      Info.SampleAspectN := 64;
-      Info.SampleAspectD := 45;
-      Info.DisplayWidth := 1024;
-      Info.DisplayHeight := 576;
-      Info.VideoCodec := 'h264';
-      Info.VideoBitrateKbps := 5000;
-      Info.Fps := 23.976;
-      Info.Bitrate := 5500;
-      Info.AudioCodec := 'aac';
-      Info.AudioSampleRate := 48000;
-      Info.AudioChannels := '5.1';
-      Info.AudioBitrateKbps := 192;
+    Info := Default(TVideoInfo);
+    Info.Duration := 3661.123;
+    Info.Width := 720;
+    Info.Height := 576;
+    Info.SampleAspectN := 64;
+    Info.SampleAspectD := 45;
+    Info.DisplayWidth := 1024;
+    Info.DisplayHeight := 576;
+    Info.VideoCodec := 'h264';
+    Info.VideoBitrateKbps := 5000;
+    Info.Fps := 23.976;
+    Info.Bitrate := 5500;
+    Info.AudioCodec := 'aac';
+    Info.AudioSampleRate := 48000;
+    Info.AudioChannels := '5.1';
+    Info.AudioBitrateKbps := 192;
 
-      Cache.Put(TmpFile, Info);
-      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
+    Cache.Put('movie.mkv', Info);
+    Assert.IsTrue(Cache.TryGet('movie.mkv', Retrieved));
 
-      Assert.AreEqual(Double(3661.123), Retrieved.Duration, 0.001);
-      Assert.AreEqual(720, Retrieved.Width);
-      Assert.AreEqual(576, Retrieved.Height);
-      Assert.AreEqual(64, Retrieved.SampleAspectN, 'SAR numerator must round-trip');
-      Assert.AreEqual(45, Retrieved.SampleAspectD, 'SAR denominator must round-trip');
-      Assert.AreEqual(1024, Retrieved.DisplayWidth, 'Display width must round-trip');
-      Assert.AreEqual(576, Retrieved.DisplayHeight, 'Display height must round-trip');
-      Assert.AreEqual('h264', Retrieved.VideoCodec);
-      Assert.AreEqual(5000, Retrieved.VideoBitrateKbps);
-      Assert.AreEqual(Double(23.976), Retrieved.Fps, 0.001);
-      Assert.AreEqual(5500, Retrieved.Bitrate);
-      Assert.AreEqual('aac', Retrieved.AudioCodec);
-      Assert.AreEqual(48000, Retrieved.AudioSampleRate);
-      Assert.AreEqual('5.1', Retrieved.AudioChannels);
-      Assert.AreEqual(192, Retrieved.AudioBitrateKbps);
-      Assert.IsTrue(Retrieved.IsValid);
-    finally
-      Cache.Free;
-    end;
+    Assert.AreEqual(Double(3661.123), Retrieved.Duration, 0.001);
+    Assert.AreEqual(720, Retrieved.Width);
+    Assert.AreEqual(576, Retrieved.Height);
+    Assert.AreEqual(64, Retrieved.SampleAspectN, 'SAR numerator must round-trip');
+    Assert.AreEqual(45, Retrieved.SampleAspectD, 'SAR denominator must round-trip');
+    Assert.AreEqual(1024, Retrieved.DisplayWidth, 'Display width must round-trip');
+    Assert.AreEqual(576, Retrieved.DisplayHeight, 'Display height must round-trip');
+    Assert.AreEqual('h264', Retrieved.VideoCodec);
+    Assert.AreEqual(5000, Retrieved.VideoBitrateKbps);
+    Assert.AreEqual(Double(23.976), Retrieved.Fps, 0.001);
+    Assert.AreEqual(5500, Retrieved.Bitrate);
+    Assert.AreEqual('aac', Retrieved.AudioCodec);
+    Assert.AreEqual(48000, Retrieved.AudioSampleRate);
+    Assert.AreEqual('5.1', Retrieved.AudioChannels);
+    Assert.AreEqual(192, Retrieved.AudioBitrateKbps);
   finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
   end;
 end;
 
@@ -244,183 +263,81 @@ procedure TTestProbeCache.TestInvalidResultNotCached;
 var
   Cache: TProbeCache;
   Info, Retrieved: TVideoInfo;
-  TmpFile: string;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_invalid.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := -1;
-      Info.ErrorMessage := 'Could not parse';
-
-      Cache.Put(TmpFile, Info);
-      Assert.IsFalse(Cache.TryGet(TmpFile, Retrieved));
-    finally
-      Cache.Free;
-    end;
-  finally
-    TFile.Delete(TmpFile);
-  end;
-end;
-
-procedure TTestProbeCache.TestMissOnNonexistentFile;
-var
-  Cache: TProbeCache;
-  Info: TVideoInfo;
-begin
-  Cache := TProbeCache.Create(FCacheDir);
-  try
-    Assert.IsFalse(Cache.TryGet('Z:\nonexistent\video.mp4', Info));
+    Info := Default(TVideoInfo);
+    Info.Duration := -1;
+    Info.ErrorMessage := 'Could not parse';
+    Cache.Put('movie.mp4', Info);
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Retrieved),
+      'Put must refuse to persist an invalid result');
   finally
     Cache.Free;
   end;
 end;
 
-procedure TTestProbeCache.TestStaleAfterFileChange;
+procedure TTestProbeCache.TestForeignContentRejected;
 var
+  Storage: ICacheStorage;
   Cache: TProbeCache;
-  Info, Retrieved: TVideoInfo;
-  TmpFile: string;
+  Retrieved: TVideoInfo;
+  StoredKey: string;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_stale.tmp');
-  TFile.WriteAllText(TmpFile, 'original');
+  {An entry lacking the GlimpseProbe format marker (a foreign blob, or one
+   from before format versioning) must be treated as a miss, never
+   deserialised into a fabricated TVideoInfo.}
+  Storage := TFakeProbeStorage.Create;
+  Cache := TProbeCache.Create(Storage, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 60.0;
-      Info.Width := 1280;
-      Info.Height := 720;
+    Cache.Put('movie.mp4', MakeInfo(120.5));
+    Assert.AreEqual<Integer>(1, Length(Storage.List), 'Put must have stored one entry');
 
-      Cache.Put(TmpFile, Info);
-      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
+    StoredKey := Storage.List[0].Key;
+    Storage.Write(StoredKey,
+      TEncoding.UTF8.GetBytes('Duration=999'#13#10'Width=640'#13#10));
 
-      { Modify the file so its timestamp changes }
-      Sleep(50);
-      TFile.WriteAllText(TmpFile, 'modified content');
-
-      { Cache should miss because file metadata changed }
-      Assert.IsFalse(Cache.TryGet(TmpFile, Retrieved));
-    finally
-      Cache.Free;
-    end;
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Retrieved),
+      'An entry without the format marker must be rejected');
   finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
   end;
 end;
 
-procedure TTestProbeCache.TestShardedDirectory;
+procedure TTestProbeCache.TestMissWhenFileCannotBeStatted;
 var
   Cache: TProbeCache;
   Info: TVideoInfo;
-  TmpFile: string;
-  Dirs: TArray<string>;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_shard.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  {A source file that cannot be stat'd yields an empty key; TryGet must
+   miss rather than trap.}
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create(False));
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 10.0;
-
-      Cache.Put(TmpFile, Info);
-
-      { Verify a 2-char shard subdirectory was created }
-      Dirs := TDirectory.GetDirectories(FCacheDir);
-      Assert.AreEqual(1, Integer(Length(Dirs)));
-      Assert.AreEqual(2, Integer(Length(ExtractFileName(Dirs[0]))));
-    finally
-      Cache.Free;
-    end;
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Info));
   finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
   end;
 end;
 
-procedure TTestProbeCache.TestDefaultProbeCacheDir;
+procedure TTestProbeCache.TestStaleAfterFileIdentityChanges;
 var
-  Dir: string;
-begin
-  Dir := DefaultProbeCacheDir;
-  Assert.IsTrue(Dir.Contains('Glimpse'));
-  Assert.IsTrue(Dir.Contains('probes'));
-end;
-
-procedure TTestProbeCache.TestTryGetOrProbeHitsCache;
-var
+  Stat: TStubFileStat;
   Cache: TProbeCache;
-  Info, Retrieved: TVideoInfo;
-  Stub: TStubProber;
-  Prober: IVideoProber;
-  TmpFile: string;
+  Retrieved: TVideoInfo;
 begin
-  { Pre-populate the cache so TryGetOrProbe returns without invoking the prober. }
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_hit.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  {The cache key folds in the source file's size; a stat reporting a
+   different size produces a different key and so a miss.}
+  Stat := TStubFileStat.Create;
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, Stat);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 42.5;
-      Info.Width := 1280;
-      Info.Height := 720;
-      Cache.Put(TmpFile, Info);
+    Cache.Put('movie.mp4', MakeInfo(60.0));
+    Assert.IsTrue(Cache.TryGet('movie.mp4', Retrieved), 'Pre-condition: cached');
 
-      Stub := TStubProber.Create(Default(TVideoInfo));
-      Prober := Stub;
-      Retrieved := Cache.TryGetOrProbe(TmpFile, Prober);
-
-      Assert.IsTrue(Retrieved.IsValid, 'Cached entry must be returned');
-      Assert.AreEqual(Double(42.5), Retrieved.Duration, 0.001);
-      Assert.AreEqual(1280, Retrieved.Width);
-      Assert.AreEqual(720, Retrieved.Height);
-      Assert.AreEqual<Integer>(0, Stub.CallCount,
-        'Prober must not be invoked when the entry is already cached');
-    finally
-      Cache.Free;
-      Prober := nil;
-    end;
+    Stat.Size := 999999;
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Retrieved),
+      'A changed source-file identity must invalidate the cached entry');
   finally
-    TFile.Delete(TmpFile);
-  end;
-end;
-
-procedure TTestProbeCache.TestTryGetOrProbeMissReturnsInvalidAndSkipsCache;
-var
-  Cache: TProbeCache;
-  Retrieved, Check, Invalid: TVideoInfo;
-  Stub: TStubProber;
-  Prober: IVideoProber;
-  TmpFile: string;
-begin
-  { Cache miss + a prober that reports failure: TryGetOrProbe must return the
-    invalid result, and Put() must refuse to persist it (Put is a no-op for
-    invalid entries). The next TryGet must still miss. }
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_miss_probe.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
-  try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Invalid := Default(TVideoInfo);
-      Invalid.Duration := -1;
-      Stub := TStubProber.Create(Invalid);
-      Prober := Stub;
-
-      Retrieved := Cache.TryGetOrProbe(TmpFile, Prober);
-      Assert.IsFalse(Retrieved.IsValid, 'Invalid probe result expected');
-      Assert.AreEqual<Integer>(1, Stub.CallCount, 'Prober invoked once on cache miss');
-
-      Assert.IsFalse(Cache.TryGet(TmpFile, Check),
-        'Invalid result must not have been cached');
-    finally
-      Cache.Free;
-      Prober := nil;
-    end;
-  finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
   end;
 end;
 
@@ -428,41 +345,124 @@ procedure TTestProbeCache.TestFloatLocaleIndependence;
 var
   Cache: TProbeCache;
   Info, Retrieved: TVideoInfo;
-  TmpFile: string;
   SavedSep: Char;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_locale.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  {Floats are serialised with the invariant format; writing under a comma
+   decimal separator must still be readable under a period.}
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    { Write with comma decimal separator }
     SavedSep := FormatSettings.DecimalSeparator;
     try
       FormatSettings.DecimalSeparator := ',';
-      Cache := TProbeCache.Create(FCacheDir);
-      try
-        Info := Default(TVideoInfo);
-        Info.Duration := 123.456;
-        Info.Fps := 29.97;
-          Cache.Put(TmpFile, Info);
-      finally
-        Cache.Free;
-      end;
+      Info := Default(TVideoInfo);
+      Info.Duration := 123.456;
+      Info.Width := 640;
+      Info.Height := 360;
+      Info.Fps := 29.97;
+      Cache.Put('movie.mp4', Info);
 
-      { Read with period decimal separator }
       FormatSettings.DecimalSeparator := '.';
-      Cache := TProbeCache.Create(FCacheDir);
-      try
-        Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
-        Assert.AreEqual(Double(123.456), Retrieved.Duration, 0.001);
-        Assert.AreEqual(Double(29.97), Retrieved.Fps, 0.001);
-      finally
-        Cache.Free;
-      end;
+      Assert.IsTrue(Cache.TryGet('movie.mp4', Retrieved));
+      Assert.AreEqual(Double(123.456), Retrieved.Duration, 0.001);
+      Assert.AreEqual(Double(29.97), Retrieved.Fps, 0.001);
     finally
       FormatSettings.DecimalSeparator := SavedSep;
     end;
   finally
-    TFile.Delete(TmpFile);
+    Cache.Free;
+  end;
+end;
+
+procedure TTestProbeCache.TestPutOverwritesPreviousEntry;
+var
+  Cache: TProbeCache;
+  Retrieved: TVideoInfo;
+begin
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
+  try
+    Cache.Put('movie.mp4', MakeInfo(30.0));
+    Cache.Put('movie.mp4', MakeInfo(90.0));
+    Assert.IsTrue(Cache.TryGet('movie.mp4', Retrieved));
+    Assert.AreEqual(Double(90.0), Retrieved.Duration, 0.001,
+      'A second Put must overwrite the first entry');
+  finally
+    Cache.Free;
+  end;
+end;
+
+procedure TTestProbeCache.TestTryGetOrProbeHitsCache;
+var
+  Cache: TProbeCache;
+  Stub: TStubProber;
+  Prober: IVideoProber;
+  Retrieved: TVideoInfo;
+begin
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
+  try
+    Cache.Put('movie.mp4', MakeInfo(42.5));
+    Stub := TStubProber.Create(Default(TVideoInfo));
+    Prober := Stub;
+
+    Retrieved := Cache.TryGetOrProbe('movie.mp4', Prober);
+    Assert.IsTrue(Retrieved.IsValid, 'Cached entry must be returned');
+    Assert.AreEqual(Double(42.5), Retrieved.Duration, 0.001);
+    Assert.AreEqual(0, Stub.CallCount,
+      'Prober must not be invoked when the entry is already cached');
+  finally
+    Cache.Free;
+    Prober := nil;
+  end;
+end;
+
+procedure TTestProbeCache.TestTryGetOrProbeMissInvalidNotCached;
+var
+  Cache: TProbeCache;
+  Stub: TStubProber;
+  Prober: IVideoProber;
+  Invalid, Retrieved, Check: TVideoInfo;
+begin
+  {On a miss with a prober that reports failure, the invalid result is
+   returned but not persisted; the next TryGet must still miss.}
+  Invalid := Default(TVideoInfo);
+  Invalid.Duration := -1;
+  Stub := TStubProber.Create(Invalid);
+  Prober := Stub;
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
+  try
+    Retrieved := Cache.TryGetOrProbe('movie.mp4', Prober);
+    Assert.IsFalse(Retrieved.IsValid, 'Invalid probe result expected');
+    Assert.AreEqual(1, Stub.CallCount, 'Prober invoked once on the cache miss');
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Check),
+      'An invalid result must not have been cached');
+  finally
+    Cache.Free;
+    Prober := nil;
+  end;
+end;
+
+procedure TTestProbeCache.TestTryGetOrProbeMissProbesAndCaches;
+var
+  Cache: TProbeCache;
+  Stub: TStubProber;
+  Prober: IVideoProber;
+  First, Second: TVideoInfo;
+begin
+  {First call misses, delegates to the prober and persists the valid
+   result; the second call is served from cache without re-probing.}
+  Stub := TStubProber.Create(MakeInfo(12.5));
+  Prober := Stub;
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
+  try
+    First := Cache.TryGetOrProbe('movie.mp4', Prober);
+    Assert.IsTrue(First.IsValid, 'First call must return the probed info');
+    Assert.AreEqual(1, Stub.CallCount, 'Prober invoked once on the first miss');
+
+    Second := Cache.TryGetOrProbe('movie.mp4', Prober);
+    Assert.IsTrue(Second.IsValid, 'Second call must hit the cache');
+    Assert.AreEqual(1, Stub.CallCount, 'Prober must not be re-invoked on a cache hit');
+  finally
+    Cache.Free;
+    Prober := nil;
   end;
 end;
 
@@ -470,10 +470,9 @@ procedure TTestProbeCache.TestGetTotalSizeEmpty;
 var
   Cache: TProbeCache;
 begin
-  {Fresh cache dir, nothing put. Total must be zero.}
-  Cache := TProbeCache.Create(FCacheDir);
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Assert.AreEqual<Int64>(0, Cache.GetTotalSize);
+    Assert.AreEqual<Int64>(0, Cache.GetTotalSize, 'Empty cache totals to zero');
   finally
     Cache.Free;
   end;
@@ -482,37 +481,12 @@ end;
 procedure TTestProbeCache.TestGetTotalSizeAfterPut;
 var
   Cache: TProbeCache;
-  Info: TVideoInfo;
-  TmpFile: string;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_size_test.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 60;
-      Info.Width := 1920;
-      Info.Height := 1080;
-      Cache.Put(TmpFile, Info);
-      Assert.IsTrue(Cache.GetTotalSize > 0,
-        'After Put the total size must be non-zero');
-    finally
-      Cache.Free;
-    end;
-  finally
-    TFile.Delete(TmpFile);
-  end;
-end;
-
-procedure TTestProbeCache.TestGetTotalSizeOnMissingDir;
-var
-  Cache: TProbeCache;
-begin
-  {Missing dir is the normal "first run" state; must return 0 not raise.}
-  Cache := TProbeCache.Create(TPath.Combine(FCacheDir, 'never_created'));
-  try
-    Assert.AreEqual<Int64>(0, Cache.GetTotalSize);
+    Cache.Put('movie.mp4', MakeInfo(60.0));
+    Assert.IsTrue(Cache.GetTotalSize > 0,
+      'After a Put the total size must be non-zero');
   finally
     Cache.Free;
   end;
@@ -521,200 +495,31 @@ end;
 procedure TTestProbeCache.TestClearWipesEntries;
 var
   Cache: TProbeCache;
-  Info, Retrieved: TVideoInfo;
-  TmpFile: string;
+  Retrieved: TVideoInfo;
 begin
-  {Clear must drop every cached probe and leave subsequent TryGet missing.}
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_clear_test.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
+  Cache := TProbeCache.Create(TFakeProbeStorage.Create, TStubFileStat.Create);
   try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 60;
-      Info.Width := 1920;
-      Info.Height := 1080;
-      Cache.Put(TmpFile, Info);
-      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved), 'Pre-condition: cache hit');
+    Cache.Put('movie.mp4', MakeInfo(60.0));
+    Assert.IsTrue(Cache.TryGet('movie.mp4', Retrieved), 'Pre-condition: cache hit');
 
-      Cache.Clear;
-      Assert.AreEqual<Int64>(0, Cache.GetTotalSize, 'Total size zero after Clear');
-      Assert.IsFalse(Cache.TryGet(TmpFile, Retrieved), 'Cache must miss after Clear');
-    finally
-      Cache.Free;
-    end;
-  finally
-    TFile.Delete(TmpFile);
-  end;
-end;
-
-procedure TTestProbeCache.TestClearOnMissingDirNoException;
-var
-  Cache: TProbeCache;
-begin
-  {Clear on a never-created dir must be a no-op, not a crash.}
-  Cache := TProbeCache.Create(TPath.Combine(FCacheDir, 'never_created'));
-  try
     Cache.Clear;
-    Assert.Pass('Clear on missing dir did not raise');
+    Assert.AreEqual<Int64>(0, Cache.GetTotalSize, 'Total size zero after Clear');
+    Assert.IsFalse(Cache.TryGet('movie.mp4', Retrieved), 'Cache must miss after Clear');
   finally
     Cache.Free;
   end;
 end;
 
-procedure TTestProbeCache.TestPutLeavesNoTempFiles;
+procedure TTestProbeCache.TestDefaultProbeCacheDir;
 var
-  Cache: TProbeCache;
-  Info: TVideoInfo;
-  TmpFile: string;
-  TempLeftovers: TArray<string>;
+  Dir: string;
 begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_atomic_' +
-    TGuid.NewGuid.ToString + '.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
-  try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      Info := Default(TVideoInfo);
-      Info.Duration := 60.0;
-      Info.Width := 640;
-      Info.Height := 360;
-
-      Cache.Put(TmpFile, Info);
-
-      {Recursive scan; the temp file lives next to the .probe inside the
-       sharded subdirectory.}
-      TempLeftovers := TDirectory.GetFiles(FCacheDir, '*.tmp',
-        TSearchOption.soAllDirectories);
-      Assert.AreEqual<Integer>(0, Length(TempLeftovers),
-        'Atomic Put must rename the temp into place; no .tmp may remain');
-    finally
-      Cache.Free;
-    end;
-  finally
-    TFile.Delete(TmpFile);
-  end;
+  Dir := DefaultProbeCacheDir;
+  Assert.IsTrue(Dir.Contains('Glimpse'), 'Default dir must be under Glimpse');
+  Assert.IsTrue(Dir.Contains('probes'), 'Default dir must be the probes folder');
 end;
 
-procedure TTestProbeCache.TestPutOverwritesPreviousEntryAtomically;
-var
-  Cache: TProbeCache;
-  Info, Retrieved: TVideoInfo;
-  TmpFile: string;
-  TempLeftovers: TArray<string>;
-begin
-  TmpFile := TPath.Combine(TPath.GetTempPath, 'probe_test_overwrite_' +
-    TGuid.NewGuid.ToString + '.tmp');
-  TFile.WriteAllText(TmpFile, 'dummy');
-  try
-    Cache := TProbeCache.Create(FCacheDir);
-    try
-      {First put.}
-      Info := Default(TVideoInfo);
-      Info.Duration := 30.0;
-      Info.Width := 320;
-      Info.Height := 240;
-      Cache.Put(TmpFile, Info);
-
-      {Re-put with different values; MoveFileEx + MOVEFILE_REPLACE_EXISTING
-       must overwrite cleanly without orphan .tmp files.}
-      Info.Duration := 90.0;
-      Info.Width := 1280;
-      Info.Height := 720;
-      Cache.Put(TmpFile, Info);
-
-      Assert.IsTrue(Cache.TryGet(TmpFile, Retrieved));
-      Assert.AreEqual(Double(90.0), Retrieved.Duration, 0.001,
-        'Overwrite must take effect');
-      Assert.AreEqual(1280, Retrieved.Width);
-
-      TempLeftovers := TDirectory.GetFiles(FCacheDir, '*.tmp',
-        TSearchOption.soAllDirectories);
-      Assert.AreEqual<Integer>(0, Length(TempLeftovers),
-        'No .tmp may remain after a successful overwrite');
-    finally
-      Cache.Free;
-    end;
-  finally
-    TFile.Delete(TmpFile);
-  end;
-end;
-
-procedure TTestProbeCache.TestInjectedProberFiresOnMissAndCachesResult;
-{On a cache miss, TryGetOrProbe must delegate to the injected prober
- and persist the returned TVideoInfo so a follow-up call is a hit
- served without invoking the prober again.}
-var
-  Stub: TStubProber;
-  ProberRef: IVideoProber;
-  Cache: TProbeCache;
-  Canned, First, Second: TVideoInfo;
-  Probe: string;
-begin
-  Canned := Default(TVideoInfo);
-  Canned.Width := 1920;
-  Canned.Height := 1080;
-  Canned.Duration := 12.5;
-  Canned.Fps := 30.0;
-
-  Stub := TStubProber.Create(Canned);
-  ProberRef := Stub;
-  Cache := TProbeCache.Create(FCacheDir);
-  try
-    Probe := TPath.Combine(FCacheDir, 'fixture.mp4');
-    ForceDirectories(FCacheDir);
-    TFile.WriteAllText(Probe, 'placeholder');
-
-    First := Cache.TryGetOrProbe(Probe, ProberRef);
-    Assert.IsTrue(First.IsValid, 'First call must return the canned info');
-    Assert.AreEqual<Integer>(1920, First.Width, 'Canned width must round-trip');
-    Assert.AreEqual<Integer>(1, Stub.CallCount, 'Prober invoked exactly once on first miss');
-    Assert.AreEqual(Probe, Stub.LastPath, 'Prober receives the requested file path');
-
-    Second := Cache.TryGetOrProbe(Probe, ProberRef);
-    Assert.IsTrue(Second.IsValid, 'Second call must hit the cache');
-    Assert.AreEqual<Integer>(1, Stub.CallCount, 'Prober must not be invoked on cache hit');
-  finally
-    Cache.Free;
-    ProberRef := nil;
-  end;
-end;
-
-procedure TTestProbeCache.TestInjectedProberNotCalledOnCacheHit;
-{Even when an injected prober is present, a pre-populated cache entry
- must be returned without touching the prober. Guards against
- accidentally calling the (potentially slow / ffmpeg-spawning) prober
- on a warm cache.}
-var
-  Stub: TStubProber;
-  ProberRef: IVideoProber;
-  Cache: TProbeCache;
-  Pre, Got: TVideoInfo;
-  Probe: string;
-begin
-  ForceDirectories(FCacheDir);
-  Probe := TPath.Combine(FCacheDir, 'warm.mp4');
-  TFile.WriteAllText(Probe, 'placeholder');
-
-  Pre := Default(TVideoInfo);
-  Pre.Width := 640;
-  Pre.Height := 360;
-  Pre.Duration := 1.0;
-  Pre.Fps := 24.0;
-
-  Stub := TStubProber.Create(Default(TVideoInfo));
-  ProberRef := Stub;
-  Cache := TProbeCache.Create(FCacheDir);
-  try
-    Cache.Put(Probe, Pre);
-    Got := Cache.TryGetOrProbe(Probe, ProberRef);
-    Assert.IsTrue(Got.IsValid, 'Cache entry must round-trip');
-    Assert.AreEqual<Integer>(640, Got.Width);
-    Assert.AreEqual<Integer>(0, Stub.CallCount, 'Prober must not fire when entry is already cached');
-  finally
-    Cache.Free;
-    ProberRef := nil;
-  end;
-end;
+initialization
+  TDUnitX.RegisterTestFixture(TTestProbeCache);
 
 end.

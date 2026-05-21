@@ -26,7 +26,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  FrameCacheFactory;
+  FrameCacheFactory, ProbeCacheFactory;
 
 {Resolves a frame-cache directory to a manager: the real disk cache when
  the directory exists, otherwise a null manager that totals and clears

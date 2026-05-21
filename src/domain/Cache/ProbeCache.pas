@@ -1,11 +1,15 @@
-{Persistent disk cache for TVideoInfo. Always enabled; stored separately
- from the frame cache so clearing frames does not invalidate probes.}
+{Persistent cache for TVideoInfo probe results, kept separate from the
+ frame cache so clearing frames does not invalidate probes. Holds only
+ cache policy: key derivation, the versioned name=value format,
+ negative-result handling and the cache-then-probe convenience. Byte
+ storage and source-file stat are injected, so the policy is testable
+ without a real disk; ProbeCacheFactory composes the production storage.}
 unit ProbeCache;
 
 interface
 
 uses
-  VideoProbing, VideoInfo;
+  VideoProbing, VideoInfo, CacheContracts;
 
 type
   {Probe-result cache surface used by the WLX/WCX/thumbnail render paths.}
@@ -23,17 +27,21 @@ type
   IProbeCacheManager = interface
     ['{7D2E4B81-5C39-4A6F-B0D1-6E3A8F92C415}']
     function GetTotalSize: Int64;
-    {Best-effort: directory locks are swallowed.}
+    {Best-effort: storage-level failures are swallowed.}
     procedure Clear;
   end;
 
+  {Storage and source-file stat are injected; ProbeCacheFactory composes
+   the production TDiskCacheStorage + TFileSystemStat, tests pass fakes.}
   TProbeCache = class(TInterfacedObject, IProbeCache, IProbeCacheManager)
   strict private
-    FCacheDir: string;
-    class function BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string; static;
+    FStorage: ICacheStorage;
+    FFileStat: IFileStat;
+    {Returns '' when the source file cannot be stat'd. Its size and mtime
+     are folded into the key so a changed source invalidates the entry.}
     function ProbeKey(const AFilePath: string): string;
   public
-    constructor Create(const ACacheDir: string);
+    constructor Create(const AStorage: ICacheStorage; const AFileStat: IFileStat);
     function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
     procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
     function TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
@@ -41,33 +49,18 @@ type
     procedure Clear;
   end;
 
-{Fixed %TEMP%\Glimpse\probes directory backing the production probe cache.}
-function DefaultProbeCacheDir: string;
-{Production probe cache, rooted at DefaultProbeCacheDir.}
-function CreateProbeCache: IProbeCache;
-{Same cache through its admin facet, for size/clear callers.}
-function CreateProbeCacheManager: IProbeCacheManager;
-
 implementation
 
 uses
-  Winapi.Windows, System.SysUtils, System.Classes, System.IOUtils, CacheKey;
+  System.SysUtils, System.Classes, CacheKey;
 
 const
-  MOVEFILE_REPLACE_EXISTING = 1;
-  {Identifies a Glimpse-written probe file and its format revision; a
-   file lacking this marker is foreign or pre-versioning and rejected.}
+  {Identifies a Glimpse-written probe entry and its format revision; an
+   entry lacking this marker is foreign or pre-versioning and rejected.}
   PROBE_FORMAT_KEY = 'GlimpseProbe';
   PROBE_FORMAT_VERSION = '1';
 
-function MoveFileEx(lpExistingFileName, lpNewFileName: PChar; dwFlags: Cardinal): LongBool; stdcall; external 'kernel32.dll' name 'MoveFileExW';
-
-function DefaultProbeCacheDir: string;
-begin
-  Result := TPath.Combine(TPath.GetTempPath, 'Glimpse' + PathDelim + 'probes');
-end;
-
-{TVideoInfo persistence: conversion to and from the probe file's
+{TVideoInfo persistence: conversion to and from the probe entry's
  name=value lines.}
 
 procedure SerializeVideoInfo(ADest: TStrings; const AInfo: TVideoInfo);
@@ -113,46 +106,13 @@ begin
   Result.AudioBitrateKbps := StrToIntDef(ASource.Values['AudioBitrateKbps'], 0);
 end;
 
-{Atomic write via a sibling .tmp + MoveFileEx so a crash mid-write
- cannot leave a partial file that poisons future reads.}
-procedure AtomicWriteTextFile(const APath: string; ALines: TStrings);
-var
-  TempPath: string;
-begin
-  TempPath := APath + '.' + TGUID.NewGuid.ToString + '.tmp';
-  try
-    TDirectory.CreateDirectory(ExtractFilePath(APath));
-    ALines.SaveToFile(TempPath, TEncoding.UTF8);
-    if not MoveFileEx(PChar(TempPath), PChar(APath), MOVEFILE_REPLACE_EXISTING) then
-    begin
-      try
-        if TFile.Exists(TempPath) then
-          TFile.Delete(TempPath);
-      except
-        {Best-effort temp cleanup}
-      end;
-    end;
-  except
-    try
-      if TFile.Exists(TempPath) then
-        TFile.Delete(TempPath);
-    except
-      {Best-effort temp cleanup}
-    end;
-  end;
-end;
-
 {TProbeCache}
 
-constructor TProbeCache.Create(const ACacheDir: string);
+constructor TProbeCache.Create(const AStorage: ICacheStorage; const AFileStat: IFileStat);
 begin
   inherited Create;
-  FCacheDir := ACacheDir;
-end;
-
-class function TProbeCache.BuildKeyString(const AFilePath: string; AFileSize: Int64; AFileTime: TDateTime): string;
-begin
-  Result := BuildFileIdentityKey(AFilePath, AFileSize, AFileTime);
+  FStorage := AStorage;
+  FFileStat := AFileStat;
 end;
 
 function TProbeCache.ProbeKey(const AFilePath: string): string;
@@ -161,42 +121,33 @@ var
   FileTime: TDateTime;
 begin
   Result := '';
-  try
-    if not TFile.Exists(AFilePath) then
-      Exit;
-    FileSize := TFile.GetSize(AFilePath);
-    FileTime := TFile.GetLastWriteTime(AFilePath);
-    Result := CacheHashKey(BuildKeyString(AFilePath, FileSize, FileTime));
-  except
-    {File inaccessible}
-  end;
+  if not FFileStat.TryStat(AFilePath, FileSize, FileTime) then
+    Exit;
+  Result := CacheHashKey(BuildFileIdentityKey(AFilePath, FileSize, FileTime));
 end;
 
 function TProbeCache.TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
 var
-  Key, Path: string;
+  Key: string;
+  Data: TBytes;
   Lines: TStringList;
 begin
   Result := False;
-  AInfo := Default (TVideoInfo);
+  AInfo := Default(TVideoInfo);
   AInfo.Duration := -1;
 
   Key := ProbeKey(AFilePath);
   if Key = '' then
     Exit;
 
-  Path := ShardedKeyPath(FCacheDir, Key, '.probe');
-  if not TFile.Exists(Path) then
+  Data := FStorage.Read(Key);
+  if Length(Data) = 0 then
     Exit;
 
   Lines := TStringList.Create;
   try
-    try
-      Lines.LoadFromFile(Path, TEncoding.UTF8);
-    except
-      Exit;
-    end;
-    {Reject a foreign or pre-versioning file: without the marker its
+    Lines.Text := TEncoding.UTF8.GetString(Data);
+    {Reject a foreign or pre-versioning entry: without the marker its
      name=value lines cannot be trusted as a real probe result.}
     if Lines.Values[PROBE_FORMAT_KEY] <> PROBE_FORMAT_VERSION then
       Exit;
@@ -217,39 +168,23 @@ end;
 
 function TProbeCache.GetTotalSize: Int64;
 var
-  Files: TArray<string>;
-  F: string;
+  Entries: TArray<TCacheEntryInfo>;
+  I: Integer;
 begin
   Result := 0;
-  if not TDirectory.Exists(FCacheDir) then
-    Exit;
-  try
-    Files := TDirectory.GetFiles(FCacheDir, '*.probe', TSearchOption.soAllDirectories);
-  except
-    Exit;
-  end;
-  for F in Files do
-    try
-      Result := Result + TFile.GetSize(F);
-    except
-      {File vanished mid-walk; skip}
-    end;
+  Entries := FStorage.List;
+  for I := 0 to High(Entries) do
+    Result := Result + Entries[I].Size;
 end;
 
 procedure TProbeCache.Clear;
 begin
-  try
-    if TDirectory.Exists(FCacheDir) then
-      TDirectory.Delete(FCacheDir, True);
-    TDirectory.CreateDirectory(FCacheDir);
-  except
-    {Best-effort: directory may be locked}
-  end;
+  FStorage.Clear;
 end;
 
 procedure TProbeCache.Put(const AFilePath: string; const AInfo: TVideoInfo);
 var
-  Key, Path: string;
+  Key: string;
   Lines: TStringList;
 begin
   if not AInfo.IsValid then
@@ -259,25 +194,13 @@ begin
   if Key = '' then
     Exit;
 
-  Path := ShardedKeyPath(FCacheDir, Key, '.probe');
-
   Lines := TStringList.Create;
   try
     SerializeVideoInfo(Lines, AInfo);
-    AtomicWriteTextFile(Path, Lines);
+    FStorage.Write(Key, TEncoding.UTF8.GetBytes(Lines.Text));
   finally
     Lines.Free;
   end;
-end;
-
-function CreateProbeCache: IProbeCache;
-begin
-  Result := TProbeCache.Create(DefaultProbeCacheDir);
-end;
-
-function CreateProbeCacheManager: IProbeCacheManager;
-begin
-  Result := TProbeCache.Create(DefaultProbeCacheDir);
 end;
 
 end.

@@ -26,7 +26,7 @@ uses
   Vcl.Graphics,
   Settings, FFmpegLocator, FFmpegExe, PluginForm, PluginServices, Cache, ProbeCache,
   Logging, ThumbnailRender, ToolbarLayout, PluginContext, Defaults,
-  VideoProbing, FrameExtractor, FrameCacheFactory;
+  VideoProbing, FrameExtractor, FrameCacheFactory, ProbeCacheFactory;
 
 var
   Log: TProc<string>;

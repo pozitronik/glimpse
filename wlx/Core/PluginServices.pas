@@ -33,7 +33,7 @@ function CreateProductionServices: TPluginServices;
 implementation
 
 uses
-  FrameCacheFactory;
+  FrameCacheFactory, ProbeCacheFactory;
 
 {TProductionFrameCacheFactory}
 

@@ -66,7 +66,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils,
-  ProbeCache, FFmpegLocator, FFmpegExe, VideoProbing,
+  ProbeCache, ProbeCacheFactory, FFmpegLocator, FFmpegExe, VideoProbing,
   PathExpand,
   FrameOffsets,
   WcxListing,
