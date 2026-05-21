@@ -8,7 +8,7 @@ unit WcxFrameCache;
 interface
 
 uses
-  System.SysUtils, System.SyncObjs;
+  System.SysUtils, System.SyncObjs, System.Classes;
 
 type
   {Test seam for the recursive directory delete; tests swap in a thrower
@@ -41,7 +41,16 @@ type
     function CachedTempDir: string;
   end;
 
-  TWcxFrameCache = class
+  {The minimal frame-cache surface OpenArchive and PreExtractFrames need.
+   TWcxFrameCache stays a manually-managed singleton; TNoRefCountObject
+   lets it be passed as this interface without refcounting freeing it.}
+  IWcxFrameCache = interface
+    ['{9F3B7D24-6E18-4A05-B7C2-0D5E8A1F4936}']
+    procedure Invalidate;
+    function BeginExtractionSession: TWcxCacheExtractionSession;
+  end;
+
+  TWcxFrameCache = class(TNoRefCountObject, IWcxFrameCache)
   strict private
     class var FInstance: TWcxFrameCache;
   {Plain private (not strict) so TWcxCacheExtractionSession in the same

@@ -66,7 +66,7 @@ var
 begin
   {Thunk: only translates the ABI integer handle to a class pointer and
    wires the module-global factories into the per-call coordinator.}
-  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory, GBitmapSaver);
+  Coord := TWcxArchiveCoordinator.Create(GSettingsProvider, GProbeService, GFrameExtractorFactory, GBitmapSaver, TWcxFrameCache.Instance);
   try
     H := Coord.OpenArchive(AFileName, AOpenMode, GIniPath, AOpenResult);
     if H <> nil then

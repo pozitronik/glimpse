@@ -10,6 +10,7 @@ uses
   WcxSettings,
   WcxArchiveHandle,
   WcxEntryExtractors,
+  WcxFrameCache,
   FrameExtractor,
   VideoInfo;
 
@@ -35,11 +36,13 @@ type
     FProbeService: IProbeService;
     FFrameExtractorFactory: IFrameExtractorFactory;
     FBitmapSaver: IBitmapSaverRouter;
+    FFrameCache: IWcxFrameCache;
   public
     constructor Create(const ASettingsProvider: IWcxSettingsProvider;
       const AProbeService: IProbeService;
       const AFrameExtractorFactory: IFrameExtractorFactory;
-      const ABitmapSaver: IBitmapSaverRouter);
+      const ABitmapSaver: IBitmapSaverRouter;
+      const AFrameCache: IWcxFrameCache);
     function OpenArchive(const AFileName: string; AOpenMode: Integer;
       const AIniPath: string;
       out AOpenResult: Integer): TArchiveHandle;
@@ -63,7 +66,6 @@ uses
   ProbeCache, FFmpegLocator, FFmpegExe, VideoProbing,
   PathExpand,
   FrameOffsets,
-  WcxFrameCache,
   WcxListing,
   WcxPresets,
   WcxExtractionController,
@@ -142,13 +144,15 @@ end;
 constructor TWcxArchiveCoordinator.Create(const ASettingsProvider: IWcxSettingsProvider;
   const AProbeService: IProbeService;
   const AFrameExtractorFactory: IFrameExtractorFactory;
-  const ABitmapSaver: IBitmapSaverRouter);
+  const ABitmapSaver: IBitmapSaverRouter;
+  const AFrameCache: IWcxFrameCache);
 begin
   inherited Create;
   FSettingsProvider := ASettingsProvider;
   FProbeService := AProbeService;
   FFrameExtractorFactory := AFrameExtractorFactory;
   FBitmapSaver := ABitmapSaver;
+  FFrameCache := AFrameCache;
 end;
 
 function TWcxArchiveCoordinator.OpenArchive(const AFileName: string; AOpenMode: Integer;
@@ -200,7 +204,7 @@ begin
     H.Listing := BuildArchiveListing(H.FileName, H.Offsets, H.Settings.ShowFrames, H.Settings.ShowCombined, H.Settings.ShowPresets, H.Settings.SaveFormat, H.Presets);
 
     if H.Settings.ShowFileSizes then
-      PreExtractFrames(H);
+      PreExtractFrames(H, FFrameCache);
 
     CoordLog(Format('OpenArchive: %s mode=%d frames=%d presets=%d', [AFileName, H.Settings.Mode, Length(H.Offsets), Length(H.Presets)]));
     Result := H;
@@ -210,7 +214,7 @@ begin
     H.Free;
     {PreExtractFrames may have populated partial cache state; invalidate
      so the next OpenArchive does not treat it as a cache hit.}
-    TWcxFrameCache.Instance.Invalidate;
+    FFrameCache.Invalidate;
     AOpenResult := E_BAD_ARCHIVE;
   end;
 end;

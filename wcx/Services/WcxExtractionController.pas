@@ -23,7 +23,7 @@ procedure ExtractSeparateToCache(H: TArchiveHandle; const AExtractor: IFrameExtr
 
 {Holds the cache lock for the full extraction so two threads opening
  the same video cannot both proceed past the cache-hit check.}
-procedure PreExtractFrames(H: TArchiveHandle);
+procedure PreExtractFrames(H: TArchiveHandle; const AFrameCache: IWcxFrameCache);
 
 implementation
 
@@ -92,13 +92,13 @@ begin
   end;
 end;
 
-procedure PreExtractFrames(H: TArchiveHandle);
+procedure PreExtractFrames(H: TArchiveHandle; const AFrameCache: IWcxFrameCache);
 var
   Session: TWcxCacheExtractionSession;
   EntryCount: Integer;
   TempDir: string;
 begin
-  Session := TWcxFrameCache.Instance.BeginExtractionSession;
+  Session := AFrameCache.BeginExtractionSession;
   try
     if Session.TryHit(H.FileName, H.TempPaths, H.EntrySizes) then
     begin
