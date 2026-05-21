@@ -38,8 +38,6 @@ type
    dimension predictor, and selection policy.}
   TFrameExporter = class
   strict private
-    FFrameView: TFrameView;
-    FSettings: TPluginSettings;
     FResolver: TExportTargetResolver;
     FSaveDialog: TSaveDialogPresenter;
     FClipboardPublisher: TClipboardPublisher;
@@ -49,18 +47,11 @@ type
     FCopier: TFrameCopier;
     function GetOnAsyncTaskRun: TAsyncTaskRunner;
     procedure SetOnAsyncTaskRun(const AValue: TAsyncTaskRunner);
-  protected
-    {Protected to preserve the TTestableExporter access surface; production
-     code reaches these only via SaveFrame / SaveView / CopyFrame.}
-    function ScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
-    function ScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
-    function RenderCellAtLiveSize(AIndex: Integer): TBitmap;
-    function RenderGridCombinedAtLiveResolution: TBitmap;
-    function RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
-    function RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
-    function RenderWithBanner(ABmp: TBitmap): TBitmap;
   public
-    constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings);
+    {Collaborators are injected and owned; build one via CreateFrameExporter.}
+    constructor Create(AResolver: TExportTargetResolver; ASaveDialog: TSaveDialogPresenter;
+      AClipboardPublisher: TClipboardPublisher; ARenderPipeline: TFrameRenderPipeline;
+      ADimensionPredictor: TFrameDimensionPredictor; ASaver: TFrameSaver; ACopier: TFrameCopier);
     destructor Destroy; override;
     {Nil = synchronous no-UI execution (tests/standalone).}
     property OnAsyncTaskRun: TAsyncTaskRunner read GetOnAsyncTaskRun write SetOnAsyncTaskRun;
@@ -106,6 +97,10 @@ type
     procedure ClearOverrideFrames;
   end;
 
+{Composition root: builds TFrameExporter's sub-services from AFrameView and
+ ASettings, then injects them. The exporter owns and frees the sub-services.}
+function CreateFrameExporter(AFrameView: TFrameView; ASettings: TPluginSettings): TFrameExporter;
+
 implementation
 
 {Thin pass-throughs so existing call sites that resolved these via
@@ -130,25 +125,41 @@ end;
 
 {TFrameExporter}
 
-constructor TFrameExporter.Create(AFrameView: TFrameView; ASettings: TPluginSettings);
+constructor TFrameExporter.Create(AResolver: TExportTargetResolver; ASaveDialog: TSaveDialogPresenter;
+  AClipboardPublisher: TClipboardPublisher; ARenderPipeline: TFrameRenderPipeline;
+  ADimensionPredictor: TFrameDimensionPredictor; ASaver: TFrameSaver; ACopier: TFrameCopier);
 begin
   inherited Create;
-  FFrameView := AFrameView;
-  FSettings := ASettings;
-  FResolver := TExportTargetResolver.Create(AFrameView);
-  {Step 109 (N3, ISP): the facade still takes TPluginSettings (so the
-   form's existing call site doesn't change), but each sub-presenter
-   constructor now takes the narrow interface slice it actually needs.
-   Delphi auto-coerces ASettings to each interface via the implements
-   clause on TPluginSettings.}
-  FSaveDialog := TSaveDialogPresenter.Create(ASettings);
-  FClipboardPublisher := TClipboardPublisher.Create(ASettings);
-  FRenderPipeline := TFrameRenderPipeline.Create(AFrameView,
-    ASettings, ASettings, ASettings, ASettings);
-  FDimensionPredictor := TFrameDimensionPredictor.Create(AFrameView,
-    ASettings, ASettings, FRenderPipeline);
-  FSaver := TFrameSaver.Create(AFrameView, ASettings, FResolver, FSaveDialog, FRenderPipeline);
-  FCopier := TFrameCopier.Create(AFrameView, ASettings, FResolver, FClipboardPublisher, FRenderPipeline);
+  FResolver := AResolver;
+  FSaveDialog := ASaveDialog;
+  FClipboardPublisher := AClipboardPublisher;
+  FRenderPipeline := ARenderPipeline;
+  FDimensionPredictor := ADimensionPredictor;
+  FSaver := ASaver;
+  FCopier := ACopier;
+end;
+
+{The single TPluginSettings argument coerces to each sub-service's narrow
+ policy interface via the implements clause on TPluginSettings.}
+function CreateFrameExporter(AFrameView: TFrameView; ASettings: TPluginSettings): TFrameExporter;
+var
+  Resolver: TExportTargetResolver;
+  SaveDialog: TSaveDialogPresenter;
+  Publisher: TClipboardPublisher;
+  RenderPipeline: TFrameRenderPipeline;
+  DimensionPredictor: TFrameDimensionPredictor;
+  Saver: TFrameSaver;
+  Copier: TFrameCopier;
+begin
+  Resolver := TExportTargetResolver.Create(AFrameView);
+  SaveDialog := TSaveDialogPresenter.Create(ASettings);
+  Publisher := TClipboardPublisher.Create(ASettings);
+  RenderPipeline := TFrameRenderPipeline.Create(AFrameView, ASettings, ASettings, ASettings, ASettings);
+  DimensionPredictor := TFrameDimensionPredictor.Create(AFrameView, ASettings, ASettings, RenderPipeline);
+  Saver := TFrameSaver.Create(AFrameView, ASettings, Resolver, SaveDialog, RenderPipeline);
+  Copier := TFrameCopier.Create(AFrameView, ASettings, Resolver, Publisher, RenderPipeline);
+  Result := TFrameExporter.Create(Resolver, SaveDialog, Publisher,
+    RenderPipeline, DimensionPredictor, Saver, Copier);
 end;
 
 destructor TFrameExporter.Destroy;
@@ -196,41 +207,6 @@ end;
 function TFrameExporter.BuildSaveIndicesSelectedOrAll: TArray<Integer>;
 begin
   Result := FResolver.BuildSaveIndicesSelectedOrAll;
-end;
-
-function TFrameExporter.ScaleBitmapLetterbox(ASrc: TBitmap; AW, AH: Integer; ABg: TColor): TBitmap;
-begin
-  Result := FRenderPipeline.ScaleBitmapLetterbox(ASrc, AW, AH, ABg);
-end;
-
-function TFrameExporter.ScaleBitmapCropToFill(ASrc: TBitmap; AW, AH: Integer): TBitmap;
-begin
-  Result := FRenderPipeline.ScaleBitmapCropToFill(ASrc, AW, AH);
-end;
-
-function TFrameExporter.RenderCellAtLiveSize(AIndex: Integer): TBitmap;
-begin
-  Result := FRenderPipeline.RenderCellAtLiveSize(AIndex);
-end;
-
-function TFrameExporter.RenderGridCombinedAtLiveResolution: TBitmap;
-begin
-  Result := FRenderPipeline.RenderGridCombinedAtLiveResolution;
-end;
-
-function TFrameExporter.RenderSmartCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
-begin
-  Result := FRenderPipeline.RenderSmartCombinedFromCells(ALiveResolutionIntent);
-end;
-
-function TFrameExporter.RenderCombinedFromCells(ALiveResolutionIntent: Boolean): TBitmap;
-begin
-  Result := FRenderPipeline.RenderCombinedFromCells(ALiveResolutionIntent);
-end;
-
-function TFrameExporter.RenderWithBanner(ABmp: TBitmap): TBitmap;
-begin
-  Result := FRenderPipeline.RenderWithBanner(ABmp);
 end;
 
 procedure TFrameExporter.SetOverrideFrames(const AFrames: TArray<TBitmap>);

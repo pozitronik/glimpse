@@ -127,6 +127,7 @@
         <DCCReference Include="Services\ExportTargetResolver.pas"/>
         <DCCReference Include="Services\FrameExportTypes.pas"/>
         <DCCReference Include="Services\FrameSaver.pas"/>
+        <DCCReference Include="Services\FrameCopier.pas"/>
         <DCCReference Include="Services\FrameExport.pas"/>
         <DCCReference Include="Presenters\SaveDialogPresenter.pas"/>
         <DCCReference Include="Services\ClipboardPublisher.pas"/>

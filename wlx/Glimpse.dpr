@@ -71,6 +71,7 @@ uses
   ExportTargetResolver in 'Services\ExportTargetResolver.pas',
   FrameExportTypes in 'Services\FrameExportTypes.pas',
   FrameSaver in 'Services\FrameSaver.pas',
+  FrameCopier in 'Services\FrameCopier.pas',
   FrameExport in 'Services\FrameExport.pas',
   SaveDialogPresenter in 'Presenters\SaveDialogPresenter.pas',
   ClipboardPublisher in 'Services\ClipboardPublisher.pas',

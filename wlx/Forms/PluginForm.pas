@@ -398,13 +398,14 @@ procedure TPluginCommandHandlers.SaveFrame;
 var
   ResolvedIdx: Integer;
 begin
-  {Same selection-first picking the original CM_SAVE_FRAME branch did:
-   PickActionCell consults the selection / focused cell / first cell in
-   that order. -1 (no context cell) lets every entry path share the
-   policy — only Copy frame forwards a context cell. Resolved once and
-   passed straight through to SaveFrame so any subsequent state change
-   while the dialog is open doesn't disagree with what was promised.}
-  ResolvedIdx := FForm.FExporter.PickActionCell(-1);
+  {Selection-first picking via PickActionCell, identical to Copy frame:
+   the selected cell when one exists, else the right-click context cell
+   (FNextContextCellIndex, primed by SetContextCellIndex), else the
+   focused / first cell. Toolbar, hotkey and TC entry paths leave
+   FNextContextCellIndex at -1 and so skip the context-cell step.
+   Resolved once and passed straight through to SaveFrame so a state
+   change while the dialog is open cannot disagree with what was promised.}
+  ResolvedIdx := FForm.FExporter.PickActionCell(FNextContextCellIndex);
   if ResolvedIdx >= 0 then
     FForm.FExporter.SaveFrame(FForm.FFileName, ResolvedIdx, MakeReExtract());
 end;
@@ -436,7 +437,7 @@ procedure TPluginCommandHandlers.CopyFrame;
 var
   ResolvedIdx: Integer;
 begin
-  {Only Copy frame forwards FNextContextCellIndex to PickActionCell.
+  {Both Save frame and Copy frame forward FNextContextCellIndex to PickActionCell.
    The right-click context menu wires its captured cursor cell through
    SetContextCellIndex so a no-selection user gets the cell they
    clicked on; when a selection exists, PickActionCell's step 1 takes
@@ -689,7 +690,7 @@ begin
   FExtractCtrl.OnFrameDelivered := OnFrameDelivered;
   FExtractCtrl.OnProgress := OnExtractionProgress;
 
-  FExporter := TFrameExporter.Create(FFrameView, FSettings);
+  FExporter := CreateFrameExporter(FFrameView, FSettings);
   {Run the file-reference clipboard PNG encode inside a modal "please
    wait" dialog parented to this form. The modal blocks UI re-entry,
    navigation, and accidental re-clicks while the worker thread runs.
