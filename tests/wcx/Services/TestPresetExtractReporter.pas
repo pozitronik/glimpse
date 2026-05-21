@@ -47,6 +47,16 @@ type
     [Test] procedure TestStartsEmpty;
   end;
 
+  [TestFixture]
+  TTestPresetFailureReporterGlobal = class
+  public
+    {The getter must never return nil — TPresetEntry.Extract calls
+     .Report on it unguarded, so a nil there is an access violation.}
+    [Test] procedure TestGetterNeverReturnsNil;
+    [Test] procedure TestSetNilInstallsNullObjectNotNil;
+    [Test] procedure TestSetInstallsGivenReporter;
+  end;
+
 implementation
 
 uses
@@ -233,6 +243,50 @@ begin
     Assert.AreEqual<Integer>(0, Reporter.Count);
   finally
     Iface := nil;
+  end;
+end;
+
+{ TTestPresetFailureReporterGlobal }
+
+procedure TTestPresetFailureReporterGlobal.TestGetterNeverReturnsNil;
+begin
+  Assert.IsTrue((GetPresetFailureReporter <> nil),
+    'The reporter getter must never return nil');
+end;
+
+procedure TTestPresetFailureReporterGlobal.TestSetNilInstallsNullObjectNotNil;
+var
+  Saved: IPresetExtractFailureReporter;
+begin
+  {SetPresetFailureReporter(nil) must install the Null Object so an
+   unguarded GetPresetFailureReporter.Report cannot nil-dereference.}
+  Saved := GetPresetFailureReporter;
+  try
+    SetPresetFailureReporter(nil);
+    Assert.IsTrue((GetPresetFailureReporter <> nil),
+      'SetPresetFailureReporter(nil) must leave the getter non-nil');
+    GetPresetFailureReporter.Report('teardown-time failure must be a safe no-op');
+  finally
+    SetPresetFailureReporter(Saved);
+  end;
+end;
+
+procedure TTestPresetFailureReporterGlobal.TestSetInstallsGivenReporter;
+var
+  Saved, Iface: IPresetExtractFailureReporter;
+  Reporter: TCapturingFailureReporter;
+begin
+  Saved := GetPresetFailureReporter;
+  try
+    Reporter := TCapturingFailureReporter.Create;
+    Iface := Reporter;
+    SetPresetFailureReporter(Iface);
+    GetPresetFailureReporter.Report('routed');
+    Assert.AreEqual<Integer>(1, Reporter.Count,
+      'The getter must return the reporter the setter installed');
+    Assert.AreEqual('routed', Reporter.Item(0));
+  finally
+    SetPresetFailureReporter(Saved);
   end;
 end;
 

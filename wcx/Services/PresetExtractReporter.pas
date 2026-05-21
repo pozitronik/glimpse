@@ -77,6 +77,19 @@ begin
     MB_OK or MB_ICONWARNING);
 end;
 
+type
+  {Null Object: the reporter in force when none has been installed —
+   the test executable, or after SetPresetFailureReporter(nil). Keeps
+   GetPresetFailureReporter non-nil so callers can Report unguarded.}
+  TNullPresetFailureReporter = class(TInterfacedObject, IPresetExtractFailureReporter)
+  public
+    procedure Report(const AMsg: string);
+  end;
+
+procedure TNullPresetFailureReporter.Report(const AMsg: string);
+begin
+end;
+
 var
   GReporter: IPresetExtractFailureReporter;
 
@@ -87,10 +100,17 @@ end;
 
 procedure SetPresetFailureReporter(const AReporter: IPresetExtractFailureReporter);
 begin
-  GReporter := AReporter;
+  {nil installs the Null Object, never an actual nil, so the getter
+   always returns a usable reporter.}
+  if Assigned(AReporter) then
+    GReporter := AReporter
+  else
+    GReporter := TNullPresetFailureReporter.Create;
 end;
 
 initialization
+
+GReporter := TNullPresetFailureReporter.Create;
 
 finalization
 
