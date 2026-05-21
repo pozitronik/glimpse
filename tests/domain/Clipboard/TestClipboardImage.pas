@@ -19,6 +19,10 @@ type
     [Test] procedure CopyBitmap_Pf32Bit_PublishesCfBitmapSibling;
     [Test] procedure CopyBitmap_Pf24Bit_RoutesToAssignBitmap;
     [Test] procedure CopyBitmap_OpenFails_DiscardsStrategiesAndReturnsFalse;
+    {Total publish failure leaves the emptied clipboard with nothing on
+     it; the copy must report False, not a false success.}
+    [Test] procedure CopyBitmap_AllPublishFail_ReturnsFalse;
+    [Test] procedure CopyBitmap_PartialPublishSucceeds_ReturnsTrue;
     {Retry contract for the open helper. Earlier the bare except absorbed
      every exception class and burned 200 ms retrying problems that were
      not transient clipboard contention.}
@@ -549,6 +553,104 @@ begin
     Assert.AreEqual(1, Fake.OpenCount, 'TryOpen must have been attempted');
     Assert.AreEqual(0, Fake.EmptyCount, 'Empty must not run when open failed');
     Assert.AreEqual(0, Fake.CloseCount, 'Close must not run when the session was never entered');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+type
+  {Configurable fake strategy: Allocate and Publish each return a preset
+   result, so the orchestrator's total-failure and partial-success
+   branches can be driven deterministically.}
+  TFakeFormatStrategy = class(TInterfacedObject, IClipboardFormatStrategy)
+  strict private
+    FName: string;
+    FAllocateResult: Boolean;
+    FPublishResult: Boolean;
+  public
+    constructor Create(const AName: string; AAllocateResult, APublishResult: Boolean);
+    function Name: string;
+    function Allocate(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): Boolean;
+    function Publish: Boolean;
+    procedure Discard;
+  end;
+
+constructor TFakeFormatStrategy.Create(const AName: string; AAllocateResult, APublishResult: Boolean);
+begin
+  inherited Create;
+  FName := AName;
+  FAllocateResult := AAllocateResult;
+  FPublishResult := APublishResult;
+end;
+
+function TFakeFormatStrategy.Name: string;
+begin
+  Result := FName;
+end;
+
+function TFakeFormatStrategy.Allocate(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): Boolean;
+begin
+  Result := FAllocateResult;
+end;
+
+function TFakeFormatStrategy.Publish: Boolean;
+begin
+  Result := FPublishResult;
+end;
+
+procedure TFakeFormatStrategy.Discard;
+begin
+end;
+
+procedure TTestClipboardImage.CopyBitmap_AllPublishFail_ReturnsFalse;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Fake: TFakeImageClipboard;
+  Clip: IImageClipboard;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  Err: string;
+begin
+  {Allocate succeeds for every format but Publish fails for every one:
+   the clipboard was emptied with nothing put back, so the copy must
+   report False rather than a false success.}
+  Fake := TFakeImageClipboard.Create;
+  Clip := Fake;
+  Strategies := TArray<IClipboardFormatStrategy>.Create(
+    TFakeFormatStrategy.Create('A', True, False),
+    TFakeFormatStrategy.Create('B', True, False));
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 255, 0, 0, 200);
+    Assert.IsFalse(CopyBitmapToClipboard(Bmp, TColor($000000), Strategies, Clip, Err),
+      'Total publish failure must report False, not a false success');
+    Assert.AreEqual(1, Fake.EmptyCount, 'Sanity: the publish session was entered');
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_PartialPublishSucceeds_ReturnsTrue;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Fake: TFakeImageClipboard;
+  Clip: IImageClipboard;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  Err: string;
+begin
+  {One format fails to publish, the other succeeds: a partial success is
+   still a usable copy, so the result must be True.}
+  Fake := TFakeImageClipboard.Create;
+  Clip := Fake;
+  Strategies := TArray<IClipboardFormatStrategy>.Create(
+    TFakeFormatStrategy.Create('A', True, False),
+    TFakeFormatStrategy.Create('B', True, True));
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.SetSize(4, 4);
+    FillPf32Bit(Bmp, 255, 0, 0, 200);
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, TColor($000000), Strategies, Clip, Err),
+      'A partial publish success must still report True');
   finally
     Bmp.Free;
   end;

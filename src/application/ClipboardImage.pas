@@ -53,6 +53,7 @@ function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap;
   out AFailedFormatName: string): Boolean;
 var
   I, J: Integer;
+  AnyPublished: Boolean;
 begin
   Result := False;
   AFailedFormatName := '';
@@ -100,9 +101,13 @@ begin
   end;
   try
     AClipboard.Empty;
+    {Per-format failures are non-fatal, but if every format fails the
+     clipboard was emptied with nothing put back — report failure.}
+    AnyPublished := False;
     for I := 0 to High(AStrategies) do
-      AStrategies[I].Publish;
-    Result := True;
+      if AStrategies[I].Publish then
+        AnyPublished := True;
+    Result := AnyPublished;
   finally
     AClipboard.Close;
   end;
