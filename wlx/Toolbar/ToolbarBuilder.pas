@@ -47,6 +47,14 @@ type
     function CreateRefreshPopup: TPopupMenu;
     function CreateSaveViewPopup: TPopupMenu;
     function CreateCopyViewPopup: TPopupMenu;
+    {Build's per-control-group steps. AX is the running horizontal cursor;
+     ACtrlH is the shared control height set by the frame-count group.}
+    procedure BuildToolbarPanel(var AHandles: TToolbarHandles);
+    procedure BuildFrameCountGroup(var AHandles: TToolbarHandles; out ACtrlH, AX: Integer);
+    procedure BuildModeButtons(var AHandles: TToolbarHandles; ACtrlH: Integer; var AX: Integer);
+    procedure BuildTimecodeButton(var AHandles: TToolbarHandles; ACtrlH: Integer; var AX: Integer);
+    procedure BuildActionButtons(var AHandles: TToolbarHandles; ACtrlH: Integer; var AX: Integer);
+    procedure BuildHamburger(var AHandles: TToolbarHandles; ACtrlH: Integer);
   public
     constructor Create(AForm: TForm; AGlyphs: TToolbarGlyphLibrary;
       AOnModeButtonClick, AOnSizingMenuClick, AOnTimecodeButtonClick,
@@ -63,6 +71,18 @@ uses
 
 const
   MAX_FRAME_COUNT = 99; {upper limit for the frame-count spin edit}
+  TB_PAD = 4; {Vertical padding above and below controls}
+  CTRL_GAP = 8; {Gap between control groups}
+  BTN_GAP = 2; {Gap between adjacent buttons in a group}
+  BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
+  {Refresh has no glyph, so reserve dropdown-arrow width explicitly.}
+  REFRESH_DROPDOWN_EXTRA = 14;
+  {Save/Copy captions are longer than Refresh; extra buffer keeps the
+   bsSplitButton arrow from pinching the text.}
+  VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
+  SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
+  ICON_W = 16; {Toolbar icon width}
+  ICON_GAP = 4; {Space between icon and caption on icon-bearing buttons}
 
 constructor TToolbarBuilder.Create(AForm: TForm; AGlyphs: TToolbarGlyphLibrary;
   AOnModeButtonClick, AOnSizingMenuClick, AOnTimecodeButtonClick,
@@ -138,141 +158,157 @@ begin
 end;
 
 function TToolbarBuilder.Build: TToolbarHandles;
-const
-  TB_PAD = 4; {Vertical padding above and below controls}
-  CTRL_GAP = 8; {Gap between control groups}
-  BTN_GAP = 2; {Gap between adjacent buttons in a group}
-  BTN_PAD = 16; {Horizontal text padding inside button (both sides)}
-  {Refresh has no glyph, so reserve dropdown-arrow width explicitly.}
-  REFRESH_DROPDOWN_EXTRA = 14;
-  {Save/Copy captions are longer than Refresh; extra buffer keeps the
-   bsSplitButton arrow from pinching the text.}
-  VIEW_DROPDOWN_EXTRA = REFRESH_DROPDOWN_EXTRA + 6;
-  SPLIT_ARROW_W = 20; {Extra width for split button dropdown arrow}
-  ICON_W = 16; {Toolbar icon width}
-  ICON_GAP = 4; {Space between icon and caption on icon-bearing buttons}
 var
-  X, CY, CtrlH, BW, I: Integer;
-  VM: TViewMode;
-  TabIdx: Integer;
-  Btn: TButton;
+  CtrlH, X: Integer;
 begin
-  Result.Toolbar := TPanel.Create(FForm);
-  Result.Toolbar.Parent := FForm;
-  Result.Toolbar.Align := alTop;
-  Result.Toolbar.BevelOuter := bvNone;
-  Result.Toolbar.ParentBackground := False;
-
-  {Create edit first: its auto-sized height is the reference for all controls}
-  Result.EditFrameCount := TEdit.Create(Result.Toolbar);
-  Result.EditFrameCount.Parent := Result.Toolbar;
-  Result.EditFrameCount.Width := FRAME_COUNT_EDIT_W;
-  Result.EditFrameCount.NumbersOnly := True;
-  Result.EditFrameCount.TabOrder := 0;
-  CtrlH := Result.EditFrameCount.Height;
-
-  Result.Toolbar.Height := CtrlH + 2 * TB_PAD;
-  CY := TB_PAD;
-  X := CTRL_GAP;
-
-  Result.LblFrames := TLabel.Create(Result.Toolbar);
-  Result.LblFrames.Parent := Result.Toolbar;
-  Result.LblFrames.Caption := 'Frames:';
-  Result.LblFrames.AutoSize := True;
-  Result.LblFrames.Left := X;
-  Result.LblFrames.Top := CY + (CtrlH - Result.LblFrames.Height) div 2;
-  Inc(X, Result.LblFrames.Width + 4);
-
-  Result.EditFrameCount.SetBounds(X, CY, FRAME_COUNT_EDIT_W, CtrlH);
-  Result.EditFrameCount.Hint := 'Number of frames to extract from the video.';
-
-  Result.UpDown := TUpDown.Create(Result.Toolbar);
-  Result.UpDown.Parent := Result.Toolbar;
-  Result.UpDown.Associate := Result.EditFrameCount;
-  Result.UpDown.Min := 1;
-  Result.UpDown.Max := MAX_FRAME_COUNT;
-  Result.UpDown.Hint := 'Number of frames to extract from the video.';
-  Inc(X, FRAME_COUNT_EDIT_W + Result.UpDown.Width + CTRL_GAP);
-  Result.FrameCountRight := X;
-
-  {Collapsible elements: modes, timecodes, actions (left to right)}
+  BuildToolbarPanel(Result);
+  BuildFrameCountGroup(Result, CtrlH, X);
+  {Collapsible elements: modes, timecodes, actions (left to right).}
   SetLength(Result.ElementRights, ELEM_TOTAL_COUNT);
+  BuildModeButtons(Result, CtrlH, X);
+  BuildTimecodeButton(Result, CtrlH, X);
+  BuildActionButtons(Result, CtrlH, X);
+  BuildHamburger(Result, CtrlH);
+end;
 
-  {Create 5 mode buttons}
+procedure TToolbarBuilder.BuildToolbarPanel(var AHandles: TToolbarHandles);
+begin
+  AHandles.Toolbar := TPanel.Create(FForm);
+  AHandles.Toolbar.Parent := FForm;
+  AHandles.Toolbar.Align := alTop;
+  AHandles.Toolbar.BevelOuter := bvNone;
+  AHandles.Toolbar.ParentBackground := False;
+end;
+
+procedure TToolbarBuilder.BuildFrameCountGroup(var AHandles: TToolbarHandles;
+  out ACtrlH, AX: Integer);
+begin
+  {Create the edit first: its auto-sized height is the reference for every
+   toolbar control.}
+  AHandles.EditFrameCount := TEdit.Create(AHandles.Toolbar);
+  AHandles.EditFrameCount.Parent := AHandles.Toolbar;
+  AHandles.EditFrameCount.Width := FRAME_COUNT_EDIT_W;
+  AHandles.EditFrameCount.NumbersOnly := True;
+  AHandles.EditFrameCount.TabOrder := 0;
+  ACtrlH := AHandles.EditFrameCount.Height;
+
+  AHandles.Toolbar.Height := ACtrlH + 2 * TB_PAD;
+  AX := CTRL_GAP;
+
+  AHandles.LblFrames := TLabel.Create(AHandles.Toolbar);
+  AHandles.LblFrames.Parent := AHandles.Toolbar;
+  AHandles.LblFrames.Caption := 'Frames:';
+  AHandles.LblFrames.AutoSize := True;
+  AHandles.LblFrames.Left := AX;
+  AHandles.LblFrames.Top := TB_PAD + (ACtrlH - AHandles.LblFrames.Height) div 2;
+  Inc(AX, AHandles.LblFrames.Width + 4);
+
+  AHandles.EditFrameCount.SetBounds(AX, TB_PAD, FRAME_COUNT_EDIT_W, ACtrlH);
+  AHandles.EditFrameCount.Hint := 'Number of frames to extract from the video.';
+
+  AHandles.UpDown := TUpDown.Create(AHandles.Toolbar);
+  AHandles.UpDown.Parent := AHandles.Toolbar;
+  AHandles.UpDown.Associate := AHandles.EditFrameCount;
+  AHandles.UpDown.Min := 1;
+  AHandles.UpDown.Max := MAX_FRAME_COUNT;
+  AHandles.UpDown.Hint := 'Number of frames to extract from the video.';
+  Inc(AX, FRAME_COUNT_EDIT_W + AHandles.UpDown.Width + CTRL_GAP);
+  AHandles.FrameCountRight := AX;
+end;
+
+procedure TToolbarBuilder.BuildModeButtons(var AHandles: TToolbarHandles;
+  ACtrlH: Integer; var AX: Integer);
+var
+  VM: TViewMode;
+  TabIdx, BW: Integer;
+begin
   TabIdx := 1;
   for VM := Low(TViewMode) to High(TViewMode) do
   begin
-    {Create popup menu first (needed for DropDownMenu assignment)}
-    Result.ModePopups[VM] := CreateModePopup(VM);
+    {Create the popup menu first (needed for the DropDownMenu assignment).}
+    AHandles.ModePopups[VM] := CreateModePopup(VM);
 
-    Result.ModeButtons[VM] := TButton.Create(Result.Toolbar);
-    Result.ModeButtons[VM].Parent := Result.Toolbar;
+    AHandles.ModeButtons[VM] := TButton.Create(AHandles.Toolbar);
+    AHandles.ModeButtons[VM].Parent := AHandles.Toolbar;
 
     {Skip split-arrow reservation on legacy Windows: BS_SPLITBUTTON does
      not render there and the extra width would leave a dead gap.}
     BW := FForm.Canvas.TextWidth(MODE_CAPTIONS[VM]) + BTN_PAD;
-    if (Result.ModePopups[VM] <> nil) and not IsLegacyWindows then
+    if (AHandles.ModePopups[VM] <> nil) and not IsLegacyWindows then
       Inc(BW, SPLIT_ARROW_W);
     if VM in [vmScroll, vmFilmstrip] then
       Inc(BW, ICON_W + ICON_GAP);
 
-    Result.ModeButtons[VM].SetBounds(X, CY, BW, CtrlH);
-    Result.ModeButtons[VM].Caption := MODE_CAPTIONS[VM];
-    Result.ModeButtons[VM].Hint := MODE_HINTS[VM];
-    Result.ModeButtons[VM].Tag := Ord(VM);
-    Result.ModeButtons[VM].TabOrder := TabIdx;
-    Result.ModeButtons[VM].OnClick := FOnModeButtonClick;
+    AHandles.ModeButtons[VM].SetBounds(AX, TB_PAD, BW, ACtrlH);
+    AHandles.ModeButtons[VM].Caption := MODE_CAPTIONS[VM];
+    AHandles.ModeButtons[VM].Hint := MODE_HINTS[VM];
+    AHandles.ModeButtons[VM].Tag := Ord(VM);
+    AHandles.ModeButtons[VM].TabOrder := TabIdx;
+    AHandles.ModeButtons[VM].OnClick := FOnModeButtonClick;
 
     if MODE_GLYPH_INDEX[VM] >= 0 then
     begin
-      Result.ModeButtons[VM].Images := FGlyphs.Images;
-      Result.ModeButtons[VM].ImageIndex := MODE_GLYPH_INDEX[VM];
+      AHandles.ModeButtons[VM].Images := FGlyphs.Images;
+      AHandles.ModeButtons[VM].ImageIndex := MODE_GLYPH_INDEX[VM];
       {Qualify because Vcl.ComCtrls also defines iaRight.}
-      Result.ModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
+      AHandles.ModeButtons[VM].ImageAlignment := Vcl.StdCtrls.iaRight;
     end;
 
     {Legacy Windows pulls iaRight icons flush to the edge; add inset manually.}
     if (VM in [vmScroll, vmFilmstrip]) and IsLegacyWindows then
-      Result.ModeButtons[VM].ImageMargins.Right := 2;
+      AHandles.ModeButtons[VM].ImageMargins.Right := 2;
 
     {PopupMenu duplicates DropDownMenu for right-click so the submodes
      stay reachable on legacy Windows (no split-arrow rendering).}
-    if Result.ModePopups[VM] <> nil then
+    if AHandles.ModePopups[VM] <> nil then
     begin
-      Result.ModeButtons[VM].Style := bsSplitButton;
-      Result.ModeButtons[VM].DropDownMenu := Result.ModePopups[VM];
-      Result.ModeButtons[VM].PopupMenu := Result.ModePopups[VM];
+      AHandles.ModeButtons[VM].Style := bsSplitButton;
+      AHandles.ModeButtons[VM].DropDownMenu := AHandles.ModePopups[VM];
+      AHandles.ModeButtons[VM].PopupMenu := AHandles.ModePopups[VM];
     end;
 
-    Result.ElementRights[Ord(VM)] := X + BW;
+    AHandles.ElementRights[Ord(VM)] := AX + BW;
     Inc(TabIdx);
     if VM < High(TViewMode) then
-      Inc(X, BW + BTN_GAP)
+      Inc(AX, BW + BTN_GAP)
     else
-      Inc(X, BW + CTRL_GAP);
+      Inc(AX, BW + CTRL_GAP);
   end;
+end;
 
-  Result.BtnTimecode := TSpeedButton.Create(Result.Toolbar);
-  Result.BtnTimecode.Parent := Result.Toolbar;
+procedure TToolbarBuilder.BuildTimecodeButton(var AHandles: TToolbarHandles;
+  ACtrlH: Integer; var AX: Integer);
+var
+  BW: Integer;
+begin
+  AHandles.BtnTimecode := TSpeedButton.Create(AHandles.Toolbar);
+  AHandles.BtnTimecode.Parent := AHandles.Toolbar;
   BW := FForm.Canvas.TextWidth('Timecodes') + BTN_PAD;
-  Result.BtnTimecode.SetBounds(X, CY, BW, CtrlH);
-  Result.BtnTimecode.Caption := 'Timecodes';
-  Result.BtnTimecode.Hint := 'Toggle timecode overlay on each frame (F2).';
-  Result.BtnTimecode.GroupIndex := 1;
-  Result.BtnTimecode.AllowAllUp := True;
-  Result.BtnTimecode.OnClick := FOnTimecodeButtonClick;
-  Result.ElementRights[ELEM_TIMECODE_INDEX] := X + BW;
-  Inc(X, BW + CTRL_GAP);
+  AHandles.BtnTimecode.SetBounds(AX, TB_PAD, BW, ACtrlH);
+  AHandles.BtnTimecode.Caption := 'Timecodes';
+  AHandles.BtnTimecode.Hint := 'Toggle timecode overlay on each frame (F2).';
+  AHandles.BtnTimecode.GroupIndex := 1;
+  AHandles.BtnTimecode.AllowAllUp := True;
+  AHandles.BtnTimecode.OnClick := FOnTimecodeButtonClick;
+  AHandles.ElementRights[ELEM_TIMECODE_INDEX] := AX + BW;
+  Inc(AX, BW + CTRL_GAP);
+end;
 
+procedure TToolbarBuilder.BuildActionButtons(var AHandles: TToolbarHandles;
+  ACtrlH: Integer; var AX: Integer);
+var
+  I, BW: Integer;
+  Btn: TButton;
+begin
   {Refresh becomes a split button so the dropdown exposes Shuffle as a peer.}
-  SetLength(Result.ToolbarButtons, 0);
-  Result.RefreshPopup := nil;
-  Result.SaveViewPopup := nil;
-  Result.CopyViewPopup := nil;
+  SetLength(AHandles.ToolbarButtons, 0);
+  AHandles.RefreshPopup := nil;
+  AHandles.SaveViewPopup := nil;
+  AHandles.CopyViewPopup := nil;
   for I := 0 to High(TB_ACTIONS) do
   begin
-    Btn := TButton.Create(Result.Toolbar);
-    Btn.Parent := Result.Toolbar;
+    Btn := TButton.Create(AHandles.Toolbar);
+    Btn.Parent := AHandles.Toolbar;
     BW := FForm.Canvas.TextWidth(TB_ACTIONS[I].Caption) + BTN_PAD;
     if not IsLegacyWindows then
       case TB_ACTIONS[I].Tag of
@@ -281,7 +317,7 @@ begin
         CM_SAVE_VIEW, CM_COPY_VIEW:
           Inc(BW, VIEW_DROPDOWN_EXTRA);
       end;
-    Btn.SetBounds(X, CY, BW, CtrlH);
+    Btn.SetBounds(AX, TB_PAD, BW, ACtrlH);
     Btn.Caption := TB_ACTIONS[I].Caption;
     Btn.Hint := TB_ACTIONS[I].Hint;
     Btn.Tag := TB_ACTIONS[I].Tag;
@@ -289,47 +325,50 @@ begin
     Btn.OnClick := FOnToolbarButtonClick;
     if TB_ACTIONS[I].Tag = CM_REFRESH then
     begin
-      Result.RefreshPopup := CreateRefreshPopup;
+      AHandles.RefreshPopup := CreateRefreshPopup;
       Btn.Style := bsSplitButton;
-      Btn.DropDownMenu := Result.RefreshPopup;
-      Btn.PopupMenu := Result.RefreshPopup;
+      Btn.DropDownMenu := AHandles.RefreshPopup;
+      Btn.PopupMenu := AHandles.RefreshPopup;
     end
     else if TB_ACTIONS[I].Tag = CM_SAVE_VIEW then
     begin
-      Result.SaveViewPopup := CreateSaveViewPopup;
+      AHandles.SaveViewPopup := CreateSaveViewPopup;
       Btn.Style := bsSplitButton;
-      Btn.DropDownMenu := Result.SaveViewPopup;
-      Btn.PopupMenu := Result.SaveViewPopup;
+      Btn.DropDownMenu := AHandles.SaveViewPopup;
+      Btn.PopupMenu := AHandles.SaveViewPopup;
     end
     else if TB_ACTIONS[I].Tag = CM_COPY_VIEW then
     begin
-      Result.CopyViewPopup := CreateCopyViewPopup;
+      AHandles.CopyViewPopup := CreateCopyViewPopup;
       Btn.Style := bsSplitButton;
-      Btn.DropDownMenu := Result.CopyViewPopup;
-      Btn.PopupMenu := Result.CopyViewPopup;
+      Btn.DropDownMenu := AHandles.CopyViewPopup;
+      Btn.PopupMenu := AHandles.CopyViewPopup;
     end;
-    Result.ElementRights[ELEM_ACTION_FIRST + I] := X + BW;
-    Inc(X, BW + BTN_GAP);
-    SetLength(Result.ToolbarButtons, Length(Result.ToolbarButtons) + 1);
-    Result.ToolbarButtons[High(Result.ToolbarButtons)] := Btn;
+    AHandles.ElementRights[ELEM_ACTION_FIRST + I] := AX + BW;
+    Inc(AX, BW + BTN_GAP);
+    SetLength(AHandles.ToolbarButtons, Length(AHandles.ToolbarButtons) + 1);
+    AHandles.ToolbarButtons[High(AHandles.ToolbarButtons)] := Btn;
   end;
+end;
 
-  Result.HamburgerMenu := TPopupMenu.Create(FForm);
-  Result.HamburgerMenu.OnPopup := FOnHamburgerMenuPopup;
+procedure TToolbarBuilder.BuildHamburger(var AHandles: TToolbarHandles; ACtrlH: Integer);
+begin
+  AHandles.HamburgerMenu := TPopupMenu.Create(FForm);
+  AHandles.HamburgerMenu.OnPopup := FOnHamburgerMenuPopup;
   {Share the toolbar's image list so menu items can paint the same arrow
    glyphs next to Scroll/Filmstrip entries (both share a textual caption).}
-  Result.HamburgerMenu.Images := FGlyphs.Images;
+  AHandles.HamburgerMenu.Images := FGlyphs.Images;
 
-  Result.BtnHamburger := TButton.Create(Result.Toolbar);
-  Result.BtnHamburger.Parent := Result.Toolbar;
-  Result.BtnHamburger.Images := FGlyphs.Images;
-  Result.BtnHamburger.ImageIndex := IDX_ICON_HAMBURGER;
-  Result.BtnHamburger.ImageAlignment := iaCenter;
-  Result.BtnHamburger.Hint := 'More commands (toolbar buttons that did not fit).';
-  {Square button matched to the rest of the toolbar's height}
-  Result.BtnHamburger.SetBounds(0, CY, CtrlH, CtrlH);
-  Result.BtnHamburger.OnClick := FOnHamburgerClick;
-  Result.BtnHamburger.Visible := False;
+  AHandles.BtnHamburger := TButton.Create(AHandles.Toolbar);
+  AHandles.BtnHamburger.Parent := AHandles.Toolbar;
+  AHandles.BtnHamburger.Images := FGlyphs.Images;
+  AHandles.BtnHamburger.ImageIndex := IDX_ICON_HAMBURGER;
+  AHandles.BtnHamburger.ImageAlignment := iaCenter;
+  AHandles.BtnHamburger.Hint := 'More commands (toolbar buttons that did not fit).';
+  {Square button matched to the rest of the toolbar's height.}
+  AHandles.BtnHamburger.SetBounds(0, TB_PAD, ACtrlH, ACtrlH);
+  AHandles.BtnHamburger.OnClick := FOnHamburgerClick;
+  AHandles.BtnHamburger.Visible := False;
 end;
 
 end.
