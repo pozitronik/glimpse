@@ -146,6 +146,13 @@ type
      FFileName / FSettings / FOffsets / FFrameView / FVideoInfo /
      FExporter / FLoadTimer.Formatted; safe to call any time, never mutates.}
     procedure BuildStatusBarValues(out AValues: TStatusBarValues);
+    {Source-grouped fill helpers BuildStatusBarValues composes — one
+     collaborator per helper so a new token added in one source area
+     only touches one method.}
+    procedure BuildFileSourceFields(var AValues: TStatusBarValues);
+    procedure BuildFrameViewFields(var AValues: TStatusBarValues);
+    procedure BuildVideoInfoFields(var AValues: TStatusBarValues);
+    procedure BuildExporterPredictionFields(var AValues: TStatusBarValues);
     {Pushes the four status-bar settings (template, font name + size,
      auto-width-live flag) into the renderer. Triggers a re-parse +
      re-measure + Refresh so panel widths and panel set track the new
@@ -1156,8 +1163,6 @@ begin
 end;
 
 procedure TPluginForm.BuildStatusBarValues(out AValues: TStatusBarValues);
-var
-  PredW, PredH, PredCappedW, PredCappedH: Integer;
 begin
   AValues := Default(TStatusBarValues);
   {Pre-template behaviour: the bar showed nothing until video info was
@@ -1167,21 +1172,34 @@ begin
     Exit;
   AValues.VideoInfoValid := True;
 
-  AValues.Filename := FFileName;
+  BuildFileSourceFields(AValues);
+  BuildFrameViewFields(AValues);
+  BuildVideoInfoFields(AValues);
+  BuildExporterPredictionFields(AValues);
+  AValues.LoadTimeText := FLoadTimer.Formatted;
+end;
 
+procedure TPluginForm.BuildFileSourceFields(var AValues: TStatusBarValues);
+begin
+  AValues.Filename := FFileName;
   AValues.FilePositionAvailable := FFileNavigator.GetFilePosition(FFileName,
     FSettings.ExtensionList, AValues.FilePositionIndex, AValues.FilePositionTotal);
+end;
 
+procedure TPluginForm.BuildFrameViewFields(var AValues: TStatusBarValues);
+begin
   AValues.FramesAvailable := Length(FOffsets) > 0;
   AValues.FramesTotal := Length(FOffsets);
-  if FFrameView <> nil then
-  begin
-    AValues.CurrentFrameIndex := FFrameView.CurrentFrameIndex;
-    AValues.IsSingleViewMode := FFrameView.ViewMode = vmSingle;
-    AValues.ViewModeName := ViewModeDisplayName(FFrameView.ViewMode);
-    AValues.ZoomModeName := ZoomModeDisplayName(FFrameView.ZoomMode);
-  end;
+  if FFrameView = nil then
+    Exit;
+  AValues.CurrentFrameIndex := FFrameView.CurrentFrameIndex;
+  AValues.IsSingleViewMode := FFrameView.ViewMode = vmSingle;
+  AValues.ViewModeName := ViewModeDisplayName(FFrameView.ViewMode);
+  AValues.ZoomModeName := ZoomModeDisplayName(FFrameView.ZoomMode);
+end;
 
+procedure TPluginForm.BuildVideoInfoFields(var AValues: TStatusBarValues);
+begin
   AValues.SourceWidth := FVideoInfo.Width;
   AValues.SourceHeight := FVideoInfo.Height;
   AValues.SourceFps := FVideoInfo.Fps;
@@ -1193,30 +1211,32 @@ begin
   AValues.SourceAudioSampleRate := FVideoInfo.AudioSampleRate;
   AValues.SourceAudioChannels := FVideoInfo.AudioChannels;
   AValues.SourceAudioBitrateKbps := FVideoInfo.AudioBitrateKbps;
+end;
 
-  if FExporter <> nil then
+procedure TPluginForm.BuildExporterPredictionFields(var AValues: TStatusBarValues);
+var
+  PredW, PredH, PredCappedW, PredCappedH: Integer;
+begin
+  if FExporter = nil then
+    Exit;
+  AValues.SaveDimAvailable := FExporter.PredictDisplayedSize(
+    FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
+  if AValues.SaveDimAvailable then
   begin
-    AValues.SaveDimAvailable := FExporter.PredictDisplayedSize(
-      FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
-    if AValues.SaveDimAvailable then
-    begin
-      AValues.SaveDimW := PredW;
-      AValues.SaveDimH := PredH;
-      AValues.SaveDimCappedW := PredCappedW;
-      AValues.SaveDimCappedH := PredCappedH;
-    end;
-    AValues.CopyDimAvailable := FExporter.PredictDisplayedSize(
-      FSettings.CopyAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
-    if AValues.CopyDimAvailable then
-    begin
-      AValues.CopyDimW := PredW;
-      AValues.CopyDimH := PredH;
-      AValues.CopyDimCappedW := PredCappedW;
-      AValues.CopyDimCappedH := PredCappedH;
-    end;
+    AValues.SaveDimW := PredW;
+    AValues.SaveDimH := PredH;
+    AValues.SaveDimCappedW := PredCappedW;
+    AValues.SaveDimCappedH := PredCappedH;
   end;
-
-  AValues.LoadTimeText := FLoadTimer.Formatted;
+  AValues.CopyDimAvailable := FExporter.PredictDisplayedSize(
+    FSettings.CopyAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
+  if AValues.CopyDimAvailable then
+  begin
+    AValues.CopyDimW := PredW;
+    AValues.CopyDimH := PredH;
+    AValues.CopyDimCappedW := PredCappedW;
+    AValues.CopyDimCappedH := PredCappedH;
+  end;
 end;
 
 procedure TPluginForm.UpdateStatusBar;
