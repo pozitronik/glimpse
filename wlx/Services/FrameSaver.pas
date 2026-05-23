@@ -6,14 +6,14 @@ unit FrameSaver;
 interface
 
 uses
-  FrameView, Settings, ExportTargetResolver, SaveDialogPresenter,
+  FrameView, SettingsInterfaces, ExportTargetResolver, SaveDialogPresenter,
   FrameRenderPipeline, BitmapSaver, FrameExportTypes;
 
 type
   TFrameSaver = class
   strict private
     FFrameView: TFrameView;
-    FSettings: TPluginSettings;
+    FSettings: IFrameSaveSettings;
     FResolver: TExportTargetResolver;
     FSaveDialog: TSaveDialogPresenter;
     FRenderPipeline: TFrameRenderPipeline;
@@ -26,7 +26,7 @@ type
     procedure WriteCombinedView(const APath: string; AFormat: TSaveFormat);
   public
     {All five collaborators are borrowed; TFrameExporter owns them.}
-    constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings;
+    constructor Create(AFrameView: TFrameView; ASettings: IFrameSaveSettings;
       AResolver: TExportTargetResolver; ASaveDialog: TSaveDialogPresenter;
       ARenderPipeline: TFrameRenderPipeline);
     {Honours SaveAtLiveResolution. AReExtract runs only after the dialog
@@ -51,7 +51,7 @@ uses
   Vcl.Dialogs, Vcl.Graphics,
   FrameCellStore, FrameFileNames, Types;
 
-constructor TFrameSaver.Create(AFrameView: TFrameView; ASettings: TPluginSettings;
+constructor TFrameSaver.Create(AFrameView: TFrameView; ASettings: IFrameSaveSettings;
   AResolver: TExportTargetResolver; ASaveDialog: TSaveDialogPresenter;
   ARenderPipeline: TFrameRenderPipeline);
 begin
@@ -67,11 +67,11 @@ procedure TFrameSaver.WriteFrameFile(AIndex: Integer; const APath: string; AForm
 var
   Tmp: TBitmap;
 begin
-  if FSettings.SaveAtLiveResolution then
+  if FSettings.GetSaveAtLiveResolution then
   begin
     Tmp := FRenderPipeline.RenderCellAtLiveSize(AIndex);
     try
-      BitmapSaver.SaveBitmapToFile(Tmp, APath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+      BitmapSaver.SaveBitmapToFile(Tmp, APath, AFormat, FSettings.GetJpegQuality, FSettings.GetPngCompression);
     finally
       Tmp.Free;
     end;
@@ -82,7 +82,7 @@ begin
      not-loaded cell); skip a nil rather than hand it to the saver.}
     Tmp := FRenderPipeline.PickSaveBitmap(AIndex, False);
     if Tmp <> nil then
-      BitmapSaver.SaveBitmapToFile(Tmp, APath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+      BitmapSaver.SaveBitmapToFile(Tmp, APath, AFormat, FSettings.GetJpegQuality, FSettings.GetPngCompression);
   end;
 end;
 
@@ -93,10 +93,10 @@ begin
   {Native combined images can exhaust 32-bit address space; surface a
    domain-specific error instead of the generic OS message.}
   try
-    Bmp := FRenderPipeline.RenderWithBanner(FRenderPipeline.RenderCombinedFromCells(FSettings.SaveAtLiveResolution));
+    Bmp := FRenderPipeline.RenderWithBanner(FRenderPipeline.RenderCombinedFromCells(FSettings.GetSaveAtLiveResolution));
     try
       FRenderPipeline.ApplyCombinedSizeCap(Bmp);
-      BitmapSaver.SaveBitmapToFile(Bmp, APath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+      BitmapSaver.SaveBitmapToFile(Bmp, APath, AFormat, FSettings.GetJpegQuality, FSettings.GetPngCompression);
     finally
       Bmp.Free;
     end;
@@ -121,11 +121,11 @@ begin
     if FFrameView.CellState(I) <> fcsLoaded then
       Continue;
     TargetPath := ADir + GenerateFrameFileName(AFileName, I, FFrameView.CellTimeOffset(I), AFormat);
-    if FSettings.SaveAtLiveResolution then
+    if FSettings.GetSaveAtLiveResolution then
     begin
       Tmp := FRenderPipeline.RenderCellAtLiveSize(I);
       try
-        BitmapSaver.SaveBitmapToFile(Tmp, TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+        BitmapSaver.SaveBitmapToFile(Tmp, TargetPath, AFormat, FSettings.GetJpegQuality, FSettings.GetPngCompression);
       finally
         Tmp.Free;
       end;
@@ -134,7 +134,7 @@ begin
     begin
       Tmp := FRenderPipeline.PickSaveBitmap(I, False);
       if Tmp <> nil then
-        BitmapSaver.SaveBitmapToFile(Tmp, TargetPath, AFormat, FSettings.JpegQuality, FSettings.PngCompression);
+        BitmapSaver.SaveBitmapToFile(Tmp, TargetPath, AFormat, FSettings.GetJpegQuality, FSettings.GetPngCompression);
     end;
   end;
 end;
@@ -151,12 +151,12 @@ begin
 
   {Dialog FIRST so the user gets immediate feedback; the seconds-long
    re-extract runs only after the user commits AND picks native resolution.}
-  if not FSaveDialog.Show('Save frame', GenerateFrameFileName(AFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.SaveFormat), True, FSettings.SaveAtLiveResolution, Path, Fmt) then
+  if not FSaveDialog.Show('Save frame', GenerateFrameFileName(AFileName, Idx, FFrameView.CellTimeOffset(Idx), FSettings.GetSaveFormat), True, FSettings.GetSaveAtLiveResolution, Path, Fmt) then
     Exit;
 
   WriteAction := procedure begin WriteFrameFile(Idx, Path, Fmt) end;
 
-  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+  if (not FSettings.GetSaveAtLiveResolution) and Assigned(AReExtract) then
     AReExtract([Idx], WriteAction)
   else
     WriteAction;
@@ -187,7 +187,7 @@ begin
         Break;
       end;
 
-  if not FSaveDialog.Show('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.SaveFormat), False, FSettings.SaveAtLiveResolution, Path, Fmt) then
+  if not FSaveDialog.Show('Save frames', GenerateFrameFileName(AFileName, FirstIdx, FFrameView.CellTimeOffset(FirstIdx), FSettings.GetSaveFormat), False, FSettings.GetSaveAtLiveResolution, Path, Fmt) then
     Exit;
 
   WriteAction := procedure
@@ -195,7 +195,7 @@ begin
       SaveFramesToDir(IncludeTrailingPathDelimiter(ExtractFilePath(Path)), Fmt, SelectedOnly, AFileName);
     end;
 
-  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+  if (not FSettings.GetSaveAtLiveResolution) and Assigned(AReExtract) then
   begin
     Indices := FResolver.BuildSaveIndicesSelectedOrAll;
     AReExtract(Indices, WriteAction);
@@ -228,7 +228,7 @@ begin
 
   WriteAction := procedure begin WriteCombinedView(Path, Fmt) end;
 
-  if (not FSettings.SaveAtLiveResolution) and Assigned(AReExtract) then
+  if (not FSettings.GetSaveAtLiveResolution) and Assigned(AReExtract) then
     AReExtract(FResolver.BuildSaveIndicesAllLoaded, WriteAction)
   else
     WriteAction;

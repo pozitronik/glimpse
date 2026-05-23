@@ -14,7 +14,8 @@ type
    crash when both the form and an interface field hold the same instance.}
   TPluginSettings = class(TNoRefCountObject,
     ITimecodeStyleProvider, IBannerStyleProvider, ISaveFormatPolicy,
-    IRenderColorPolicy, IClipboardPolicy, IRenderSizePolicy)
+    IRenderColorPolicy, IClipboardPolicy, IRenderSizePolicy,
+    IFrameSaveSettings, IFrameCopySettings)
   strict private
     FIniPath: string;
     FFFmpeg: TFFmpegSettingsGroup;
@@ -193,6 +194,7 @@ type
     function GetClipboardFormats: TClipboardFormatsGroup;
     function GetClipboardAsFileReference: Boolean;
     function GetPngCompression: Integer;
+    function GetJpegQuality: Integer;
   end;
 
 const
@@ -461,6 +463,11 @@ end;
 function TPluginSettings.GetCombinedMaxSide: Integer;
 begin
   Result := FSave.CombinedMaxSide;
+end;
+
+function TPluginSettings.GetJpegQuality: Integer;
+begin
+  Result := FSave.JpegQuality;
 end;
 
 function TPluginSettings.GetBackground: TColor;

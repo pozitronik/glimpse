@@ -1,4 +1,4 @@
-{Pins that TPluginSettings actually satisfies each of the 6 narrow
+{Pins that TPluginSettings actually satisfies each of the 8 narrow
  settings interfaces and that getter/setter readback matches the
  underlying flat property. The interfaces are pure contracts, so this
  is the one seam that can break silently.}
@@ -19,6 +19,8 @@ type
     [Test] procedure TPluginSettings_ImplementsIRenderSizePolicy;
     [Test] procedure TPluginSettings_ImplementsIRenderColorPolicy;
     [Test] procedure TPluginSettings_ImplementsIClipboardPolicy;
+    [Test] procedure TPluginSettings_ImplementsIFrameSaveSettings;
+    [Test] procedure TPluginSettings_ImplementsIFrameCopySettings;
     [Test] procedure SaveFormatPolicy_SetSaveFolder_RoundTrips;
     [Test] procedure SaveFormatPolicy_SetSaveAtLiveResolution_RoundTrips;
     [Test] procedure NoRefCount_InterfaceRefRelease_DoesNotFreeInstance;
@@ -141,6 +143,46 @@ begin
     Assert.IsFalse(P.GetClipboardFormats.PublishCompressedPng);
     Assert.IsTrue(P.GetClipboardAsFileReference);
     Assert.AreEqual(7, P.GetPngCompression);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestSettingsInterfaces.TPluginSettings_ImplementsIFrameSaveSettings;
+var
+  S: TPluginSettings;
+  P: IFrameSaveSettings;
+begin
+  S := TPluginSettings.Create('');
+  try
+    S.SaveFormat := sfJPEG;
+    S.SaveAtLiveResolution := True;
+    S.JpegQuality := 88;
+    S.PngCompression := 6;
+    P := S;
+    Assert.IsTrue(P.GetSaveFormat = sfJPEG);
+    Assert.IsTrue(P.GetSaveAtLiveResolution);
+    Assert.AreEqual(88, P.GetJpegQuality);
+    Assert.AreEqual(6, P.GetPngCompression);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestSettingsInterfaces.TPluginSettings_ImplementsIFrameCopySettings;
+var
+  S: TPluginSettings;
+  P: IFrameCopySettings;
+begin
+  S := TPluginSettings.Create('');
+  try
+    S.ClipboardAsFileReference := True;
+    S.Background := clNavy;
+    S.CopyAtLiveResolution := True;
+    P := S;
+    Assert.IsTrue(P.GetClipboardAsFileReference);
+    Assert.IsTrue(P.GetBackground = clNavy);
+    Assert.IsTrue(P.GetCopyAtLiveResolution);
   finally
     S.Free;
   end;

@@ -6,14 +6,14 @@ unit FrameCopier;
 interface
 
 uses
-  FrameView, Settings, ExportTargetResolver, ClipboardPublisher,
+  FrameView, SettingsInterfaces, ExportTargetResolver, ClipboardPublisher,
   FrameRenderPipeline, FrameExportTypes;
 
 type
   TFrameCopier = class
   strict private
     FFrameView: TFrameView;
-    FSettings: TPluginSettings;
+    FSettings: IFrameCopySettings;
     FResolver: TExportTargetResolver;
     FClipboardPublisher: TClipboardPublisher;
     FRenderPipeline: TFrameRenderPipeline;
@@ -28,7 +28,7 @@ type
     procedure WriteCombinedToClipboard(AForceLiveRes: Boolean);
   public
     {All five collaborators are borrowed; TFrameExporter owns them.}
-    constructor Create(AFrameView: TFrameView; ASettings: TPluginSettings;
+    constructor Create(AFrameView: TFrameView; ASettings: IFrameCopySettings;
       AResolver: TExportTargetResolver; AClipboardPublisher: TClipboardPublisher;
       ARenderPipeline: TFrameRenderPipeline);
     {Honours CopyAtLiveResolution. AReExtract fires when native is requested
@@ -45,7 +45,7 @@ uses
   Vcl.Dialogs, Vcl.Graphics,
   Types;
 
-constructor TFrameCopier.Create(AFrameView: TFrameView; ASettings: TPluginSettings;
+constructor TFrameCopier.Create(AFrameView: TFrameView; ASettings: IFrameCopySettings;
   AResolver: TExportTargetResolver; AClipboardPublisher: TClipboardPublisher;
   ARenderPipeline: TFrameRenderPipeline);
 begin
@@ -75,12 +75,12 @@ begin
     {PublishAs* take ToPublish unconditionally and nil it; the finally
      Free is a nil-safe guard for the path where a publish raises before
      taking ownership.}
-    if FSettings.ClipboardAsFileReference then
+    if FSettings.GetClipboardAsFileReference then
     begin
       if FClipboardPublisher.PublishAsFileReference(ToPublish) = cprFailed then
         MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
     end
-    else if FClipboardPublisher.PublishAsImage(ToPublish, FSettings.Background, ErrMsg) = cprFailed then
+    else if FClipboardPublisher.PublishAsImage(ToPublish, FSettings.GetBackground, ErrMsg) = cprFailed then
       MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
   finally
     ToPublish.Free;
@@ -100,14 +100,14 @@ begin
     try
       FRenderPipeline.ApplyCombinedSizeCap(Bmp);
       {Strategy array from ClipboardFormats: legacy targets see opaque
-       pixels flattened against FSettings.Background; alpha-aware targets
+       pixels flattened against FSettings.GetBackground; alpha-aware targets
        see transparent cell gaps via CF_DIBV5.}
-      if FSettings.ClipboardAsFileReference then
+      if FSettings.GetClipboardAsFileReference then
       begin
         if FClipboardPublisher.PublishAsFileReference(Bmp) = cprFailed then
           MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
       end
-      else if FClipboardPublisher.PublishAsImage(Bmp, FSettings.Background, ErrMsg) = cprFailed then
+      else if FClipboardPublisher.PublishAsImage(Bmp, FSettings.GetBackground, ErrMsg) = cprFailed then
         MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, True), mtError, [mbOK], 0);
     finally
       Bmp.Free;
@@ -132,7 +132,7 @@ begin
   {Single-frame uses CF_BITMAP only (broadest compatibility, frames are
    opaque pf24bit). CopyView needs CF_DIBV5 for cell-gap transparency —
    do NOT collapse the two paths.}
-  CopyLiveRes := FSettings.CopyAtLiveResolution;
+  CopyLiveRes := FSettings.GetCopyAtLiveResolution;
 
   WriteAction := procedure begin WriteFrameToClipboard(Idx, CopyLiveRes) end;
 

@@ -54,10 +54,29 @@ type
     ['{E5F6A7B8-8CAF-4ECE-D508-6CBF9EDABE56}']
     function GetClipboardFormats: TClipboardFormatsGroup;
     function GetClipboardAsFileReference: Boolean;
-    {Also exposed via ISaveFormatPolicy. One underlying field driving
+    {Also exposed via IFrameSaveSettings. One underlying field driving
      two consumer concerns (file-save + in-memory CF_PNG) is not
      duplication; each interface exposes what its consumer needs.}
     function GetPngCompression: Integer;
+  end;
+
+  {Settings slice for the frame-save flow: encoder format, the live-resolution
+   toggle for saves, and the format-specific quality knobs.}
+  IFrameSaveSettings = interface
+    ['{F1B6C9E7-5B9D-4E0F-A8B1-6D1E9F3E4B7C}']
+    function GetSaveFormat: TSaveFormat;
+    function GetSaveAtLiveResolution: Boolean;
+    function GetJpegQuality: Integer;
+    function GetPngCompression: Integer;
+  end;
+
+  {Settings slice for the frame-copy flow: clipboard target routing, the
+   background color the flattened path needs, and copy-at-live-resolution.}
+  IFrameCopySettings = interface
+    ['{A2C7DAF8-6CAE-4F10-B9C2-7E2FA042F5CD}']
+    function GetClipboardAsFileReference: Boolean;
+    function GetBackground: TColor;
+    function GetCopyAtLiveResolution: Boolean;
   end;
 
 implementation
