@@ -16,7 +16,8 @@ uses
   FrameExport, ExtractionController, PluginServices, FileNavigator,
   CommandDescriptors,
   StatusBarTokens, StatusBarTemplate, StatusBarFormatters, StatusBarRenderer,
-  StatusBarPresenter;
+  StatusBarPresenter,
+  ListerMenuExtension;
 
 type
   TPluginForm = class;
@@ -128,6 +129,10 @@ type
      Replaces four parallel CM_* case ladders with one data table.}
     FCommandHandlers: TPluginCommandHandlers;
     FCommandTable: TCommandTable;
+    {Experimental: Glimpse actions appended to TLister's menu bar.
+     Constructed in CreateForPlugin only when ShowListerMenu is on and
+     we're not in Quick View; nil otherwise.}
+    FListerMenuExtension: TListerMenuExtension;
 
     procedure CreateToolbar;
     procedure LayoutToolbar;
@@ -169,6 +174,11 @@ type
     procedure InitializeUI;
     procedure InitializeExtractionStack;
     procedure InitializeServices;
+    {Conditionally constructs FListerMenuExtension. Honoured only in
+     non-QuickView mode (QV has no menu bar on its parent).}
+    procedure InstallListerMenuIfEnabled;
+    {Dispatch callback for the lister-menu extension.}
+    procedure OnListerMenuItemPick(const AEntry: TListerMenuEntry);
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -601,6 +611,7 @@ begin
 
   InitializeExtractionStack;
   InitializeServices;
+  InstallListerMenuIfEnabled;
 
   LoadFile(AFileName);
 
@@ -750,6 +761,35 @@ begin
   FCommandTable := FCommandHandlers.BuildTable;
 end;
 
+procedure TPluginForm.InstallListerMenuIfEnabled;
+begin
+  if FQuickViewMode then
+    Exit;
+  if (FSettings = nil) or not FSettings.ShowListerMenu then
+    Exit;
+  FListerMenuExtension := TListerMenuExtension.Create(FParentWnd,
+    FSettings.ListerMenuFlat, OnListerMenuItemPick);
+end;
+
+procedure TPluginForm.OnListerMenuItemPick(const AEntry: TListerMenuEntry);
+begin
+  case AEntry.Kind of
+    lmekMode:
+      ActivateMode(AEntry.Mode);
+    lmekZoom:
+      begin
+        ActivateMode(AEntry.Mode);
+        FFrameView.ZoomMode := AEntry.Zoom;
+        FSettings.ModeZoom[AEntry.Mode] := AEntry.Zoom;
+        FSettings.Save;
+      end;
+    lmekTimecode:
+      DoToggleTimecode;
+    lmekAction:
+      DispatchCommand(AEntry.ActionTag);
+  end;
+end;
+
 destructor TPluginForm.Destroy;
 begin
   {Release the table's executor closures BEFORE freeing the handler
@@ -760,6 +800,9 @@ begin
    Self briefly during finalization.}
   FCommandTable := nil;
   FreeAndNil(FCommandHandlers);
+  {Free the lister-menu extension early so its subclass-uninstall and
+   menu-removal run while FParentWnd is still a valid window.}
+  FreeAndNil(FListerMenuExtension);
   FreeAndNil(FSettingsToggle);
   if HandleAllocated then
     RemoveWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID);

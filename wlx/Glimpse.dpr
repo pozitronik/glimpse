@@ -58,6 +58,7 @@ uses
   ToolbarLayout in 'Toolbar\ToolbarLayout.pas',
   ToolbarGlyphLibrary in 'Toolbar\ToolbarGlyphLibrary.pas',
   ToolbarBuilder in 'Toolbar\ToolbarBuilder.pas',
+  ListerMenuExtension in 'Toolbar\ListerMenuExtension.pas',
   ToolbarController in 'Controllers\ToolbarController.pas',
   ViewportRefreshDebouncer in 'Services\ViewportRefreshDebouncer.pas',
   LoadTimeRecorder in 'Services\LoadTimeRecorder.pas',

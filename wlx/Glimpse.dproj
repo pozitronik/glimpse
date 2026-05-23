@@ -114,6 +114,7 @@
         <DCCReference Include="Toolbar\ToolbarLayout.pas"/>
         <DCCReference Include="Toolbar\ToolbarGlyphLibrary.pas"/>
         <DCCReference Include="Toolbar\ToolbarBuilder.pas"/>
+        <DCCReference Include="Toolbar\ListerMenuExtension.pas"/>
         <DCCReference Include="Controllers\ToolbarController.pas"/>
         <DCCReference Include="Services\ViewportRefreshDebouncer.pas"/>
         <DCCReference Include="Services\LoadTimeRecorder.pas"/>

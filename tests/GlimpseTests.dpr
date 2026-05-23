@@ -81,6 +81,7 @@ uses
   ToolbarGlyphLibrary in '..\wlx\Toolbar\ToolbarGlyphLibrary.pas',
   TestToolbarGlyphLibrary in 'TestToolbarGlyphLibrary.pas',
   ToolbarBuilder in '..\wlx\Toolbar\ToolbarBuilder.pas',
+  ListerMenuExtension in '..\wlx\Toolbar\ListerMenuExtension.pas',
   ViewportRefreshDebouncer in '..\wlx\Services\ViewportRefreshDebouncer.pas',
   TestViewportRefreshDebouncer in 'TestViewportRefreshDebouncer.pas',
   LoadTimeRecorder in '..\wlx\Services\LoadTimeRecorder.pas',
