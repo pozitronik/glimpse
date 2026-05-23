@@ -46,21 +46,23 @@ end;
 
 procedure TTestWcxPresetsRepository.LoadAll_MissingFile_ReturnsEmptyArray;
 var
-  Repo: IWcxPresetsRepository;
+  Reader: IWcxPresetsReader;
   Loaded: TWcxPresetArray;
 begin
-  Repo := TProductionWcxPresetsRepository.Create(FPresetsPath);
-  Loaded := Repo.LoadAll;
+  Reader := TProductionWcxPresetsRepository.Create(FPresetsPath);
+  Loaded := Reader.LoadAll;
   Assert.AreEqual<Integer>(0, Length(Loaded),
     'LoadAll on a missing file must return an empty array, not raise');
 end;
 
 procedure TTestWcxPresetsRepository.SaveAll_LoadAll_RoundTripsPresetFields;
 var
-  Repo: IWcxPresetsRepository;
+  Reader: IWcxPresetsReader;
+  Writer: IWcxPresetsWriter;
   Seed, Loaded: TWcxPresetArray;
 begin
-  Repo := TProductionWcxPresetsRepository.Create(FPresetsPath);
+  Reader := TProductionWcxPresetsRepository.Create(FPresetsPath);
+  Writer := Reader as IWcxPresetsWriter;
   SetLength(Seed, 2);
   Seed[0].Name := 'alpha';
   Seed[0].Enabled := True;
@@ -71,8 +73,8 @@ begin
   Seed[1].Enabled := False;
   Seed[1].OutputExt := 'mkv';
 
-  Repo.SaveAll(Seed);
-  Loaded := Repo.LoadAll;
+  Writer.SaveAll(Seed);
+  Loaded := Reader.LoadAll;
 
   Assert.AreEqual<Integer>(2, Length(Loaded), 'Round-trip must preserve the preset count');
   Assert.AreEqual('alpha', Loaded[0].Name);
@@ -87,20 +89,22 @@ end;
 
 procedure TTestWcxPresetsRepository.SaveAll_Twice_SecondSaveReplacesFirst;
 var
-  Repo: IWcxPresetsRepository;
+  Reader: IWcxPresetsReader;
+  Writer: IWcxPresetsWriter;
   First, Second, Loaded: TWcxPresetArray;
 begin
-  Repo := TProductionWcxPresetsRepository.Create(FPresetsPath);
+  Reader := TProductionWcxPresetsRepository.Create(FPresetsPath);
+  Writer := Reader as IWcxPresetsWriter;
   SetLength(First, 2);
   First[0].Name := 'one'; First[0].Enabled := True; First[0].OutputExt := 'mp4';
   First[1].Name := 'two'; First[1].Enabled := True; First[1].OutputExt := 'mkv';
-  Repo.SaveAll(First);
+  Writer.SaveAll(First);
 
   SetLength(Second, 1);
   Second[0].Name := 'only'; Second[0].Enabled := True; Second[0].OutputExt := 'webm';
-  Repo.SaveAll(Second);
+  Writer.SaveAll(Second);
 
-  Loaded := Repo.LoadAll;
+  Loaded := Reader.LoadAll;
   Assert.AreEqual<Integer>(1, Length(Loaded),
     'Second SaveAll must wipe the first; otherwise removed presets leak back into the file');
   Assert.AreEqual('only', Loaded[0].Name);
@@ -108,14 +112,16 @@ end;
 
 procedure TTestWcxPresetsRepository.EmptyPath_LoadAll_ReturnsEmpty_SaveAll_NoOp;
 var
-  Repo: IWcxPresetsRepository;
+  Reader: IWcxPresetsReader;
+  Writer: IWcxPresetsWriter;
   Seed, Loaded: TWcxPresetArray;
 begin
-  Repo := TProductionWcxPresetsRepository.Create('');
+  Reader := TProductionWcxPresetsRepository.Create('');
+  Writer := Reader as IWcxPresetsWriter;
   SetLength(Seed, 1);
   Seed[0].Name := 'x'; Seed[0].Enabled := True; Seed[0].OutputExt := 'mp4';
-  Repo.SaveAll(Seed);
-  Loaded := Repo.LoadAll;
+  Writer.SaveAll(Seed);
+  Loaded := Reader.LoadAll;
   Assert.AreEqual<Integer>(0, Length(Loaded),
     'Empty-path repo must behave as a no-op on both sides; matches the legacy free-function contract');
 end;

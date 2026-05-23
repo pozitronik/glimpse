@@ -36,7 +36,7 @@ type
      be nil for callers without a presets backing store.}
     function Run(ASettings: TWcxSettings; APresetModel: TPresetEditorModel;
       const ASettingsRepo: IWcxSettingsRepository;
-      const APresetsRepo: IWcxPresetsRepository;
+      const APresetsRepo: IWcxPresetsWriter;
       const APreparePersistence: TProc;
       const AOnApply: TProc): TSettingsSaveResult;
   end;
@@ -46,7 +46,7 @@ implementation
 function TSettingsSaveOrchestrator.Run(ASettings: TWcxSettings;
   APresetModel: TPresetEditorModel;
   const ASettingsRepo: IWcxSettingsRepository;
-  const APresetsRepo: IWcxPresetsRepository;
+  const APresetsRepo: IWcxPresetsWriter;
   const APreparePersistence: TProc; const AOnApply: TProc): TSettingsSaveResult;
 begin
   Result.Kind := ssrSkipped;

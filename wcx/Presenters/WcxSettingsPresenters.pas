@@ -76,7 +76,7 @@ type
   TWcxPresetEditorPresenter = class
   strict private
     FPresetModel: TPresetEditorModel;
-    FPresetsRepo: IWcxPresetsRepository;
+    FPresetsRepo: IWcxPresetsReader;
     FLbxPresets: TListBox;
     FEdtPresetName: TEdit;
     FChkPresetEnabled: TCheckBox;
@@ -87,7 +87,7 @@ type
     FCurrentPresetIndex: Integer;
   public
     constructor Create(APresetModel: TPresetEditorModel;
-      const APresetsRepo: IWcxPresetsRepository;
+      const APresetsRepo: IWcxPresetsReader;
       ALbxPresets: TListBox;
       AEdtPresetName: TEdit; AChkPresetEnabled: TCheckBox;
       AEdtPresetDescription: TEdit; AEdtPresetOutputExt: TEdit;
@@ -260,7 +260,7 @@ end;
 {TWcxPresetEditorPresenter}
 
 constructor TWcxPresetEditorPresenter.Create(APresetModel: TPresetEditorModel;
-  const APresetsRepo: IWcxPresetsRepository;
+  const APresetsRepo: IWcxPresetsReader;
   ALbxPresets: TListBox;
   AEdtPresetName: TEdit; AChkPresetEnabled: TCheckBox;
   AEdtPresetDescription: TEdit; AEdtPresetOutputExt: TEdit;

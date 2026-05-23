@@ -236,14 +236,14 @@ procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 var
   Settings: TWcxSettings;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsReader: IWcxPresetsReader;
 begin
   Settings := TWcxSettings.Create(GIniPath);
   try
     Settings.Load;
     SettingsRepo := TProductionWcxSettingsRepository.Create;
-    PresetsRepo := TProductionWcxPresetsRepository.Create(PresetsIniPath(GIniPath));
-    if ShowWcxSettingsDialog(Parent, Settings, SettingsRepo, PresetsRepo,
+    PresetsReader := TProductionWcxPresetsRepository.Create(PresetsIniPath(GIniPath));
+    if ShowWcxSettingsDialog(Parent, Settings, SettingsRepo, PresetsReader, PresetsReader as IWcxPresetsWriter,
       procedure
       begin
         TWcxFrameCache.Instance.Invalidate;

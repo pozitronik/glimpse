@@ -49,18 +49,15 @@ type
     property LastInstance: TWcxSettings read FLastInstance;
   end;
 
-  {Recording fake presets repository. LoadAll returns the canned payload
-   if any; SaveAll records the call count + the persisted array length
-   + a copy of the array so assertions can pin per-element fields.}
-  TFakePresetsRepo = class(TInterfacedObject, IWcxPresetsRepository)
+  {Recording fake presets writer: SaveAll records the call count + the
+   persisted array length + a copy of the array so assertions can pin
+   per-element fields. The orchestrator only writes.}
+  TFakePresetsRepo = class(TInterfacedObject, IWcxPresetsWriter)
   strict private
-    FLoadResult: TWcxPresetArray;
     FSaveCount: Integer;
     FLastSaved: TWcxPresetArray;
   public
-    function LoadAll: TWcxPresetArray;
     procedure SaveAll(const APresets: TWcxPresetArray);
-    property LoadResult: TWcxPresetArray read FLoadResult write FLoadResult;
     property SaveCount: Integer read FSaveCount;
     property LastSaved: TWcxPresetArray read FLastSaved;
   end;
@@ -74,11 +71,6 @@ begin
 end;
 
 {TFakePresetsRepo}
-
-function TFakePresetsRepo.LoadAll: TWcxPresetArray;
-begin
-  Result := FLoadResult;
-end;
 
 procedure TFakePresetsRepo.SaveAll(const APresets: TWcxPresetArray);
 var
@@ -111,7 +103,7 @@ var
   SettingsRepoObj: TFakeSettingsRepo;
   PresetsRepoObj: TFakePresetsRepo;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   R: TSettingsSaveResult;
 begin
   Model := TPresetEditorModel.Create;
@@ -139,7 +131,7 @@ var
   Model: TPresetEditorModel;
   S: TWcxSettings;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   R: TSettingsSaveResult;
   Bad: TWcxPresetArray;
 begin
@@ -174,7 +166,7 @@ var
   Model: TPresetEditorModel;
   S: TWcxSettings;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   Bad: TWcxPresetArray;
   PrepareCalled: Boolean;
 begin
@@ -208,7 +200,7 @@ var
   Model: TPresetEditorModel;
   S: TWcxSettings;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   Bad: TWcxPresetArray;
   AppliedCount: Integer;
 begin
@@ -243,7 +235,7 @@ var
   SettingsRepoObj: TFakeSettingsRepo;
   PresetsRepoObj: TFakePresetsRepo;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   Bad: TWcxPresetArray;
 begin
   S := TWcxSettings.Create(FIniPath);
@@ -279,7 +271,7 @@ var
   SettingsRepoObj: TFakeSettingsRepo;
   PresetsRepoObj: TFakePresetsRepo;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   R: TSettingsSaveResult;
   Sequence: string;
 begin
@@ -315,7 +307,7 @@ var
   SettingsRepoObj: TFakeSettingsRepo;
   PresetsRepoObj: TFakePresetsRepo;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
 begin
   S := TWcxSettings.Create(FIniPath);
   Model := TPresetEditorModel.Create;
@@ -345,7 +337,7 @@ var
   SettingsRepoObj: TFakeSettingsRepo;
   PresetsRepoObj: TFakePresetsRepo;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   Seed: TWcxPresetArray;
 begin
   S := TWcxSettings.Create(FIniPath);
@@ -405,7 +397,7 @@ var
   Orch: TSettingsSaveOrchestrator;
   Model: TPresetEditorModel;
   S: TWcxSettings;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   R: TSettingsSaveResult;
   Applied: Boolean;
 begin
@@ -432,7 +424,7 @@ var
   Model: TPresetEditorModel;
   S: TWcxSettings;
   SettingsRepo: IWcxSettingsRepository;
-  PresetsRepo: IWcxPresetsRepository;
+  PresetsRepo: IWcxPresetsWriter;
   R: TSettingsSaveResult;
 begin
   S := TWcxSettings.Create(FIniPath);

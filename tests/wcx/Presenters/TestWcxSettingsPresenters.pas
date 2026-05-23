@@ -178,16 +178,15 @@ begin
   AControls.UdCombinedMax := MakeUpDown(AParent, 0, 16000);
 end;
 
-{In-memory presets repo for preset-editor tests. Stores SaveAll output;
- LoadAll returns whatever was last persisted (or the seeded array).}
+{In-memory presets reader for preset-editor tests. LoadAll returns the
+ seeded array; the presenter only reads, so no writer facet is exposed.}
 type
-  TFakeWcxPresetsRepo = class(TInterfacedObject, IWcxPresetsRepository)
+  TFakeWcxPresetsRepo = class(TInterfacedObject, IWcxPresetsReader)
   strict private
     FStored: TWcxPresetArray;
   public
     constructor Create(const ASeed: TWcxPresetArray);
     function LoadAll: TWcxPresetArray;
-    procedure SaveAll(const APresets: TWcxPresetArray);
   end;
 
 constructor TFakeWcxPresetsRepo.Create(const ASeed: TWcxPresetArray);
@@ -203,15 +202,6 @@ end;
 function TFakeWcxPresetsRepo.LoadAll: TWcxPresetArray;
 begin
   Result := FStored;
-end;
-
-procedure TFakeWcxPresetsRepo.SaveAll(const APresets: TWcxPresetArray);
-var
-  I: Integer;
-begin
-  SetLength(FStored, Length(APresets));
-  for I := 0 to High(APresets) do
-    FStored[I] := APresets[I];
 end;
 
 {TWcxExtractionPresenter}
@@ -425,7 +415,7 @@ end;
 {Builds a presenter wired to the supplied model + repo, with fresh
  VCL controls under AForm. Caller frees the presenter.}
 function BuildPresetEditor(AForm: TForm; AModel: TPresetEditorModel;
-  const ARepo: IWcxPresetsRepository): TWcxPresetEditorPresenter;
+  const ARepo: IWcxPresetsReader): TWcxPresetEditorPresenter;
 var
   Lbx: TListBox;
   EdtName, EdtDesc, EdtExt, EdtOutName: TEdit;
@@ -447,7 +437,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_LoadFromDisk_PopulatesListBox;
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   Lbx: TListBox;
@@ -483,7 +473,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_ShowPreset_PopulatesEditFields
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   EdtName: TEdit;
@@ -520,7 +510,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_ShowMinusOne_ClearsAndDisables
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   EdtName: TEdit;
@@ -557,7 +547,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_CommitCurrentPreset_WritesBack
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   EdtName, EdtExt: TEdit;
@@ -596,7 +586,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_AddPreset_AppendsAndSelects;
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   Lbx: TListBox;
@@ -629,7 +619,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_RemovePreset_DropsRow;
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   Lbx: TListBox;
@@ -663,7 +653,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_DuplicatePreset_AddsCopyAndSel
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   Lbx: TListBox;
@@ -697,7 +687,7 @@ procedure TTestWcxSettingsPresenters.PresetEditor_NavigateToValidationFailure_Se
 var
   Form: TForm;
   Model: TPresetEditorModel;
-  Repo: IWcxPresetsRepository;
+  Repo: IWcxPresetsReader;
   Seed: TWcxPresetArray;
   P: TWcxPresetEditorPresenter;
   Lbx: TListBox;

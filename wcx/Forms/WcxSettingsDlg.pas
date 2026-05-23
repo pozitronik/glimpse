@@ -168,7 +168,8 @@ type
     FSettings: TWcxSettings;
     FOnApply: TProc;
     FSettingsRepo: IWcxSettingsRepository;
-    FPresetsRepo: IWcxPresetsRepository;
+    FPresetsReader: IWcxPresetsReader;
+    FPresetsWriter: IWcxPresetsWriter;
   private
     FOwnerWnd: HWND;
     FPresetModel: TPresetEditorModel;
@@ -202,7 +203,8 @@ type
     constructor CreateForSettings(AOwnerWnd: HWND; ASettings: TWcxSettings;
       AOnApply: TProc;
       const ASettingsRepo: IWcxSettingsRepository;
-      const APresetsRepo: IWcxPresetsRepository);
+      const APresetsReader: IWcxPresetsReader;
+      const APresetsWriter: IWcxPresetsWriter);
     destructor Destroy; override;
   end;
 
@@ -210,7 +212,8 @@ type
    by the time the callback runs.}
 function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings;
   const ASettingsRepo: IWcxSettingsRepository;
-  const APresetsRepo: IWcxPresetsRepository;
+  const APresetsReader: IWcxPresetsReader;
+  const APresetsWriter: IWcxPresetsWriter;
   AOnApply: TProc = nil): Boolean;
 
 implementation
@@ -460,7 +463,7 @@ begin
   Orchestrator := TSettingsSaveOrchestrator.Create;
   try
     Outcome := Orchestrator.Run(FSettings, FPresetModel,
-      FSettingsRepo, FPresetsRepo,
+      FSettingsRepo, FPresetsWriter,
       procedure begin ControlsToSettings(FSettings) end,
       FOnApply);
   finally
@@ -546,7 +549,8 @@ end;
 constructor TWcxSettingsForm.CreateForSettings(AOwnerWnd: HWND;
   ASettings: TWcxSettings; AOnApply: TProc;
   const ASettingsRepo: IWcxSettingsRepository;
-  const APresetsRepo: IWcxPresetsRepository);
+  const APresetsReader: IWcxPresetsReader;
+  const APresetsWriter: IWcxPresetsWriter);
 begin
   FOwnerWnd := AOwnerWnd;
   inherited Create(nil);
@@ -554,7 +558,8 @@ begin
   FSettings := ASettings;
   FOnApply := AOnApply;
   FSettingsRepo := ASettingsRepo;
-  FPresetsRepo := APresetsRepo;
+  FPresetsReader := APresetsReader;
+  FPresetsWriter := APresetsWriter;
   {Order: bundles populated first so presenters can copy refs out;
    both run after the DFM has instantiated every control referenced.}
   InitControlsBundles;
@@ -567,7 +572,7 @@ begin
     FTimestampControls, FBannerControls, FLimitsControls,
     EdtTimestampFont, EdtBannerFont, FontDlg);
   FPresetEditorPresenter := TWcxPresetEditorPresenter.Create(
-    FPresetModel, FPresetsRepo, LbxPresets,
+    FPresetModel, FPresetsReader, LbxPresets,
     EdtPresetName, ChkPresetEnabled, EdtPresetDescription,
     EdtPresetOutputExt, EdtPresetOutputName, MemoPresetArgs);
   {Keep tooltips visible as long as the cursor stays. Application is
@@ -599,14 +604,15 @@ end;
 
 function ShowWcxSettingsDialog(AParentWnd: HWND; ASettings: TWcxSettings;
   const ASettingsRepo: IWcxSettingsRepository;
-  const APresetsRepo: IWcxPresetsRepository;
+  const APresetsReader: IWcxPresetsReader;
+  const APresetsWriter: IWcxPresetsWriter;
   AOnApply: TProc): Boolean;
 var
   Dlg: TWcxSettingsForm;
 begin
   Result := False;
   Dlg := TWcxSettingsForm.CreateForSettings(AParentWnd, ASettings, AOnApply,
-    ASettingsRepo, APresetsRepo);
+    ASettingsRepo, APresetsReader, APresetsWriter);
   try
     if Dlg.ShowModal = mrOk then
     begin
