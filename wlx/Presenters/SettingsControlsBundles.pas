@@ -71,6 +71,8 @@ type
     UdCellGap: TUpDown;
     UdBorder: TUpDown;
     CbxProgressBarLayout: TComboBox;
+    ChkShowListerMenu: TCheckBox;
+    ChkListerMenuFlat: TCheckBox;
   end;
 
   {Show + Corner are encoded across ChkShowTimecode + CbxTimestampCorner via SettingsDlgLogic.}
@@ -266,6 +268,8 @@ begin
   AControls.UdCellGap.Position := ASettings.CellGap;
   AControls.UdBorder.Position := ASettings.CombinedBorder;
   AControls.CbxProgressBarLayout.ItemIndex := Ord(ASettings.ProgressBarLayout);
+  AControls.ChkShowListerMenu.Checked := ASettings.ShowListerMenu;
+  AControls.ChkListerMenuFlat.Checked := ASettings.ListerMenuFlat;
 end;
 
 procedure BindViewFromControls(ASettings: TPluginSettings; const AControls: TViewControls);
@@ -276,6 +280,8 @@ begin
   ASettings.CellGap := AControls.UdCellGap.Position;
   ASettings.CombinedBorder := AControls.UdBorder.Position;
   ASettings.ProgressBarLayout := TProgressBarLayout(AControls.CbxProgressBarLayout.ItemIndex);
+  ASettings.ShowListerMenu := AControls.ChkShowListerMenu.Checked;
+  ASettings.ListerMenuFlat := AControls.ChkListerMenuFlat.Checked;
 end;
 
 {Timestamp}

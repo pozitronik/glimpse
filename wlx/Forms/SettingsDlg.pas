@@ -157,6 +157,8 @@ type
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
     ChkQVHideStatusBar: TCheckBox;
+    ChkShowListerMenu: TCheckBox;
+    ChkListerMenuFlat: TCheckBox;
     TshHotkeys: TTabSheet;
     LvwHotkeys: TListView;
     BtnHotkeyClear: TButton;
@@ -186,6 +188,7 @@ type
      Wired to ten DFM entries (5 panels + 5 buttons).}
     procedure OnColorSwatchClick(Sender: TObject);
     procedure ChkClipboardAsFileReferenceClick(Sender: TObject);
+    procedure ChkShowListerMenuClick(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
     procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
@@ -346,6 +349,8 @@ begin
   FViewControls.UdCellGap := UdCellGap;
   FViewControls.UdBorder := UdBorder;
   FViewControls.CbxProgressBarLayout := CbxProgressBarLayout;
+  FViewControls.ChkShowListerMenu := ChkShowListerMenu;
+  FViewControls.ChkListerMenuFlat := ChkListerMenuFlat;
 
   FTimestampControls.ChkShowTimecode := ChkShowTimecode;
   FTimestampControls.CbxTimestampCorner := CbxTimestampCorner;
@@ -512,6 +517,11 @@ begin
   RecomputeEnables;
 end;
 
+procedure TSettingsForm.ChkShowListerMenuClick(Sender: TObject);
+begin
+  RecomputeEnables;
+end;
+
 procedure TSettingsForm.BtnSaveFolderClick(Sender: TObject);
 begin
   FAppearancePresenter.OnSaveFolderClick;
@@ -632,7 +642,7 @@ end;
 
 procedure TSettingsForm.BuildEnableRules;
 begin
-  SetLength(FEnableRules, 11);
+  SetLength(FEnableRules, 12);
 
   {Max workers / max threads — auto mode swaps which of the two
    workers/threads pairs is editable. Limit workers count is only
@@ -702,6 +712,10 @@ begin
                 and (CbxThumbnailMode.ItemIndex = Ord(tnmGrid));
     end;
   FEnableRules[10].Controls := [LblThumbnailGridFrames, EdtThumbnailGridFrames, UdThumbnailGridFrames];
+
+  {Flat-layout choice is meaningless when the lister menu is disabled.}
+  FEnableRules[11].Predicate := function: Boolean begin Result := ChkShowListerMenu.Checked end;
+  FEnableRules[11].Controls := [ChkListerMenuFlat];
 end;
 
 procedure TSettingsForm.RecomputeEnables;

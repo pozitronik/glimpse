@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 520
+  ClientHeight = 556
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -19,7 +19,7 @@ object SettingsForm: TSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 480
+    Height = 516
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -453,7 +453,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 1
       DesignSize = (
         452
-        450)
+        486)
       object LblBackground: TLabel
         Left = 12
         Top = 24
@@ -874,6 +874,29 @@ object SettingsForm: TSettingsForm
           'After panels'
           'Over panels'
           'Auto')
+      end
+      object ChkShowListerMenu: TCheckBox
+        Left = 12
+        Top = 460
+        Width = 200
+        Height = 17
+        Hint =
+          'Experimental: append Glimpse actions to TC'#39's lister menu bar. ' +
+          'Lister mode only; Quick View is unaffected.'
+        Caption = 'Show menu in lister (experimental)'
+        TabOrder = 30
+        OnClick = ChkShowListerMenuClick
+      end
+      object ChkListerMenuFlat: TCheckBox
+        Left = 230
+        Top = 460
+        Width = 215
+        Height = 17
+        Hint =
+          'Off: a single "Glimpse" submenu groups every action. On: each act' +
+          'ion becomes its own top-level menu entry on the lister menu bar.'
+        Caption = 'Flat layout (each item as top-level entry)'
+        TabOrder = 31
       end
     end
     object TshSave: TTabSheet
@@ -1646,7 +1669,7 @@ object SettingsForm: TSettingsForm
   end
   object PnlButtons: TPanel
     Left = 0
-    Top = 480
+    Top = 516
     Width = 460
     Height = 40
     Align = alBottom
