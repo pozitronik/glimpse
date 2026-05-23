@@ -53,6 +53,13 @@ type
     function GetColumnCount(const ACtx: TViewLayoutContext): Integer; virtual; abstract;
     function RecalcSize(const ACtx: TViewLayoutContext): TSize; virtual; abstract;
     function WheelScrollKind: TLayoutWheelAction; virtual; abstract;
+    {Default scans every index and returns the first cell rect containing
+     APoint. Subclasses MAY restrict the result to a single active cell
+     when only one is rendered (TSingleLayout returns the current frame
+     index or -1, ignoring other cells whose rects would otherwise hit).
+     Callers must not assume "if GetCellRect(I).Contains(APoint) then
+     CellIndexAt(APoint) = I" — that holds for the grid layouts but not
+     for restricted overrides.}
     function CellIndexAt(const APoint: TPoint; const ACtx: TViewLayoutContext): Integer; virtual;
   end;
 
