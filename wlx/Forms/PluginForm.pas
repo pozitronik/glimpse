@@ -1093,10 +1093,13 @@ end;
 
 function TPluginForm.ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;
 begin
-  if FModePopups[FFrameView.ViewMode] = nil then
-    Result := zmFitWindow
+  {ModeHasZoomSubmodes returns False for vmGrid and vmSmartGrid, matching
+   the "no zoom popup" gate FModePopups[VM]=nil also expressed; the domain
+   helper is the source of truth.}
+  if ModeHasZoomSubmodes(FFrameView.ViewMode) then
+    Result := ARequestedZoom
   else
-    Result := ARequestedZoom;
+    Result := zmFitWindow;
 end;
 
 procedure TPluginForm.ApplySettings;
@@ -1459,7 +1462,8 @@ end;
 
 function TPluginForm.ComputeStatusBarPostHideVisibility: Boolean;
 begin
-  Result := FSettings.ShowStatusBar and not(FQuickViewMode and FSettings.QVHideStatusBar);
+  Result := StatusBarShouldRemainVisible(FSettings.ShowStatusBar,
+    FQuickViewMode, FSettings.QVHideStatusBar);
 end;
 
 procedure TPluginForm.UpdateProgress;

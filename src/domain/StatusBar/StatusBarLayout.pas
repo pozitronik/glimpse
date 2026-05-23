@@ -36,6 +36,12 @@ function StatusBarHeightApplyModeToStr(AMode: TStatusBarHeightApplyMode): string
 function ShouldApplyStatusBarHeight(AMode: TStatusBarHeightApplyMode;
   AIsQuickView: Boolean): Boolean;
 
+{Decides whether the status bar should stay visible after the progress
+ indicator hides itself. AShowStatusBar is the user's persisted toggle;
+ AIsQuickView gates the QV override (AQVHideStatusBar). Pure: no VCL.}
+function StatusBarShouldRemainVisible(AShowStatusBar, AIsQuickView,
+  AQVHideStatusBar: Boolean): Boolean;
+
 {Pure: no VCL. ASettingPx <= 0 means auto (font-derived). APpi <= 0
  normalises to 96. Explicit heights below the font reach are bumped to
  ATextHeightPx + 2 px to avoid clipping.}
@@ -110,6 +116,12 @@ begin
   else
     Result := True;
   end;
+end;
+
+function StatusBarShouldRemainVisible(AShowStatusBar, AIsQuickView,
+  AQVHideStatusBar: Boolean): Boolean;
+begin
+  Result := AShowStatusBar and not (AIsQuickView and AQVHideStatusBar);
 end;
 
 function ResolveStatusBarHeightPixels(ATextHeightPx, ASettingPx: Integer;
