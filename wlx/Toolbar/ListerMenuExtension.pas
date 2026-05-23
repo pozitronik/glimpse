@@ -320,13 +320,9 @@ begin
 
   for I := StartPos to EndPos do
   begin
-    {Read fType + the existing caption + submenu handle so we can
-     write back the type with the caption preserved. Reading MIIM_STRING
-     into a sized buffer gives us back the text Windows already stored
-     from our AppendMenu calls.}
     FillChar(Info, SizeOf(Info), 0);
     Info.cbSize := SizeOf(Info);
-    Info.fMask := MIIM_FTYPE or MIIM_SUBMENU or MIIM_STRING;
+    Info.fMask := MIIM_FTYPE or MIIM_SUBMENU or MIIM_STRING or MIIM_ID;
     Info.dwTypeData := @StrBuf[0];
     Info.cch := STR_BUF_LEN;
     if not GetMenuItemInfo(AMenu, I, True, Info) then
@@ -340,11 +336,19 @@ begin
      them into empty text items).}
     if (Info.fType and MFT_SEPARATOR) <> 0 then
       Continue;
-    {Force string rendering. cch already points at the read-back caption,
-     so MIIM_STRING re-asserts the existing text under MFT_STRING.}
-    Info.fMask := MIIM_FTYPE or MIIM_STRING;
-    Info.fType := MFT_STRING;
-    SetMenuItemInfo(AMenu, I, True, Info);
+    {ModifyMenu replaces the item wholesale rather than mutating
+     individual fields like SetMenuItemInfo does. Used here as a
+     stronger override than the previous SetMenuItemInfo(MIIM_FTYPE)
+     attempt — if TC's WM_INITMENU handler post-stamps owner-draw bits
+     on items it doesn't recognise, the per-field SET call competes
+     with that stamping, while ModifyMenu replaces the item from
+     scratch on the menu's data structure.}
+    if Info.hSubMenu <> 0 then
+      ModifyMenu(AMenu, I, MF_BYPOSITION or MF_STRING or MF_POPUP,
+        UINT_PTR(Info.hSubMenu), PChar(@StrBuf[0]))
+    else
+      ModifyMenu(AMenu, I, MF_BYPOSITION or MF_STRING,
+        Info.wID, PChar(@StrBuf[0]));
   end;
 end;
 
