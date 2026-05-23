@@ -53,7 +53,6 @@ type
   IClipboardPolicy = interface
     ['{E5F6A7B8-8CAF-4ECE-D508-6CBF9EDABE56}']
     function GetClipboardFormats: TClipboardFormatsGroup;
-    function GetClipboardAsFileReference: Boolean;
     {Also exposed via IFrameSaveSettings. One underlying field driving
      two consumer concerns (file-save + in-memory CF_PNG) is not
      duplication; each interface exposes what its consumer needs.}

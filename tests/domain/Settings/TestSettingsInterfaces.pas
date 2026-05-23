@@ -135,13 +135,11 @@ begin
   try
     S.PublishAlphaAwareBitmap := True;
     S.PublishCompressedPng := False;
-    S.ClipboardAsFileReference := True;
     S.PngCompression := 7;
     P := S;
     Assert.IsTrue(P.GetClipboardFormats.PublishAlphaAwareBitmap,
       'GetClipboardFormats reflects the underlying group');
     Assert.IsFalse(P.GetClipboardFormats.PublishCompressedPng);
-    Assert.IsTrue(P.GetClipboardAsFileReference);
     Assert.AreEqual(7, P.GetPngCompression);
   finally
     S.Free;
