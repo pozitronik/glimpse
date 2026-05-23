@@ -132,6 +132,9 @@
         <DCCReference Include="Services\FrameExport.pas"/>
         <DCCReference Include="Presenters\SaveDialogPresenter.pas"/>
         <DCCReference Include="Services\ClipboardPublisher.pas"/>
+        <DCCReference Include="Services\FrameRenderLayout.pas"/>
+        <DCCReference Include="Services\CellBitmapScaler.pas"/>
+        <DCCReference Include="Services\OverrideFramesSource.pas"/>
         <DCCReference Include="Services\FrameRenderPipeline.pas"/>
         <DCCReference Include="Services\FrameDimensionPredictor.pas"/>
         <DCCReference Include="Controllers\ExtractionController.pas"/>
