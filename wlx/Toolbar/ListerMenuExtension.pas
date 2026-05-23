@@ -26,7 +26,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages,
   System.SysUtils, System.Generics.Collections,
-  Types;
+  Types, Hotkeys;
 
 const
   {Reserved WM_COMMAND ID range. Well above standard Windows menu ID
@@ -63,6 +63,10 @@ type
     FParentMenu: HMENU;
     FFlatMode: Boolean;
     FDispatch: TListerMenuDispatch;
+    {Borrowed; lookup-only. Used to format the hotkey shown next to
+     each leaf menu item's caption. May be nil — captions then render
+     without accelerator text.}
+    FHotkeys: THotkeyBindings;
     {Position of the first top-level item we appended to FParentMenu,
      and how many top-level items we appended. Used for removal via
      MF_BYPOSITION (deleting in reverse order shifts the menu down
@@ -76,6 +80,18 @@ type
     FEntries: TDictionary<Word, TListerMenuEntry>;
     FNextId: Word;
     function AllocIdFor(const AEntry: TListerMenuEntry): Word;
+    {Maps an entry to its TPluginAction so we can look up the binding.
+     Returns paNone for entries with no direct action (zoom variants,
+     submenu parents that only open their popup).}
+    function PluginActionFor(const AEntry: TListerMenuEntry): TPluginAction;
+    {Returns the display string for the first assigned chord bound to
+     AEntry's TPluginAction, or '' when nothing is bound or no action
+     maps. Reads through FHotkeys (nil-safe).}
+    function AcceleratorFor(const AEntry: TListerMenuEntry): string;
+    {ABase + #9 + accelerator (when present). #9 is the Win32 menu
+     convention for right-aligning the accelerator hint.}
+    function CaptionWithAccelerator(const ABase: string;
+      const AEntry: TListerMenuEntry): string;
     procedure AddSeparator(ADest: HMENU);
     procedure AddPlainModeItem(ADest: HMENU; AMode: TViewMode);
     procedure AddModeWithZoomSubmenu(ADest: HMENU; AMode: TViewMode);
@@ -105,9 +121,11 @@ type
     procedure ForceRebuild;
     {AParentWnd is the TLister window. AFlatMode selects layout
      (False = submenu under one "Glimpse" entry, True = each item
-     at top level). The dispatch callback is invoked on every click;
-     the host translates the entry to its action.}
+     at top level). AHotkeys is borrowed (nil is allowed; captions
+     then omit the accelerator hint). The dispatch callback is invoked
+     on every click; the host translates the entry to its action.}
     constructor Create(AParentWnd: HWND; AFlatMode: Boolean;
+      AHotkeys: THotkeyBindings;
       const ADispatch: TListerMenuDispatch);
     destructor Destroy; override;
     {Returns True if ACommandId was one of ours (dispatched). The
@@ -190,11 +208,13 @@ begin
 end;
 
 constructor TListerMenuExtension.Create(AParentWnd: HWND; AFlatMode: Boolean;
+  AHotkeys: THotkeyBindings;
   const ADispatch: TListerMenuDispatch);
 begin
   inherited Create;
   FParentWnd := AParentWnd;
   FFlatMode := AFlatMode;
+  FHotkeys := AHotkeys;
   FDispatch := ADispatch;
   FNextId := LISTER_MENU_CMD_BASE;
   FEntries := TDictionary<Word, TListerMenuEntry>.Create;
@@ -361,6 +381,75 @@ begin
   FEntries.Add(Result, AEntry);
 end;
 
+function TListerMenuExtension.PluginActionFor(const AEntry: TListerMenuEntry): TPluginAction;
+begin
+  case AEntry.Kind of
+    lmekMode:
+      case AEntry.Mode of
+        vmSmartGrid: Result := paViewModeSmartGrid;
+        vmGrid:      Result := paViewModeGrid;
+        vmScroll:    Result := paViewModeScroll;
+        vmFilmstrip: Result := paViewModeFilmstrip;
+        vmSingle:    Result := paViewModeSingle;
+      else
+        Result := paNone;
+      end;
+    lmekTimecode:
+      Result := paToggleTimecode;
+    lmekAction:
+      case AEntry.ActionTag of
+        CM_SAVE_FRAME:       Result := paSaveFrame;
+        CM_SAVE_FRAMES:      Result := paSaveFrames;
+        CM_SAVE_VIEW:        Result := paSaveView;
+        CM_SAVE_VIEW_LIVE:   Result := paSaveViewLive;
+        CM_SAVE_VIEW_NATIVE: Result := paSaveViewNative;
+        CM_COPY_FRAME:       Result := paCopyFrame;
+        CM_COPY_VIEW:        Result := paCopyView;
+        CM_COPY_VIEW_LIVE:   Result := paCopyViewLive;
+        CM_COPY_VIEW_NATIVE: Result := paCopyViewNative;
+        CM_REFRESH:          Result := paRefreshExtraction;
+        CM_SHUFFLE:          Result := paShuffleExtraction;
+        CM_SETTINGS:         Result := paSettings;
+      else
+        Result := paNone;
+      end;
+  else
+    {lmekZoom items inside mode submenus have no dedicated action —
+     they activate a mode + apply a zoom, which has no single hotkey
+     in the binding table.}
+    Result := paNone;
+  end;
+end;
+
+function TListerMenuExtension.AcceleratorFor(const AEntry: TListerMenuEntry): string;
+var
+  Action: TPluginAction;
+  Chords: THotkeyChordArray;
+  I: Integer;
+begin
+  Result := '';
+  if FHotkeys = nil then
+    Exit;
+  Action := PluginActionFor(AEntry);
+  if Action = paNone then
+    Exit;
+  Chords := FHotkeys.Get(Action);
+  for I := 0 to High(Chords) do
+    if Chords[I].IsAssigned then
+      Exit(Chords[I].ToDisplayStr);
+end;
+
+function TListerMenuExtension.CaptionWithAccelerator(const ABase: string;
+  const AEntry: TListerMenuEntry): string;
+var
+  Acc: string;
+begin
+  Acc := AcceleratorFor(AEntry);
+  if Acc = '' then
+    Exit(ABase);
+  Result := ABase + #9 + Acc;
+end;
+
 procedure TListerMenuExtension.AddSeparator(ADest: HMENU);
 begin
   {Separators only belong inside popup menus. Adding one to the
@@ -376,13 +465,15 @@ procedure TListerMenuExtension.AddPlainModeItem(ADest: HMENU; AMode: TViewMode);
 var
   Entry: TListerMenuEntry;
   Id: Word;
+  Caption: string;
 begin
   Entry.Kind := lmekMode;
   Entry.Mode := AMode;
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := 0;
   Id := AllocIdFor(Entry);
-  AppendMenu(ADest, MF_STRING, Id, PChar(MenuCaptionForMode(AMode)));
+  Caption := CaptionWithAccelerator(MenuCaptionForMode(AMode), Entry);
+  AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
 procedure TListerMenuExtension.AddModeWithZoomSubmenu(ADest: HMENU; AMode: TViewMode);
@@ -420,13 +511,15 @@ procedure TListerMenuExtension.AddTimecodeItem(ADest: HMENU);
 var
   Entry: TListerMenuEntry;
   Id: Word;
+  Caption: string;
 begin
   Entry.Kind := lmekTimecode;
   Entry.Mode := vmGrid;
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := 0;
   Id := AllocIdFor(Entry);
-  AppendMenu(ADest, MF_STRING, Id, TIMECODE_MENU_CAPTION);
+  Caption := CaptionWithAccelerator(TIMECODE_MENU_CAPTION, Entry);
+  AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
 procedure TListerMenuExtension.AddActionItem(ADest: HMENU; AActionTag: Integer;
@@ -434,13 +527,15 @@ procedure TListerMenuExtension.AddActionItem(ADest: HMENU; AActionTag: Integer;
 var
   Entry: TListerMenuEntry;
   Id: Word;
+  Caption: string;
 begin
   Entry.Kind := lmekAction;
   Entry.Mode := vmGrid;
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := AActionTag;
   Id := AllocIdFor(Entry);
-  AppendMenu(ADest, MF_STRING, Id, PChar(ACaption));
+  Caption := CaptionWithAccelerator(ACaption, Entry);
+  AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
 {Save view / Copy view / Refresh map to split-buttons on the toolbar

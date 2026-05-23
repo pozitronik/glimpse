@@ -768,7 +768,7 @@ begin
   if (FSettings = nil) or not FSettings.ShowListerMenu then
     Exit;
   FListerMenuExtension := TListerMenuExtension.Create(FParentWnd,
-    FSettings.ListerMenuFlat, OnListerMenuItemPick);
+    FSettings.ListerMenuFlat, FSettings.Hotkeys, OnListerMenuItemPick);
 end;
 
 procedure TPluginForm.OnListerMenuItemPick(const AEntry: TListerMenuEntry);
