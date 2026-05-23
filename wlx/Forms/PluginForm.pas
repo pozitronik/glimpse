@@ -246,6 +246,15 @@ type
     procedure OnContextMenuPopup(Sender: TObject);
     procedure OnContextMenuClick(Sender: TObject);
     procedure OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    {Helpers OnFormKeyDown composes — one stage of the dispatch flow each.
+     Each takes Key by var (or returns a boolean predicate) and zeroes it
+     when it consumed the keystroke; downstream stages short-circuit on
+     Key=0 so they need no extra guards.}
+    procedure TryHandleTabFocusCycle(var AKey: Word; const AShift: TShiftState);
+    function EditFocusAbsorbsKey(AKey: Word; const AShift: TShiftState): Boolean;
+    procedure TryDispatchConfigurableHotkey(var AKey: Word; const AShift: TShiftState);
+    procedure ReclaimFocusFromEdit(var AKey: Word);
+    procedure ForwardUnconsumedToLister(var AKey: Word; const AShift: TShiftState);
     procedure OnFormKeyPress(Sender: TObject; var Key: Char);
     function ExecuteHotkey(AAction: TPluginAction): Boolean;
     {Per-action handlers extracted from ExecuteHotkey's case body so
@@ -1917,80 +1926,103 @@ begin
 end;
 
 procedure TPluginForm.OnFormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  FKeyConsumed := False;
+  TryHandleTabFocusCycle(Key, Shift);
+  if EditFocusAbsorbsKey(Key, Shift) then
+    Exit;
+  TryDispatchConfigurableHotkey(Key, Shift);
+  ReclaimFocusFromEdit(Key);
+  ForwardUnconsumedToLister(Key, Shift);
+  if Key = 0 then
+    FKeyConsumed := True;
+end;
+
+{Tab cycles focus through child controls — a VCL convention, not a
+ user-configurable hotkey. Tab and Shift+Tab only; Ctrl+Tab and Alt+Tab
+ fall through to the configurable dispatcher.}
+procedure TPluginForm.TryHandleTabFocusCycle(var AKey: Word; const AShift: TShiftState);
+begin
+  if (AKey = VK_TAB) and (AShift - [ssShift] = []) then
+  begin
+    SelectNext(ActiveControl, not (ssShift in AShift), True);
+    AKey := 0;
+  end;
+end;
+
+{Edit-focus passthrough (fires BEFORE hotkey dispatch). When the frame
+ count edit holds focus, digits and basic editing keys must reach the
+ edit regardless of whether the user happened to bind them to a global
+ action. Without this check, typing "12" in the edit would fire
+ paViewModeSmartGrid and paViewModeGrid on a default install because
+ "1" and "2" are default Ctrl+digit chords that collapse to the bare
+ digit when no modifier keys are held. Caller short-circuits OnFormKeyDown
+ when this returns True; the post-dispatch fallback below still handles
+ the non-typable keys (Enter to commit, unbound Ctrl+V to reclaim focus,
+ etc.).}
+function TPluginForm.EditFocusAbsorbsKey(AKey: Word; const AShift: TShiftState): Boolean;
+begin
+  Result := False;
+  if (GetFocus = FEditFrameCount.Handle) and (AShift * [ssCtrl, ssAlt] = []) then
+    case AKey of
+      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9, VK_BACK, VK_DELETE,
+      VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN:
+        Result := True;
+    end;
+end;
+
+{Configurable hotkeys. ExecuteHotkey returns False when the action's
+ contextual guards say "not applicable right now" (e.g. paPrevFrame when
+ not in single-view mode, or paOpenInPlayer with no file), in which case
+ AKey survives unchanged and the Lister forward below — letting TC's own
+ built-in shortcut on the same key fire as a fallback — gets a chance.}
+procedure TPluginForm.TryDispatchConfigurableHotkey(var AKey: Word; const AShift: TShiftState);
 var
   Action: TPluginAction;
 begin
-  FKeyConsumed := False;
-
-  {Tab: VCL focus cycling. System-level, never user-configurable; the
-   configurable dispatcher intentionally doesn't handle this.}
-  if (Key = VK_TAB) and (Shift - [ssShift] = []) then
-  begin
-    SelectNext(ActiveControl, not(ssShift in Shift), True);
-    Key := 0;
-    FKeyConsumed := True;
-    Exit;
-  end;
-
-  {Edit-focus passthrough (fires BEFORE hotkey dispatch). When the frame
-   count edit holds focus, digits and basic editing keys must reach the
-   edit regardless of whether the user happened to bind them to a global
-   action. Without this check, typing "12" in the edit would fire
-   paViewModeSmartGrid and paViewModeGrid on a default install because
-   "1" and "2" are default Ctrl+digit chords that collapse to the bare
-   digit when no modifier keys are held. The post-dispatch fallback below
-   still handles the non-typable keys (Enter to commit, unbound Ctrl+V
-   to reclaim focus, etc.).}
-  if (GetFocus = FEditFrameCount.Handle) and (Shift * [ssCtrl, ssAlt] = []) then
-    case Key of
-      Ord('0') .. Ord('9'), VK_NUMPAD0 .. VK_NUMPAD9, VK_BACK, VK_DELETE, VK_LEFT, VK_RIGHT, VK_HOME, VK_END, VK_UP, VK_DOWN:
-        Exit;
-    end;
-
-  {Configurable hotkeys. ExecuteHotkey returns False when the action's
-   contextual guards say "not applicable right now" (e.g. paPrevFrame when
-   not in single-view mode, or paOpenInPlayer with no file), in which case
-   the key falls through to the Lister forward below — letting TC's own
-   built-in shortcut on the same key fire as a fallback.}
-  Action := FSettings.Hotkeys.Lookup(Key, Shift);
+  Action := FSettings.Hotkeys.Lookup(AKey, AShift);
   if (Action <> paNone) and ExecuteHotkey(Action) then
-    Key := 0;
+    AKey := 0;
+end;
 
-  {Post-dispatch edit-focus fallback: any keystroke that the edit wasn't
-   allowed to handle above AND wasn't consumed by a hotkey is mopped up
-   here. Enter is allowed to commit the value; everything else reclaims
-   form focus so TC's subclass sees subsequent keystrokes. Runs before
-   the Lister forward so editing keys never leak out to TC.}
-  if (Key <> 0) and (GetFocus = FEditFrameCount.Handle) then
-    case Key of
-      VK_SHIFT, VK_CONTROL, VK_MENU:
-        ; {Let modifier key-downs flow through naturally}
-      VK_RETURN:
-        begin
-          Winapi.Windows.SetFocus(Handle);
-          Key := 0;
-        end;
-      else
+{Post-dispatch edit-focus fallback: any keystroke that the edit wasn't
+ allowed to handle by EditFocusAbsorbsKey above AND wasn't consumed by a
+ hotkey is mopped up here. Enter is allowed to commit the value;
+ everything else reclaims form focus so TC's subclass sees subsequent
+ keystrokes. Runs before the Lister forward so editing keys never leak
+ out to TC.}
+procedure TPluginForm.ReclaimFocusFromEdit(var AKey: Word);
+begin
+  if (AKey = 0) or (GetFocus <> FEditFrameCount.Handle) then
+    Exit;
+  case AKey of
+    VK_SHIFT, VK_CONTROL, VK_MENU:
+      ; {Let modifier key-downs flow through naturally}
+    VK_RETURN:
+      begin
         Winapi.Windows.SetFocus(Handle);
-        Key := 0;
-    end;
-
-  {Anything still unconsumed gets handed back to TC's Lister window.
-   FormSubclassProc claims every key off TC's wndproc so the plugin's
-   binding dispatcher always sees keys first; without this forward TC's
-   built-in shortcuts (N/P navigation, F2 reload, Backspace to parent,
-   letter-key mode toggles, etc.) would be permanently dead while the
-   plugin is the active view — fatal in Quick View, which has no window
-   menu fallback. Alt+letter forwards as a SysKey so TC's menu mnemonics
-   still resolve correctly in regular Lister mode.}
-  if Key <> 0 then
-  begin
-    ForwardKeyToLister(Key, ssAlt in Shift);
-    Key := 0;
+        AKey := 0;
+      end;
+  else
+    Winapi.Windows.SetFocus(Handle);
+    AKey := 0;
   end;
+end;
 
-  if Key = 0 then
-    FKeyConsumed := True;
+{Anything still unconsumed gets handed back to TC's Lister window.
+ FormSubclassProc claims every key off TC's wndproc so the plugin's
+ binding dispatcher always sees keys first; without this forward TC's
+ built-in shortcuts (N/P navigation, F2 reload, Backspace to parent,
+ letter-key mode toggles, etc.) would be permanently dead while the
+ plugin is the active view — fatal in Quick View, which has no window
+ menu fallback. Alt+letter forwards as a SysKey so TC's menu mnemonics
+ still resolve correctly in regular Lister mode.}
+procedure TPluginForm.ForwardUnconsumedToLister(var AKey: Word; const AShift: TShiftState);
+begin
+  if AKey = 0 then
+    Exit;
+  ForwardKeyToLister(AKey, ssAlt in AShift);
+  AKey := 0;
 end;
 
 procedure TPluginForm.OnFormKeyPress(Sender: TObject; var Key: Char);
