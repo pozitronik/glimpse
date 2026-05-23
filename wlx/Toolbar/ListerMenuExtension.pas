@@ -157,28 +157,35 @@ begin
       begin
         {Menu commands have HIWORD(wParam) = 0; accelerator commands set
          HIWORD = 1. Treat both the same — only the ID matters for our
-         range check.}
+         range check. Intercept BEFORE TC's wndproc so it never sees
+         our IDs.}
         CmdId := Word(AWParam and $FFFF);
         if (CmdId >= LISTER_MENU_CMD_BASE) and (CmdId <= LISTER_MENU_CMD_LAST) then
           if (Ext <> nil) and Ext.TryHandleCommand(CmdId) then
             Exit(0);
+        Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
       end;
-    {WM_INITMENU is the cheap catch-all — fires every time any menu
-     becomes active (including Alt key entering menu mode). The fast-
-     path check inside EnsureItemsInstalled returns quickly when our
-     items look intact.}
+    {Menu-affecting messages: let TC process them FIRST (it may rebuild
+     its menu, resize the bar, adjust DPI-scaled font metrics, etc.),
+     THEN run our hook so our items land on top of TC's processed
+     state. Our subclass was installed after TC's wndproc so we fire
+     first in the chain — without this explicit ordering, any work TC
+     does after DefSubclassProc returns would wipe our additions.}
     WM_INITMENU:
-      if Ext <> nil then
-        Ext.EnsureItemsInstalled;
-    {Display / DPI / theme changes are rare AND known to invalidate
-     menu rendering even when item data survives. Force an
-     unconditional rebuild so we sidestep any in-place corruption
-     instead of trusting our verify-then-skip path.}
+      begin
+        Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
+        if Ext <> nil then
+          Ext.EnsureItemsInstalled;
+      end;
     WM_DPICHANGED, WM_DISPLAYCHANGE, WM_THEMECHANGED:
-      if Ext <> nil then
-        Ext.ForceRebuild;
+      begin
+        Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
+        if Ext <> nil then
+          Ext.ForceRebuild;
+      end;
+  else
+    Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
   end;
-  Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
 end;
 
 constructor TListerMenuExtension.Create(AParentWnd: HWND; AFlatMode: Boolean;
