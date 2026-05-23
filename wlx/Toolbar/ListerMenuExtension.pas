@@ -88,6 +88,7 @@ type
     procedure PopulateContents(ADest: HMENU);
     procedure BuildSubmenu;
     procedure BuildFlat;
+    procedure ForceStringFTypeRecursive(AMenu: HMENU);
     procedure Install;
     procedure Teardown;
     procedure InstallSubclass;
@@ -232,6 +233,13 @@ begin
   else
     BuildSubmenu;
   FItemCount := GetMenuItemCount(FParentMenu) - FFirstPos;
+  {Force MFT_STRING on every item we just appended (and on any popup
+   submenus we own). Defends against the parent menu having MNS_NOTIFYBYPOS
+   or other style flags that make AppendMenu's default rendering be
+   treated as owner-draw by the host — the classic cause of "items
+   invisible until you hover them" after a UI-state change like Alt
+   activating the menu bar.}
+  ForceStringFTypeRecursive(FParentMenu);
   DrawMenuBar(FParentWnd);
 end;
 
@@ -281,6 +289,63 @@ begin
   if FParentWnd <> 0 then
     SetWindowPos(FParentWnd, 0, 0, 0, 0, 0,
       SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE or SWP_FRAMECHANGED);
+end;
+
+procedure TListerMenuExtension.ForceStringFTypeRecursive(AMenu: HMENU);
+const
+  STR_BUF_LEN = 256;
+var
+  I, Count, StartPos, EndPos: Integer;
+  StrBuf: array [0 .. STR_BUF_LEN - 1] of Char;
+  Info: TMenuItemInfo;
+begin
+  if AMenu = 0 then
+    Exit;
+  Count := GetMenuItemCount(AMenu);
+  if Count <= 0 then
+    Exit;
+
+  {Top-level call against the parent menu: only touch our items. Any
+   nested call (popup we built) processes all items inside that popup.}
+  if AMenu = FParentMenu then
+  begin
+    StartPos := FFirstPos;
+    EndPos := FFirstPos + FItemCount - 1;
+    if EndPos >= Count then
+      EndPos := Count - 1;
+  end else begin
+    StartPos := 0;
+    EndPos := Count - 1;
+  end;
+
+  for I := StartPos to EndPos do
+  begin
+    {Read fType + the existing caption + submenu handle so we can
+     write back the type with the caption preserved. Reading MIIM_STRING
+     into a sized buffer gives us back the text Windows already stored
+     from our AppendMenu calls.}
+    FillChar(Info, SizeOf(Info), 0);
+    Info.cbSize := SizeOf(Info);
+    Info.fMask := MIIM_FTYPE or MIIM_SUBMENU or MIIM_STRING;
+    Info.dwTypeData := @StrBuf[0];
+    Info.cch := STR_BUF_LEN;
+    if not GetMenuItemInfo(AMenu, I, True, Info) then
+      Continue;
+    {Recurse into popup submenus we own before mutating. The recursion
+     is bounded by our build depth (two levels at most: parent → Glimpse
+     popup → mode-zoom or save-view popup).}
+    if Info.hSubMenu <> 0 then
+      ForceStringFTypeRecursive(Info.hSubMenu);
+    {Skip separators (they carry MFT_SEPARATOR; reassigning would turn
+     them into empty text items).}
+    if (Info.fType and MFT_SEPARATOR) <> 0 then
+      Continue;
+    {Force string rendering. cch already points at the read-back caption,
+     so MIIM_STRING re-asserts the existing text under MFT_STRING.}
+    Info.fMask := MIIM_FTYPE or MIIM_STRING;
+    Info.fType := MFT_STRING;
+    SetMenuItemInfo(AMenu, I, True, Info);
+  end;
 end;
 
 function TListerMenuExtension.AllocIdFor(const AEntry: TListerMenuEntry): Word;
