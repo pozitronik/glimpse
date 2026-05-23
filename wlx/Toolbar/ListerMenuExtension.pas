@@ -89,9 +89,13 @@ type
      maps. Reads through FHotkeys (nil-safe).}
     function AcceleratorFor(const AEntry: TListerMenuEntry): string;
     {ABase + #9 + accelerator (when present). #9 is the Win32 menu
-     convention for right-aligning the accelerator hint.}
+     convention for right-aligning the accelerator hint. Returns ABase
+     unchanged when ADest is the parent menu bar — accelerator hints on
+     top-level menu bar entries render with extra blank space and the
+     #9 padding makes them look broken, so flat-mode entries on the
+     menu bar get just the caption.}
     function CaptionWithAccelerator(const ABase: string;
-      const AEntry: TListerMenuEntry): string;
+      const AEntry: TListerMenuEntry; ADest: HMENU): string;
     procedure AddSeparator(ADest: HMENU);
     procedure AddPlainModeItem(ADest: HMENU; AMode: TViewMode);
     procedure AddModeWithZoomSubmenu(ADest: HMENU; AMode: TViewMode);
@@ -440,10 +444,12 @@ begin
 end;
 
 function TListerMenuExtension.CaptionWithAccelerator(const ABase: string;
-  const AEntry: TListerMenuEntry): string;
+  const AEntry: TListerMenuEntry; ADest: HMENU): string;
 var
   Acc: string;
 begin
+  if ADest = FParentMenu then
+    Exit(ABase);
   Acc := AcceleratorFor(AEntry);
   if Acc = '' then
     Exit(ABase);
@@ -472,7 +478,7 @@ begin
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := 0;
   Id := AllocIdFor(Entry);
-  Caption := CaptionWithAccelerator(MenuCaptionForMode(AMode), Entry);
+  Caption := CaptionWithAccelerator(MenuCaptionForMode(AMode), Entry, ADest);
   AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
@@ -518,7 +524,7 @@ begin
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := 0;
   Id := AllocIdFor(Entry);
-  Caption := CaptionWithAccelerator(TIMECODE_MENU_CAPTION, Entry);
+  Caption := CaptionWithAccelerator(TIMECODE_MENU_CAPTION, Entry, ADest);
   AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
@@ -534,7 +540,7 @@ begin
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := AActionTag;
   Id := AllocIdFor(Entry);
-  Caption := CaptionWithAccelerator(ACaption, Entry);
+  Caption := CaptionWithAccelerator(ACaption, Entry, ADest);
   AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
