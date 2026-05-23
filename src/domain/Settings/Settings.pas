@@ -161,6 +161,10 @@ type
 
     property ProgressBarLayout: TProgressBarLayout read FView.ProgressBarLayout write FView.ProgressBarLayout;
 
+    {Experimental: see TViewSettingsGroup header.}
+    property ShowListerMenu: Boolean read FView.ShowListerMenu write FView.ShowListerMenu;
+    property ListerMenuFlat: Boolean read FView.ListerMenuFlat write FView.ListerMenuFlat;
+
     property StatusBarTemplate: string read FStatusBar.Template write FStatusBar.Template;
     property StatusBarFontName: string read FStatusBar.FontName write FStatusBar.FontName;
     property StatusBarFontSize: Integer read FStatusBar.FontSize write FStatusBar.FontSize;
