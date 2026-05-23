@@ -136,8 +136,6 @@ type
     FProbeCount: Integer;
   public
     constructor Create(const AInfo: TVideoInfo);
-    function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
-    procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
     function TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
     property ProbeCount: Integer read FProbeCount;
   end;
@@ -176,17 +174,6 @@ constructor TFakeProbeCache.Create(const AInfo: TVideoInfo);
 begin
   inherited Create;
   FInfo := AInfo;
-end;
-
-function TFakeProbeCache.TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
-begin
-  AInfo := FInfo;
-  Result := FInfo.IsValid;
-end;
-
-procedure TFakeProbeCache.Put(const AFilePath: string; const AInfo: TVideoInfo);
-begin
-  {Intentionally empty: the fake serves only canned data.}
 end;
 
 function TFakeProbeCache.TryGetOrProbe(const AFilePath: string;

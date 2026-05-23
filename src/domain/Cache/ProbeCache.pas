@@ -15,11 +15,10 @@ type
   {Probe-result cache surface used by the WLX/WCX/thumbnail render paths.}
   IProbeCache = interface
     ['{3F6A9C12-4E7B-4D58-9A2C-1B8E5D7F0A63}']
-    function TryGet(const AFilePath: string; out AInfo: TVideoInfo): Boolean;
-    {Only caches valid results.}
-    procedure Put(const AFilePath: string; const AInfo: TVideoInfo);
     {Cache-then-probe convenience. On a cache miss delegates to AProber
-     and persists a valid result.}
+     and persists a valid result. The cache primitives `TryGet` and `Put`
+     live on the concrete `TProbeCache` only - no external consumer reads
+     or writes the cache except through this method.}
     function TryGetOrProbe(const AFilePath: string; const AProber: IVideoProber): TVideoInfo;
   end;
 
