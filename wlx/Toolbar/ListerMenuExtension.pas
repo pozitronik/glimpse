@@ -63,23 +63,29 @@ type
     FParentMenu: HMENU;
     FFlatMode: Boolean;
     FDispatch: TListerMenuDispatch;
-    {Non-flat: handle of the "Glimpse" popup we appended.
-     Flat: 0 (items live directly on the parent's menu bar).}
-    FSubmenu: HMENU;
-    {Flat: command IDs of the top-level items we appended; needed for
-     removal in Destroy. Non-flat: command IDs of items inside the
-     submenu; their removal happens implicitly when we DeleteMenu the
-     parent of the submenu.}
-    FOwnedIds: TList<Word>;
+    {Position of the first top-level item we appended to FParentMenu,
+     and how many top-level items we appended. Used for removal via
+     MF_BYPOSITION (deleting in reverse order shifts the menu down
+     each step, leaving the next-to-remove at the same start position).
+     Assumes the parent menu is stable between Build and Destroy — TC
+     does not mutate its lister menu, so this holds in practice.}
+    FFirstPos: Integer;
+    FItemCount: Integer;
     {Map from command ID to the entry payload, used by TryHandleCommand
      to look up which operation a clicked item maps to.}
     FEntries: TDictionary<Word, TListerMenuEntry>;
     FNextId: Word;
     function AllocIdFor(const AEntry: TListerMenuEntry): Word;
-    procedure AddModeItems(ADest: HMENU);
     procedure AddSeparator(ADest: HMENU);
+    procedure AddPlainModeItem(ADest: HMENU; AMode: TViewMode);
+    procedure AddModeWithZoomSubmenu(ADest: HMENU; AMode: TViewMode);
+    procedure AddModeItems(ADest: HMENU);
     procedure AddTimecodeItem(ADest: HMENU);
-    procedure AddActionGroup(ADest: HMENU; AActionTag: Integer; const ACaption: string);
+    procedure AddActionItem(ADest: HMENU; AActionTag: Integer; const ACaption: string);
+    procedure AddSaveViewSubmenu(ADest: HMENU);
+    procedure AddCopyViewSubmenu(ADest: HMENU);
+    procedure AddRefreshSubmenu(ADest: HMENU);
+    procedure PopulateContents(ADest: HMENU);
     procedure BuildSubmenu;
     procedure BuildFlat;
     procedure InstallSubclass;
@@ -101,17 +107,14 @@ type
 implementation
 
 uses
-  ToolbarLayout, KeyInterceptionSubclass;
+  ToolbarLayout, ViewModeLogic, KeyInterceptionSubclass;
 
 const
-  {Captions used in the menu. Static (English-only — experimental
-   feature, see unit header).}
+  {Captions used in the menu. Submenu items deliberately drop the '&'
+   mnemonic markers so the menu matches the hamburger popup's style
+   and avoids surprise accelerator collisions inside a long submenu.}
   TIMECODE_MENU_CAPTION = 'Show timecodes';
-  REFRESH_MENU_CAPTION = '&Refresh';
-  SHUFFLE_MENU_CAPTION = 'Shuf&fle';
-  SETTINGS_MENU_CAPTION = '&Settings...';
-  SAVE_VIEW_MENU_CAPTION = '&Save view...';
-  COPY_VIEW_MENU_CAPTION = '&Copy view';
+  SETTINGS_MENU_CAPTION = 'Settings...';
 
 {Subclass proc that intercepts WM_COMMAND for our menu IDs. Installed
  by InstallSubclass with dwRefData = TListerMenuExtension Self pointer.}
@@ -145,7 +148,6 @@ begin
   FFlatMode := AFlatMode;
   FDispatch := ADispatch;
   FNextId := LISTER_MENU_CMD_BASE;
-  FOwnedIds := TList<Word>.Create;
   FEntries := TDictionary<Word, TListerMenuEntry>.Create;
   FParentMenu := GetMenu(AParentWnd);
   {No menu on the parent (Quick View panel, or a host that opted out)
@@ -153,10 +155,12 @@ begin
   if FParentMenu = 0 then
     Exit;
 
+  FFirstPos := GetMenuItemCount(FParentMenu);
   if FFlatMode then
     BuildFlat
   else
     BuildSubmenu;
+  FItemCount := GetMenuItemCount(FParentMenu) - FFirstPos;
 
   DrawMenuBar(FParentWnd);
   InstallSubclass;
@@ -164,29 +168,21 @@ end;
 
 destructor TListerMenuExtension.Destroy;
 var
-  Id: Word;
+  I: Integer;
 begin
   if FParentMenu <> 0 then
   begin
     UninstallSubclass;
-    if FFlatMode then
-    begin
-      {Flat: each item is its own top-level entry, removed by command ID.}
-      for Id in FOwnedIds do
-        RemoveMenu(FParentMenu, Id, MF_BYCOMMAND);
-    end
-    else if FSubmenu <> 0 then
-    begin
-      {Submenu mode: removing the popup from the parent also destroys
-       all items inside it. Use MF_BYCOMMAND with the submenu HANDLE,
-       which is what AppendMenu(MF_POPUP) used as the "uIDNewItem".}
-      RemoveMenu(FParentMenu, FSubmenu, MF_BYCOMMAND);
-      DestroyMenu(FSubmenu);
-    end;
+    {Remove items in reverse order. Each RemoveMenu shifts subsequent
+     items down, so deleting from the tail keeps FFirstPos pointing at
+     the correct position for the next removal. Popup submenus attached
+     via MF_POPUP are destroyed automatically when their host item is
+     removed.}
+    for I := FItemCount - 1 downto 0 do
+      RemoveMenu(FParentMenu, FFirstPos + I, MF_BYPOSITION);
     DrawMenuBar(FParentWnd);
   end;
   FEntries.Free;
-  FOwnedIds.Free;
   inherited;
 end;
 
@@ -204,23 +200,48 @@ begin
   AppendMenu(ADest, MF_SEPARATOR, 0, nil);
 end;
 
-procedure TListerMenuExtension.AddModeItems(ADest: HMENU);
+procedure TListerMenuExtension.AddPlainModeItem(ADest: HMENU; AMode: TViewMode);
 var
-  VM: TViewMode;
   Entry: TListerMenuEntry;
   Id: Word;
 begin
-  for VM := Low(TViewMode) to High(TViewMode) do
+  Entry.Kind := lmekMode;
+  Entry.Mode := AMode;
+  Entry.Zoom := zmFitWindow;
+  Entry.ActionTag := 0;
+  Id := AllocIdFor(Entry);
+  AppendMenu(ADest, MF_STRING, Id, PChar(ViewModeDisplayName(AMode)));
+end;
+
+procedure TListerMenuExtension.AddModeWithZoomSubmenu(ADest: HMENU; AMode: TViewMode);
+var
+  ZM: TZoomMode;
+  Entry: TListerMenuEntry;
+  Id: Word;
+  ModePopup: HMENU;
+begin
+  ModePopup := CreatePopupMenu;
+  for ZM := Low(TZoomMode) to High(TZoomMode) do
   begin
-    Entry.Kind := lmekMode;
-    Entry.Mode := VM;
-    Entry.Zoom := zmFitWindow;
+    Entry.Kind := lmekZoom;
+    Entry.Mode := AMode;
+    Entry.Zoom := ZM;
     Entry.ActionTag := 0;
     Id := AllocIdFor(Entry);
-    if FFlatMode then
-      FOwnedIds.Add(Id);
-    AppendMenu(ADest, MF_STRING, Id, PChar(MODE_CAPTIONS[VM]));
+    AppendMenu(ModePopup, MF_STRING, Id, PChar(SIZING_LABELS[AMode, ZM]));
   end;
+  AppendMenu(ADest, MF_POPUP, ModePopup, PChar(ViewModeDisplayName(AMode)));
+end;
+
+procedure TListerMenuExtension.AddModeItems(ADest: HMENU);
+var
+  VM: TViewMode;
+begin
+  for VM := Low(TViewMode) to High(TViewMode) do
+    if ModeHasZoomSubmodes(VM) then
+      AddModeWithZoomSubmenu(ADest, VM)
+    else
+      AddPlainModeItem(ADest, VM);
 end;
 
 procedure TListerMenuExtension.AddTimecodeItem(ADest: HMENU);
@@ -233,12 +254,10 @@ begin
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := 0;
   Id := AllocIdFor(Entry);
-  if FFlatMode then
-    FOwnedIds.Add(Id);
   AppendMenu(ADest, MF_STRING, Id, TIMECODE_MENU_CAPTION);
 end;
 
-procedure TListerMenuExtension.AddActionGroup(ADest: HMENU; AActionTag: Integer;
+procedure TListerMenuExtension.AddActionItem(ADest: HMENU; AActionTag: Integer;
   const ACaption: string);
 var
   Entry: TListerMenuEntry;
@@ -249,51 +268,81 @@ begin
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := AActionTag;
   Id := AllocIdFor(Entry);
-  if FFlatMode then
-    FOwnedIds.Add(Id);
   AppendMenu(ADest, MF_STRING, Id, PChar(ACaption));
 end;
 
-procedure TListerMenuExtension.BuildSubmenu;
+{Save view / Copy view / Refresh map to split-buttons on the toolbar
+ with dropdown variants. In the menu, each becomes a popup that lists
+ the default action plus the variants, mirroring the toolbar dropdown.}
+procedure TListerMenuExtension.AddSaveViewSubmenu(ADest: HMENU);
+var
+  Popup: HMENU;
+  I: Integer;
 begin
-  FSubmenu := CreatePopupMenu;
+  Popup := CreatePopupMenu;
+  AddActionItem(Popup, CM_SAVE_VIEW, 'Save view (default)...');
+  for I := 0 to High(SAVE_VIEW_VARIANTS) do
+    AddActionItem(Popup, SAVE_VIEW_VARIANTS[I].Tag, SAVE_VIEW_VARIANTS[I].Caption);
+  AppendMenu(ADest, MF_POPUP, Popup, 'Save view');
+end;
 
-  AddModeItems(FSubmenu);
-  AddSeparator(FSubmenu);
-  AddTimecodeItem(FSubmenu);
-  AddSeparator(FSubmenu);
-  AddActionGroup(FSubmenu, CM_REFRESH, REFRESH_MENU_CAPTION);
-  AddActionGroup(FSubmenu, CM_SHUFFLE, SHUFFLE_MENU_CAPTION);
-  AddSeparator(FSubmenu);
-  AddActionGroup(FSubmenu, CM_SAVE_VIEW, SAVE_VIEW_MENU_CAPTION);
-  AddActionGroup(FSubmenu, CM_SAVE_VIEW_LIVE, 'Save view (live resolution)');
-  AddActionGroup(FSubmenu, CM_SAVE_VIEW_NATIVE, 'Save view (native size)');
-  AddSeparator(FSubmenu);
-  AddActionGroup(FSubmenu, CM_COPY_VIEW, COPY_VIEW_MENU_CAPTION);
-  AddActionGroup(FSubmenu, CM_COPY_VIEW_LIVE, 'Copy view (live resolution)');
-  AddActionGroup(FSubmenu, CM_COPY_VIEW_NATIVE, 'Copy view (native size)');
-  AddSeparator(FSubmenu);
-  AddActionGroup(FSubmenu, CM_SETTINGS, SETTINGS_MENU_CAPTION);
+procedure TListerMenuExtension.AddCopyViewSubmenu(ADest: HMENU);
+var
+  Popup: HMENU;
+  I: Integer;
+begin
+  Popup := CreatePopupMenu;
+  AddActionItem(Popup, CM_COPY_VIEW, 'Copy view (default)');
+  for I := 0 to High(COPY_VIEW_VARIANTS) do
+    AddActionItem(Popup, COPY_VIEW_VARIANTS[I].Tag, COPY_VIEW_VARIANTS[I].Caption);
+  AppendMenu(ADest, MF_POPUP, Popup, 'Copy view');
+end;
 
-  AppendMenu(FParentMenu, MF_POPUP, FSubmenu, GLIMPSE_MENU_CAPTION);
+procedure TListerMenuExtension.AddRefreshSubmenu(ADest: HMENU);
+var
+  Popup: HMENU;
+begin
+  Popup := CreatePopupMenu;
+  AddActionItem(Popup, CM_REFRESH, 'Refresh');
+  AddActionItem(Popup, CM_SHUFFLE, 'Shuffle');
+  AppendMenu(ADest, MF_POPUP, Popup, 'Refresh');
+end;
+
+procedure TListerMenuExtension.PopulateContents(ADest: HMENU);
+begin
+  AddModeItems(ADest);
+  AddSeparator(ADest);
+  AddTimecodeItem(ADest);
+  AddSeparator(ADest);
+  AddActionItem(ADest, CM_SAVE_FRAME, 'Save frame...');
+  AddActionItem(ADest, CM_SAVE_FRAMES, 'Save frames...');
+  AddSaveViewSubmenu(ADest);
+  AddSeparator(ADest);
+  AddActionItem(ADest, CM_COPY_FRAME, 'Copy frame');
+  AddCopyViewSubmenu(ADest);
+  AddSeparator(ADest);
+  AddRefreshSubmenu(ADest);
+  AddSeparator(ADest);
+  AddActionItem(ADest, CM_SETTINGS, SETTINGS_MENU_CAPTION);
+end;
+
+procedure TListerMenuExtension.BuildSubmenu;
+var
+  Glimpse: HMENU;
+begin
+  Glimpse := CreatePopupMenu;
+  PopulateContents(Glimpse);
+  AppendMenu(FParentMenu, MF_POPUP, Glimpse, GLIMPSE_MENU_CAPTION);
 end;
 
 procedure TListerMenuExtension.BuildFlat;
 begin
-  {Each call appends directly to FParentMenu; AddSeparator is a no-op
-   here because separators on a top-level menu bar look weird and most
-   menu bars ignore them anyway.}
-  AddModeItems(FParentMenu);
-  AddTimecodeItem(FParentMenu);
-  AddActionGroup(FParentMenu, CM_REFRESH, 'Refresh');
-  AddActionGroup(FParentMenu, CM_SHUFFLE, 'Shuffle');
-  AddActionGroup(FParentMenu, CM_SAVE_VIEW, 'Save view');
-  AddActionGroup(FParentMenu, CM_SAVE_VIEW_LIVE, 'Save (live)');
-  AddActionGroup(FParentMenu, CM_SAVE_VIEW_NATIVE, 'Save (native)');
-  AddActionGroup(FParentMenu, CM_COPY_VIEW, 'Copy view');
-  AddActionGroup(FParentMenu, CM_COPY_VIEW_LIVE, 'Copy (live)');
-  AddActionGroup(FParentMenu, CM_COPY_VIEW_NATIVE, 'Copy (native)');
-  AddActionGroup(FParentMenu, CM_SETTINGS, 'Settings');
+  {Flat mode appends the same content directly to the menu bar; mode
+   items with zoom submenus and the save / copy / refresh groups
+   become top-level entries opening their respective popup. Visually
+   noisy but matches the "every button as a top-level menu entry"
+   instruction.}
+  PopulateContents(FParentMenu);
 end;
 
 procedure TListerMenuExtension.InstallSubclass;
