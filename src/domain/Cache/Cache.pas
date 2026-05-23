@@ -187,9 +187,13 @@ constructor TBypassFrameCache.Create(const AInner: IFrameCache);
 begin
   inherited Create;
   FInner := AInner;
-  {Cache the inner's admin facet so Supports runs once. nil = inner has
-   no ICacheManager and admin ops become no-ops.}
-  Supports(FInner, ICacheManager, FInnerMgr);
+  {Inner MUST expose ICacheManager. The decorator itself declares
+   ICacheManager, so an inner that lacks it would silently turn Clear /
+   Evict / GetTotalSize into no-ops — exactly the chain-of-decorators
+   hazard that hid behind the previous Supports-fallback.}
+  if not Supports(FInner, ICacheManager, FInnerMgr) then
+    raise EArgumentException.Create(
+      'TBypassFrameCache: inner cache must implement ICacheManager');
 end;
 
 function TBypassFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
@@ -204,22 +208,17 @@ end;
 
 procedure TBypassFrameCache.Clear;
 begin
-  if FInnerMgr <> nil then
-    FInnerMgr.Clear;
+  FInnerMgr.Clear;
 end;
 
 procedure TBypassFrameCache.Evict;
 begin
-  if FInnerMgr <> nil then
-    FInnerMgr.Evict;
+  FInnerMgr.Evict;
 end;
 
 function TBypassFrameCache.GetTotalSize: Int64;
 begin
-  if FInnerMgr <> nil then
-    Result := FInnerMgr.GetTotalSize
-  else
-    Result := 0;
+  Result := FInnerMgr.GetTotalSize;
 end;
 
 {TReadOnlyFrameCache}
@@ -228,7 +227,9 @@ constructor TReadOnlyFrameCache.Create(const AInner: IFrameCache);
 begin
   inherited Create;
   FInner := AInner;
-  Supports(FInner, ICacheManager, FInnerMgr);
+  if not Supports(FInner, ICacheManager, FInnerMgr) then
+    raise EArgumentException.Create(
+      'TReadOnlyFrameCache: inner cache must implement ICacheManager');
 end;
 
 function TReadOnlyFrameCache.TryGet(const AKey: TFrameCacheKey): TBitmap;
@@ -243,22 +244,17 @@ end;
 
 procedure TReadOnlyFrameCache.Clear;
 begin
-  if FInnerMgr <> nil then
-    FInnerMgr.Clear;
+  FInnerMgr.Clear;
 end;
 
 procedure TReadOnlyFrameCache.Evict;
 begin
-  if FInnerMgr <> nil then
-    FInnerMgr.Evict;
+  FInnerMgr.Evict;
 end;
 
 function TReadOnlyFrameCache.GetTotalSize: Int64;
 begin
-  if FInnerMgr <> nil then
-    Result := FInnerMgr.GetTotalSize
-  else
-    Result := 0;
+  Result := FInnerMgr.GetTotalSize;
 end;
 
 {TFrameCache logging. The outcome records ferry the facts a log line

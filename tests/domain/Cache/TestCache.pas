@@ -102,6 +102,10 @@ type
     procedure TestReadOnlyCacheAdminGetTotalSizeDelegates;
     [Test]
     procedure TestChainedDecoratorsPropagateAdminToInnermost;
+    [Test]
+    procedure TestBypassCacheRejectsInnerWithoutCacheManager;
+    [Test]
+    procedure TestReadOnlyCacheRejectsInnerWithoutCacheManager;
 
     { Eviction edge cases }
     [Test]
@@ -154,6 +158,24 @@ implementation
 
 uses
   System.DateUtils;
+
+type
+  {IFrameCache implementer that deliberately omits ICacheManager so the
+   decorator constructors can be asserted to reject it.}
+  TFrameCacheWithoutManager = class(TFrameCacheBase)
+  public
+    function TryGet(const AKey: TFrameCacheKey): TBitmap; override;
+    procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap); override;
+  end;
+
+function TFrameCacheWithoutManager.TryGet(const AKey: TFrameCacheKey): TBitmap;
+begin
+  Result := nil;
+end;
+
+procedure TFrameCacheWithoutManager.Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
+begin
+end;
 
 {Builds a disk-backed TFrameCache for the on-disk test fixtures.}
 function NewDiskCache(const ACacheDir: string; AMaxSizeMB: Integer): TFrameCache;
@@ -954,6 +976,37 @@ begin
 
   Bmp := RealCache.TryGet(TFrameCacheKey.Create(FilePath, 1.0, 0, False));
   Assert.IsNull(Bmp, 'Chained Bypass(ReadOnly(real)).Clear must reach the real cache');
+end;
+
+procedure TTestFrameCache.TestBypassCacheRejectsInnerWithoutCacheManager;
+var
+  Inner: IFrameCache;
+begin
+  {Decorator declares ICacheManager itself; an inner that lacks it would
+   silently turn Clear / Evict / GetTotalSize into no-ops. The constructor
+   must reject that configuration loudly rather than absorbing it.}
+  Inner := TFrameCacheWithoutManager.Create;
+  Assert.WillRaise(
+    procedure
+    begin
+      TBypassFrameCache.Create(Inner).Free;
+    end,
+    EArgumentException,
+    'TBypassFrameCache must reject an inner that does not implement ICacheManager');
+end;
+
+procedure TTestFrameCache.TestReadOnlyCacheRejectsInnerWithoutCacheManager;
+var
+  Inner: IFrameCache;
+begin
+  Inner := TFrameCacheWithoutManager.Create;
+  Assert.WillRaise(
+    procedure
+    begin
+      TReadOnlyFrameCache.Create(Inner).Free;
+    end,
+    EArgumentException,
+    'TReadOnlyFrameCache must reject an inner that does not implement ICacheManager');
 end;
 
 procedure TTestFrameCache.TestEvictionSkipsLockedFiles;
