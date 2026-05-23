@@ -95,6 +95,7 @@
         <DCCReference Include="..\src\infrastructure\SettingsDialogHelpers.pas"/>
         <DCCReference Include="Presenters\SettingsPresenters.pas"/>
         <DCCReference Include="Presenters\HotkeyUIPresenter.pas"/>
+        <DCCReference Include="Presenters\StatusBarPresenter.pas"/>
         <DCCReference Include="Forms\SettingsDlg.pas">
             <Form>SettingsForm</Form>
         </DCCReference>

@@ -42,6 +42,7 @@ uses
   SettingsDialogHelpers in '..\src\infrastructure\SettingsDialogHelpers.pas',
   SettingsPresenters in 'Presenters\SettingsPresenters.pas',
   HotkeyUIPresenter in 'Presenters\HotkeyUIPresenter.pas',
+  StatusBarPresenter in 'Presenters\StatusBarPresenter.pas',
   SettingsDlg in 'Forms\SettingsDlg.pas',
   CaptureShortcutDlg in 'Forms\CaptureShortcutDlg.pas',
   FrameFileNames in '..\src\domain\Frame\FrameFileNames.pas',

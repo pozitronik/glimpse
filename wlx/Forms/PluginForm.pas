@@ -15,7 +15,8 @@ uses
   ViewportRefreshDebouncer, LoadTimeRecorder, ProgressIndicator,
   FrameExport, ExtractionController, PluginServices, FileNavigator,
   CommandDescriptors,
-  StatusBarTokens, StatusBarTemplate, StatusBarFormatters, StatusBarRenderer;
+  StatusBarTokens, StatusBarTemplate, StatusBarFormatters, StatusBarRenderer,
+  StatusBarPresenter;
 
 type
   TPluginForm = class;
@@ -53,7 +54,7 @@ type
   end;
 
   {Plugin form created as a child of TC's Lister window.}
-  TPluginForm = class(TForm)
+  TPluginForm = class(TForm, IStatusBarDataSource)
   private
     FFileName: string;
     FSettings: TPluginSettings;
@@ -83,10 +84,7 @@ type
     FToolbarImages: TImageList;
     FProgressIndicator: TProgressIndicator;
     FStatusBar: TStatusBar;
-    FStatusBarRenderer: TStatusBarRenderer;
-    {Snapshot refreshed once per UpdateStatusBar so a render emits a
-     coherent view instead of racing live changes mid-iteration.}
-    FCachedStatusBarValues: TStatusBarValues;
+    FStatusBarPresenter: TStatusBarPresenter;
     FScrollBox: TScrollBox;
     FFrameView: TFrameView;
     FLblError: TLabel;
@@ -141,54 +139,18 @@ type
     procedure CreateFrameView;
     procedure OnFrameViewCtrlWheel(Sender: TObject; AWheelDelta: Integer);
     procedure CreateStatusBar;
+    {Thin forwarders to FStatusBarPresenter — kept on the form so the
+     many internal call sites (DoPrevFrame, OnStatusBarDblClick handler,
+     UpdateProgress, OnHamburgerZoomClick, etc.) don't all need updating.}
     procedure UpdateStatusBar;
-    {Snapshot every datum the status-bar formatter consumes. Reads
-     FFileName / FSettings / FOffsets / FFrameView / FVideoInfo /
-     FExporter / FLoadTimer.Formatted; safe to call any time, never mutates.}
-    procedure BuildStatusBarValues(out AValues: TStatusBarValues);
-    {Source-grouped fill helpers BuildStatusBarValues composes — one
-     collaborator per helper so a new token added in one source area
-     only touches one method.}
-    procedure BuildFileSourceFields(var AValues: TStatusBarValues);
-    procedure BuildFrameViewFields(var AValues: TStatusBarValues);
-    procedure BuildVideoInfoFields(var AValues: TStatusBarValues);
-    procedure BuildExporterPredictionFields(var AValues: TStatusBarValues);
-    {Pushes the four status-bar settings (template, font name + size,
-     auto-width-live flag) into the renderer. Triggers a re-parse +
-     re-measure + Refresh so panel widths and panel set track the new
-     template / font on the next paint cycle. No-op when the renderer
-     is not yet constructed (defensive — settings can be loaded before
-     CreateStatusBar in some lifecycle paths).}
     procedure ApplyStatusBarSettings;
-    {Named replacements for the three anonymous lambdas CreateStatusBar
-     used to construct inline. Same behaviour as the inline closures;
-     extracting them lets the renderer be owned by the form (TComponent)
-     without losing readability — the Self-capture is explicit at the
-     method-name site instead of hidden in a lambda body.}
-    function ResolveStatusBarToken(const AToken: TStatusBarToken): string;
-    function GetStatusBarPanelHint(APanelIndex: Integer): string;
-    function GetStatusBarPanelKind(APanelIndex: Integer): TStatusBarTokenKind;
-    {Resolves the pixel height for the status bar given the current
-     font's TextHeight, the persisted StatusBarHeight + apply-mode
-     settings, and the bar's CurrentPPI. Auto path returns
-     TextHeight + 6 px padding; explicit path scales the saved logical
-     value and silently bumps below-font values so text never clips.}
-    function ResolveStatusBarHeight(ATextHeight: Integer): Integer;
-    {Double-click handler: when the cursor is over a panel whose backing
-     token is interactive (Save / Copy predicted-dimension), flip the
-     corresponding persisted *AtLiveResolution toggle, save settings,
-     and refresh the bar so the new prediction is visible immediately.
-     Non-interactive panels swallow the double-click silently. Single
-     clicks (without Ctrl) are NOT bound — they would race the flip in
-     the double-click sequence (OnClick fires before OnDblClick).}
-    procedure OnStatusBarDblClick(Sender: TObject);
-    {Mouse-up handler reserved for Ctrl+Click: copies the panel text
-     under the cursor to the clipboard. Inspecting Shift here (instead
-     of OnClick) gives access to the modifier state without a separate
-     GetKeyState round-trip; firing on MouseUp keeps the gesture cheap
-     and idempotent in the double-click case.}
-    procedure OnStatusBarMouseUp(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
+    {IStatusBarDataSource — exposes the mutable form state the presenter
+     reads on each refresh. Stable references (FSettings, FFrameView,
+     etc.) the presenter receives directly in its constructor.}
+    function GetCurrentFileName: string;
+    function GetCurrentOffsets: TFrameOffsetArray;
+    function GetCurrentVideoInfo: TVideoInfo;
+    function IsQuickViewMode: Boolean;
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
     procedure UpdateResolutionMenuLabels(AMenu: TPopupMenu);
@@ -814,11 +776,13 @@ begin
   FreeAndNil(FToolbarController);
   FreeAndNil(FViewportRefreshDebouncer);
   FreeAndNil(FLoadTimer);
+  {Free the presenter BEFORE the inherited destructor — the renderer it
+   borrows is TComponent-owned by Self and will be released by the
+   inherited Destroy's FComponents sweep. Freeing the presenter first
+   means the renderer is still valid while its handlers (held by the
+   presenter) get torn down.}
+  FreeAndNil(FStatusBarPresenter);
   FreeAndNil(FProgressIndicator);
-  {FStatusBarRenderer is owned by Self (step 59) — inherited TForm.Destroy
-   iterates FComponents and frees it. The resolver method-reference
-   captures Self; release happens during the inherited pass while
-   Self's fields are still memory-valid.}
   inherited;
 end;
 
@@ -1053,13 +1017,10 @@ begin
   Bar := TGlimpseStatusBar.Create(Self);
   FStatusBar := Bar;
   FStatusBar.Parent := Self;
-  {Initial Height is set by ApplyStatusBarSettings (called below) once
-   the configured font has been measured — no point picking a number
-   that the same paint cycle will overwrite.}
+  {Initial Height is set by FStatusBarPresenter.ApplySettings (called
+   below) once the configured font has been measured.}
   FStatusBar.SimplePanel := False;
   FStatusBar.SizeGrip := False;
-  FStatusBar.OnDblClick := OnStatusBarDblClick;
-  FStatusBar.OnMouseUp := OnStatusBarMouseUp;
   {Per-panel hints come from CMHintShow inside TGlimpseStatusBar; the
    ShowHint flag still has to be on so the VCL routes hint messages to
    the control in the first place.}
@@ -1078,238 +1039,56 @@ begin
         ALayout := FSettings.ProgressBarLayout;
       end;
     end);
-  {Renderer owns the status bar's panels from here on. The resolver
-   reads from FCachedStatusBarValues which UpdateStatusBar refreshes
-   once per call — guarantees a coherent snapshot across all tokens
-   in a single Refresh. Self is passed as the renderer's owner so the
-   form's inherited Destroy frees the renderer automatically; no manual
-   FStatusBarRenderer.Free needed.}
-  FStatusBarRenderer := TStatusBarRenderer.Create(Self, FStatusBar, ResolveStatusBarToken);
 
-  Bar.OnGetPanelHint := GetStatusBarPanelHint;
-  Bar.OnQueryPanelKind := GetStatusBarPanelKind;
+  {Presenter owns the renderer + cached snapshot, wires the bar's
+   panel-hint / panel-kind callbacks, and supplies the dbl-click /
+   mouse-up handlers. Self is passed as renderer-owner so the form's
+   inherited Destroy releases the renderer via TComponent cleanup; the
+   presenter itself is freed explicitly in TPluginForm.Destroy.}
+  FStatusBarPresenter := TStatusBarPresenter.Create(Self, Bar,
+    FProgressIndicator, FSettings, FFrameView, FExporter, FLoadTimer,
+    FFileNavigator, Self);
+  FStatusBar.OnDblClick := FStatusBarPresenter.HandleStatusBarDblClick;
+  FStatusBar.OnMouseUp := FStatusBarPresenter.HandleStatusBarMouseUp;
 
-  {FSettings is populated before CreateStatusBar (see SetParentAndLoad),
-   so push the user's saved template / font / measurement policy in.
-   Initial Refresh runs against an empty FCachedStatusBarValues so the
-   bar is empty until UpdateStatusBar fires for the first opened
-   file — matching the pre-template behaviour.}
-  ApplyStatusBarSettings;
-end;
-
-function TPluginForm.ResolveStatusBarToken(const AToken: TStatusBarToken): string;
-begin
-  {Resolve the platform-specific glyph once per token; the formatter
-   used to call PlatformDetect itself, but lifting the dependency to
-   the call site keeps StatusBarFormatters truly pure.}
-  Result := FormatStatusBarToken(AToken, FCachedStatusBarValues,
-    ResolutionTransformGlyph);
-end;
-
-function TPluginForm.GetStatusBarPanelHint(APanelIndex: Integer): string;
-begin
-  Result := FStatusBarRenderer.HintForPanel(APanelIndex);
-end;
-
-function TPluginForm.GetStatusBarPanelKind(APanelIndex: Integer): TStatusBarTokenKind;
-begin
-  Result := FStatusBarRenderer.KindForPanel(APanelIndex);
-end;
-
-procedure TPluginForm.ApplyStatusBarSettings;
-var
-  Bmp: TBitmap;
-  TextH: Integer;
-begin
-  if FStatusBarRenderer = nil then
-    Exit;
-  FStatusBarRenderer.SetFont(FSettings.StatusBarFontName, FSettings.StatusBarFontSize);
-  FStatusBarRenderer.SetAutoWidthLive(FSettings.StatusBarAutoWidthLive);
-  FStatusBarRenderer.SetStretchPanels(FSettings.StatusBarStretchPanels);
-  FStatusBarRenderer.ApplyTemplate(FSettings.StatusBarTemplate);
-
-  {Resize the bar. Auto path uses font-derived height (TextHeight + a
-   small padding), explicit path scales the user's logical pixel value
-   to the bar's CurrentPPI and silently bumps up to the font minimum
-   so text never clips. Apply-mode gate honours the lister/quickview
-   selection (sbhamBoth always applies; sbhamLister/QuickView skip the
-   override when running in the other window mode and fall back to
-   auto). Progress bar fills ClientHeight so it follows automatically
-   once the bar resizes.}
-  Bmp := TBitmap.Create;
-  try
-    Bmp.Canvas.Font.Assign(FStatusBar.Font);
-    {'Hg' is the standard ascender + descender pair used to measure a
-     font's true vertical reach (matches GDI's GetTextMetrics output).}
-    TextH := Bmp.Canvas.TextHeight('Hg');
-  finally
-    Bmp.Free;
-  end;
-  FStatusBar.Height := ResolveStatusBarHeight(TextH);
-  FProgressIndicator.Reposition;
-end;
-
-function TPluginForm.ResolveStatusBarHeight(ATextHeight: Integer): Integer;
-begin
-  {VCL-bound wrapper: hands the form state to the pure resolver in
-   Types so the policy stays unit-testable. FStatusBar.CurrentPPI
-   returns 0 in some pre-paint states; the pure helper normalises
-   that to 96.}
-  Result := ResolveStatusBarHeightPixels(ATextHeight,
-    FSettings.StatusBarHeight,
-    FSettings.StatusBarHeightApplyMode,
-    FQuickViewMode,
-    FStatusBar.CurrentPPI);
-end;
-
-procedure TPluginForm.BuildStatusBarValues(out AValues: TStatusBarValues);
-begin
-  AValues := Default(TStatusBarValues);
-  {Pre-template behaviour: the bar showed nothing until video info was
-   probed. Preserved here so panels stay hidden until extraction starts
-   filling them in.}
-  if not FVideoInfo.IsValid then
-    Exit;
-  AValues.VideoInfoValid := True;
-
-  BuildFileSourceFields(AValues);
-  BuildFrameViewFields(AValues);
-  BuildVideoInfoFields(AValues);
-  BuildExporterPredictionFields(AValues);
-  AValues.LoadTimeText := FLoadTimer.Formatted;
-end;
-
-procedure TPluginForm.BuildFileSourceFields(var AValues: TStatusBarValues);
-begin
-  AValues.Filename := FFileName;
-  AValues.FilePositionAvailable := FFileNavigator.GetFilePosition(FFileName,
-    FSettings.ExtensionList, AValues.FilePositionIndex, AValues.FilePositionTotal);
-end;
-
-procedure TPluginForm.BuildFrameViewFields(var AValues: TStatusBarValues);
-begin
-  AValues.FramesAvailable := Length(FOffsets) > 0;
-  AValues.FramesTotal := Length(FOffsets);
-  if FFrameView = nil then
-    Exit;
-  AValues.CurrentFrameIndex := FFrameView.CurrentFrameIndex;
-  AValues.IsSingleViewMode := FFrameView.ViewMode = vmSingle;
-  AValues.ViewModeName := ViewModeDisplayName(FFrameView.ViewMode);
-  AValues.ZoomModeName := ZoomModeDisplayName(FFrameView.ZoomMode);
-end;
-
-procedure TPluginForm.BuildVideoInfoFields(var AValues: TStatusBarValues);
-begin
-  AValues.SourceWidth := FVideoInfo.Width;
-  AValues.SourceHeight := FVideoInfo.Height;
-  AValues.SourceFps := FVideoInfo.Fps;
-  AValues.SourceDurationSec := FVideoInfo.Duration;
-  AValues.SourceBitrateKbps := FVideoInfo.Bitrate;
-  AValues.SourceVideoCodec := FVideoInfo.VideoCodec;
-
-  AValues.SourceAudioCodec := FVideoInfo.AudioCodec;
-  AValues.SourceAudioSampleRate := FVideoInfo.AudioSampleRate;
-  AValues.SourceAudioChannels := FVideoInfo.AudioChannels;
-  AValues.SourceAudioBitrateKbps := FVideoInfo.AudioBitrateKbps;
-end;
-
-procedure TPluginForm.BuildExporterPredictionFields(var AValues: TStatusBarValues);
-var
-  PredW, PredH, PredCappedW, PredCappedH: Integer;
-begin
-  if FExporter = nil then
-    Exit;
-  AValues.SaveDimAvailable := FExporter.PredictDisplayedSize(
-    FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
-  if AValues.SaveDimAvailable then
-  begin
-    AValues.SaveDimW := PredW;
-    AValues.SaveDimH := PredH;
-    AValues.SaveDimCappedW := PredCappedW;
-    AValues.SaveDimCappedH := PredCappedH;
-  end;
-  AValues.CopyDimAvailable := FExporter.PredictDisplayedSize(
-    FSettings.CopyAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
-  if AValues.CopyDimAvailable then
-  begin
-    AValues.CopyDimW := PredW;
-    AValues.CopyDimH := PredH;
-    AValues.CopyDimCappedW := PredCappedW;
-    AValues.CopyDimCappedH := PredCappedH;
-  end;
+  {Push the user's saved template / font / measurement policy. Initial
+   Refresh waits for the first UpdateStatusBar so the bar starts empty
+   — matches the pre-template behaviour.}
+  FStatusBarPresenter.ApplySettings;
 end;
 
 procedure TPluginForm.UpdateStatusBar;
-var
-  Last: Integer;
-  Dummy: TStatusPanel;
 begin
-  if FStatusBarRenderer = nil then
-    Exit;
-  BuildStatusBarValues(FCachedStatusBarValues);
-  FStatusBarRenderer.Refresh;
-  {Append a 0-width dummy panel only when the last visible panel has
-   non-default alignment. Without it the common control lets the last
-   panel stretch to fill remaining width, defeating the right- or
-   center-justify the user asked for. Other panels can stretch
-   harmlessly (left-justified text just leaves blank space on the
-   right), so the dummy is only added when it would actually matter —
-   matches the pre-template behaviour for the load_time panel.}
-  Last := FStatusBar.Panels.Count - 1;
-  if (Last >= 0) and (FStatusBar.Panels[Last].Alignment <> taLeftJustify) then
-  begin
-    Dummy := FStatusBar.Panels.Add;
-    Dummy.Width := 0;
-    Dummy.Text := '';
-  end;
+  if FStatusBarPresenter <> nil then
+    FStatusBarPresenter.Refresh;
 end;
 
-procedure TPluginForm.OnStatusBarDblClick(Sender: TObject);
-var
-  Pt: TPoint;
-  HitIdx, PanelLeft: Integer;
-  Kind: TStatusBarTokenKind;
+procedure TPluginForm.ApplyStatusBarSettings;
 begin
-  if (FStatusBar.Panels.Count = 0) or (FStatusBarRenderer = nil) then
-    Exit;
-  Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
-  HitIdx := StatusBarPanelHitTest(FStatusBar, Pt.X, PanelLeft);
-  if HitIdx < 0 then
-    Exit;
-  Kind := FStatusBarRenderer.KindForPanel(HitIdx);
-  case Kind of
-    tkSaveDimension:
-      FSettings.SaveAtLiveResolution := not FSettings.SaveAtLiveResolution;
-    tkCopyDimension:
-      FSettings.CopyAtLiveResolution := not FSettings.CopyAtLiveResolution;
-  else
-    Exit;
-  end;
-  {Persist so a TC restart preserves the flip — same contract the
-   settings dialog has. UpdateStatusBar recomputes the predicted-size
-   panels against the new toggle so the visible text changes on the
-   next paint, giving the user immediate feedback.}
-  FSettings.Save;
-  UpdateStatusBar;
+  if FStatusBarPresenter <> nil then
+    FStatusBarPresenter.ApplySettings;
 end;
 
-procedure TPluginForm.OnStatusBarMouseUp(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
-var
-  HitIdx, PanelLeft: Integer;
+{ IStatusBarDataSource }
+
+function TPluginForm.GetCurrentFileName: string;
 begin
-  {Only Ctrl+left-click copies. Other modifier combinations and right /
-   middle clicks fall through to default (no-op for status bar).}
-  if (Button <> mbLeft) or (Shift * [ssCtrl, ssShift, ssAlt] <> [ssCtrl]) then
-    Exit;
-  if FStatusBar.Panels.Count = 0 then
-    Exit;
-  HitIdx := StatusBarPanelHitTest(FStatusBar, X, PanelLeft);
-  {Click past last panel: copy last panel (matches pre-change behaviour
-   when double-click did the copying).}
-  if HitIdx < 0 then
-    HitIdx := FStatusBar.Panels.Count - 1;
-  Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
+  Result := FFileName;
+end;
+
+function TPluginForm.GetCurrentOffsets: TFrameOffsetArray;
+begin
+  Result := FOffsets;
+end;
+
+function TPluginForm.GetCurrentVideoInfo: TVideoInfo;
+begin
+  Result := FVideoInfo;
+end;
+
+function TPluginForm.IsQuickViewMode: Boolean;
+begin
+  Result := FQuickViewMode;
 end;
 
 function TPluginForm.ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;

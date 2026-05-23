@@ -216,6 +216,7 @@ uses
   TestSettingsDialogHelpers in 'TestSettingsDialogHelpers.pas',
   SettingsPresenters in '..\wlx\Presenters\SettingsPresenters.pas',
   HotkeyUIPresenter in '..\wlx\Presenters\HotkeyUIPresenter.pas',
+  StatusBarPresenter in '..\wlx\Presenters\StatusBarPresenter.pas',
   TestSettingsPresenters in 'TestSettingsPresenters.pas',
   WcxSettingsControlsBundles in '..\wcx\Presenters\WcxSettingsControlsBundles.pas',
   TestWcxSettingsControlsBundles in 'TestWcxSettingsControlsBundles.pas',
