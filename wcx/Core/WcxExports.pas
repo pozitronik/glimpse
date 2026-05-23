@@ -236,14 +236,21 @@ procedure ConfigurePacker(Parent: HWND; DllInstance: THandle); stdcall;
 var
   Settings: TWcxSettings;
   SettingsRepo: IWcxSettingsRepository;
+  {One concrete repository implements both reader and writer; binding
+   each role to its own typed local avoids a runtime as-cast that would
+   crash if a future variant implemented only one side.}
+  PresetsRepo: TProductionWcxPresetsRepository;
   PresetsReader: IWcxPresetsReader;
+  PresetsWriter: IWcxPresetsWriter;
 begin
   Settings := TWcxSettings.Create(GIniPath);
   try
     Settings.Load;
     SettingsRepo := TProductionWcxSettingsRepository.Create;
-    PresetsReader := TProductionWcxPresetsRepository.Create(PresetsIniPath(GIniPath));
-    if ShowWcxSettingsDialog(Parent, Settings, SettingsRepo, PresetsReader, PresetsReader as IWcxPresetsWriter,
+    PresetsRepo := TProductionWcxPresetsRepository.Create(PresetsIniPath(GIniPath));
+    PresetsReader := PresetsRepo;
+    PresetsWriter := PresetsRepo;
+    if ShowWcxSettingsDialog(Parent, Settings, SettingsRepo, PresetsReader, PresetsWriter,
       procedure
       begin
         TWcxFrameCache.Instance.Invalidate;
