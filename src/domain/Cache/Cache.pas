@@ -25,9 +25,15 @@ type
     class function Create(const AFilePath: string; ATimeOffset: Double; AMaxSide: Integer; AUseKeyframes: Boolean): TFrameCacheKey; static;
   end;
 
+  {Best-effort cache contract. Implementations may legitimately discard a Put
+   (no-op) or return nil from TryGet for valid configuration reasons —
+   caching-disabled, refresh-bypass and read-only decorators all do.
+   Callers MUST treat TryGet=nil as a miss and the original source as
+   authoritative; they MUST NOT assume "I just wrote it, so a TryGet of the
+   same key returns the same bitmap." Bitmap ownership: caller owns what
+   TryGet returns; Put copies (encoded) so the caller still owns ABitmap.}
   IFrameCache = interface
     ['{A7E3B2C1-4D5F-6E7A-8B9C-0D1E2F3A4B5C}']
-    {Caller owns the returned bitmap.}
     function TryGet(const AKey: TFrameCacheKey): TBitmap;
     procedure Put(const AKey: TFrameCacheKey; ABitmap: TBitmap);
   end;
