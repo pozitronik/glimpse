@@ -18,8 +18,13 @@ type
     {1-based AIndex within sorted siblings, plus total. False with zeros
      when directory unreadable or current file not in list.}
     function GetFilePosition(const ACurrentFile, AExtensions: string; out AIndex, ATotal: Integer): Boolean;
+  end;
 
-    {Number of cached directory listings; exposed for cache-behaviour tests.}
+  {Diagnostic facet for cache observability (currently used by tests).
+   Separate from IFileNavigator so production consumers depend only on
+   the navigation surface.}
+  IFileNavigatorDiagnostics = interface
+    ['{8D5F6B91-3C7E-4A2D-9B1F-6A4E0C8D5F92}']
     function DirectoryCacheSize: Integer;
   end;
 
@@ -42,7 +47,7 @@ type
     Files: TArray<string>;
   end;
 
-  TFileNavigator = class(TInterfacedObject, IFileNavigator)
+  TFileNavigator = class(TInterfacedObject, IFileNavigator, IFileNavigatorDiagnostics)
   strict private
     FCacheLock: TCriticalSection;
     FCache: array[0..CACHE_CAPACITY - 1] of TDirCacheEntry;

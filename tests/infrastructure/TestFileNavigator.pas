@@ -296,7 +296,7 @@ end;
 procedure TTestFileNavigator.Cache_FreshNavigator_SizeIsZero;
 begin
   { A freshly created navigator starts with an empty cache. }
-  Assert.AreEqual(0, FNav.DirectoryCacheSize);
+  Assert.AreEqual(0, (FNav as IFileNavigatorDiagnostics).DirectoryCacheSize);
 end;
 
 procedure TTestFileNavigator.Cache_FirstCall_GrowsSizeToOne;
@@ -305,7 +305,7 @@ var
 begin
   CreateFiles(['a.mp4', 'b.mp4']);
   FNav.GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total);
-  Assert.AreEqual(1, FNav.DirectoryCacheSize,
+  Assert.AreEqual(1, (FNav as IFileNavigatorDiagnostics).DirectoryCacheSize,
     'First call inserts one cache entry for (dir, mtime, extensions)');
 end;
 
@@ -316,7 +316,7 @@ begin
   CreateFiles(['a.mp4', 'b.mp4']);
   FNav.GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total);
   FNav.GetFilePosition(FTempDir + 'b.mp4', 'mp4', Idx, Total);
-  Assert.AreEqual(1, FNav.DirectoryCacheSize,
+  Assert.AreEqual(1, (FNav as IFileNavigatorDiagnostics).DirectoryCacheSize,
     'Second call with identical key hits the cache; size stays at 1');
 end;
 
@@ -327,7 +327,7 @@ begin
   CreateFiles(['a.mp4', 'b.mkv']);
   FNav.GetFilePosition(FTempDir + 'a.mp4', 'mp4', Idx, Total);
   FNav.GetFilePosition(FTempDir + 'a.mp4', 'mp4,mkv', Idx, Total);
-  Assert.AreEqual(2, FNav.DirectoryCacheSize,
+  Assert.AreEqual(2, (FNav as IFileNavigatorDiagnostics).DirectoryCacheSize,
     'Different extension list -> different key -> separate cache entry');
 end;
 
