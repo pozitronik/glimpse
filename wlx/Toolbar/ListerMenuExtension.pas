@@ -94,11 +94,14 @@ type
     procedure UninstallSubclass;
   public
     {Re-attaches our items when the host's menu has been replaced or
-     trimmed underneath us — Windows recreates the parent's menu on
-     DPI / display-config changes and TC may rebuild it for its own
-     reasons. Called by our subclass on WM_INITMENU / WM_DPICHANGED /
-     WM_DISPLAYCHANGE.}
+     trimmed underneath us. Cheap fast-path check; rebuilds only when
+     a mismatch is detected. Called by our subclass on WM_INITMENU.}
     procedure EnsureItemsInstalled;
+    {Unconditional teardown + install. Called on WM_DPICHANGED /
+     WM_DISPLAYCHANGE / WM_THEMECHANGED where the menu is known to
+     have been redrawn and a verify-then-rebuild path can be tricked
+     by surviving-but-corrupted items.}
+    procedure ForceRebuild;
     {AParentWnd is the TLister window. AFlatMode selects layout
      (False = submenu under one "Glimpse" entry, True = each item
      at top level). The dispatch callback is invoked on every click;
@@ -160,14 +163,20 @@ begin
           if (Ext <> nil) and Ext.TryHandleCommand(CmdId) then
             Exit(0);
       end;
-    {Hooks that fire when the host may have replaced the menu under us.
-     WM_INITMENU is the catch-all (sent every time the user pulls down
-     ANY menu — including pressing Alt to enter menu mode); WM_DPICHANGED
-     and WM_DISPLAYCHANGE fire when monitors / DPI change. The check
-     inside EnsureItemsInstalled is cheap when the menu is still intact.}
-    WM_INITMENU, WM_DPICHANGED, WM_DISPLAYCHANGE, WM_THEMECHANGED:
+    {WM_INITMENU is the cheap catch-all — fires every time any menu
+     becomes active (including Alt key entering menu mode). The fast-
+     path check inside EnsureItemsInstalled returns quickly when our
+     items look intact.}
+    WM_INITMENU:
       if Ext <> nil then
         Ext.EnsureItemsInstalled;
+    {Display / DPI / theme changes are rare AND known to invalidate
+     menu rendering even when item data survives. Force an
+     unconditional rebuild so we sidestep any in-place corruption
+     instead of trusting our verify-then-skip path.}
+    WM_DPICHANGED, WM_DISPLAYCHANGE, WM_THEMECHANGED:
+      if Ext <> nil then
+        Ext.ForceRebuild;
   end;
   Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
 end;
@@ -250,11 +259,21 @@ begin
   if (CurrentMenu <> 0) and (CurrentMenu = FParentMenu)
     and (GetMenuItemCount(FParentMenu) >= FFirstPos + FItemCount) then
     Exit;
-  {Either the host swapped its HMENU under us (DPI / display change)
-   or removed our items. Tear down what we still own on the cached
-   menu and re-install on the current one.}
+  ForceRebuild;
+end;
+
+procedure TListerMenuExtension.ForceRebuild;
+begin
   Teardown;
   Install;
+  {Force a non-client area recalc on the host. DrawMenuBar alone is
+   sometimes insufficient after DPI / display changes — items end up
+   in the menu data but the menu bar's non-client cache stays stale
+   until something else triggers a repaint. SWP_FRAMECHANGED forces
+   WM_NCCALCSIZE which redraws the menu bar from scratch.}
+  if FParentWnd <> 0 then
+    SetWindowPos(FParentWnd, 0, 0, 0, 0, 0,
+      SWP_NOMOVE or SWP_NOSIZE or SWP_NOZORDER or SWP_NOACTIVATE or SWP_FRAMECHANGED);
 end;
 
 function TListerMenuExtension.AllocIdFor(const AEntry: TListerMenuEntry): Word;
@@ -268,6 +287,12 @@ end;
 
 procedure TListerMenuExtension.AddSeparator(ADest: HMENU);
 begin
+  {Separators only belong inside popup menus. Adding one to the
+   top-level menu bar (Mode B) renders as a stray "-" on some
+   Windows configurations and survives TC menu rebuilds out of step
+   with the text items, leaving an orphan after our items vanish.}
+  if ADest = FParentMenu then
+    Exit;
   AppendMenu(ADest, MF_SEPARATOR, 0, nil);
 end;
 
