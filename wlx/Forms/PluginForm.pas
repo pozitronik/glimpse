@@ -144,13 +144,19 @@ type
      UpdateProgress, OnHamburgerZoomClick, etc.) don't all need updating.}
     procedure UpdateStatusBar;
     procedure ApplyStatusBarSettings;
-    {IStatusBarDataSource — exposes the mutable form state the presenter
-     reads on each refresh. Stable references (FSettings, FFrameView,
-     etc.) the presenter receives directly in its constructor.}
+    {IStatusBarDataSource — exposes the host state the presenter reads
+     on each refresh. The frame-view / exporter / load-timer accessors
+     read at refresh time so they return the current value even though
+     they are still nil at CreateStatusBar (the presenter is constructed
+     during InitializeUI; FExporter and FLoadTimer are wired by the
+     later InitializeExtractionStack / InitializeServices phases).}
     function GetCurrentFileName: string;
     function GetCurrentOffsets: TFrameOffsetArray;
     function GetCurrentVideoInfo: TVideoInfo;
     function IsQuickViewMode: Boolean;
+    function GetFrameView: TFrameView;
+    function GetExporter: TFrameExporter;
+    function GetLoadTimer: TLoadTimeRecorder;
     procedure CreateContextMenu;
     procedure CreateErrorLabel;
     procedure UpdateResolutionMenuLabels(AMenu: TPopupMenu);
@@ -1044,10 +1050,12 @@ begin
    panel-hint / panel-kind callbacks, and supplies the dbl-click /
    mouse-up handlers. Self is passed as renderer-owner so the form's
    inherited Destroy releases the renderer via TComponent cleanup; the
-   presenter itself is freed explicitly in TPluginForm.Destroy.}
+   presenter itself is freed explicitly in TPluginForm.Destroy.
+   FrameView / Exporter / LoadTimer are read through Self
+   (IStatusBarDataSource) at refresh time, not captured here, because
+   those fields are not yet populated when CreateStatusBar runs.}
   FStatusBarPresenter := TStatusBarPresenter.Create(Self, Bar,
-    FProgressIndicator, FSettings, FFrameView, FExporter, FLoadTimer,
-    FFileNavigator, Self);
+    FProgressIndicator, FSettings, FFileNavigator, Self);
   FStatusBar.OnDblClick := FStatusBarPresenter.HandleStatusBarDblClick;
   FStatusBar.OnMouseUp := FStatusBarPresenter.HandleStatusBarMouseUp;
 
@@ -1089,6 +1097,21 @@ end;
 function TPluginForm.IsQuickViewMode: Boolean;
 begin
   Result := FQuickViewMode;
+end;
+
+function TPluginForm.GetFrameView: TFrameView;
+begin
+  Result := FFrameView;
+end;
+
+function TPluginForm.GetExporter: TFrameExporter;
+begin
+  Result := FExporter;
+end;
+
+function TPluginForm.GetLoadTimer: TLoadTimeRecorder;
+begin
+  Result := FLoadTimer;
 end;
 
 function TPluginForm.ResolveZoomModeForCurrentView(ARequestedZoom: TZoomMode): TZoomMode;

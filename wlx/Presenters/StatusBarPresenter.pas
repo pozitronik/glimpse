@@ -22,16 +22,23 @@ uses
   FrameOffsets, VideoInfo;
 
 type
-  {The minimal slice of host state the presenter rebuilds the snapshot
-   from on each refresh. The host (typically TPluginForm) implements it.
-   Stable references are passed through the presenter's constructor
-   instead so this stays tightly scoped to mutable state.}
+  {The slice of host state the presenter reads on each refresh. The
+   host (typically TPluginForm) implements it. Refresh-time-read getters
+   matter for collaborators that may still be nil while the host's
+   init order is mid-flight; on a complex form (CreateStatusBar runs
+   before CreateFrameView / InitializeExtractionStack / InitializeServices)
+   the presenter would otherwise capture nil at construction and crash
+   later. Reading through the interface keeps the presenter robust to
+   any host init order.}
   IStatusBarDataSource = interface
     ['{4D8C2F31-7B5E-4A92-91D0-3E6F8B0C2D4A}']
     function GetCurrentFileName: string;
     function GetCurrentOffsets: TFrameOffsetArray;
     function GetCurrentVideoInfo: TVideoInfo;
     function IsQuickViewMode: Boolean;
+    function GetFrameView: TFrameView;
+    function GetExporter: TFrameExporter;
+    function GetLoadTimer: TLoadTimeRecorder;
   end;
 
   TStatusBarPresenter = class
@@ -39,9 +46,6 @@ type
     FStatusBar: TGlimpseStatusBar;
     FProgressIndicator: TProgressIndicator;
     FSettings: TPluginSettings;
-    FFrameView: TFrameView;
-    FExporter: TFrameExporter;
-    FLoadTimer: TLoadTimeRecorder;
     FFileNavigator: IFileNavigator;
     FDataSource: IStatusBarDataSource;
     FRenderer: TStatusBarRenderer;
@@ -59,15 +63,16 @@ type
     {ARendererOwner is the TComponent that owns the renderer for VCL
      cleanup; passing the host form here keeps the existing
      "inherited Destroy frees the renderer" lifecycle. AStatusBar,
-     AProgressIndicator, ASettings, AFrameView, AExporter, ALoadTimer,
-     AFileNavigator, ADataSource are all borrowed.}
+     AProgressIndicator, ASettings, AFileNavigator and ADataSource are
+     all borrowed. FrameView, Exporter and LoadTimer are read on
+     demand through ADataSource so the presenter is robust to host
+     init order — they may still be nil when the presenter is
+     constructed and the data source's getters will return them once
+     the host has wired them up.}
     constructor Create(ARendererOwner: TComponent;
       AStatusBar: TGlimpseStatusBar;
       AProgressIndicator: TProgressIndicator;
       ASettings: TPluginSettings;
-      AFrameView: TFrameView;
-      AExporter: TFrameExporter;
-      ALoadTimer: TLoadTimeRecorder;
       const AFileNavigator: IFileNavigator;
       const ADataSource: IStatusBarDataSource);
     {Rebuilds the cached snapshot and tells the renderer to repaint.
@@ -102,9 +107,6 @@ constructor TStatusBarPresenter.Create(ARendererOwner: TComponent;
   AStatusBar: TGlimpseStatusBar;
   AProgressIndicator: TProgressIndicator;
   ASettings: TPluginSettings;
-  AFrameView: TFrameView;
-  AExporter: TFrameExporter;
-  ALoadTimer: TLoadTimeRecorder;
   const AFileNavigator: IFileNavigator;
   const ADataSource: IStatusBarDataSource);
 begin
@@ -112,9 +114,6 @@ begin
   FStatusBar := AStatusBar;
   FProgressIndicator := AProgressIndicator;
   FSettings := ASettings;
-  FFrameView := AFrameView;
-  FExporter := AExporter;
-  FLoadTimer := ALoadTimer;
   FFileNavigator := AFileNavigator;
   FDataSource := ADataSource;
   {Renderer takes the host as its TComponent owner so the host's
@@ -193,16 +192,18 @@ end;
 procedure TStatusBarPresenter.BuildFrameViewFields(var AValues: TStatusBarValues);
 var
   Offsets: TFrameOffsetArray;
+  FrameView: TFrameView;
 begin
   Offsets := FDataSource.GetCurrentOffsets;
   AValues.FramesAvailable := Length(Offsets) > 0;
   AValues.FramesTotal := Length(Offsets);
-  if FFrameView = nil then
+  FrameView := FDataSource.GetFrameView;
+  if FrameView = nil then
     Exit;
-  AValues.CurrentFrameIndex := FFrameView.CurrentFrameIndex;
-  AValues.IsSingleViewMode := FFrameView.ViewMode = vmSingle;
-  AValues.ViewModeName := ViewModeDisplayName(FFrameView.ViewMode);
-  AValues.ZoomModeName := ZoomModeDisplayName(FFrameView.ZoomMode);
+  AValues.CurrentFrameIndex := FrameView.CurrentFrameIndex;
+  AValues.IsSingleViewMode := FrameView.ViewMode = vmSingle;
+  AValues.ViewModeName := ViewModeDisplayName(FrameView.ViewMode);
+  AValues.ZoomModeName := ZoomModeDisplayName(FrameView.ZoomMode);
 end;
 
 procedure TStatusBarPresenter.BuildVideoInfoFields(var AValues: TStatusBarValues);
@@ -226,10 +227,12 @@ end;
 procedure TStatusBarPresenter.BuildExporterPredictionFields(var AValues: TStatusBarValues);
 var
   PredW, PredH, PredCappedW, PredCappedH: Integer;
+  Exporter: TFrameExporter;
 begin
-  if FExporter = nil then
+  Exporter := FDataSource.GetExporter;
+  if Exporter = nil then
     Exit;
-  AValues.SaveDimAvailable := FExporter.PredictDisplayedSize(
+  AValues.SaveDimAvailable := Exporter.PredictDisplayedSize(
     FSettings.SaveAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
   if AValues.SaveDimAvailable then
   begin
@@ -238,7 +241,7 @@ begin
     AValues.SaveDimCappedW := PredCappedW;
     AValues.SaveDimCappedH := PredCappedH;
   end;
-  AValues.CopyDimAvailable := FExporter.PredictDisplayedSize(
+  AValues.CopyDimAvailable := Exporter.PredictDisplayedSize(
     FSettings.CopyAtLiveResolution, PredW, PredH, PredCappedW, PredCappedH);
   if AValues.CopyDimAvailable then
   begin
@@ -250,6 +253,8 @@ begin
 end;
 
 procedure TStatusBarPresenter.BuildValues(out AValues: TStatusBarValues);
+var
+  LoadTimer: TLoadTimeRecorder;
 begin
   AValues := Default(TStatusBarValues);
   {Pre-template behaviour: the bar showed nothing until video info was
@@ -263,7 +268,9 @@ begin
   BuildFrameViewFields(AValues);
   BuildVideoInfoFields(AValues);
   BuildExporterPredictionFields(AValues);
-  AValues.LoadTimeText := FLoadTimer.Formatted;
+  LoadTimer := FDataSource.GetLoadTimer;
+  if LoadTimer <> nil then
+    AValues.LoadTimeText := LoadTimer.Formatted;
 end;
 
 procedure TStatusBarPresenter.Refresh;
