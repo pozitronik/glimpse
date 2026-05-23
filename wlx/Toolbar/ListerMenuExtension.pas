@@ -88,9 +88,17 @@ type
     procedure PopulateContents(ADest: HMENU);
     procedure BuildSubmenu;
     procedure BuildFlat;
+    procedure Install;
+    procedure Teardown;
     procedure InstallSubclass;
     procedure UninstallSubclass;
   public
+    {Re-attaches our items when the host's menu has been replaced or
+     trimmed underneath us — Windows recreates the parent's menu on
+     DPI / display-config changes and TC may rebuild it for its own
+     reasons. Called by our subclass on WM_INITMENU / WM_DPICHANGED /
+     WM_DISPLAYCHANGE.}
+    procedure EnsureItemsInstalled;
     {AParentWnd is the TLister window. AFlatMode selects layout
      (False = submenu under one "Glimpse" entry, True = each item
      at top level). The dispatch callback is invoked on every click;
@@ -116,6 +124,22 @@ const
   TIMECODE_MENU_CAPTION = 'Show timecodes';
   SETTINGS_MENU_CAPTION = 'Settings...';
 
+{The toolbar shares the 'Scroll' caption between vmScroll and vmFilmstrip
+ and distinguishes with arrow icons (vertical / horizontal); the menu
+ has no icons so the captions spell out the direction.}
+function MenuCaptionForMode(AMode: TViewMode): string;
+begin
+  case AMode of
+    vmSmartGrid: Result := 'Smart grid';
+    vmGrid:      Result := 'Grid';
+    vmScroll:    Result := 'Vertical scroll';
+    vmFilmstrip: Result := 'Horizontal scroll (filmstrip)';
+    vmSingle:    Result := 'Single frame';
+  else
+    Result := ViewModeDisplayName(AMode);
+  end;
+end;
+
 {Subclass proc that intercepts WM_COMMAND for our menu IDs. Installed
  by InstallSubclass with dwRefData = TListerMenuExtension Self pointer.}
 function ListerMenuSubclassProc(AWnd: HWND; AMsg: UINT; AWParam: WPARAM;
@@ -124,18 +148,26 @@ var
   Ext: TListerMenuExtension;
   CmdId: Word;
 begin
-  if AMsg = WM_COMMAND then
-  begin
-    {Menu commands have HIWORD(wParam) = 0; accelerator commands set
-     HIWORD = 1. Treat both the same — only the ID matters for our
-     range check.}
-    CmdId := Word(AWParam and $FFFF);
-    if (CmdId >= LISTER_MENU_CMD_BASE) and (CmdId <= LISTER_MENU_CMD_LAST) then
-    begin
-      Ext := TListerMenuExtension(Pointer(ARefData));
-      if (Ext <> nil) and Ext.TryHandleCommand(CmdId) then
-        Exit(0);
-    end;
+  Ext := TListerMenuExtension(Pointer(ARefData));
+  case AMsg of
+    WM_COMMAND:
+      begin
+        {Menu commands have HIWORD(wParam) = 0; accelerator commands set
+         HIWORD = 1. Treat both the same — only the ID matters for our
+         range check.}
+        CmdId := Word(AWParam and $FFFF);
+        if (CmdId >= LISTER_MENU_CMD_BASE) and (CmdId <= LISTER_MENU_CMD_LAST) then
+          if (Ext <> nil) and Ext.TryHandleCommand(CmdId) then
+            Exit(0);
+      end;
+    {Hooks that fire when the host may have replaced the menu under us.
+     WM_INITMENU is the catch-all (sent every time the user pulls down
+     ANY menu — including pressing Alt to enter menu mode); WM_DPICHANGED
+     and WM_DISPLAYCHANGE fire when monitors / DPI change. The check
+     inside EnsureItemsInstalled is cheap when the menu is still intact.}
+    WM_INITMENU, WM_DPICHANGED, WM_DISPLAYCHANGE, WM_THEMECHANGED:
+      if Ext <> nil then
+        Ext.EnsureItemsInstalled;
   end;
   Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
 end;
@@ -149,11 +181,34 @@ begin
   FDispatch := ADispatch;
   FNextId := LISTER_MENU_CMD_BASE;
   FEntries := TDictionary<Word, TListerMenuEntry>.Create;
-  FParentMenu := GetMenu(AParentWnd);
-  {No menu on the parent (Quick View panel, or a host that opted out)
-   — leave FParentMenu = 0; Destroy will short-circuit cleanly.}
+  Install;
+  {Always install the subclass — even if Install short-circuited
+   (no parent menu yet), a future WM_INITMENU will let
+   EnsureItemsInstalled try again. Subclass also forwards WM_COMMAND
+   no matter what.}
+  InstallSubclass;
+end;
+
+destructor TListerMenuExtension.Destroy;
+begin
+  UninstallSubclass;
+  Teardown;
+  FEntries.Free;
+  inherited;
+end;
+
+procedure TListerMenuExtension.Install;
+begin
+  FParentMenu := GetMenu(FParentWnd);
+  {No menu on the parent (Quick View panel, or the host is currently
+   between menu HANDLES — common during DPI change). Leave state
+   cleared; EnsureItemsInstalled will retry on the next WM_INITMENU.}
   if FParentMenu = 0 then
+  begin
+    FFirstPos := 0;
+    FItemCount := 0;
     Exit;
+  end;
 
   FFirstPos := GetMenuItemCount(FParentMenu);
   if FFlatMode then
@@ -161,29 +216,45 @@ begin
   else
     BuildSubmenu;
   FItemCount := GetMenuItemCount(FParentMenu) - FFirstPos;
-
   DrawMenuBar(FParentWnd);
-  InstallSubclass;
 end;
 
-destructor TListerMenuExtension.Destroy;
+procedure TListerMenuExtension.Teardown;
 var
   I: Integer;
 begin
-  if FParentMenu <> 0 then
+  {Only remove if the cached parent menu is still the host's current
+   menu. If GetMenu has changed underneath us, the old HMENU was
+   destroyed by the host (taking our items with it) and a removal call
+   would target the wrong menu.}
+  if (FParentMenu <> 0) and (FParentMenu = GetMenu(FParentWnd)) then
   begin
-    UninstallSubclass;
-    {Remove items in reverse order. Each RemoveMenu shifts subsequent
-     items down, so deleting from the tail keeps FFirstPos pointing at
-     the correct position for the next removal. Popup submenus attached
-     via MF_POPUP are destroyed automatically when their host item is
-     removed.}
     for I := FItemCount - 1 downto 0 do
       RemoveMenu(FParentMenu, FFirstPos + I, MF_BYPOSITION);
     DrawMenuBar(FParentWnd);
   end;
-  FEntries.Free;
-  inherited;
+  FParentMenu := 0;
+  FFirstPos := 0;
+  FItemCount := 0;
+  FNextId := LISTER_MENU_CMD_BASE;
+  FEntries.Clear;
+end;
+
+procedure TListerMenuExtension.EnsureItemsInstalled;
+var
+  CurrentMenu: HMENU;
+begin
+  CurrentMenu := GetMenu(FParentWnd);
+  {Same menu and item count looks sane — nothing to do. Cheap fast
+   path for the common WM_INITMENU storm.}
+  if (CurrentMenu <> 0) and (CurrentMenu = FParentMenu)
+    and (GetMenuItemCount(FParentMenu) >= FFirstPos + FItemCount) then
+    Exit;
+  {Either the host swapped its HMENU under us (DPI / display change)
+   or removed our items. Tear down what we still own on the cached
+   menu and re-install on the current one.}
+  Teardown;
+  Install;
 end;
 
 function TListerMenuExtension.AllocIdFor(const AEntry: TListerMenuEntry): Word;
@@ -210,7 +281,7 @@ begin
   Entry.Zoom := zmFitWindow;
   Entry.ActionTag := 0;
   Id := AllocIdFor(Entry);
-  AppendMenu(ADest, MF_STRING, Id, PChar(ViewModeDisplayName(AMode)));
+  AppendMenu(ADest, MF_STRING, Id, PChar(MenuCaptionForMode(AMode)));
 end;
 
 procedure TListerMenuExtension.AddModeWithZoomSubmenu(ADest: HMENU; AMode: TViewMode);
@@ -230,7 +301,7 @@ begin
     Id := AllocIdFor(Entry);
     AppendMenu(ModePopup, MF_STRING, Id, PChar(SIZING_LABELS[AMode, ZM]));
   end;
-  AppendMenu(ADest, MF_POPUP, ModePopup, PChar(ViewModeDisplayName(AMode)));
+  AppendMenu(ADest, MF_POPUP, ModePopup, PChar(MenuCaptionForMode(AMode)));
 end;
 
 procedure TListerMenuExtension.AddModeItems(ADest: HMENU);
