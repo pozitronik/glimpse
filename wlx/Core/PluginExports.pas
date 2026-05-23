@@ -248,7 +248,12 @@ end;
 function DoGetPreviewBitmap(const AFileName: string; Width, Height: Integer): HBITMAP;
 var
   Ctx: TPluginContext;
-  FFmpeg: IVideoProber;
+  {One TFFmpegExe instance, held via its two interface facets — the dual
+   role is enforced at compile time instead of through a runtime as-cast
+   that would crash if a future variant implemented only one side.}
+  FFmpegExe: TFFmpegExe;
+  Prober: IVideoProber;
+  Extractor: IFrameExtractor;
   Bmp: TBitmap;
 begin
   Result := 0;
@@ -263,11 +268,11 @@ begin
     Exit;
 
   try
-    {One TFFmpegExe instance, held via its two interfaces — refcount frees
-     it on scope exit. The shorter thumbnail extract budget is baked in.}
-    FFmpeg := TFFmpegExe.Create(Ctx.FFmpegPath, TProductionProcessRunner.Create,
+    FFmpegExe := TFFmpegExe.Create(Ctx.FFmpegPath, TProductionProcessRunner.Create,
       DEF_THUMBNAIL_TIMEOUT_MS);
-    Bmp := RenderThumbnail(FFmpeg as IFrameExtractor, FFmpeg, AFileName, Width, Height,
+    Prober := FFmpegExe;
+    Extractor := FFmpegExe;
+    Bmp := RenderThumbnail(Extractor, Prober, AFileName, Width, Height,
       TThumbnailParams.FromSettings(Ctx.Settings), Ctx.ThumbnailCache, Ctx.ProbeCache);
     if Bmp <> nil then
       try
