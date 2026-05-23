@@ -29,11 +29,17 @@ type
     function GetSaveAtLiveResolution: Boolean;
     procedure SetSaveAtLiveResolution(AValue: Boolean);
     function GetCopyAtLiveResolution: Boolean;
-    function GetCombinedMaxSide: Integer;
     {Commits in-memory settings to the backing INI; called by
      TSaveDialogPresenter to persist the dialog's folder + live-resolution
      choice across sessions.}
     procedure Save;
+  end;
+
+  {Render-size cap for the combined grid image. Carved off ISaveFormatPolicy
+   so render-side consumers depend only on the cap they read.}
+  IRenderSizePolicy = interface
+    ['{E6F0B5D8-4A8C-4D9F-B7E0-5C0F8E2D3A6B}']
+    function GetCombinedMaxSide: Integer;
   end;
 
   IRenderColorPolicy = interface

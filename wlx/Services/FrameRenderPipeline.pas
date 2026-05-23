@@ -22,7 +22,7 @@ type
     FRenderColorPolicy: IRenderColorPolicy;
     FBannerStyleProvider: IBannerStyleProvider;
     FTimecodeStyleProvider: ITimecodeStyleProvider;
-    FSavePolicy: ISaveFormatPolicy;
+    FSizePolicy: IRenderSizePolicy;
     FBannerInfo: TBannerInfo;
     {Indexed parallel to FFrameView cells. Non-owned (typically owned by
      TFrameCache). When SaveAtLiveResolution is off, save paths prefer
@@ -38,7 +38,7 @@ type
       const ARenderColorPolicy: IRenderColorPolicy;
       const ABannerStyleProvider: IBannerStyleProvider;
       const ATimecodeStyleProvider: ITimecodeStyleProvider;
-      const ASavePolicy: ISaveFormatPolicy);
+      const ASizePolicy: IRenderSizePolicy);
     {Returns the bitmap save/copy paths should consume for cell AIndex,
      honouring FOverrideFrames when set and the live-resolution toggle
      is off. ALiveResolutionIntent True routes through RenderCellAtLiveSize
@@ -103,14 +103,14 @@ constructor TFrameRenderPipeline.Create(AFrameView: TFrameView;
   const ARenderColorPolicy: IRenderColorPolicy;
   const ABannerStyleProvider: IBannerStyleProvider;
   const ATimecodeStyleProvider: ITimecodeStyleProvider;
-  const ASavePolicy: ISaveFormatPolicy);
+  const ASizePolicy: IRenderSizePolicy);
 begin
   inherited Create;
   FFrameView := AFrameView;
   FRenderColorPolicy := ARenderColorPolicy;
   FBannerStyleProvider := ABannerStyleProvider;
   FTimecodeStyleProvider := ATimecodeStyleProvider;
-  FSavePolicy := ASavePolicy;
+  FSizePolicy := ASizePolicy;
 end;
 
 function TFrameRenderPipeline.PickSaveBitmap(AIndex: Integer; ALiveResolutionIntent: Boolean): TBitmap;
@@ -487,9 +487,9 @@ procedure TFrameRenderPipeline.ApplyCombinedSizeCap(var ABmp: TBitmap);
 var
   Shrunk: TBitmap;
 begin
-  if (ABmp = nil) or (FSavePolicy.GetCombinedMaxSide <= 0) then
+  if (ABmp = nil) or (FSizePolicy.GetCombinedMaxSide <= 0) then
     Exit;
-  Shrunk := DownscaleBitmapToFit(ABmp, FSavePolicy.GetCombinedMaxSide);
+  Shrunk := DownscaleBitmapToFit(ABmp, FSizePolicy.GetCombinedMaxSide);
   if Shrunk = nil then
     Exit;
   ABmp.Free;

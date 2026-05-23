@@ -1,4 +1,4 @@
-{Pins that TPluginSettings actually satisfies each of the 5 narrow
+{Pins that TPluginSettings actually satisfies each of the 6 narrow
  settings interfaces and that getter/setter readback matches the
  underlying flat property. The interfaces are pure contracts, so this
  is the one seam that can break silently.}
@@ -16,6 +16,7 @@ type
     [Test] procedure TPluginSettings_ImplementsITimecodeStyleProvider;
     [Test] procedure TPluginSettings_ImplementsIBannerStyleProvider;
     [Test] procedure TPluginSettings_ImplementsISaveFormatPolicy;
+    [Test] procedure TPluginSettings_ImplementsIRenderSizePolicy;
     [Test] procedure TPluginSettings_ImplementsIRenderColorPolicy;
     [Test] procedure TPluginSettings_ImplementsIClipboardPolicy;
     [Test] procedure SaveFormatPolicy_SetSaveFolder_RoundTrips;
@@ -76,13 +77,27 @@ begin
     S.SaveFolder := 'C:\out';
     S.SaveAtLiveResolution := True;
     S.CopyAtLiveResolution := False;
-    S.CombinedMaxSide := 4096;
     P := S;
     Assert.IsTrue(P.GetSaveFormat = sfJPEG);
     Assert.AreEqual('C:\out', P.GetSaveFolder);
     Assert.IsTrue(P.GetSaveAtLiveResolution);
     Assert.IsFalse(P.GetCopyAtLiveResolution);
-    Assert.AreEqual(4096, P.GetCombinedMaxSide);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestSettingsInterfaces.TPluginSettings_ImplementsIRenderSizePolicy;
+var
+  S: TPluginSettings;
+  P: IRenderSizePolicy;
+begin
+  S := TPluginSettings.Create('');
+  try
+    S.CombinedMaxSide := 4096;
+    P := S;
+    Assert.AreEqual(4096, P.GetCombinedMaxSide,
+      'IRenderSizePolicy.GetCombinedMaxSide must reflect the underlying property');
   finally
     S.Free;
   end;

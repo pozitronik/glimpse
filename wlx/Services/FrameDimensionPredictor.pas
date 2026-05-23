@@ -14,12 +14,12 @@ type
   strict private
     FFrameView: TFrameView;
     FRenderColorPolicy: IRenderColorPolicy;
-    FSavePolicy: ISaveFormatPolicy;
+    FSizePolicy: IRenderSizePolicy;
     FRenderPipeline: TFrameRenderPipeline;
   public
     constructor Create(AFrameView: TFrameView;
       const ARenderColorPolicy: IRenderColorPolicy;
-      const ASavePolicy: ISaveFormatPolicy;
+      const ASizePolicy: IRenderSizePolicy;
       ARenderPipeline: TFrameRenderPipeline);
     {Pre-banner, pre-cap pixel dimensions. Banner height is omitted (variable
      and hard to predict without a canvas). Returns 0,0 when no cells.}
@@ -39,13 +39,13 @@ uses
 
 constructor TFrameDimensionPredictor.Create(AFrameView: TFrameView;
   const ARenderColorPolicy: IRenderColorPolicy;
-  const ASavePolicy: ISaveFormatPolicy;
+  const ASizePolicy: IRenderSizePolicy;
   ARenderPipeline: TFrameRenderPipeline);
 begin
   inherited Create;
   FFrameView := AFrameView;
   FRenderColorPolicy := ARenderColorPolicy;
-  FSavePolicy := ASavePolicy;
+  FSizePolicy := ASizePolicy;
   FRenderPipeline := ARenderPipeline;
 end;
 
@@ -110,7 +110,7 @@ begin
   PredictCombinedSize(AForceLiveRes, AW, AH);
   if (AW <= 0) or (AH <= 0) then
     Exit;
-  ComputeCappedSize(AW, AH, FSavePolicy.GetCombinedMaxSide, ACappedW, ACappedH);
+  ComputeCappedSize(AW, AH, FSizePolicy.GetCombinedMaxSide, ACappedW, ACappedH);
   Result := True;
 end;
 

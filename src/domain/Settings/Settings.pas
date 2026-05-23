@@ -14,7 +14,7 @@ type
    crash when both the form and an interface field hold the same instance.}
   TPluginSettings = class(TNoRefCountObject,
     ITimecodeStyleProvider, IBannerStyleProvider, ISaveFormatPolicy,
-    IRenderColorPolicy, IClipboardPolicy)
+    IRenderColorPolicy, IClipboardPolicy, IRenderSizePolicy)
   strict private
     FIniPath: string;
     FFFmpeg: TFFmpegSettingsGroup;
