@@ -21,6 +21,7 @@ uses
   FFmpegLocator in '..\src\infrastructure\FFmpegLocator.pas',
   FFmpegExe in '..\src\infrastructure\FFmpegExe.pas',
   FrameView in 'Widgets\FrameView.pas',
+  ScrollableHost in 'Widgets\ScrollableHost.pas',
   FrameCellStore in 'Widgets\FrameCellStore.pas',
   FrameGeometry in 'Widgets\FrameGeometry.pas',
   FrameViewRenderer in 'Widgets\FrameViewRenderer.pas',

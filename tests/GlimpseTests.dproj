@@ -91,6 +91,7 @@
         <DCCReference Include="infrastructure\TestFFmpegProbeParser.pas"/>
         <DCCReference Include="infrastructure\TestFFmpegCmdLine.pas"/>
         <DCCReference Include="..\wlx\Widgets\FrameView.pas"/>
+        <DCCReference Include="..\wlx\Widgets\ScrollableHost.pas"/>
         <DCCReference Include="..\wlx\Widgets\FrameCellStore.pas"/>
         <DCCReference Include="..\wlx\Widgets\FrameGeometry.pas"/>
         <DCCReference Include="..\wlx\Widgets\FrameViewRenderer.pas"/>

@@ -35,6 +35,7 @@ uses
   TestFFmpegProbeParser in 'TestFFmpegProbeParser.pas',
   TestFFmpegCmdLine in 'TestFFmpegCmdLine.pas',
   FrameView in '..\wlx\Widgets\FrameView.pas',
+  ScrollableHost in '..\wlx\Widgets\ScrollableHost.pas',
   FrameCellStore in '..\wlx\Widgets\FrameCellStore.pas',
   FrameGeometry in '..\wlx\Widgets\FrameGeometry.pas',
   FrameViewRenderer in '..\wlx\Widgets\FrameViewRenderer.pas',

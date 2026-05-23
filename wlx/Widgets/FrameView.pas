@@ -9,7 +9,8 @@ uses
   Winapi.Windows, Winapi.Messages,
   Vcl.Controls, Vcl.Graphics,
   Types, Settings, Defaults, FrameOffsets, FrameCellStore, FrameGeometry,
-  FrameViewRenderer, ViewModeLayout, TimecodeOverlay, RenderDefaults;
+  FrameViewRenderer, ViewModeLayout, TimecodeOverlay, RenderDefaults,
+  ScrollableHost;
 
 type
   TCtrlWheelEvent = procedure(Sender: TObject; AWheelDelta: Integer) of object;
@@ -22,6 +23,7 @@ type
     FCellStore: TFrameCellStore;
     FGeometry: TFrameGeometry;
     FRenderer: TFrameViewRenderer;
+    FScrollableHost: IScrollableHost;
   private
     FCurrentFrameIndex: Integer;
     FOnCtrlWheel: TCtrlWheelEvent;
@@ -102,6 +104,13 @@ type
     property CellGap: Integer read GetCellGap write SetCellGap;
     property CellMargin: Integer read GetCellMargin write SetCellMargin;
     property OnCtrlWheel: TCtrlWheelEvent read FOnCtrlWheel write FOnCtrlWheel;
+    {Optional. When wired, lwaHorizontalScroll / lwaVerticalScroll wheel
+     events are dispatched through this interface; when nil, they fall
+     through to the inherited handler. The hosting form is responsible
+     for constructing the adapter (typically TScrollBoxScrollableHost
+     around its actual TScrollBox parent) and assigning it after
+     parenting.}
+    property ScrollableHost: IScrollableHost read FScrollableHost write FScrollableHost;
     property PopupMenu;
     property BaseW: Integer read GetBaseW;
     property BaseH: Integer read GetBaseH;
@@ -114,9 +123,6 @@ const
   ANIM_INTERVAL_MS = 80;
 
 implementation
-
-uses
-  Vcl.Forms;
 
 constructor TFrameView.Create(AOwner: TComponent);
 begin
@@ -290,9 +296,9 @@ begin
       end;
     lwaHorizontalScroll:
       begin
-        if Parent is TScrollBox then
+        if FScrollableHost <> nil then
         begin
-          TScrollBox(Parent).HorzScrollBar.Position := TScrollBox(Parent).HorzScrollBar.Position - Message.WheelDelta;
+          FScrollableHost.ScrollHorz(Message.WheelDelta);
           Message.Result := 1;
         end
         else
@@ -300,9 +306,9 @@ begin
       end;
     lwaVerticalScroll:
       begin
-        if Parent is TScrollBox then
+        if FScrollableHost <> nil then
         begin
-          TScrollBox(Parent).VertScrollBar.Position := TScrollBox(Parent).VertScrollBar.Position - Message.WheelDelta;
+          FScrollableHost.ScrollVert(Message.WheelDelta);
           Message.Result := 1;
         end
         else

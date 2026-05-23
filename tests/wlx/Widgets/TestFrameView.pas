@@ -209,7 +209,7 @@ uses
   System.SysUtils, System.Types, System.Math, System.Classes,
   Winapi.Windows, Winapi.Messages,
   Vcl.Forms, Vcl.Graphics, Vcl.Controls,
-  FrameView, FrameCellStore, FrameOffsets, Types, Settings;
+  FrameView, FrameCellStore, FrameOffsets, Types, Settings, ScrollableHost;
 
 { Helper: create a TFrameView with a temporary parent so it has a valid ClientWidth }
 function CreateTestFrameView(AWidth: Integer; AMode: TViewMode): TFrameView;
@@ -1328,6 +1328,7 @@ begin
 
     View := TFrameView.Create(ScrollBox);
     View.Parent := ScrollBox;
+    View.ScrollableHost := TScrollBoxScrollableHost.Create(ScrollBox);
     View.SetBounds(0, 0, 780, 2000);
 
     ScrollBox.VertScrollBar.Range := 2000;
@@ -1361,6 +1362,7 @@ begin
 
     View := TFrameView.Create(ScrollBox);
     View.Parent := ScrollBox;
+    View.ScrollableHost := TScrollBoxScrollableHost.Create(ScrollBox);
     View.SetBounds(0, 0, 780, 2000);
 
     ScrollBox.VertScrollBar.Range := 2000;
@@ -2510,6 +2512,7 @@ begin
 
     View := TFrameView.Create(ScrollBox);
     View.Parent := ScrollBox;
+    View.ScrollableHost := TScrollBoxScrollableHost.Create(ScrollBox);
     View.ViewMode := vmFilmstrip;
     View.SetCellCount(10, MakeOffsets(10));
     View.SetViewport(400, 400);

@@ -11,7 +11,7 @@ uses
   Vcl.ComCtrls, Vcl.Graphics, Vcl.Menus, Vcl.Buttons, Vcl.ImgList,
   Types, StatusBarLayout, Settings, SettingsToggleService, Hotkeys, FrameOffsets, VideoInfo, Cache, WlxAPI, FrameNotificationSink,
   ZoomController,
-  ExtractionPlanner, ToolbarLayout, ToolbarController, FrameView,
+  ExtractionPlanner, ToolbarLayout, ToolbarController, FrameView, ScrollableHost,
   ViewportRefreshDebouncer, LoadTimeRecorder, ProgressIndicator,
   FrameExport, ExtractionController, PluginServices, FileNavigator,
   CommandDescriptors,
@@ -973,6 +973,7 @@ begin
   FFrameView.Left := 0;
   FFrameView.Top := 0;
   FFrameView.OnCtrlWheel := OnFrameViewCtrlWheel;
+  FFrameView.ScrollableHost := TScrollBoxScrollableHost.Create(FScrollBox);
 end;
 
 procedure TPluginForm.CreateContextMenu;

@@ -74,6 +74,7 @@
         <DCCReference Include="..\src\infrastructure\FFmpegLocator.pas"/>
         <DCCReference Include="..\src\infrastructure\FFmpegExe.pas"/>
         <DCCReference Include="Widgets\FrameView.pas"/>
+        <DCCReference Include="Widgets\ScrollableHost.pas"/>
         <DCCReference Include="Widgets\FrameCellStore.pas"/>
         <DCCReference Include="Widgets\FrameGeometry.pas"/>
         <DCCReference Include="Widgets\FrameViewRenderer.pas"/>
