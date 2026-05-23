@@ -82,8 +82,6 @@ type
     {Alias of FToolbarController.GlyphLibrary.Images; image list is owned by the controller.}
     FToolbarImages: TImageList;
     FProgressIndicator: TProgressIndicator;
-    {Alias of FProgressIndicator.ProgressBar so direct .Style/.Max/.Position writes keep working.}
-    FProgressBar: TProgressBar;
     FStatusBar: TStatusBar;
     FStatusBarRenderer: TStatusBarRenderer;
     {Snapshot refreshed once per UpdateStatusBar so a render emits a
@@ -710,14 +708,12 @@ begin
        visual cue that the lister itself is busy (the modal blocks
        form input but doesn't paint the status bar), the modal
        provides the Cancel button and the central indication.}
-      FProgressBar.Style := pbstMarquee;
-      FProgressBar.MarqueeInterval := 30;
+      FProgressIndicator.BeginMarquee(30);
       FProgressIndicator.Show;
       try
         Result := RunWithProgress(Self, AThread, AText);
       finally
         FProgressIndicator.Hide;
-        FProgressBar.Style := pbstNormal;
       end;
     end;
 end;
@@ -1065,8 +1061,6 @@ begin
         ALayout := FSettings.ProgressBarLayout;
       end;
     end);
-  FProgressBar := FProgressIndicator.ProgressBar;
-
   {Renderer owns the status bar's panels from here on. The resolver
    reads from FCachedStatusBarValues which UpdateStatusBar refreshes
    once per call — guarantees a coherent snapshot across all tokens
@@ -1568,7 +1562,7 @@ begin
   FLoadTimer.Start;
   UpdateToolbarButtons;
 
-  FProgressBar.Style := pbstMarquee;
+  FProgressIndicator.BeginMarquee(30);
   FProgressIndicator.Show;
   FAnimTimer.Enabled := True;
 
@@ -1669,11 +1663,7 @@ begin
     FProgressIndicator.Hide;
     FAnimTimer.Enabled := FFrameView.HasPlaceholders;
   end else if (FExtractCtrl.FramesLoaded > 0) and FProgressIndicator.Visible then
-  begin
-    FProgressBar.Style := pbstNormal;
-    FProgressBar.Max := FExtractCtrl.TotalFrames;
-    FProgressBar.Position := FExtractCtrl.FramesLoaded;
-  end;
+    FProgressIndicator.SetProgress(FExtractCtrl.FramesLoaded, FExtractCtrl.TotalFrames);
 end;
 
 procedure TPluginForm.WMFrameReady(var Message: TMessage);

@@ -20,17 +20,21 @@ type
   TProgressIndicator = class
   strict protected
     function GetVisible: Boolean; virtual;
-    function GetProgressBar: TProgressBar; virtual;
   public
     procedure Show; virtual;
     procedure Hide; virtual;
     procedure Reposition; virtual;
-    {Configure the bar for a determinate run of ATotalSteps, then track
-     progress with SetStep. The Null base no-ops both, so callers need no
-     subclass check.}
+    {Marquee = indeterminate spinner. AInterval is the animation step in
+     ms. Used for "busy, duration unknown" phases.}
+    procedure BeginMarquee(AInterval: Integer); virtual;
+    {Configure the bar for a determinate run of ATotalSteps; Position
+     resets to 0. Follow with SetStep to advance.}
     procedure BeginSteps(ATotalSteps: Integer); virtual;
     procedure SetStep(AStepIndex: Integer); virtual;
-    property ProgressBar: TProgressBar read GetProgressBar;
+    {Atomic determinate-mode update for the steady-state path: switches
+     to determinate mode and writes Max + Position in one call so the
+     bar does not flicker through zero on every refresh.}
+    procedure SetProgress(ACurrent, ATotal: Integer); virtual;
     property Visible: Boolean read GetVisible;
   end;
 
@@ -43,7 +47,6 @@ type
     FOnQueryLayout: TStatusBarLayoutCallback;
   strict protected
     function GetVisible: Boolean; override;
-    function GetProgressBar: TProgressBar; override;
   public
     constructor Create(AStatusBar: TStatusBar;
       const AOnPostHideVisibility: TStatusBarVisibilityCallback;
@@ -53,8 +56,10 @@ type
     procedure Hide; override;
     {No-op when the indicator is not visible.}
     procedure Reposition; override;
+    procedure BeginMarquee(AInterval: Integer); override;
     procedure BeginSteps(ATotalSteps: Integer); override;
     procedure SetStep(AStepIndex: Integer); override;
+    procedure SetProgress(ACurrent, ATotal: Integer); override;
   end;
 
 implementation
@@ -70,11 +75,6 @@ begin
   Result := False;
 end;
 
-function TProgressIndicator.GetProgressBar: TProgressBar;
-begin
-  Result := nil;
-end;
-
 procedure TProgressIndicator.Show;
 begin
 end;
@@ -87,11 +87,19 @@ procedure TProgressIndicator.Reposition;
 begin
 end;
 
+procedure TProgressIndicator.BeginMarquee(AInterval: Integer);
+begin
+end;
+
 procedure TProgressIndicator.BeginSteps(ATotalSteps: Integer);
 begin
 end;
 
 procedure TProgressIndicator.SetStep(AStepIndex: Integer);
+begin
+end;
+
+procedure TProgressIndicator.SetProgress(ACurrent, ATotal: Integer);
 begin
 end;
 
@@ -113,11 +121,6 @@ end;
 function TStatusBarProgressIndicator.GetVisible: Boolean;
 begin
   Result := FVisible;
-end;
-
-function TStatusBarProgressIndicator.GetProgressBar: TProgressBar;
-begin
-  Result := FProgressBar;
 end;
 
 procedure TStatusBarProgressIndicator.Show;
@@ -155,6 +158,12 @@ begin
   FProgressBar.SetBounds(Bounds.Left, Bounds.Top, Bounds.Width, Bounds.Height);
 end;
 
+procedure TStatusBarProgressIndicator.BeginMarquee(AInterval: Integer);
+begin
+  FProgressBar.Style := pbstMarquee;
+  FProgressBar.MarqueeInterval := AInterval;
+end;
+
 procedure TStatusBarProgressIndicator.BeginSteps(ATotalSteps: Integer);
 begin
   FProgressBar.Style := pbstNormal;
@@ -166,6 +175,13 @@ end;
 procedure TStatusBarProgressIndicator.SetStep(AStepIndex: Integer);
 begin
   FProgressBar.Position := AStepIndex;
+end;
+
+procedure TStatusBarProgressIndicator.SetProgress(ACurrent, ATotal: Integer);
+begin
+  FProgressBar.Style := pbstNormal;
+  FProgressBar.Max := ATotal;
+  FProgressBar.Position := ACurrent;
 end;
 
 end.
