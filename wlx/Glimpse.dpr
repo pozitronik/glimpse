@@ -41,6 +41,7 @@ uses
   SettingsControlsBundles in 'Presenters\SettingsControlsBundles.pas',
   SettingsDialogHelpers in '..\src\infrastructure\SettingsDialogHelpers.pas',
   SettingsPresenters in 'Presenters\SettingsPresenters.pas',
+  HotkeyUIPresenter in 'Presenters\HotkeyUIPresenter.pas',
   SettingsDlg in 'Forms\SettingsDlg.pas',
   CaptureShortcutDlg in 'Forms\CaptureShortcutDlg.pas',
   FrameFileNames in '..\src\domain\Frame\FrameFileNames.pas',

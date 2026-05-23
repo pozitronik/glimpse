@@ -10,7 +10,7 @@ uses
   Vcl.ComCtrls, Vcl.Dialogs,
   Winapi.Windows,
   Types, StatusBarLayout, Settings, Hotkeys, EnableRules,
-  SettingsControlsBundles, SettingsPresenters;
+  SettingsControlsBundles, SettingsPresenters, HotkeyUIPresenter;
 
 type
   TSettingsForm = class(TForm)
@@ -227,15 +227,11 @@ type
     FExtractionPresenter: TExtractionPresenter;
     FStoragePresenter: TStoragePresenter;
     FAppearancePresenter: TAppearancePresenter;
+    FHotkeyPresenter: THotkeyUIPresenter;
     {Local snapshot of the bindings so the live table isn't mutated unless
-     the user confirms with OK/Apply. Mirrors the per-row listview rows.}
+     the user confirms with OK/Apply. Owned by the form; the hotkey
+     presenter borrows it.}
     FHotkeys: Hotkeys.THotkeyBindings;
-    {Parallel to LvwHotkeys.Items, indexed by Item.Index. Replaces the
-     earlier Item.Data := Pointer(NativeInt(Ord(A))) type-pun. The
-     listview is not sorted (SortType=stNone in the DFM), so insertion
-     order matches Item.Index; if sort is ever enabled this needs to
-     become a TDictionary<TListItem, TPluginAction>.}
-    FHotkeyRowActions: TArray<Hotkeys.TPluginAction>;
     {Declarative table of (predicate, controls) tuples that replaces the
      former cluster of seven UpdateXxxControls methods. Built once during
      construction and recomputed by RecomputeEnables on every relevant
@@ -277,10 +273,6 @@ type
     procedure RecomputeEnables;
     procedure PickColor(APanel: TPanel);
     procedure PopulateStatusBarLegend;
-    procedure PopulateHotkeyList;
-    procedure RefreshHotkeyRow(AAction: Hotkeys.TPluginAction);
-    function SelectedHotkeyAction: Hotkeys.TPluginAction;
-    procedure CaptureAndAssignHotkey(AAction: Hotkeys.TPluginAction);
   protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
@@ -304,8 +296,7 @@ implementation
 uses
   System.IOUtils, System.Math,
   Defaults, FFmpegExe, FFmpegCmdLine, CacheMaintenance, BitmapSaver, PathExpand,
-  SettingsDlgLogic, SettingsDlgUI, PluginMessages, CaptureShortcutDlg,
-  StatusBarTokens, HotkeysDisplay;
+  SettingsDlgLogic, SettingsDlgUI, StatusBarTokens;
 
 procedure TSettingsForm.InitControlsBundles;
 begin
@@ -412,7 +403,7 @@ begin
   {Snapshot the bindings into our local copy so edits here only commit on
    OK/Apply via ControlsToSettings.}
   FHotkeys.Assign(ASettings.Hotkeys);
-  PopulateHotkeyList;
+  FHotkeyPresenter.Populate;
 
   RecomputeEnables;
 end;
@@ -615,111 +606,28 @@ begin
     FOnApply();
 end;
 
-{Hotkeys tab}
-
-procedure TSettingsForm.PopulateHotkeyList;
-var
-  A: Hotkeys.TPluginAction;
-  Item: TListItem;
-begin
-  SetLength(FHotkeyRowActions, 0);
-  LvwHotkeys.Items.BeginUpdate;
-  try
-    LvwHotkeys.Items.Clear;
-    for A := Succ(Hotkeys.paNone) to High(Hotkeys.TPluginAction) do
-    begin
-      Item := LvwHotkeys.Items.Add;
-      Item.Caption := Hotkeys.ActionCaption(A);
-      SetLength(FHotkeyRowActions, Length(FHotkeyRowActions) + 1);
-      FHotkeyRowActions[High(FHotkeyRowActions)] := A;
-      Item.SubItems.Add(ChordsToDisplayStr(FHotkeys.Get(A)));
-    end;
-  finally
-    LvwHotkeys.Items.EndUpdate;
-  end;
-end;
-
-procedure TSettingsForm.RefreshHotkeyRow(AAction: Hotkeys.TPluginAction);
-var
-  I: Integer;
-  Item: TListItem;
-  Display: string;
-begin
-  Display := ChordsToDisplayStr(FHotkeys.Get(AAction));
-  for I := 0 to LvwHotkeys.Items.Count - 1 do
-  begin
-    if (I < Length(FHotkeyRowActions)) and (FHotkeyRowActions[I] = AAction) then
-    begin
-      Item := LvwHotkeys.Items[I];
-      if Item.SubItems.Count = 0 then
-        Item.SubItems.Add(Display)
-      else
-        Item.SubItems[0] := Display;
-      Exit;
-    end;
-  end;
-end;
-
-function TSettingsForm.SelectedHotkeyAction: Hotkeys.TPluginAction;
-var
-  Item: TListItem;
-begin
-  Item := LvwHotkeys.Selected;
-  if Item = nil then
-    Exit(Hotkeys.paNone);
-  if (Item.Index < 0) or (Item.Index >= Length(FHotkeyRowActions)) then
-    Exit(Hotkeys.paNone);
-  Result := FHotkeyRowActions[Item.Index];
-end;
-
-procedure TSettingsForm.CaptureAndAssignHotkey(AAction: Hotkeys.TPluginAction);
-var
-  NewChords: Hotkeys.THotkeyChordArray;
-  EvictedActions: TArray<Hotkeys.TPluginAction>;
-  Evicted: Hotkeys.TPluginAction;
-begin
-  if AAction = Hotkeys.paNone then
-    Exit;
-  if not EditShortcuts(Self, AAction, FHotkeys, NewChords) then
-    Exit;
-
-  {ReassignExclusive removes NewChords from any other action that owned
-   them (the editor already prompted the user and they said "Yes,
-   reassign") and Puts NewChords on AAction. Returns the list of actions
-   whose rows need a UI refresh.}
-  EvictedActions := FHotkeys.ReassignExclusive(AAction, NewChords);
-  for Evicted in EvictedActions do
-    RefreshHotkeyRow(Evicted);
-  RefreshHotkeyRow(AAction);
-end;
+{Hotkeys tab — DFM event handlers forward to FHotkeyPresenter so the
+ form keeps its DFM-bound method names while THotkeyUIPresenter owns
+ the actual UI logic.}
 
 procedure TSettingsForm.LvwHotkeysDblClick(Sender: TObject);
 begin
-  CaptureAndAssignHotkey(SelectedHotkeyAction);
+  FHotkeyPresenter.HandleListDblClick(Sender);
 end;
 
 procedure TSettingsForm.BtnHotkeyAssignClick(Sender: TObject);
 begin
-  CaptureAndAssignHotkey(SelectedHotkeyAction);
+  FHotkeyPresenter.HandleAssignClick(Sender);
 end;
 
 procedure TSettingsForm.BtnHotkeyClearClick(Sender: TObject);
-var
-  A: Hotkeys.TPluginAction;
 begin
-  A := SelectedHotkeyAction;
-  if A = Hotkeys.paNone then
-    Exit;
-  FHotkeys.Put(A, nil);
-  RefreshHotkeyRow(A);
+  FHotkeyPresenter.HandleClearClick(Sender);
 end;
 
 procedure TSettingsForm.BtnHotkeyResetAllClick(Sender: TObject);
 begin
-  if ShowPluginMessage(Handle, 'Reset every hotkey to its default? Unsaved changes in this tab will be lost.', MB_YESNO or MB_ICONQUESTION) <> IDYES then
-    Exit;
-  FHotkeys.ResetToDefaults;
-  PopulateHotkeyList;
+  FHotkeyPresenter.HandleResetAllClick(Sender);
 end;
 
 procedure TSettingsForm.BuildEnableRules;
@@ -840,6 +748,7 @@ begin
     EdtTimestampFont, EdtBannerFont, EdtStatusBarFont,
     ChkBannerAutoSize, FontDlg, CbxProgressBarLayout,
     Self, FOwnerWnd);
+  FHotkeyPresenter := THotkeyUIPresenter.Create(Self, LvwHotkeys, FHotkeys);
   {Keep tooltips visible as long as the cursor stays over the control.
    Application is per-DLL, so this only affects hints shown by our forms;
    TC's own UI uses its own (non-VCL) tooltip mechanism.}
@@ -849,6 +758,7 @@ end;
 
 destructor TSettingsForm.Destroy;
 begin
+  FHotkeyPresenter.Free;
   FAppearancePresenter.Free;
   FStoragePresenter.Free;
   FExtractionPresenter.Free;
