@@ -179,6 +179,8 @@ type
     procedure InstallListerMenuIfEnabled;
     {Dispatch callback for the lister-menu extension.}
     procedure OnListerMenuItemPick(const AEntry: TListerMenuEntry);
+    {Clamps and applies a frame-count delta from the lister menu.}
+    procedure AdjustFramesCount(ADelta: Integer);
     procedure ApplySettings;
     procedure ApplyVideoDimsToFrameView;
     procedure SetupPlaceholders;
@@ -323,7 +325,7 @@ uses
   ExtractionWorker, ViewModeLogic, ViewModeLayout,
   FrameExtractor, ProbeCache, VideoProbing,
   System.Math, Vcl.Clipbrd,
-  StatusBarHostBar, KeyInterceptionSubclass;
+  StatusBarHostBar, KeyInterceptionSubclass, FrameCountPolicy;
 
 {Embedded toolbar glyph resources; consumed by TToolbarGlyphLibrary. The
  .res is generated from icons.rc by cgrc as a pre-build step in build.bat
@@ -768,7 +770,19 @@ begin
   if (FSettings = nil) or not FSettings.ShowListerMenu then
     Exit;
   FListerMenuExtension := TListerMenuExtension.Create(FParentWnd,
-    FSettings.ListerMenuFlat, FSettings.Hotkeys, OnListerMenuItemPick);
+    FSettings.Hotkeys, OnListerMenuItemPick,
+    function: Integer
+    begin
+      Result := FSettings.FramesCount;
+    end);
+end;
+
+procedure TPluginForm.AdjustFramesCount(ADelta: Integer);
+begin
+  {Route through FUpDown.Position so OnFrameCountChange persists and
+   re-extracts; clamp first so an out of range delta collapses to a
+   no-op via that handler's equality guard.}
+  FUpDown.Position := TFrameCountPolicy.Clamp(FSettings.FramesCount + ADelta);
 end;
 
 procedure TPluginForm.OnListerMenuItemPick(const AEntry: TListerMenuEntry);
@@ -785,6 +799,8 @@ begin
       end;
     lmekTimecode:
       DoToggleTimecode;
+    lmekFrameCount:
+      AdjustFramesCount(AEntry.ActionTag);
     lmekAction:
       DispatchCommand(AEntry.ActionTag);
   end;
@@ -2312,6 +2328,16 @@ var
 begin
   FSettings.Save;
   ApplySettings;
+
+  {Apply the lister-menu toggle live so the user does not have to reopen
+   the lister. Mirrors how ShowToolbar / ShowStatusBar apply on the fly.}
+  if not FQuickViewMode then
+  begin
+    if FSettings.ShowListerMenu and (FListerMenuExtension = nil) then
+      InstallListerMenuIfEnabled
+    else if (not FSettings.ShowListerMenu) and (FListerMenuExtension <> nil) then
+      FreeAndNil(FListerMenuExtension);
+  end;
 
   Changes := DetectSettingsChanges(FSettingsSnap, FSettings);
 

@@ -147,7 +147,6 @@ begin
   AControls.UdBorder := MakeUpDown(AParent, 0, 100);
   AControls.CbxProgressBarLayout := MakeComboBox(AParent, 3);
   AControls.ChkShowListerMenu := MakeCheckBox(AParent);
-  AControls.ChkListerMenuFlat := MakeCheckBox(AParent);
 end;
 
 procedure BuildTimestampControls(AParent: TWinControl; out AControls: TTimestampControls);

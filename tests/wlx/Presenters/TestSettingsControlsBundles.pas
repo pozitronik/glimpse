@@ -446,7 +446,6 @@ begin
     Bundle.UdBorder := MakeUpDown(Owner, 0, 100);
     Bundle.CbxProgressBarLayout := MakeComboBox(Owner, 3);
     Bundle.ChkShowListerMenu := MakeCheckBox(Owner);
-    Bundle.ChkListerMenuFlat := MakeCheckBox(Owner);
 
     Settings.Background := clNavy;
     Settings.ShowToolbar := False;
@@ -494,7 +493,6 @@ begin
     Bundle.UdBorder := MakeUpDown(Owner, 0, 100);
     Bundle.CbxProgressBarLayout := MakeComboBox(Owner, 3);
     Bundle.ChkShowListerMenu := MakeCheckBox(Owner);
-    Bundle.ChkListerMenuFlat := MakeCheckBox(Owner);
 
     for V := Low(TProgressBarLayout) to High(TProgressBarLayout) do
     begin

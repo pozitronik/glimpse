@@ -885,18 +885,6 @@ object SettingsForm: TSettingsForm
           'Lister mode only; Quick View is unaffected.'
         Caption = 'Show menu in lister (experimental)'
         TabOrder = 30
-        OnClick = ChkShowListerMenuClick
-      end
-      object ChkListerMenuFlat: TCheckBox
-        Left = 230
-        Top = 460
-        Width = 215
-        Height = 17
-        Hint =
-          'Off: a single "Glimpse" submenu groups every action. On: each act' +
-          'ion becomes its own top-level menu entry on the lister menu bar.'
-        Caption = 'Flat layout (each item as top-level entry)'
-        TabOrder = 31
       end
     end
     object TshSave: TTabSheet

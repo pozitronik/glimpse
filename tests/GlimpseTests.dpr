@@ -19,6 +19,8 @@ uses
   SettingsToggleService in '..\src\domain\Settings\SettingsToggleService.pas',
   TestSettingsToggleService in 'TestSettingsToggleService.pas',
   FrameOffsets in '..\src\domain\Frame\FrameOffsets.pas',
+  FrameCountPolicy in '..\src\domain\Frame\FrameCountPolicy.pas',
+  FrameCountPolicyTests in 'domain\Frame\FrameCountPolicyTests.pas',
   FFmpegLocator in '..\src\infrastructure\FFmpegLocator.pas',
   FFmpegExe in '..\src\infrastructure\FFmpegExe.pas',
   TestFFmpegLocator in 'TestFFmpegLocator.pas',

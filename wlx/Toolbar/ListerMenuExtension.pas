@@ -2,13 +2,8 @@
  menu bar so the user can drive the plugin from TC's menu in addition
  to the in-form toolbar and configurable hotkeys.
 
- Two layouts (selected via TPluginSettings.ListerMenuFlat):
- - Submenu (default, ListerMenuFlat = False): a single new top-level
-   "Glimpse" entry on the menu bar; all items live as children of that
-   popup. Lower visual noise.
- - Flat (ListerMenuFlat = True): every action gets its own top-level
-   entry on the menu bar. Pushes TC's existing menus rightward; mainly
-   here so the user can A/B-test the two layouts.
+ The actions live under a single new top-level "Glimpse" entry on the
+ menu bar, keeping visual noise low and staying out of TC's way.
 
  The extension installs its own window subclass on the parent (TLister)
  to intercept WM_COMMAND in the reserved range $C000..$C1FF. Standard
@@ -43,7 +38,7 @@ const
 
 type
   {Each menu item dispatches to one of four host operations.}
-  TListerMenuEntryKind = (lmekMode, lmekZoom, lmekTimecode, lmekAction);
+  TListerMenuEntryKind = (lmekMode, lmekZoom, lmekTimecode, lmekFrameCount, lmekAction);
 
   TListerMenuEntry = record
     Kind: TListerMenuEntryKind;
@@ -57,12 +52,22 @@ type
    DoToggleTimecode / DispatchCommand).}
   TListerMenuDispatch = reference to procedure(const AEntry: TListerMenuEntry);
 
+  {Supplies the current frame count for the live "Frames count: X" header.}
+  TListerMenuFrameCountProvider = reference to function: Integer;
+
   TListerMenuExtension = class
   strict private
     FParentWnd: HWND;
     FParentMenu: HMENU;
-    FFlatMode: Boolean;
     FDispatch: TListerMenuDispatch;
+    {Supplies the live frame count for the "Frames count: X" header; the
+     value is re-stamped on every WM_INITMENU.}
+    FFrameCountProvider: TListerMenuFrameCountProvider;
+    {Slot of the frame-count submenu's parent item, captured at build so
+     RefreshFrameCountCaption can re-stamp the live value in place.}
+    FFrameCountParentMenu: HMENU;
+    FFrameCountPos: Integer;
+    FFrameCountPopup: HMENU;
     {Borrowed; lookup-only. Used to format the hotkey shown next to
      each leaf menu item's caption. May be nil — captions then render
      without accelerator text.}
@@ -90,10 +95,8 @@ type
     function AcceleratorFor(const AEntry: TListerMenuEntry): string;
     {ABase + #9 + accelerator (when present). #9 is the Win32 menu
      convention for right-aligning the accelerator hint. Returns ABase
-     unchanged when ADest is the parent menu bar — accelerator hints on
-     top-level menu bar entries render with extra blank space and the
-     #9 padding makes them look broken, so flat-mode entries on the
-     menu bar get just the caption.}
+     unchanged when ADest is the parent menu bar — top-level menu bar
+     entries render the #9 padding broken, so they get just the caption.}
     function CaptionWithAccelerator(const ABase: string;
       const AEntry: TListerMenuEntry; ADest: HMENU): string;
     procedure AddSeparator(ADest: HMENU);
@@ -102,12 +105,13 @@ type
     procedure AddModeItems(ADest: HMENU);
     procedure AddTimecodeItem(ADest: HMENU);
     procedure AddActionItem(ADest: HMENU; AActionTag: Integer; const ACaption: string);
+    procedure AddFrameCountItem(APopup: HMENU; ADelta: Integer; const ACaption: string);
+    procedure AddFrameCountSubmenu(ADest: HMENU);
     procedure AddSaveViewSubmenu(ADest: HMENU);
     procedure AddCopyViewSubmenu(ADest: HMENU);
     procedure AddRefreshSubmenu(ADest: HMENU);
     procedure PopulateContents(ADest: HMENU);
     procedure BuildSubmenu;
-    procedure BuildFlat;
     procedure ForceStringFTypeRecursive(AMenu: HMENU);
     procedure Install;
     procedure Teardown;
@@ -118,19 +122,23 @@ type
      trimmed underneath us. Cheap fast-path check; rebuilds only when
      a mismatch is detected. Called by our subclass on WM_INITMENU.}
     procedure EnsureItemsInstalled;
+    {Re-stamps the "Frames count: X" header with the current value so the
+     menu bar shows it fresh each time it is activated. Public so the
+     unit-level subclass proc can call it on WM_INITMENU.}
+    procedure RefreshFrameCountCaption;
     {Unconditional teardown + install. Called on WM_DPICHANGED /
      WM_DISPLAYCHANGE / WM_THEMECHANGED where the menu is known to
      have been redrawn and a verify-then-rebuild path can be tricked
      by surviving-but-corrupted items.}
     procedure ForceRebuild;
-    {AParentWnd is the TLister window. AFlatMode selects layout
-     (False = submenu under one "Glimpse" entry, True = each item
-     at top level). AHotkeys is borrowed (nil is allowed; captions
-     then omit the accelerator hint). The dispatch callback is invoked
-     on every click; the host translates the entry to its action.}
-    constructor Create(AParentWnd: HWND; AFlatMode: Boolean;
+    {AParentWnd is the TLister window. AHotkeys is borrowed (nil is
+     allowed; captions then omit the accelerator hint). The dispatch
+     callback is invoked on every click; the host translates the entry
+     to its action.}
+    constructor Create(AParentWnd: HWND;
       AHotkeys: THotkeyBindings;
-      const ADispatch: TListerMenuDispatch);
+      const ADispatch: TListerMenuDispatch;
+      const AFrameCountProvider: TListerMenuFrameCountProvider);
     destructor Destroy; override;
     {Returns True if ACommandId was one of ours (dispatched). The
      installing subclass proc calls this; if False, the WM_COMMAND
@@ -149,6 +157,8 @@ const
    and avoids surprise accelerator collisions inside a long submenu.}
   TIMECODE_MENU_CAPTION = 'Show timecodes';
   SETTINGS_MENU_CAPTION = 'Settings...';
+  {Step sizes offered by the frame-count submenu, applied as +/- deltas.}
+  FRAME_COUNT_STEPS: array [0 .. 2] of Integer = (1, 5, 10);
 
 {The toolbar shares the 'Scroll' caption between vmScroll and vmFilmstrip
  and distinguishes with arrow icons (vertical / horizontal); the menu
@@ -198,7 +208,10 @@ begin
       begin
         Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
         if Ext <> nil then
+        begin
           Ext.EnsureItemsInstalled;
+          Ext.RefreshFrameCountCaption;
+        end;
       end;
     WM_DPICHANGED, WM_DISPLAYCHANGE, WM_THEMECHANGED:
       begin
@@ -211,15 +224,16 @@ begin
   end;
 end;
 
-constructor TListerMenuExtension.Create(AParentWnd: HWND; AFlatMode: Boolean;
+constructor TListerMenuExtension.Create(AParentWnd: HWND;
   AHotkeys: THotkeyBindings;
-  const ADispatch: TListerMenuDispatch);
+  const ADispatch: TListerMenuDispatch;
+  const AFrameCountProvider: TListerMenuFrameCountProvider);
 begin
   inherited Create;
   FParentWnd := AParentWnd;
-  FFlatMode := AFlatMode;
   FHotkeys := AHotkeys;
   FDispatch := ADispatch;
+  FFrameCountProvider := AFrameCountProvider;
   FNextId := LISTER_MENU_CMD_BASE;
   FEntries := TDictionary<Word, TListerMenuEntry>.Create;
   Install;
@@ -252,10 +266,7 @@ begin
   end;
 
   FFirstPos := GetMenuItemCount(FParentMenu);
-  if FFlatMode then
-    BuildFlat
-  else
-    BuildSubmenu;
+  BuildSubmenu;
   FItemCount := GetMenuItemCount(FParentMenu) - FFirstPos;
   {Force MFT_STRING on every item we just appended (and on any popup
    submenus we own). Defends against the parent menu having MNS_NOTIFYBYPOS
@@ -285,6 +296,9 @@ begin
   FFirstPos := 0;
   FItemCount := 0;
   FNextId := LISTER_MENU_CMD_BASE;
+  FFrameCountParentMenu := 0;
+  FFrameCountPos := 0;
+  FFrameCountPopup := 0;
   FEntries.Clear;
 end;
 
@@ -544,6 +558,59 @@ begin
   AppendMenu(ADest, MF_STRING, Id, PChar(Caption));
 end;
 
+procedure TListerMenuExtension.AddFrameCountItem(APopup: HMENU; ADelta: Integer;
+  const ACaption: string);
+var
+  Entry: TListerMenuEntry;
+  Id: Word;
+begin
+  Entry.Kind := lmekFrameCount;
+  Entry.Mode := vmGrid;
+  Entry.Zoom := zmFitWindow;
+  Entry.ActionTag := ADelta;
+  Id := AllocIdFor(Entry);
+  AppendMenu(APopup, MF_STRING, Id, PChar(ACaption));
+end;
+
+{Live "Frames count: X" header whose value refreshes on each menu
+ activation, with a submenu of +/- step adjustments.}
+procedure TListerMenuExtension.AddFrameCountSubmenu(ADest: HMENU);
+var
+  Popup: HMENU;
+  Step: Integer;
+  Caption: string;
+begin
+  Popup := CreatePopupMenu;
+  for Step in FRAME_COUNT_STEPS do
+    AddFrameCountItem(Popup, Step, Format('Increase by %d', [Step]));
+  AddSeparator(Popup);
+  for Step in FRAME_COUNT_STEPS do
+    AddFrameCountItem(Popup, -Step, Format('Decrease by %d', [Step]));
+  if Assigned(FFrameCountProvider) then
+    Caption := Format('Frames count: %d', [FFrameCountProvider()])
+  else
+    Caption := 'Frames count';
+  {Capture the slot before appending so RefreshFrameCountCaption can
+   re-stamp the value in place via MF_BYPOSITION.}
+  FFrameCountParentMenu := ADest;
+  FFrameCountPos := GetMenuItemCount(ADest);
+  FFrameCountPopup := Popup;
+  AppendMenu(ADest, MF_POPUP, Popup, PChar(Caption));
+end;
+
+procedure TListerMenuExtension.RefreshFrameCountCaption;
+var
+  Caption: string;
+begin
+  if (FFrameCountParentMenu = 0) or (FFrameCountPopup = 0) or
+     not Assigned(FFrameCountProvider) then
+    Exit;
+  Caption := Format('Frames count: %d', [FFrameCountProvider()]);
+  ModifyMenu(FFrameCountParentMenu, FFrameCountPos,
+    MF_BYPOSITION or MF_STRING or MF_POPUP, UINT_PTR(FFrameCountPopup),
+    PChar(Caption));
+end;
+
 {Save view / Copy view / Refresh map to split-buttons on the toolbar
  with dropdown variants. In the menu, each becomes a popup that lists
  the default action plus the variants, mirroring the toolbar dropdown.}
@@ -585,6 +652,8 @@ procedure TListerMenuExtension.PopulateContents(ADest: HMENU);
 begin
   AddModeItems(ADest);
   AddSeparator(ADest);
+  AddFrameCountSubmenu(ADest);
+  AddSeparator(ADest);
   AddTimecodeItem(ADest);
   AddSeparator(ADest);
   AddActionItem(ADest, CM_SAVE_FRAME, 'Save frame...');
@@ -606,16 +675,6 @@ begin
   Glimpse := CreatePopupMenu;
   PopulateContents(Glimpse);
   AppendMenu(FParentMenu, MF_POPUP, Glimpse, GLIMPSE_MENU_CAPTION);
-end;
-
-procedure TListerMenuExtension.BuildFlat;
-begin
-  {Flat mode appends the same content directly to the menu bar; mode
-   items with zoom submenus and the save / copy / refresh groups
-   become top-level entries opening their respective popup. Visually
-   noisy but matches the "every button as a top-level menu entry"
-   instruction.}
-  PopulateContents(FParentMenu);
 end;
 
 procedure TListerMenuExtension.InstallSubclass;

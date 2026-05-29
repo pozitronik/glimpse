@@ -75,6 +75,8 @@
         </DelphiCompile>
         <DCCReference Include="domain\Settings\TestSettings.pas"/>
         <DCCReference Include="domain\Frame\TestFrameOffsets.pas"/>
+        <DCCReference Include="..\src\domain\Frame\FrameCountPolicy.pas"/>
+        <DCCReference Include="domain\Frame\FrameCountPolicyTests.pas"/>
         <DCCReference Include="..\src\domain\Settings\Settings.pas"/>
         <DCCReference Include="..\src\domain\Settings\SettingsToggleService.pas"/>
         <DCCReference Include="domain\Settings\TestSettingsToggleService.pas"/>

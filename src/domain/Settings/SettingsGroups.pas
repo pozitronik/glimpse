@@ -151,11 +151,9 @@ type
     CombinedBorder: Integer;
     ProgressBarLayout: TProgressBarLayout;
     {Experimental: when on (and not in Quick View) the plugin appends its
-     toolbar actions into TLister's own menu bar. ListerMenuFlat selects
-     the layout: False = one new "Glimpse" submenu with nested items;
-     True = each action as a separate top-level menu entry.}
+     toolbar actions into TLister's own menu bar as a single "Glimpse"
+     submenu holding the nested items.}
     ShowListerMenu: Boolean;
-    ListerMenuFlat: Boolean;
 
     class function Defaults: TViewSettingsGroup; static;
     procedure LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -515,7 +513,6 @@ begin
   Result.CombinedBorder := DEF_COMBINED_BORDER;
   Result.ProgressBarLayout := pblAuto;
   Result.ShowListerMenu := False;
-  Result.ListerMenuFlat := False;
 end;
 
 procedure TViewSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -540,7 +537,6 @@ begin
   ProgressBarLayout := StrToProgressBarLayout(
     AIni.ReadString(ASection, 'ProgressBarLayout', ''), ProgressBarLayout);
   ShowListerMenu := AIni.ReadBool(ASection, 'ShowListerMenu', ShowListerMenu);
-  ListerMenuFlat := AIni.ReadBool(ASection, 'ListerMenuFlat', ListerMenuFlat);
 end;
 
 procedure TViewSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
@@ -559,7 +555,6 @@ begin
   AIni.WriteInteger(ASection, 'CellGap', CellGap);
   AIni.WriteInteger(ASection, 'CombinedBorder', CombinedBorder);
   AIni.WriteBool(ASection, 'ShowListerMenu', ShowListerMenu);
-  AIni.WriteBool(ASection, 'ListerMenuFlat', ListerMenuFlat);
 end;
 
 {TSaveSettingsGroup}
