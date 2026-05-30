@@ -68,6 +68,7 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Respect anamorphic dimensions     | On          | Scales frames to display dimensions for sources where stored pixels are non-square (DVD rips, broadcast, some cameras).                                                         |
 | Extensions                        | mp4,mkv,... | Comma-separated list of video file extensions the plugin will handle                                                                                                            |
 | FFmpeg path                       | Auto-detect | Explicit path to `ffmpeg.exe`. Leave empty to auto-detect from plugin directory or system PATH                                                                                  |
+| Non-modal settings window         | Off         | Opens Settings without blocking Total Commander, so you can keep working while it is open. Off keeps the classic modal dialog                                                   |
 
 #### Sampling
 
@@ -102,6 +103,7 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 | Status bar height (px)                        | 0 (auto)      | Overrides the font-derived height with an explicit pixel count (logical pixels, scaled to monitor DPI). Values below the font minimum are silently bumped so text never clips. 0 = auto |
 | Apply in (height)                             | Both          | In which window mode the explicit height takes effect: *Lister only*, *Quick View only*, or *Both*. The other mode falls back to auto height regardless of the px value                 |
 | Recalculate auto-width panels on every update | On            | When on, auto-width panels re-measure to live text on every refresh; when off, they size once to a worst-case sample and lock                                                           |
+| Toolbar action                                | Double-click  | Whether a single-click or a double-click on the save/copy dimension status-bar panels toggles output-at-view-resolution. Ctrl+click always copies the panel text                        |
 
 ##### Status bar template
 
@@ -148,7 +150,7 @@ When a token's data is unavailable:
 - `width=auto` panels collapse out of the bar (matches the legacy "no panel for missing data" behaviour).
 - Fixed `width=N` panels stay at their slot and show `?` so the layout doesn't shift unexpectedly.
 
-The `%save_dimension%` and `%copy_dimension%` panels are interactive: **double-click** flips the corresponding *Save at view resolution* / *Copy at view resolution* default (same setting the dropdown radio bullet tracks). The hand cursor on hover and the panel's tooltip surface the affordance. **Ctrl+Click** on any panel copies its text to the clipboard.
+The `%save_dimension%` and `%copy_dimension%` panels are interactive: a click flips the corresponding *Save at view resolution* / *Copy at view resolution* default (same setting the dropdown radio bullet tracks). The *Toolbar action* setting on the Appearance tab chooses whether a **single-click** or a **double-click** triggers the toggle (default double-click). The hand cursor on hover and the panel's tooltip surface the affordance. **Ctrl+Click** on any panel copies its text to the clipboard regardless of that setting.
 
 The **Stretch auto-width panels to fill the bar** setting (Appearance tab, off by default) makes the renderer distribute any remaining bar width across the auto-width panels proportionally to their natural widths — useful when you want a justified bar with no trailing gap. Fixed `width=N` panels keep their widths.
 
@@ -175,13 +177,15 @@ The toolbar **Copy view** button works the same way: a split button whose dropdo
 
 Controls which Win32 clipboard formats *Copy frame* / *Copy view* publish for `pf32bit` sources (combined view, plus single frames whenever they carry alpha). The `pf24bit` single-frame path uses VCL's `Clipboard.Assign` and ignores these toggles. Each enabled format is allocated before any clipboard operation begins; if any one of them runs out of contiguous memory the whole copy aborts and the error dialog names the failing format.
 
-| Setting                               | Default | Description                                                                                                                                                                                                |
-|---------------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Alpha-aware bitmap                    | On      | Preserves transparency. Costs roughly width*height*4 bytes per copy. Published as `CF_DIBV5`.                                                                                                              |
-| Compressed PNG                        | On      | Carries true alpha at a fraction of the raw-pixel memory cost. Published under the system-registered `"PNG"` clipboard format. Compression level follows the *PNG compression* setting under *Save*.       |
-| Flattened bitmap for legacy apps      | On      | Opaque copy with transparency composited onto the background colour. Used as a fallback by paste targets that do not understand alpha. Costs roughly width*height*3 bytes per copy. Published as `CF_DIB`. |
-| GDI bitmap handle                     | On      | Direct bitmap handle for paste targets that distrust DIB synthesis. Costs roughly width*height*4 bytes per copy. Published as `CF_BITMAP`.                                                                 |
-| Copy to clipboard as a file reference | Off     | Writes the image to a temp PNG in `%TEMP%` and publishes its path as `CF_HDROP` instead of a bitmap. When on, the four format toggles above are ignored.                                                   |
+| Setting                               | Default               | Description                                                                                                                                                                                                                |
+|---------------------------------------|-----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Alpha-aware bitmap                    | On                    | Preserves transparency. Costs roughly width*height*4 bytes per copy. Published as `CF_DIBV5`.                                                                                                                              |
+| Compressed PNG                        | On                    | Carries true alpha at a fraction of the raw-pixel memory cost. Published under the system-registered `"PNG"` clipboard format. Compression level follows the *PNG compression* setting under *Save*.                       |
+| Flattened bitmap for legacy apps      | On                    | Opaque copy with transparency composited onto the background colour. Used as a fallback by paste targets that do not understand alpha. Costs roughly width*height*3 bytes per copy. Published as `CF_DIB`.                 |
+| GDI bitmap handle                     | On                    | Direct bitmap handle for paste targets that distrust DIB synthesis. Costs roughly width*height*4 bytes per copy. Published as `CF_BITMAP`.                                                                                 |
+| Copy to clipboard as a file reference | Off                   | Writes the image to a temp PNG and publishes its path as `CF_HDROP` instead of a bitmap. When on, the four format toggles above are ignored.                                                                               |
+| Files location                        | System temp           | Folder where file-reference files are written. Empty uses the system temp; environment variables are expanded, so a path under TC's own temp works. Falls back to system temp if the folder is unusable.                   |
+| Clean up on start                     | Delete older than 24h | Sweep of leftover `glimpse_clip_*.png` files on plugin load: *No cleanup*, *Clean everything*, or *Delete older than* a `DD:HH:MM` age. The file currently on the clipboard is always kept so a pending paste still works. |
 
 Disabling individual format toggles reduces the per-copy memory allocation. When the four format toggles are all enabled the publish order is `CF_DIBV5` -> `"PNG"` -> `CF_DIB` -> `CF_BITMAP`; paste targets that enumerate formats receive them in that priority. Disabling a format only affects what *this* plugin offers — paste targets that accept multiple formats automatically pick whichever is still present.
 
@@ -208,11 +212,12 @@ Controls the small preview icons that Total Commander shows for video files in i
 
 These settings only apply when the plugin is opened in TC's Quick View panel (Ctrl+Q), allowing a more compact layout that doesn't compete with the file panel for keyboard focus.
 
-| Setting                          | Default | Description                                                                                                                  |
-|----------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------|
-| Disable internal file navigation | On      | Prevents the arrow keys from advancing to neighbor video files, leaving them to TC's file panel where they're usually wanted |
-| Hide toolbar                     | On      | Hides the toolbar in Quick View mode regardless of the Appearance setting                                                    |
-| Hide status bar                  | On      | Hides the status bar in Quick View mode regardless of the Appearance setting                                                 |
+| Setting                          | Default | Description                                                                                                                                            |
+|----------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Disable internal file navigation | On      | Prevents the arrow keys from advancing to neighbor video files, leaving them to TC's file panel where they're usually wanted                           |
+| Hide toolbar                     | On      | Hides the toolbar in Quick View mode regardless of the Appearance setting                                                                              |
+| Hide status bar                  | On      | Hides the status bar in Quick View mode regardless of the Appearance setting                                                                           |
+| Esc clears frame selection       | Off     | First Esc clears the frame selection, a second Esc closes Quick View. Esc still closes immediately when nothing is selected. Lister mode is unaffected |
 
 #### Hotkeys
 
