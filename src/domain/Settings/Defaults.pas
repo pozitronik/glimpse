@@ -5,7 +5,7 @@ interface
 
 uses
   System.UITypes,
-  BitmapSaver, Types, StatusBarLayout;
+  BitmapSaver, Types, StatusBarLayout, ClipboardTemp;
 
 const
   {Extraction defaults}
@@ -163,6 +163,19 @@ const
   DEF_STATUSBAR_HEIGHT_APPLY_MODE = sbhamBoth;
 
   DEF_STATUSBAR_DIMENSION_CLICK_MODE = sbdcmDouble;
+
+  {Clipboard file-reference temp-file management. Empty folder = the system
+   %TEMP%; any other value (env vars expanded) overrides it, e.g. TC's own
+   temp tree. Cleanup sweeps leftover glimpse_clip_*.png on plugin load:
+   default is "delete older than 24h", a grace window that still allows the
+   intended paste-after-close while not hoarding files forever.}
+  DEF_CLIPBOARD_TEMP_FOLDER = '';
+  DEF_CLIPBOARD_CLEANUP_STRATEGY = ccsOlderThan;
+  DEF_CLIPBOARD_CLEANUP_AGE_SECONDS = SECONDS_PER_DAY;
+  MIN_CLIPBOARD_CLEANUP_AGE_SECONDS = 0;
+  {Cap the configurable age at 365 days so a fat-fingered DD field can not
+   overflow into a nonsensical span; well beyond any real grace window.}
+  MAX_CLIPBOARD_CLEANUP_AGE_SECONDS = 365 * SECONDS_PER_DAY;
 
 implementation
 

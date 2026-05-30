@@ -191,6 +191,23 @@ type
     [Test] procedure Load_UnknownApplyMode_KeepsCurrent;
   end;
 
+  [TestFixture]
+  TTestClipboardTempSettingsGroup = class
+  strict private
+    FTempDir: string;
+    function MakeIniPath(const AName: string): string;
+  public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
+    [Test] procedure Defaults_PopulatesEveryField;
+    [Test] procedure SaveThenLoad_RoundTripsAllFields;
+    [Test] procedure Load_MissingKeys_PreservesCurrentValues;
+    [Test] procedure Load_EmptyFolder_StaysEmpty;
+    [Test] procedure Load_UnknownStrategy_KeepsCurrent;
+    [Test] procedure Load_AgeClampedHigh;
+    [Test] procedure Load_AgeClampedLow;
+  end;
+
   {The settings groups depend on the IIniFile abstraction, so they
    round-trip through any implementation — exercised here with an
    in-memory fake, no file on disk.}
@@ -205,7 +222,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.UITypes, System.Generics.Collections,
-  BitmapSaver, StatusBarLayout, Types, Defaults, SettingsGroups, UnicodeIniFile,
+  BitmapSaver, StatusBarLayout, ClipboardTemp, Types, Defaults, SettingsGroups, UnicodeIniFile,
   IniStore;
 
 type
@@ -284,6 +301,200 @@ end;
 procedure TFakeIniFile.UpdateFile;
 begin
   {In-memory: nothing to flush.}
+end;
+
+{TTestClipboardTempSettingsGroup}
+
+procedure TTestClipboardTempSettingsGroup.Setup;
+begin
+  FTempDir := TPath.Combine(TPath.GetTempPath, 'VT_ClipTempTest_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(FTempDir);
+end;
+
+procedure TTestClipboardTempSettingsGroup.TearDown;
+begin
+  if TDirectory.Exists(FTempDir) then
+    TDirectory.Delete(FTempDir, True);
+end;
+
+function TTestClipboardTempSettingsGroup.MakeIniPath(const AName: string): string;
+begin
+  Result := TPath.Combine(FTempDir, AName);
+end;
+
+procedure TTestClipboardTempSettingsGroup.Defaults_PopulatesEveryField;
+var
+  G: TClipboardTempSettingsGroup;
+begin
+  G := TClipboardTempSettingsGroup.Defaults;
+  Assert.AreEqual(DEF_CLIPBOARD_TEMP_FOLDER, G.TempFolder);
+  Assert.AreEqual(Ord(DEF_CLIPBOARD_CLEANUP_STRATEGY), Ord(G.CleanupStrategy));
+  Assert.AreEqual(DEF_CLIPBOARD_CLEANUP_AGE_SECONDS, G.CleanupAgeSeconds);
+end;
+
+procedure TTestClipboardTempSettingsGroup.SaveThenLoad_RoundTripsAllFields;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G1, G2: TClipboardTempSettingsGroup;
+begin
+  IniPath := MakeIniPath('cliptemp_rt.ini');
+  G1 := TClipboardTempSettingsGroup.Defaults;
+  G1.TempFolder := '%COMMANDER_PATH%\temp';
+  G1.CleanupStrategy := ccsAll;
+  G1.CleanupAgeSeconds := 2 * SECONDS_PER_DAY + 3 * SECONDS_PER_HOUR;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G1.SaveTo(Ini, 'copy');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G2 := TClipboardTempSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G2.LoadFrom(Ini, 'copy');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual(G1.TempFolder, G2.TempFolder);
+  Assert.AreEqual(Ord(G1.CleanupStrategy), Ord(G2.CleanupStrategy));
+  Assert.AreEqual(G1.CleanupAgeSeconds, G2.CleanupAgeSeconds);
+end;
+
+procedure TTestClipboardTempSettingsGroup.Load_MissingKeys_PreservesCurrentValues;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TClipboardTempSettingsGroup;
+begin
+  {Empty INI: every field keeps the pre-load value (the group's own state
+   acts as the fallback, matching the other groups' contract).}
+  IniPath := MakeIniPath('cliptemp_missing.ini');
+  G := TClipboardTempSettingsGroup.Defaults;
+  G.TempFolder := 'D:\custom';
+  G.CleanupStrategy := ccsNone;
+  G.CleanupAgeSeconds := 12345;
+
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'copy');
+  finally
+    Ini.Free;
+  end;
+
+  Assert.AreEqual('D:\custom', G.TempFolder);
+  Assert.AreEqual(Ord(ccsNone), Ord(G.CleanupStrategy));
+  Assert.AreEqual(12345, G.CleanupAgeSeconds);
+end;
+
+procedure TTestClipboardTempSettingsGroup.Load_EmptyFolder_StaysEmpty;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TClipboardTempSettingsGroup;
+begin
+  {An explicitly-stored empty folder means "system temp" and must survive a
+   round-trip as empty — NOT be coerced back to a non-empty prior value the
+   way the font-style fields are.}
+  IniPath := MakeIniPath('cliptemp_empty.ini');
+  G := TClipboardTempSettingsGroup.Defaults;
+  G.TempFolder := '';
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.SaveTo(Ini, 'copy');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G.TempFolder := 'should_be_overwritten';
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'copy');
+  finally
+    Ini.Free;
+  end;
+  Assert.AreEqual('', G.TempFolder);
+end;
+
+procedure TTestClipboardTempSettingsGroup.Load_UnknownStrategy_KeepsCurrent;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TClipboardTempSettingsGroup;
+begin
+  IniPath := MakeIniPath('cliptemp_badstrat.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteString('copy', 'TempCleanupStrategy', 'nonsense');
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TClipboardTempSettingsGroup.Defaults;
+  G.CleanupStrategy := ccsAll;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'copy');
+  finally
+    Ini.Free;
+  end;
+  Assert.AreEqual(Ord(ccsAll), Ord(G.CleanupStrategy));
+end;
+
+procedure TTestClipboardTempSettingsGroup.Load_AgeClampedHigh;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TClipboardTempSettingsGroup;
+begin
+  IniPath := MakeIniPath('cliptemp_agehigh.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('copy', 'TempCleanupAgeSeconds', MAX_CLIPBOARD_CLEANUP_AGE_SECONDS + 999999);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TClipboardTempSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'copy');
+  finally
+    Ini.Free;
+  end;
+  Assert.AreEqual(MAX_CLIPBOARD_CLEANUP_AGE_SECONDS, G.CleanupAgeSeconds);
+end;
+
+procedure TTestClipboardTempSettingsGroup.Load_AgeClampedLow;
+var
+  IniPath: string;
+  Ini: TUnicodeIniFile;
+  G: TClipboardTempSettingsGroup;
+begin
+  IniPath := MakeIniPath('cliptemp_agelow.ini');
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    Ini.WriteInteger('copy', 'TempCleanupAgeSeconds', -100);
+    Ini.UpdateFile;
+  finally
+    Ini.Free;
+  end;
+
+  G := TClipboardTempSettingsGroup.Defaults;
+  Ini := TUnicodeIniFile.Create(IniPath);
+  try
+    G.LoadFrom(Ini, 'copy');
+  finally
+    Ini.Free;
+  end;
+  Assert.AreEqual(MIN_CLIPBOARD_CLEANUP_AGE_SECONDS, G.CleanupAgeSeconds);
 end;
 
 {TTestIniFileSubstitution}
@@ -2219,6 +2430,7 @@ initialization
   TDUnitX.RegisterTestFixture(TTestQuickViewSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestThumbnailsSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestStatusBarSettingsGroup);
+  TDUnitX.RegisterTestFixture(TTestClipboardTempSettingsGroup);
   TDUnitX.RegisterTestFixture(TTestIniFileSubstitution);
 
 end.

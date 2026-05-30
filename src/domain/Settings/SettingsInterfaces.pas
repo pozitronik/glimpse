@@ -57,6 +57,10 @@ type
      two consumer concerns (file-save + in-memory CF_PNG) is not
      duplication; each interface exposes what its consumer needs.}
     function GetPngCompression: Integer;
+    {Raw configured folder for file-reference temp PNGs; empty = system
+     %TEMP%. The publisher expands env vars and falls back via
+     ClipboardTempResolver, so consumers get the unresolved value here.}
+    function GetClipboardTempFolder: string;
   end;
 
   {Settings slice for the frame-save flow: encoder format, the live-resolution

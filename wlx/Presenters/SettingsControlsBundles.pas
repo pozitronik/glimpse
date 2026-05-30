@@ -99,6 +99,18 @@ type
     ChkPublishBitmapHandle: TCheckBox;
   end;
 
+  {File-reference folder + leftover-cleanup. CleanupStrategy is encoded via
+   ord/cast against the combo's ItemIndex; the age is split across three
+   spin fields (days / hours / minutes) round-tripped through ClipboardTemp's
+   seconds helpers.}
+  TClipboardTempControls = record
+    EdtClipboardTempFolder: TEdit;
+    CbxClipboardCleanup: TComboBox;
+    UdCleanupDays: TUpDown;
+    UdCleanupHours: TUpDown;
+    UdCleanupMinutes: TUpDown;
+  end;
+
   {HeightApplyMode is encoded via ord/cast against the combo's ItemIndex.}
   TStatusBarControls = record
     EdtStatusBarTemplate: TEdit;
@@ -132,6 +144,7 @@ procedure BindViewToControls(ASettings: TPluginSettings; const AControls: TViewC
 procedure BindTimestampToControls(ASettings: TPluginSettings; const AControls: TTimestampControls);
 procedure BindBannerToControls(ASettings: TPluginSettings; const AControls: TBannerControls);
 procedure BindClipboardFormatsToControls(ASettings: TPluginSettings; const AControls: TClipboardFormatsControls);
+procedure BindClipboardTempToControls(ASettings: TPluginSettings; const AControls: TClipboardTempControls);
 procedure BindStatusBarToControls(ASettings: TPluginSettings; const AControls: TStatusBarControls);
 procedure BindQuickViewToControls(ASettings: TPluginSettings; const AControls: TQuickViewControls);
 procedure BindThumbnailsToControls(ASettings: TPluginSettings; const AControls: TThumbnailsControls);
@@ -146,6 +159,7 @@ procedure BindViewFromControls(ASettings: TPluginSettings; const AControls: TVie
 procedure BindTimestampFromControls(ASettings: TPluginSettings; const AControls: TTimestampControls);
 procedure BindBannerFromControls(ASettings: TPluginSettings; const AControls: TBannerControls);
 procedure BindClipboardFormatsFromControls(ASettings: TPluginSettings; const AControls: TClipboardFormatsControls);
+procedure BindClipboardTempFromControls(ASettings: TPluginSettings; const AControls: TClipboardTempControls);
 procedure BindStatusBarFromControls(ASettings: TPluginSettings; const AControls: TStatusBarControls);
 procedure BindQuickViewFromControls(ASettings: TPluginSettings; const AControls: TQuickViewControls);
 procedure BindThumbnailsFromControls(ASettings: TPluginSettings; const AControls: TThumbnailsControls);
@@ -153,8 +167,8 @@ procedure BindThumbnailsFromControls(ASettings: TPluginSettings; const AControls
 implementation
 
 uses
-  System.SysUtils,
-  Types, StatusBarLayout, BitmapSaver,
+  System.SysUtils, System.Math,
+  Types, StatusBarLayout, ClipboardTemp, BitmapSaver, Defaults,
   SettingsDlgLogic;
 
 {Extraction}
@@ -348,6 +362,36 @@ begin
   ASettings.PublishCompressedPng := AControls.ChkPublishCompressedPng.Checked;
   ASettings.PublishFlattenedBitmap := AControls.ChkPublishFlattenedBitmap.Checked;
   ASettings.PublishBitmapHandle := AControls.ChkPublishBitmapHandle.Checked;
+end;
+
+{Clipboard temp folder + cleanup}
+
+procedure BindClipboardTempToControls(ASettings: TPluginSettings; const AControls: TClipboardTempControls);
+var
+  Days, Hours, Minutes: Integer;
+begin
+  AControls.EdtClipboardTempFolder.Text := ASettings.ClipboardTempFolder;
+  AControls.CbxClipboardCleanup.ItemIndex := Ord(ASettings.ClipboardCleanupStrategy);
+  SplitSecondsToDHM(ASettings.ClipboardCleanupAgeSeconds, Days, Hours, Minutes);
+  AControls.UdCleanupDays.Position := Days;
+  AControls.UdCleanupHours.Position := Hours;
+  AControls.UdCleanupMinutes.Position := Minutes;
+end;
+
+procedure BindClipboardTempFromControls(ASettings: TPluginSettings; const AControls: TClipboardTempControls);
+begin
+  {Trim trailing/leading spaces — a Windows path never legitimately carries
+   them and they would defeat the empty-means-system-temp check. Free-function
+   Trim (not the string helper) so helper scope in this unit is irrelevant.}
+  ASettings.ClipboardTempFolder := Trim(AControls.EdtClipboardTempFolder.Text);
+  ASettings.ClipboardCleanupStrategy :=
+    TClipboardCleanupStrategy(AControls.CbxClipboardCleanup.ItemIndex);
+  {Spin fields are range-clamped by the UpDowns; EnsureRange guards the
+   composed total against the documented bound.}
+  ASettings.ClipboardCleanupAgeSeconds := EnsureRange(
+    DHMToSeconds(AControls.UdCleanupDays.Position, AControls.UdCleanupHours.Position,
+      AControls.UdCleanupMinutes.Position),
+    MIN_CLIPBOARD_CLEANUP_AGE_SECONDS, MAX_CLIPBOARD_CLEANUP_AGE_SECONDS);
 end;
 
 {Status bar}

@@ -5,8 +5,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.UITypes, System.Math,
-  BitmapSaver, Types, StatusBarLayout, Defaults, Hotkeys, SettingsGroups, UnicodeIniFile,
-  SettingsInterfaces, IniStore;
+  BitmapSaver, Types, StatusBarLayout, ClipboardTemp, Defaults, Hotkeys, SettingsGroups,
+  UnicodeIniFile, SettingsInterfaces, IniStore;
 
 type
   {Inherits from TNoRefCountObject (not TInterfacedObject) because the
@@ -24,6 +24,7 @@ type
     FTimestamp: TTimestampSettingsGroup;
     FSave: TSaveSettingsGroup;
     FClipboardFormats: TClipboardFormatsGroup;
+    FClipboardTemp: TClipboardTempSettingsGroup;
     FBanner: TBannerSettingsGroup;
     FCache: TCacheSettingsGroup;
     FQuickView: TQuickViewSettingsGroup;
@@ -135,6 +136,13 @@ type
      snapshot of the four publish toggles in one read rather than racing
      against per-field writes.}
     property ClipboardFormats: TClipboardFormatsGroup read FClipboardFormats;
+    {Raw configured folder for file-reference temp PNGs; empty = system
+     %TEMP%. Env vars are expanded at resolve time, not here.}
+    property ClipboardTempFolder: string read FClipboardTemp.TempFolder write FClipboardTemp.TempFolder;
+    property ClipboardCleanupStrategy: TClipboardCleanupStrategy
+      read FClipboardTemp.CleanupStrategy write FClipboardTemp.CleanupStrategy;
+    property ClipboardCleanupAgeSeconds: Integer
+      read FClipboardTemp.CleanupAgeSeconds write FClipboardTemp.CleanupAgeSeconds;
     property CombinedMaxSide: Integer read FSave.CombinedMaxSide write FSave.CombinedMaxSide;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
@@ -197,6 +205,7 @@ type
     function GetCombinedBorder: Integer;
     function GetClipboardFormats: TClipboardFormatsGroup;
     function GetClipboardAsFileReference: Boolean;
+    function GetClipboardTempFolder: string;
     function GetPngCompression: Integer;
     function GetJpegQuality: Integer;
   end;
@@ -292,6 +301,7 @@ begin
   FTimestamp.FontSize := DEF_TIMESTAMP_FONT_SIZE;
   FSave := TSaveSettingsGroup.Defaults;
   FClipboardFormats := TClipboardFormatsGroup.Defaults;
+  FClipboardTemp := TClipboardTempSettingsGroup.Defaults;
   FBanner := TBannerSettingsGroup.Defaults;
   FBanner.Show := DEF_SHOW_BANNER;
   FCache := TCacheSettingsGroup.Defaults;
@@ -318,6 +328,7 @@ begin
    Does NOT seed from [save] AtLiveResolution; users on the old INI
    get the default for the new key without disturbing save settings.}
   FClipboardFormats.LoadFrom(AIni, 'copy');
+  FClipboardTemp.LoadFrom(AIni, 'copy');
   FCache.LoadFrom(AIni);
   FQuickView.LoadFrom(AIni, 'quickview');
   FThumbnails.LoadFrom(AIni, 'thumbnails');
@@ -361,6 +372,7 @@ begin
   FSave.SaveTo(AIni);
   FBanner.SaveTo(AIni, 'save');
   FClipboardFormats.SaveTo(AIni, 'copy');
+  FClipboardTemp.SaveTo(AIni, 'copy');
   FCache.SaveTo(AIni);
   FQuickView.SaveTo(AIni, 'quickview');
   FThumbnails.SaveTo(AIni, 'thumbnails');
@@ -502,6 +514,11 @@ end;
 function TPluginSettings.GetClipboardAsFileReference: Boolean;
 begin
   Result := FSave.ClipboardAsFileReference;
+end;
+
+function TPluginSettings.GetClipboardTempFolder: string;
+begin
+  Result := FClipboardTemp.TempFolder;
 end;
 
 function TPluginSettings.GetPngCompression: Integer;

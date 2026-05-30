@@ -26,7 +26,8 @@ uses
   Vcl.Graphics,
   Settings, FFmpegLocator, FFmpegExe, ProcessRunner, PluginForm, PluginServices, Cache, ProbeCache,
   Logging, ThumbnailRender, ToolbarLayout, PluginContext, Defaults,
-  VideoProbing, FrameExtractor, FrameCacheFactory, ProbeCacheFactory;
+  VideoProbing, FrameExtractor, FrameCacheFactory, ProbeCacheFactory,
+  ClipboardTempResolver, ClipboardTempSweeper;
 
 var
   Log: TProc<string>;
@@ -242,6 +243,18 @@ begin
   end
   else
     Ctx.ThumbnailCache := TNullFrameCache.Create;
+
+  {Once-per-session sweep of leftover clipboard file-reference temp PNGs.
+   Independent of the cache; wrapped so a bad temp folder never crashes TC.}
+  try
+    RunClipboardTempSweep(
+      ResolveClipboardTempFolder(Ctx.Settings.ClipboardTempFolder),
+      Ctx.Settings.ClipboardCleanupStrategy,
+      Ctx.Settings.ClipboardCleanupAgeSeconds);
+  except
+    on E: Exception do
+      Log(Format('  Clipboard temp sweep failed: %s', [E.Message]));
+  end;
 end;
 
 {Runs on TC's worker thread. Failures return 0 so TC falls back to its default icon.}

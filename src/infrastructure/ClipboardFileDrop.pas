@@ -15,12 +15,18 @@ type
 {Returns 0 on GlobalAlloc failure. No clipboard side effects.}
 function BuildDropFilesHandle(const AFilePath: string): NativeUInt;
 
+{Reads the first path from the clipboard's CF_HDROP entry, or '' when the
+ clipboard holds no file drop. The temp-file sweep uses this to never delete
+ the file the user has copied but not yet pasted (the clipboard holds at most
+ one entry, so this protects the one file that matters across instances).}
+function GetClipboardFilePath: string;
+
 function CreateFileDropClipboard: IFileDropClipboard;
 
 implementation
 
 uses
-  Winapi.Windows, Winapi.ShlObj, Vcl.Clipbrd, VclClipboard;
+  Winapi.Windows, Winapi.ShlObj, Winapi.ShellAPI, Vcl.Clipbrd, VclClipboard;
 
 type
   TFileDropClipboard = class(TInterfacedObject, IFileDropClipboard)
@@ -93,6 +99,33 @@ begin
     Result := True;
   finally
     Clipboard.Close;
+  end;
+end;
+
+function GetClipboardFilePath: string;
+var
+  Drop: HDROP;
+  Len: UINT;
+  Buf: array of Char;
+begin
+  Result := '';
+  {Raw open/close (not the VCL Clipboard) keeps this a side-effect-free
+   read with no interaction with the VCL clipboard open-refcount.}
+  if not OpenClipboard(0) then
+    Exit;
+  try
+    Drop := HDROP(GetClipboardData(CF_HDROP));
+    if Drop = 0 then
+      Exit;
+    {Probe the path length (excluding terminator); 0 = empty drop.}
+    Len := DragQueryFile(Drop, 0, nil, 0);
+    if Len = 0 then
+      Exit;
+    SetLength(Buf, Len + 1);
+    DragQueryFile(Drop, 0, @Buf[0], Len + 1);
+    Result := PChar(@Buf[0]);
+  finally
+    CloseClipboard;
   end;
 end;
 

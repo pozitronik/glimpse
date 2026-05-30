@@ -31,6 +31,9 @@ type
     [Test] procedure Banner_Roundtrip_PinsAllFields;
     [Test] procedure Banner_Position_EnumRoundTripsViaItemIndex;
     [Test] procedure ClipboardFormats_Roundtrip_PinsAllFields;
+    [Test] procedure ClipboardTemp_Roundtrip_PinsAllFields;
+    [Test] procedure ClipboardTemp_CleanupStrategy_EnumRoundTripsViaItemIndex;
+    [Test] procedure ClipboardTemp_Age_RoundTripsViaSpins;
     [Test] procedure StatusBar_Roundtrip_PinsAllFields;
     [Test] procedure StatusBar_HeightApplyMode_EnumRoundTripsViaItemIndex;
     [Test] procedure QuickView_Roundtrip_PinsAllFields;
@@ -43,7 +46,7 @@ implementation
 uses
   System.SysUtils, System.Classes, System.UITypes,
   Vcl.Graphics, Vcl.Forms, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Controls,
-  Types, StatusBarLayout, BitmapSaver, Defaults,
+  Types, StatusBarLayout, ClipboardTemp, BitmapSaver, Defaults,
   Settings,
   SettingsControlsBundles;
 
@@ -700,6 +703,108 @@ begin
     Owner.Free;
   end;
 end;
+
+procedure TTestSettingsControlsBundles.ClipboardTemp_Roundtrip_PinsAllFields;
+var
+  Owner: TForm;
+  Bundle: TClipboardTempControls;
+  Settings, Reloaded: TPluginSettings;
+begin
+  Owner := TForm.CreateNew(nil);
+  Settings := TPluginSettings.Create('');
+  Reloaded := TPluginSettings.Create('');
+  try
+    Bundle.EdtClipboardTempFolder := MakeEdit(Owner);
+    Bundle.CbxClipboardCleanup := MakeComboBox(Owner, 3);
+    Bundle.UdCleanupDays := MakeUpDown(Owner, 0, 365);
+    Bundle.UdCleanupHours := MakeUpDown(Owner, 0, 23);
+    Bundle.UdCleanupMinutes := MakeUpDown(Owner, 0, 59);
+
+    Settings.ClipboardTempFolder := '%COMMANDER_PATH%\temp';
+    Settings.ClipboardCleanupStrategy := ccsAll;
+    {1 day exactly so the day spin reads 1 and the others 0.}
+    Settings.ClipboardCleanupAgeSeconds := SECONDS_PER_DAY;
+
+    BindClipboardTempToControls(Settings, Bundle);
+    Assert.AreEqual('%COMMANDER_PATH%\temp', Bundle.EdtClipboardTempFolder.Text);
+    Assert.AreEqual(Ord(ccsAll), Bundle.CbxClipboardCleanup.ItemIndex);
+    Assert.AreEqual(1, Bundle.UdCleanupDays.Position);
+    Assert.AreEqual(0, Bundle.UdCleanupHours.Position);
+    Assert.AreEqual(0, Bundle.UdCleanupMinutes.Position);
+
+    BindClipboardTempFromControls(Reloaded, Bundle);
+    Assert.AreEqual('%COMMANDER_PATH%\temp', Reloaded.ClipboardTempFolder);
+    Assert.IsTrue(Reloaded.ClipboardCleanupStrategy = ccsAll);
+    Assert.AreEqual(SECONDS_PER_DAY, Reloaded.ClipboardCleanupAgeSeconds);
+  finally
+    Reloaded.Free;
+    Settings.Free;
+    Owner.Free;
+  end;
+end;
+
+procedure TTestSettingsControlsBundles.ClipboardTemp_CleanupStrategy_EnumRoundTripsViaItemIndex;
+var
+  Owner: TForm;
+  Bundle: TClipboardTempControls;
+  Settings: TPluginSettings;
+  V: TClipboardCleanupStrategy;
+begin
+  Owner := TForm.CreateNew(nil);
+  Settings := TPluginSettings.Create('');
+  try
+    Bundle.EdtClipboardTempFolder := MakeEdit(Owner);
+    Bundle.CbxClipboardCleanup := MakeComboBox(Owner, 3);
+    Bundle.UdCleanupDays := MakeUpDown(Owner, 0, 365);
+    Bundle.UdCleanupHours := MakeUpDown(Owner, 0, 23);
+    Bundle.UdCleanupMinutes := MakeUpDown(Owner, 0, 59);
+
+    for V := Low(TClipboardCleanupStrategy) to High(TClipboardCleanupStrategy) do
+    begin
+      Bundle.CbxClipboardCleanup.ItemIndex := Ord(V);
+      BindClipboardTempFromControls(Settings, Bundle);
+      Assert.IsTrue(Settings.ClipboardCleanupStrategy = V);
+    end;
+  finally
+    Settings.Free;
+    Owner.Free;
+  end;
+end;
+
+procedure TTestSettingsControlsBundles.ClipboardTemp_Age_RoundTripsViaSpins;
+var
+  Owner: TForm;
+  Bundle: TClipboardTempControls;
+  Settings, Reloaded: TPluginSettings;
+begin
+  {Age survives the seconds -> spin -> seconds path with no string parsing.}
+  Owner := TForm.CreateNew(nil);
+  Settings := TPluginSettings.Create('');
+  Reloaded := TPluginSettings.Create('');
+  try
+    Bundle.EdtClipboardTempFolder := MakeEdit(Owner);
+    Bundle.CbxClipboardCleanup := MakeComboBox(Owner, 3);
+    Bundle.UdCleanupDays := MakeUpDown(Owner, 0, 365);
+    Bundle.UdCleanupHours := MakeUpDown(Owner, 0, 23);
+    Bundle.UdCleanupMinutes := MakeUpDown(Owner, 0, 59);
+
+    Settings.ClipboardCleanupAgeSeconds :=
+      1 * SECONDS_PER_DAY + 2 * SECONDS_PER_HOUR + 3 * SECONDS_PER_MINUTE;
+
+    BindClipboardTempToControls(Settings, Bundle);
+    Assert.AreEqual(1, Bundle.UdCleanupDays.Position);
+    Assert.AreEqual(2, Bundle.UdCleanupHours.Position);
+    Assert.AreEqual(3, Bundle.UdCleanupMinutes.Position);
+
+    BindClipboardTempFromControls(Reloaded, Bundle);
+    Assert.AreEqual(Settings.ClipboardCleanupAgeSeconds, Reloaded.ClipboardCleanupAgeSeconds);
+  finally
+    Reloaded.Free;
+    Settings.Free;
+    Owner.Free;
+  end;
+end;
+
 
 {Status bar}
 

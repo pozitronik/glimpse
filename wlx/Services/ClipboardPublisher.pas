@@ -65,6 +65,7 @@ implementation
 uses
   System.SysUtils, System.IOUtils, System.UITypes,
   ClipboardImage, VclClipboard, ClipboardFileDrop, ClipboardFormatStrategies,
+  ClipboardTemp, ClipboardTempResolver,
   SettingsGroups, Defaults, BitmapSaver, Logging;
 
 function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
@@ -121,9 +122,11 @@ var
   WorkResult: TClipboardPublishResult;
 begin
   {GUID-based name so concurrent TC lister windows do not collide.
-   Previous file is deleted on success — at most one Glimpse temp lives at a time.}
-  NewPath := IncludeTrailingPathDelimiter(System.IOUtils.TPath.GetTempPath) +
-    'glimpse_clip_' + TGuid.NewGuid.ToString + '.png';
+   Previous file is deleted on success — at most one Glimpse temp lives at a
+   time. The folder is the user-configured temp (env vars expanded, system
+   %TEMP% fallback); the prefix/extension are shared with the sweeper.}
+  NewPath := ResolveClipboardTempFolder(FClipboardPolicy.GetClipboardTempFolder) +
+    CLIPBOARD_TEMP_PREFIX + TGuid.NewGuid.ToString + CLIPBOARD_TEMP_EXT;
 
   WorkResult := RunBitmapWorkInModal(ABitmap, 'Writing clipboard image...',
     procedure(ABmp: TBitmap; var AOut: TBitmapWorkOutcome)

@@ -1316,6 +1316,165 @@ object SettingsForm: TSettingsForm
         TabOrder = 4
         OnClick = ChkClipboardAsFileReferenceClick
       end
+      object LblClipboardTempHeader: TLabel
+        Left = 12
+        Top = 192
+        Width = 300
+        Height = 15
+        Caption = 'Clipboard file-reference files:'
+      end
+      object LblClipboardTempFolder: TLabel
+        Left = 12
+        Top = 222
+        Width = 100
+        Height = 15
+        Caption = 'Files location:'
+      end
+      object EdtClipboardTempFolder: TEdit
+        Left = 116
+        Top = 218
+        Width = 292
+        Height = 23
+        Hint =
+          'Where file-reference files are written. Empty = system temp; ' +
+          'environment variables are expanded.'
+        Anchors = [akLeft, akTop, akRight]
+        TabOrder = 5
+        TextHint = 'Leave empty for default'
+        OnChange = EdtClipboardTempFolderChange
+      end
+      object BtnClipboardTempFolder: TButton
+        Left = 414
+        Top = 218
+        Width = 25
+        Height = 23
+        Hint = 'Browse for the file-reference folder.'
+        Anchors = [akTop, akRight]
+        Caption = '...'
+        TabOrder = 6
+        OnClick = BtnClipboardTempFolderClick
+      end
+      object EdtClipboardTempFolderInfo: TEdit
+        Left = 116
+        Top = 246
+        Width = 323
+        Height = 23
+        TabStop = False
+        Anchors = [akLeft, akTop, akRight]
+        BorderStyle = bsNone
+        Color = clBtnFace
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
+        Font.Height = -12
+        Font.Name = 'Segoe UI'
+        Font.Style = []
+        ParentFont = False
+        ReadOnly = True
+        TabOrder = 7
+      end
+      object LblClipboardCleanup: TLabel
+        Left = 12
+        Top = 276
+        Width = 100
+        Height = 15
+        Caption = 'Clean up on start:'
+      end
+      object CbxClipboardCleanup: TComboBox
+        Left = 116
+        Top = 272
+        Width = 130
+        Height = 23
+        Style = csDropDownList
+        Hint =
+          'On plugin load, sweep leftover clipboard file-reference files. ' +
+          'The file currently on the clipboard is always kept so a pending ' +
+          'paste still works.'
+        TabOrder = 8
+        OnChange = CbxClipboardCleanupChange
+        Items.Strings = (
+          'No cleanup'
+          'Clean everything'
+          'Delete older than')
+      end
+      object EdtCleanupDays: TEdit
+        Left = 252
+        Top = 272
+        Width = 30
+        Height = 23
+        Hint = 'Days'
+        NumbersOnly = True
+        TabOrder = 9
+        Text = '1'
+      end
+      object UdCleanupDays: TUpDown
+        Left = 282
+        Top = 272
+        Width = 16
+        Height = 23
+        Associate = EdtCleanupDays
+        Max = 365
+        Position = 1
+        TabOrder = 10
+      end
+      object LblCleanupSep1: TLabel
+        Left = 302
+        Top = 276
+        Width = 4
+        Height = 15
+        Caption = ':'
+      end
+      object EdtCleanupHours: TEdit
+        Left = 310
+        Top = 272
+        Width = 26
+        Height = 23
+        Hint = 'Hours'
+        NumbersOnly = True
+        TabOrder = 11
+        Text = '0'
+      end
+      object UdCleanupHours: TUpDown
+        Left = 336
+        Top = 272
+        Width = 16
+        Height = 23
+        Associate = EdtCleanupHours
+        Max = 23
+        TabOrder = 12
+      end
+      object LblCleanupSep2: TLabel
+        Left = 356
+        Top = 276
+        Width = 4
+        Height = 15
+        Caption = ':'
+      end
+      object EdtCleanupMinutes: TEdit
+        Left = 364
+        Top = 272
+        Width = 26
+        Height = 23
+        Hint = 'Minutes'
+        NumbersOnly = True
+        TabOrder = 13
+        Text = '0'
+      end
+      object UdCleanupMinutes: TUpDown
+        Left = 390
+        Top = 272
+        Width = 16
+        Height = 23
+        Associate = EdtCleanupMinutes
+        Max = 59
+        TabOrder = 14
+      end
+      object LblClipboardCleanupAgeUnit: TLabel
+        Left = 410
+        Top = 276
+        Width = 40
+        Height = 15
+        Caption = '(d:h:m)'
+      end
     end
     object TshCache: TTabSheet
       Caption = 'Cache'

@@ -131,6 +131,22 @@ type
     ChkPublishFlattenedBitmap: TCheckBox;
     ChkPublishBitmapHandle: TCheckBox;
     ChkClipboardAsFileReference: TCheckBox;
+    LblClipboardTempHeader: TLabel;
+    LblClipboardTempFolder: TLabel;
+    EdtClipboardTempFolder: TEdit;
+    BtnClipboardTempFolder: TButton;
+    EdtClipboardTempFolderInfo: TEdit;
+    LblClipboardCleanup: TLabel;
+    CbxClipboardCleanup: TComboBox;
+    EdtCleanupDays: TEdit;
+    UdCleanupDays: TUpDown;
+    LblCleanupSep1: TLabel;
+    EdtCleanupHours: TEdit;
+    UdCleanupHours: TUpDown;
+    LblCleanupSep2: TLabel;
+    EdtCleanupMinutes: TEdit;
+    UdCleanupMinutes: TUpDown;
+    LblClipboardCleanupAgeUnit: TLabel;
     TshCache: TTabSheet;
     ChkCacheEnabled: TCheckBox;
     BtnClearCache: TButton;
@@ -189,6 +205,9 @@ type
      Wired to ten DFM entries (5 panels + 5 buttons).}
     procedure OnColorSwatchClick(Sender: TObject);
     procedure ChkClipboardAsFileReferenceClick(Sender: TObject);
+    procedure BtnClipboardTempFolderClick(Sender: TObject);
+    procedure CbxClipboardCleanupChange(Sender: TObject);
+    procedure EdtClipboardTempFolderChange(Sender: TObject);
     procedure ChkShowBannerClick(Sender: TObject);
     procedure ChkBannerAutoSizeClick(Sender: TObject);
     procedure BtnTimestampFontClick(Sender: TObject);
@@ -255,6 +274,7 @@ type
     FTimestampControls: TTimestampControls;
     FBannerControls: TBannerControls;
     FClipboardFormatsControls: TClipboardFormatsControls;
+    FClipboardTempControls: TClipboardTempControls;
     FStatusBarControls: TStatusBarControls;
     FQuickViewControls: TQuickViewControls;
     FThumbnailsControls: TThumbnailsControls;
@@ -274,6 +294,10 @@ type
      then performs the only non-enable side effect: refreshing the
      MaxThreadsAuto caption to track UdMaxThreads.Position.}
     procedure RecomputeEnables;
+    {Refreshes the grey resolved-path hint under the file-reference folder
+     edit so the user sees where files actually land (system temp when empty,
+     env vars expanded otherwise).}
+    procedure UpdateClipboardTempResolved;
     procedure PickColor(APanel: TPanel);
     procedure PopulateStatusBarLegend;
   protected
@@ -299,7 +323,7 @@ implementation
 uses
   System.IOUtils, System.Math,
   Defaults, FFmpegExe, FFmpegCmdLine, CacheMaintenance, BitmapSaver, PathExpand,
-  SettingsDlgLogic, SettingsDlgUI, StatusBarTokens;
+  ClipboardTemp, ClipboardTempResolver, SettingsDlgLogic, SettingsDlgUI, StatusBarTokens;
 
 procedure TSettingsForm.InitControlsBundles;
 begin
@@ -369,6 +393,12 @@ begin
   FClipboardFormatsControls.ChkPublishFlattenedBitmap := ChkPublishFlattenedBitmap;
   FClipboardFormatsControls.ChkPublishBitmapHandle := ChkPublishBitmapHandle;
 
+  FClipboardTempControls.EdtClipboardTempFolder := EdtClipboardTempFolder;
+  FClipboardTempControls.CbxClipboardCleanup := CbxClipboardCleanup;
+  FClipboardTempControls.UdCleanupDays := UdCleanupDays;
+  FClipboardTempControls.UdCleanupHours := UdCleanupHours;
+  FClipboardTempControls.UdCleanupMinutes := UdCleanupMinutes;
+
   FStatusBarControls.EdtStatusBarTemplate := EdtStatusBarTemplate;
   FStatusBarControls.ChkStatusBarAutoWidthLive := ChkStatusBarAutoWidthLive;
   FStatusBarControls.ChkStatusBarStretchPanels := ChkStatusBarStretchPanels;
@@ -404,6 +434,8 @@ begin
    (5 checkboxes; no event-handler-bearing logic justifies its own
    class).}
   BindClipboardFormatsToControls(ASettings, FClipboardFormatsControls);
+  BindClipboardTempToControls(ASettings, FClipboardTempControls);
+  UpdateClipboardTempResolved;
 
   {Snapshot the bindings into our local copy so edits here only commit on
    OK/Apply via ControlsToSettings.}
@@ -423,6 +455,7 @@ begin
   FStoragePresenter.SaveTo(ASettings);
 
   BindClipboardFormatsFromControls(ASettings, FClipboardFormatsControls);
+  BindClipboardTempFromControls(ASettings, FClipboardTempControls);
 
   {Hotkeys were edited into our local snapshot; push the whole table back.}
   ASettings.Hotkeys.Assign(FHotkeys);
@@ -515,6 +548,27 @@ end;
 procedure TSettingsForm.ChkClipboardAsFileReferenceClick(Sender: TObject);
 begin
   RecomputeEnables;
+end;
+
+procedure TSettingsForm.BtnClipboardTempFolderClick(Sender: TObject);
+begin
+  BrowseFolderInto(EdtClipboardTempFolder, Self);
+end;
+
+procedure TSettingsForm.CbxClipboardCleanupChange(Sender: TObject);
+begin
+  RecomputeEnables;
+end;
+
+procedure TSettingsForm.EdtClipboardTempFolderChange(Sender: TObject);
+begin
+  UpdateClipboardTempResolved;
+end;
+
+procedure TSettingsForm.UpdateClipboardTempResolved;
+begin
+  EdtClipboardTempFolderInfo.Text :=
+    'Resolved: ' + DisplayClipboardTempFolder(EdtClipboardTempFolder.Text);
 end;
 
 procedure TSettingsForm.BtnSaveFolderClick(Sender: TObject);
@@ -637,7 +691,7 @@ end;
 
 procedure TSettingsForm.BuildEnableRules;
 begin
-  SetLength(FEnableRules, 11);
+  SetLength(FEnableRules, 12);
 
   {Max workers / max threads — auto mode swaps which of the two
    workers/threads pairs is editable. Limit workers count is only
@@ -707,6 +761,17 @@ begin
                 and (CbxThumbnailMode.ItemIndex = Ord(tnmGrid));
     end;
   FEnableRules[10].Controls := [LblThumbnailGridFrames, EdtThumbnailGridFrames, UdThumbnailGridFrames];
+
+  {The day/hour/minute age spins only apply to the "Delete older than"
+   cleanup strategy; the other two ignore the threshold.}
+  FEnableRules[11].Predicate := function: Boolean
+    begin
+      Result := CbxClipboardCleanup.ItemIndex = Ord(ccsOlderThan);
+    end;
+  FEnableRules[11].Controls := [EdtCleanupDays, UdCleanupDays, LblCleanupSep1,
+                                EdtCleanupHours, UdCleanupHours, LblCleanupSep2,
+                                EdtCleanupMinutes, UdCleanupMinutes,
+                                LblClipboardCleanupAgeUnit];
 end;
 
 procedure TSettingsForm.RecomputeEnables;

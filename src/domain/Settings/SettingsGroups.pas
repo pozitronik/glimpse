@@ -23,7 +23,7 @@ interface
 
 uses
   System.UITypes,
-  BitmapSaver, StatusBarLayout, Types, IniStore;
+  BitmapSaver, StatusBarLayout, ClipboardTemp, Types, IniStore;
 
 type
   {[extraction] group — eight fields shared verbatim between WLX and WCX.
@@ -90,6 +90,23 @@ type
     PublishCompressedPng: Boolean;    {registered "PNG" format}
 
     class function Defaults: TClipboardFormatsGroup; static;
+    procedure LoadFrom(const AIni: IIniFile; const ASection: string);
+    procedure SaveTo(const AIni: IIniFile; const ASection: string);
+  end;
+
+  {Clipboard file-reference temp-file management. WLX-only today, kept here
+   for the shared record/Defaults/LoadFrom/SaveTo pattern. TempFolder is the
+   raw configured directory (env vars expanded at resolve time); EMPTY means
+   the system %TEMP% and is a meaningful value, NOT "use default" — so
+   LoadFrom reads it plainly rather than applying the empty-string-becomes
+   default fallback the font fields use. CleanupStrategy + CleanupAgeSeconds
+   drive the plugin-load sweep of leftover glimpse_clip_*.png files.}
+  TClipboardTempSettingsGroup = record
+    TempFolder: string;
+    CleanupStrategy: TClipboardCleanupStrategy;
+    CleanupAgeSeconds: Integer;
+
+    class function Defaults: TClipboardTempSettingsGroup; static;
     procedure LoadFrom(const AIni: IIniFile; const ASection: string);
     procedure SaveTo(const AIni: IIniFile; const ASection: string);
   end;
@@ -403,6 +420,35 @@ begin
   AIni.WriteBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
   AIni.WriteBool(ASection, 'PublishBitmapHandle', PublishBitmapHandle);
   AIni.WriteBool(ASection, 'PublishCompressedPng', PublishCompressedPng);
+end;
+
+{TClipboardTempSettingsGroup}
+
+class function TClipboardTempSettingsGroup.Defaults: TClipboardTempSettingsGroup;
+begin
+  Result.TempFolder := DEF_CLIPBOARD_TEMP_FOLDER;
+  Result.CleanupStrategy := DEF_CLIPBOARD_CLEANUP_STRATEGY;
+  Result.CleanupAgeSeconds := DEF_CLIPBOARD_CLEANUP_AGE_SECONDS;
+end;
+
+procedure TClipboardTempSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
+begin
+  {Plain read: an explicit empty TempFolder means "system temp", so the
+   font-style empty-becomes-default fallback must not apply here.}
+  TempFolder := AIni.ReadString(ASection, 'TempFolder', TempFolder);
+  CleanupStrategy := StrToClipboardCleanupStrategy(
+    AIni.ReadString(ASection, 'TempCleanupStrategy', ''), CleanupStrategy);
+  CleanupAgeSeconds := EnsureRange(
+    AIni.ReadInteger(ASection, 'TempCleanupAgeSeconds', CleanupAgeSeconds),
+    MIN_CLIPBOARD_CLEANUP_AGE_SECONDS, MAX_CLIPBOARD_CLEANUP_AGE_SECONDS);
+end;
+
+procedure TClipboardTempSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
+begin
+  AIni.WriteString(ASection, 'TempFolder', TempFolder);
+  AIni.WriteString(ASection, 'TempCleanupStrategy',
+    ClipboardCleanupStrategyToStr(CleanupStrategy));
+  AIni.WriteInteger(ASection, 'TempCleanupAgeSeconds', CleanupAgeSeconds);
 end;
 
 {TTimestampSettingsGroup}
