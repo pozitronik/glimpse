@@ -64,6 +64,10 @@ type
     FVideoInfo: TVideoInfo;
     FOffsets: TFrameOffsetArray;
     FParentWnd: HWND;
+    {Live modeless Settings dialog, nil when none is open. Typed as TForm to
+     avoid an interface dependency on SettingsDlg; owned here so it is freed
+     before this form's window dies, and nilled by its on-close callback.}
+    FSettingsForm: TForm;
     {Widget fields below are non-owning aliases populated from
      FToolbarController.Build; widgets are owned by the form (TComponent).}
     FToolbarController: TToolbarController;
@@ -825,6 +829,11 @@ begin
    menu-removal run while FParentWnd is still a valid window.}
   FreeAndNil(FListerMenuExtension);
   FreeAndNil(FSettingsToggle);
+  {Free a still-open modeless Settings dialog before our owner window goes
+   away. FreeAndNil (not Close) so the form's caFree/on-close path does not
+   run against a half-destroyed plugin form.}
+  if Assigned(FSettingsForm) then
+    FreeAndNil(FSettingsForm);
   if HandleAllocated then
     RemoveWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID);
   if FParentWnd <> 0 then
@@ -2406,12 +2415,23 @@ end;
 
 procedure TPluginForm.ShowSettings;
 begin
+  {Modeless dialog persists across invocations; a second Settings request
+   just refocuses the open window instead of spawning a duplicate.}
+  if FSettings.ModelessSettingsWindow and Assigned(FSettingsForm) then
+  begin
+    FSettingsForm.Show;
+    Exit;
+  end;
+
   FSettingsSnap := TakeSettingsSnapshot(FSettings);
 
-  if not ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath, CommitSettingsChanges) then
-    Exit;
-
-  CommitSettingsChanges;
+  if FSettings.ModelessSettingsWindow then
+    {Modeless: Apply/OK commit live via CommitSettingsChanges; the on-close
+     closure drops our reference when the user closes the window.}
+    FSettingsForm := ShowSettingsDialogModeless(FParentWnd, FSettings, FFFmpegPath,
+      CommitSettingsChanges, procedure begin FSettingsForm := nil end)
+  else if ShowSettingsDialog(FParentWnd, FSettings, FFFmpegPath, CommitSettingsChanges) then
+    CommitSettingsChanges;
 end;
 
 procedure TPluginForm.NavigateToAdjacentFile(ADelta: Integer);

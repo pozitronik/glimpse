@@ -15,6 +15,7 @@ object SettingsForm: TSettingsForm
   Position = poScreenCenter
   ShowHint = True
   TextHeight = 15
+  OnClose = FormClose
   object PageControl: TPageControl
     Left = 0
     Top = 0
@@ -346,6 +347,19 @@ object SettingsForm: TSettingsForm
         Caption = '...'
         TabOrder = 17
         OnClick = BtnFFmpegPathClick
+      end
+      object ChkModelessSettings: TCheckBox
+        Left = 12
+        Top = 414
+        Width = 427
+        Height = 17
+        Hint =
+          'Open the Settings window without blocking Total Commander, so ' +
+          'you can keep working while it is open. Off keeps the classic ' +
+          'modal dialog.'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Non-modal settings window (does not block Total Commander)'
+        TabOrder = 18
       end
     end
     object TshSampling: TTabSheet
@@ -1893,6 +1907,7 @@ object SettingsForm: TSettingsForm
       Default = True
       ModalResult = 1
       TabOrder = 2
+      OnClick = BtnOKClick
     end
     object BtnCancel: TButton
       Left = 377
@@ -1904,6 +1919,7 @@ object SettingsForm: TSettingsForm
       Caption = 'Cancel'
       ModalResult = 2
       TabOrder = 3
+      OnClick = BtnCancelClick
     end
   end
   object ColorDlg: TColorDialog

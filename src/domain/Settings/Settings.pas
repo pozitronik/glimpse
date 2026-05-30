@@ -32,6 +32,7 @@ type
     FStatusBar: TStatusBarSettingsGroup;
     FHotkeys: THotkeyBindings;
     FDebugLogEnabled: Boolean;
+    FModelessSettingsWindow: Boolean;
 
     function GetModeZoom(AMode: TViewMode): TZoomMode;
     procedure SetModeZoom(AMode: TViewMode; AValue: TZoomMode);
@@ -190,6 +191,10 @@ type
      once at ListSetDefaultParams; hand-edits take effect on next TC restart.}
     property DebugLogEnabled: Boolean read FDebugLogEnabled write FDebugLogEnabled;
 
+    {When on, the Settings dialog opens modeless so it does not block Total
+     Commander. Off (modal) by default; persisted under [ui] ModelessSettings.}
+    property ModelessSettingsWindow: Boolean read FModelessSettingsWindow write FModelessSettingsWindow;
+
     function GetTimestamp: TTimestampSettingsGroup;
     function GetBanner: TBannerSettingsGroup;
     function GetShowBanner: Boolean;
@@ -242,6 +247,9 @@ const
 {$ELSE}
   DEF_DEBUG_LOG_ENABLED = False;
 {$ENDIF}
+
+  {Modal preserves the long-standing behaviour, so it stays the default.}
+  DEF_MODELESS_SETTINGS_WINDOW = False;
 
   DEF_SKIP_EDGES_PERCENT = DEF_SKIP_EDGES;
 
@@ -310,6 +318,7 @@ begin
   FThumbnails := TThumbnailsSettingsGroup.Defaults;
   FStatusBar := TStatusBarSettingsGroup.Defaults;
   FDebugLogEnabled := DEF_DEBUG_LOG_ENABLED;
+  FModelessSettingsWindow := DEF_MODELESS_SETTINGS_WINDOW;
   {Guard against call-order shifts: FHotkeys would be nil if
    ResetDefaults ever ran before the constructor created the table.}
   if FHotkeys <> nil then
@@ -336,6 +345,7 @@ begin
   FHotkeys.Load(AIni);
   FStatusBar.LoadFrom(AIni, 'statusbar');
   FDebugLogEnabled := AIni.ReadBool('debug', 'LogEnabled', FDebugLogEnabled);
+  FModelessSettingsWindow := AIni.ReadBool('ui', 'ModelessSettings', FModelessSettingsWindow);
   Validate;
 end;
 
@@ -380,6 +390,7 @@ begin
   FHotkeys.Save(AIni);
   FStatusBar.SaveTo(AIni, 'statusbar');
   AIni.WriteBool('debug', 'LogEnabled', FDebugLogEnabled);
+  AIni.WriteBool('ui', 'ModelessSettings', FModelessSettingsWindow);
   {Writes are buffered in memory; UpdateFile commits them to the store.}
   AIni.UpdateFile;
 end;

@@ -172,6 +172,10 @@ type
     [Test]
     procedure TestStatusBarStretchPanelsRoundTrip;
     [Test]
+    procedure TestModelessSettingsWindowDefault;
+    [Test]
+    procedure TestModelessSettingsWindowRoundTrip;
+    [Test]
     procedure TestStatusBarHeightDefault;
     [Test]
     procedure TestStatusBarHeightRoundTrip;
@@ -2243,6 +2247,43 @@ begin
   try
     S2.Load;
     Assert.AreEqual(not DEF_STATUSBAR_STRETCH_PANELS, S2.StatusBarStretchPanels);
+  finally
+    S2.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestModelessSettingsWindowDefault;
+var
+  S: TPluginSettings;
+begin
+  {Modal stays the default so upgrades keep the long-standing behaviour.}
+  S := TPluginSettings.Create(TPath.Combine(FTempDir, 'nonexistent.ini'));
+  try
+    S.Load;
+    Assert.AreEqual(DEF_MODELESS_SETTINGS_WINDOW, S.ModelessSettingsWindow,
+      'Settings window is modal by default');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TTestPluginSettings.TestModelessSettingsWindowRoundTrip;
+var
+  S1, S2: TPluginSettings;
+  IniPath: string;
+begin
+  IniPath := TPath.Combine(FTempDir, 'modeless.ini');
+  S1 := TPluginSettings.Create(IniPath);
+  try
+    S1.ModelessSettingsWindow := not DEF_MODELESS_SETTINGS_WINDOW;
+    S1.Save;
+  finally
+    S1.Free;
+  end;
+  S2 := TPluginSettings.Create(IniPath);
+  try
+    S2.Load;
+    Assert.AreEqual(not DEF_MODELESS_SETTINGS_WINDOW, S2.ModelessSettingsWindow);
   finally
     S2.Free;
   end;

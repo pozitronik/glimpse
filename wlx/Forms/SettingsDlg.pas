@@ -28,6 +28,7 @@ type
     ChkHwAccel: TCheckBox;
     ChkUseKeyframes: TCheckBox;
     ChkRespectAnamorphic: TCheckBox;
+    ChkModelessSettings: TCheckBox;
     ChkScaledExtraction: TCheckBox;
     LblScaleTarget: TLabel;
     EdtMinFrameSide: TEdit;
@@ -231,6 +232,11 @@ type
     procedure ChkThumbnailsEnabledClick(Sender: TObject);
     procedure CbxThumbnailModeChange(Sender: TObject);
     procedure BtnApplyClick(Sender: TObject);
+    {Modeless-only OK/Cancel/close handlers. In modal mode they early-exit
+     and the DFM ModalResult drives the close as before.}
+    procedure BtnOKClick(Sender: TObject);
+    procedure BtnCancelClick(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure LvwHotkeysDblClick(Sender: TObject);
     procedure BtnHotkeyClearClick(Sender: TObject);
     procedure BtnHotkeyAssignClick(Sender: TObject);
@@ -240,6 +246,10 @@ type
     FResolvedFFmpegPath: string;
     FSettings: TPluginSettings;
     FOnApply: TProc;
+    {Modeless mode flips OK/Cancel from ModalResult to explicit Close, and
+     FOnCloseNotify lets the owner drop its reference when the user closes.}
+    FModeless: Boolean;
+    FOnCloseNotify: TProc;
     {Per-cluster presenters (step 84). Each owns its bundle(s),
      its event handlers, its update helpers, and (for Appearance)
      its dialog-local font shadow fields. The form delegates DFM-
@@ -316,6 +326,12 @@ type
    Returns True if the user pressed OK (ASettings is updated on top of any prior Apply).
    Returns False if dismissed. NOTE: an earlier Apply is not rolled back on Cancel.}
 function ShowSettingsDialog(AParentWnd: HWND; ASettings: TPluginSettings; const AResolvedFFmpegPath: string; AOnApply: TProc = nil): Boolean;
+
+{Modeless variant: shows the dialog without blocking and returns the live
+ form. The form frees itself on close and invokes AOnClose so the owner can
+ nil its reference. AOnApply commits live exactly as in the modal dialog.}
+function ShowSettingsDialogModeless(AParentWnd: HWND; ASettings: TPluginSettings;
+  const AResolvedFFmpegPath: string; AOnApply: TProc; AOnClose: TProc): TSettingsForm;
 
 implementation
 
@@ -438,6 +454,7 @@ begin
   BindClipboardFormatsToControls(ASettings, FClipboardFormatsControls);
   BindClipboardTempToControls(ASettings, FClipboardTempControls);
   UpdateClipboardTempResolved;
+  ChkModelessSettings.Checked := ASettings.ModelessSettingsWindow;
 
   {Snapshot the bindings into our local copy so edits here only commit on
    OK/Apply via ControlsToSettings.}
@@ -458,6 +475,7 @@ begin
 
   BindClipboardFormatsFromControls(ASettings, FClipboardFormatsControls);
   BindClipboardTempFromControls(ASettings, FClipboardTempControls);
+  ASettings.ModelessSettingsWindow := ChkModelessSettings.Checked;
 
   {Hotkeys were edited into our local snapshot; push the whole table back.}
   ASettings.Hotkeys.Assign(FHotkeys);
@@ -667,6 +685,42 @@ begin
     FOnApply();
 end;
 
+procedure TSettingsForm.BtnOKClick(Sender: TObject);
+begin
+  {Modal OK is driven by the DFM ModalResult; only the modeless path needs
+   to commit-and-close by hand here.}
+  if not FModeless then
+    Exit;
+  if FSettings <> nil then
+  begin
+    ControlsToSettings(FSettings);
+    if Assigned(FOnApply) then
+      FOnApply();
+  end;
+  Close;
+end;
+
+procedure TSettingsForm.BtnCancelClick(Sender: TObject);
+begin
+  {Modeless cancel just closes; any prior Apply already committed (same
+   contract as the modal path, which also does not roll back an Apply).}
+  if not FModeless then
+    Exit;
+  Close;
+end;
+
+procedure TSettingsForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  {Modeless dialog owns its own teardown: free on close and let the host
+   drop its reference. Modal keeps the default (the caller frees it).}
+  if FModeless then
+  begin
+    Action := caFree;
+    if Assigned(FOnCloseNotify) then
+      FOnCloseNotify();
+  end;
+end;
+
 {Hotkeys tab — DFM event handlers forward to FHotkeyPresenter so the
  form keeps its DFM-bound method names while THotkeyUIPresenter owns
  the actual UI logic.}
@@ -865,6 +919,20 @@ begin
   finally
     Form.Free;
   end;
+end;
+
+function ShowSettingsDialogModeless(AParentWnd: HWND; ASettings: TPluginSettings;
+  const AResolvedFFmpegPath: string; AOnApply: TProc; AOnClose: TProc): TSettingsForm;
+begin
+  Result := TSettingsForm.CreateWithOwner(AParentWnd);
+  Result.FResolvedFFmpegPath := AResolvedFFmpegPath;
+  Result.FExtractionPresenter.SetResolvedFFmpegPath(AResolvedFFmpegPath);
+  Result.FSettings := ASettings;
+  Result.FOnApply := AOnApply;
+  Result.FModeless := True;
+  Result.FOnCloseNotify := AOnClose;
+  Result.SettingsToControls(ASettings);
+  Result.Show;
 end;
 
 end.
