@@ -14,8 +14,10 @@ object SettingsForm: TSettingsForm
   Font.Style = []
   Position = poScreenCenter
   ShowHint = True
+  KeyPreview = True
   TextHeight = 15
   OnClose = FormClose
+  OnKeyDown = FormKeyDown
   object PageControl: TPageControl
     Left = 0
     Top = 0

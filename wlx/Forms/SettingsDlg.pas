@@ -237,6 +237,11 @@ type
     procedure BtnOKClick(Sender: TObject);
     procedure BtnCancelClick(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    {Modeless Enter=OK / Esc=Cancel. A modal dialog gets this free from
+     ShowModal's loop (IsDialogMessage), but the modeless form is pumped by
+     TC's loop, which never runs that mapping, so KeyPreview routes the keys
+     here instead.}
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure LvwHotkeysDblClick(Sender: TObject);
     procedure BtnHotkeyClearClick(Sender: TObject);
     procedure BtnHotkeyAssignClick(Sender: TObject);
@@ -718,6 +723,33 @@ begin
     Action := caFree;
     if Assigned(FOnCloseNotify) then
       FOnCloseNotify();
+  end;
+end;
+
+procedure TSettingsForm.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  {Modal mode gets Enter/Esc from ShowModal's dialog loop; only the modeless
+   form (pumped by TC's loop) needs them wired by hand. Bare keys only so
+   Ctrl+Enter and friends are left for the focused control.}
+  if not FModeless then
+    Exit;
+  if Shift * [ssShift, ssAlt, ssCtrl] <> [] then
+    Exit;
+  {A dropped-down combo owns Enter/Esc (commit / close the list), matching how
+   a modal dialog defers to the open list before firing OK/Cancel.}
+  if (ActiveControl is TComboBox) and TComboBox(ActiveControl).DroppedDown then
+    Exit;
+  case Key of
+    VK_RETURN:
+      begin
+        Key := 0;
+        BtnOKClick(nil);
+      end;
+    VK_ESCAPE:
+      begin
+        Key := 0;
+        BtnCancelClick(nil);
+      end;
   end;
 end;
 
