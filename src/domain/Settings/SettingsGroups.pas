@@ -269,6 +269,7 @@ type
     StretchPanels: Boolean;
     Height: Integer;
     HeightApplyMode: TStatusBarHeightApplyMode;
+    DimensionClickMode: TStatusBarDimensionClickMode;
 
     class function Defaults: TStatusBarSettingsGroup; static;
     procedure LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -739,6 +740,7 @@ begin
   Result.StretchPanels := DEF_STATUSBAR_STRETCH_PANELS;
   Result.Height := DEF_STATUSBAR_HEIGHT;
   Result.HeightApplyMode := DEF_STATUSBAR_HEIGHT_APPLY_MODE;
+  Result.DimensionClickMode := DEF_STATUSBAR_DIMENSION_CLICK_MODE;
 end;
 
 procedure TStatusBarSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -761,6 +763,8 @@ begin
     MIN_STATUSBAR_HEIGHT, MAX_STATUSBAR_HEIGHT);
   HeightApplyMode := StrToStatusBarHeightApplyMode(
     AIni.ReadString(ASection, 'HeightApplyMode', ''), HeightApplyMode);
+  DimensionClickMode := StrToStatusBarDimensionClickMode(
+    AIni.ReadString(ASection, 'DimensionClickMode', ''), DimensionClickMode);
 end;
 
 procedure TStatusBarSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
@@ -773,6 +777,8 @@ begin
   AIni.WriteInteger(ASection, 'Height', Height);
   AIni.WriteString(ASection, 'HeightApplyMode',
     StatusBarHeightApplyModeToStr(HeightApplyMode));
+  AIni.WriteString(ASection, 'DimensionClickMode',
+    StatusBarDimensionClickModeToStr(DimensionClickMode));
 end;
 
 end.

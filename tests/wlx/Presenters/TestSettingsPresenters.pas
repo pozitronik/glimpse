@@ -166,6 +166,7 @@ begin
   AControls.ChkStatusBarStretchPanels := MakeCheckBox(AParent);
   AControls.UdStatusBarHeight := MakeUpDown(AParent, 0, 200);
   AControls.CbxStatusBarHeightApply := MakeComboBox(AParent, 3);
+  AControls.CbxStatusBarDimensionClick := MakeComboBox(AParent, 2);
 end;
 
 procedure BuildBannerControls(AParent: TWinControl; out AControls: TBannerControls);

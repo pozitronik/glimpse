@@ -99,8 +99,12 @@ begin
     tkVideoCodec:    Result := 'Source video codec';
     tkAudio:         Result := 'First audio stream summary';
     tkLoadTime:      Result := 'Time spent extracting the displayed frames';
-    tkSaveDimension: Result := 'Predicted Save view output dimensions. Double-click to toggle Save at view resolution';
-    tkCopyDimension: Result := 'Predicted Copy view output dimensions. Double-click to toggle Copy at view resolution';
+    tkSaveDimension: Result := 'Predicted Save view output dimensions. ' +
+      'Click to toggle Save at view resolution (single or double click per ' +
+      'settings); Ctrl+click copies.';
+    tkCopyDimension: Result := 'Predicted Copy view output dimensions. ' +
+      'Click to toggle Copy at view resolution (single or double click per ' +
+      'settings); Ctrl+click copies.';
     tkViewMode:      Result := 'Active view mode';
     tkZoom:          Result := 'Active zoom mode';
   else

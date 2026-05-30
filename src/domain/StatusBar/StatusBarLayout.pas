@@ -23,6 +23,14 @@ type
    would silently pick the wrong mode on next dialog open.}
   TStatusBarHeightApplyMode = (sbhamLister, sbhamQuickView, sbhamBoth);
 
+  {Gesture that toggles live resolution on the save / copy dimension panels.
+   Default (double) is declared first so its ordinal maps to the top combo
+   row. Order is load-bearing: serialised by token name via
+   StatusBarDimensionClickModeToStr, and the settings combo's ItemIndex
+   matches Ord(enum). Reordering would silently pick the wrong gesture on
+   the next dialog open.}
+  TStatusBarDimensionClickMode = (sbdcmDouble, sbdcmSingle);
+
   TProgressBarBounds = record
     Left, Top, Width, Height: Integer;
   end;
@@ -32,6 +40,9 @@ function ProgressBarLayoutToStr(ALayout: TProgressBarLayout): string;
 function StrToStatusBarHeightApplyMode(const AValue: string;
   ADefault: TStatusBarHeightApplyMode): TStatusBarHeightApplyMode;
 function StatusBarHeightApplyModeToStr(AMode: TStatusBarHeightApplyMode): string;
+function StrToStatusBarDimensionClickMode(const AValue: string;
+  ADefault: TStatusBarDimensionClickMode): TStatusBarDimensionClickMode;
+function StatusBarDimensionClickModeToStr(AMode: TStatusBarDimensionClickMode): string;
 
 function ShouldApplyStatusBarHeight(AMode: TStatusBarHeightApplyMode;
   AIsQuickView: Boolean): Boolean;
@@ -103,6 +114,25 @@ begin
     sbhamLister:    Result := 'lister';
     sbhamQuickView: Result := 'quickview';
     sbhamBoth:      Result := 'both';
+  end;
+end;
+
+function StrToStatusBarDimensionClickMode(const AValue: string;
+  ADefault: TStatusBarDimensionClickMode): TStatusBarDimensionClickMode;
+begin
+  if SameText(AValue, 'single') then
+    Result := sbdcmSingle
+  else if SameText(AValue, 'double') then
+    Result := sbdcmDouble
+  else
+    Result := ADefault;
+end;
+
+function StatusBarDimensionClickModeToStr(AMode: TStatusBarDimensionClickMode): string;
+begin
+  case AMode of
+    sbdcmSingle: Result := 'single';
+    sbdcmDouble: Result := 'double';
   end;
 end;
 

@@ -106,6 +106,7 @@ type
     ChkStatusBarStretchPanels: TCheckBox;
     UdStatusBarHeight: TUpDown;
     CbxStatusBarHeightApply: TComboBox;
+    CbxStatusBarDimensionClick: TComboBox;
   end;
 
   TQuickViewControls = record
@@ -358,6 +359,7 @@ begin
   AControls.ChkStatusBarStretchPanels.Checked := ASettings.StatusBarStretchPanels;
   AControls.UdStatusBarHeight.Position := ASettings.StatusBarHeight;
   AControls.CbxStatusBarHeightApply.ItemIndex := Ord(ASettings.StatusBarHeightApplyMode);
+  AControls.CbxStatusBarDimensionClick.ItemIndex := Ord(ASettings.StatusBarDimensionClickMode);
 end;
 
 procedure BindStatusBarFromControls(ASettings: TPluginSettings; const AControls: TStatusBarControls);
@@ -367,6 +369,7 @@ begin
   ASettings.StatusBarStretchPanels := AControls.ChkStatusBarStretchPanels.Checked;
   ASettings.StatusBarHeight := AControls.UdStatusBarHeight.Position;
   ASettings.StatusBarHeightApplyMode := TStatusBarHeightApplyMode(AControls.CbxStatusBarHeightApply.ItemIndex);
+  ASettings.StatusBarDimensionClickMode := TStatusBarDimensionClickMode(AControls.CbxStatusBarDimensionClick.ItemIndex);
 end;
 
 {Quick view}

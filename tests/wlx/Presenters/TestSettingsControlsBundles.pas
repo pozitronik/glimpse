@@ -718,6 +718,7 @@ begin
     Bundle.ChkStatusBarStretchPanels := MakeCheckBox(Owner);
     Bundle.UdStatusBarHeight := MakeUpDown(Owner, 0, 200);
     Bundle.CbxStatusBarHeightApply := MakeComboBox(Owner, 3);
+    Bundle.CbxStatusBarDimensionClick := MakeComboBox(Owner, 2);
 
     Settings.StatusBarTemplate := '{file} - {duration}';
     Settings.StatusBarAutoWidthLive := True;
@@ -760,6 +761,7 @@ begin
     Bundle.ChkStatusBarStretchPanels := MakeCheckBox(Owner);
     Bundle.UdStatusBarHeight := MakeUpDown(Owner, 0, 200);
     Bundle.CbxStatusBarHeightApply := MakeComboBox(Owner, 3);
+    Bundle.CbxStatusBarDimensionClick := MakeComboBox(Owner, 2);
 
     for V := Low(TStatusBarHeightApplyMode) to High(TStatusBarHeightApplyMode) do
     begin

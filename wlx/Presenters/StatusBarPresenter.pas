@@ -59,6 +59,10 @@ type
     procedure BuildVideoInfoFields(var AValues: TStatusBarValues);
     procedure BuildExporterPredictionFields(var AValues: TStatusBarValues);
     function ResolveHeight(ATextHeight: Integer): Integer;
+    {Shared toggle body for the save / copy dimension panels. AX, AY are
+     client coords. Exits when the hit panel is past the last one or is not
+     a dimension panel, matching the original double-click contract.}
+    procedure ToggleDimensionAt(AX, AY: Integer);
   public
     {ARendererOwner is the TComponent that owns the renderer for VCL
      cleanup; passing the host form here keeps the existing
@@ -295,16 +299,14 @@ begin
   end;
 end;
 
-procedure TStatusBarPresenter.HandleStatusBarDblClick(Sender: TObject);
+procedure TStatusBarPresenter.ToggleDimensionAt(AX, AY: Integer);
 var
-  Pt: TPoint;
   HitIdx, PanelLeft: Integer;
   Kind: TStatusBarTokenKind;
 begin
   if (FStatusBar.Panels.Count = 0) or (FRenderer = nil) then
     Exit;
-  Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
-  HitIdx := StatusBarPanelHitTest(FStatusBar, Pt.X, PanelLeft);
+  HitIdx := StatusBarPanelHitTest(FStatusBar, AX, PanelLeft);
   if HitIdx < 0 then
     Exit;
   Kind := FRenderer.KindForPanel(HitIdx);
@@ -324,22 +326,42 @@ begin
   Refresh;
 end;
 
+procedure TStatusBarPresenter.HandleStatusBarDblClick(Sender: TObject);
+var
+  Pt: TPoint;
+begin
+  {In single-click mode the double-click must not also toggle, otherwise a
+   double-click would flip twice and net to nothing.}
+  if FSettings.StatusBarDimensionClickMode <> sbdcmDouble then
+    Exit;
+  Pt := FStatusBar.ScreenToClient(Mouse.CursorPos);
+  ToggleDimensionAt(Pt.X, Pt.Y);
+end;
+
 procedure TStatusBarPresenter.HandleStatusBarMouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
   HitIdx, PanelLeft: Integer;
 begin
-  {Only Ctrl+left-click copies. Other modifier combinations and right /
-   middle clicks fall through to default (no-op for status bar).}
-  if (Button <> mbLeft) or (Shift * [ssCtrl, ssShift, ssAlt] <> [ssCtrl]) then
+  if Button <> mbLeft then
     Exit;
-  if FStatusBar.Panels.Count = 0 then
+  {Ctrl+left-click copies in both gesture modes. It is gated on exactly
+   [ssCtrl] so it never collides with a bare-click toggle.}
+  if Shift * [ssCtrl, ssShift, ssAlt] = [ssCtrl] then
+  begin
+    if FStatusBar.Panels.Count = 0 then
+      Exit;
+    HitIdx := StatusBarPanelHitTest(FStatusBar, X, PanelLeft);
+    {Click past last panel: copy last panel.}
+    if HitIdx < 0 then
+      HitIdx := FStatusBar.Panels.Count - 1;
+    Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
     Exit;
-  HitIdx := StatusBarPanelHitTest(FStatusBar, X, PanelLeft);
-  {Click past last panel: copy last panel.}
-  if HitIdx < 0 then
-    HitIdx := FStatusBar.Panels.Count - 1;
-  Clipboard.AsText := FStatusBar.Panels[HitIdx].Text;
+  end;
+  {Bare left-click (no modifiers) toggles in single-click mode.}
+  if (Shift * [ssCtrl, ssShift, ssAlt] = []) and
+    (FSettings.StatusBarDimensionClickMode = sbdcmSingle) then
+    ToggleDimensionAt(X, Y);
 end;
 
 end.

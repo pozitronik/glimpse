@@ -162,6 +162,8 @@ const
 
   DEF_STATUSBAR_HEIGHT_APPLY_MODE = sbhamBoth;
 
+  DEF_STATUSBAR_DIMENSION_CLICK_MODE = sbdcmDouble;
+
 implementation
 
 end.

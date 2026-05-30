@@ -171,6 +171,7 @@ type
     property StatusBarStretchPanels: Boolean read FStatusBar.StretchPanels write FStatusBar.StretchPanels;
     property StatusBarHeight: Integer read FStatusBar.Height write FStatusBar.Height;
     property StatusBarHeightApplyMode: TStatusBarHeightApplyMode read FStatusBar.HeightApplyMode write FStatusBar.HeightApplyMode;
+    property StatusBarDimensionClickMode: TStatusBarDimensionClickMode read FStatusBar.DimensionClickMode write FStatusBar.DimensionClickMode;
 
     {Binding table owns itself; mutate via its Get/Put/ResetToDefaults
      API rather than scalar properties.}

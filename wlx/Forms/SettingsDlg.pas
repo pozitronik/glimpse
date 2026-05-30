@@ -88,6 +88,8 @@ type
     UdStatusBarHeight: TUpDown;
     LblStatusBarHeightApply: TLabel;
     CbxStatusBarHeightApply: TComboBox;
+    LblStatusBarDimensionClick: TLabel;
+    CbxStatusBarDimensionClick: TComboBox;
     TshSave: TTabSheet;
     LblSaveFormat: TLabel;
     CbxSaveFormat: TComboBox;
@@ -372,6 +374,7 @@ begin
   FStatusBarControls.ChkStatusBarStretchPanels := ChkStatusBarStretchPanels;
   FStatusBarControls.UdStatusBarHeight := UdStatusBarHeight;
   FStatusBarControls.CbxStatusBarHeightApply := CbxStatusBarHeightApply;
+  FStatusBarControls.CbxStatusBarDimensionClick := CbxStatusBarDimensionClick;
 
   FQuickViewControls.ChkQVDisableNavigation := ChkQVDisableNavigation;
   FQuickViewControls.ChkQVHideToolbar := ChkQVHideToolbar;

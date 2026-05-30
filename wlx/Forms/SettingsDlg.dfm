@@ -4,7 +4,7 @@ object SettingsForm: TSettingsForm
   BorderIcons = [biSystemMenu]
   BorderStyle = bsDialog
   Caption = 'Glimpse Settings'
-  ClientHeight = 556
+  ClientHeight = 588
   ClientWidth = 460
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -19,7 +19,7 @@ object SettingsForm: TSettingsForm
     Left = 0
     Top = 0
     Width = 460
-    Height = 516
+    Height = 548
     ActivePage = TshGeneral
     Align = alClient
     TabOrder = 0
@@ -27,7 +27,7 @@ object SettingsForm: TSettingsForm
       Caption = 'General'
       DesignSize = (
         452
-        450)
+        482)
       object LblMaxWorkers: TLabel
         Left = 12
         Top = 24
@@ -353,7 +353,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 7
       DesignSize = (
         452
-        450)
+        482)
       object LblSkipEdges: TLabel
         Left = 12
         Top = 24
@@ -453,7 +453,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 1
       DesignSize = (
         452
-        486)
+        518)
       object LblBackground: TLabel
         Left = 12
         Top = 24
@@ -877,7 +877,7 @@ object SettingsForm: TSettingsForm
       end
       object ChkShowListerMenu: TCheckBox
         Left = 12
-        Top = 460
+        Top = 490
         Width = 200
         Height = 17
         Hint =
@@ -886,13 +886,35 @@ object SettingsForm: TSettingsForm
         Caption = 'Show menu in lister (experimental)'
         TabOrder = 30
       end
+      object LblStatusBarDimensionClick: TLabel
+        Left = 12
+        Top = 460
+        Width = 116
+        Height = 15
+        Caption = 'Toolbar action:'
+      end
+      object CbxStatusBarDimensionClick: TComboBox
+        Left = 150
+        Top = 456
+        Width = 105
+        Height = 23
+        Style = csDropDownList
+        Hint =
+          'How a click on the save/copy dimension status-bar panels toggles ' +
+          'output-at-view-resolution. Ctrl+click always copies the panel ' +
+          'text regardless of this setting.'
+        TabOrder = 31
+        Items.Strings = (
+          'Double-click'
+          'Single-click')
+      end
     end
     object TshSave: TTabSheet
       Caption = 'Save'
       ImageIndex = 2
       DesignSize = (
         452
-        450)
+        482)
       object LblSaveFormat: TLabel
         Left = 12
         Top = 24
@@ -1219,7 +1241,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 8
       DesignSize = (
         452
-        450)
+        482)
       object LblClipboardFormatsHeader: TLabel
         Left = 12
         Top = 12
@@ -1300,7 +1322,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 3
       DesignSize = (
         452
-        450)
+        482)
       object LblCacheFolder: TLabel
         Left = 12
         Top = 53
@@ -1554,7 +1576,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 5
       DesignSize = (
         452
-        450)
+        482)
       object ChkQVDisableNavigation: TCheckBox
         Left = 12
         Top = 24
@@ -1597,7 +1619,7 @@ object SettingsForm: TSettingsForm
       ImageIndex = 6
       DesignSize = (
         452
-        450)
+        482)
       object LvwHotkeys: TListView
         Left = 12
         Top = 12
