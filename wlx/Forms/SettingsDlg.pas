@@ -175,6 +175,7 @@ type
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
     ChkQVHideStatusBar: TCheckBox;
+    ChkQVEscClearsSelection: TCheckBox;
     ChkShowListerMenu: TCheckBox;
     TshHotkeys: TTabSheet;
     LvwHotkeys: TListView;
@@ -409,6 +410,7 @@ begin
   FQuickViewControls.ChkQVDisableNavigation := ChkQVDisableNavigation;
   FQuickViewControls.ChkQVHideToolbar := ChkQVHideToolbar;
   FQuickViewControls.ChkQVHideStatusBar := ChkQVHideStatusBar;
+  FQuickViewControls.ChkQVEscClearsSelection := ChkQVEscClearsSelection;
 
   FThumbnailsControls.ChkThumbnailsEnabled := ChkThumbnailsEnabled;
   FThumbnailsControls.CbxThumbnailMode := CbxThumbnailMode;

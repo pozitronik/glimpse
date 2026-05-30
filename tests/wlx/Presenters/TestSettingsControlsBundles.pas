@@ -895,20 +895,24 @@ begin
     Bundle.ChkQVDisableNavigation := MakeCheckBox(Owner);
     Bundle.ChkQVHideToolbar := MakeCheckBox(Owner);
     Bundle.ChkQVHideStatusBar := MakeCheckBox(Owner);
+    Bundle.ChkQVEscClearsSelection := MakeCheckBox(Owner);
 
     Settings.QVDisableNavigation := True;
     Settings.QVHideToolbar := False;
     Settings.QVHideStatusBar := True;
+    Settings.QVEscClearsSelection := True;
 
     BindQuickViewToControls(Settings, Bundle);
     Assert.IsTrue(Bundle.ChkQVDisableNavigation.Checked);
     Assert.IsFalse(Bundle.ChkQVHideToolbar.Checked);
     Assert.IsTrue(Bundle.ChkQVHideStatusBar.Checked);
+    Assert.IsTrue(Bundle.ChkQVEscClearsSelection.Checked);
 
     BindQuickViewFromControls(Reloaded, Bundle);
     Assert.IsTrue(Reloaded.QVDisableNavigation);
     Assert.IsFalse(Reloaded.QVHideToolbar);
     Assert.IsTrue(Reloaded.QVHideStatusBar);
+    Assert.IsTrue(Reloaded.QVEscClearsSelection);
   finally
     Reloaded.Free;
     Settings.Free;

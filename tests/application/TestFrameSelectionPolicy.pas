@@ -58,6 +58,19 @@ type
     [Test] procedure EmptyGrid_ReturnsMinusOne;
   end;
 
+  [TestFixture]
+  TTestEscClearSelection = class
+  public
+    {All three conditions (Quick View, enabled, a non-empty selection) must
+     hold for the first Esc to clear instead of close.}
+    [Test] procedure QuickViewEnabledWithSelection_True;
+    {Lister mode never intercepts Esc, even with selection and toggle on.}
+    [Test] procedure NotQuickView_False;
+    [Test] procedure Disabled_False;
+    {Nothing selected: Esc falls through to its normal close behaviour.}
+    [Test] procedure NoSelection_False;
+  end;
+
 implementation
 
 uses
@@ -392,6 +405,28 @@ var
 begin
   View := TStubFrameViewQuery.Create(0);
   Assert.AreEqual<Integer>(-1, TFrameSelectionPolicy.PickActionCell(View, 0));
+end;
+
+{ TTestEscClearSelection }
+
+procedure TTestEscClearSelection.QuickViewEnabledWithSelection_True;
+begin
+  Assert.IsTrue(TFrameSelectionPolicy.ShouldEscClearSelection(True, True, 1));
+end;
+
+procedure TTestEscClearSelection.NotQuickView_False;
+begin
+  Assert.IsFalse(TFrameSelectionPolicy.ShouldEscClearSelection(False, True, 3));
+end;
+
+procedure TTestEscClearSelection.Disabled_False;
+begin
+  Assert.IsFalse(TFrameSelectionPolicy.ShouldEscClearSelection(True, False, 3));
+end;
+
+procedure TTestEscClearSelection.NoSelection_False;
+begin
+  Assert.IsFalse(TFrameSelectionPolicy.ShouldEscClearSelection(True, True, 0));
 end;
 
 end.

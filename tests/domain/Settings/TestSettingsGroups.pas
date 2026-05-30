@@ -1970,6 +1970,7 @@ begin
   Assert.IsTrue(G.DisableNavigation);
   Assert.IsTrue(G.HideToolbar);
   Assert.IsTrue(G.HideStatusBar);
+  Assert.IsFalse(G.EscClearsSelection);
 end;
 
 procedure TTestQuickViewSettingsGroup.SaveThenLoad_RoundTripsAllFields;

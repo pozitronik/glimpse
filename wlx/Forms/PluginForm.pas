@@ -257,6 +257,11 @@ type
     procedure DoToggleMaximize;
     procedure DoToggleFullScreen;
     function DoHamburgerMenu: Boolean;
+    {Quick View Esc-first-clears-selection gate. Returns True (and clears the
+     selection) when the setting is on, we are in Quick View, and at least one
+     cell is selected; the Esc handlers then consume the key instead of
+     closing. False leaves Esc to its normal close path.}
+    function TryQuickViewEscClearSelection: Boolean;
     procedure DoCloseLister;
     {Navigation}
     procedure DoPrevFile;
@@ -325,7 +330,7 @@ uses
   ExtractionWorker, ViewModeLogic, ViewModeLayout,
   FrameExtractor, ProbeCache, VideoProbing,
   System.Math, Vcl.Clipbrd,
-  StatusBarHostBar, KeyInterceptionSubclass, FrameCountPolicy;
+  StatusBarHostBar, KeyInterceptionSubclass, FrameCountPolicy, FrameSelectionPolicy;
 
 {Embedded toolbar glyph resources; consumed by TToolbarGlyphLibrary. The
  .res is generated from icons.rc by cgrc as a pre-build step in build.bat
@@ -1738,8 +1743,20 @@ begin
     Result := False;
 end;
 
+function TPluginForm.TryQuickViewEscClearSelection: Boolean;
+begin
+  Result := Assigned(FFrameView)
+    and TFrameSelectionPolicy.ShouldEscClearSelection(FQuickViewMode,
+      FSettings.QVEscClearsSelection, FFrameView.SelectedCount);
+  if Result then
+    FFrameView.DeselectAll;
+end;
+
 procedure TPluginForm.DoCloseLister;
 begin
+  {First Esc clears a Quick View selection; only a subsequent Esc closes.}
+  if TryQuickViewEscClearSelection then
+    Exit;
   ForwardKeyToLister(VK_ESCAPE, False);
 end;
 
@@ -1933,8 +1950,13 @@ begin
       end;
     VK_ESCAPE:
       begin
-        PostMessage(GetParent(Handle), WM_KEYDOWN, VK_ESCAPE, 0);
-        PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
+        {First Esc clears a Quick View selection; otherwise forward to TC so
+         it closes the view as usual. Either way the key is consumed here.}
+        if not TryQuickViewEscClearSelection then
+        begin
+          PostMessage(GetParent(Handle), WM_KEYDOWN, VK_ESCAPE, 0);
+          PostMessage(GetParent(Handle), WM_KEYUP, VK_ESCAPE, 0);
+        end;
         Message.Result := 1;
       end;
     else

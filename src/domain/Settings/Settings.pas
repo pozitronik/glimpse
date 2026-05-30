@@ -161,6 +161,7 @@ type
     property QVDisableNavigation: Boolean read FQuickView.DisableNavigation write FQuickView.DisableNavigation;
     property QVHideToolbar: Boolean read FQuickView.HideToolbar write FQuickView.HideToolbar;
     property QVHideStatusBar: Boolean read FQuickView.HideStatusBar write FQuickView.HideStatusBar;
+    property QVEscClearsSelection: Boolean read FQuickView.EscClearsSelection write FQuickView.EscClearsSelection;
 
     property ThumbnailsEnabled: Boolean read FThumbnails.Enabled write FThumbnails.Enabled;
     property ThumbnailMode: TThumbnailMode read FThumbnails.Mode write FThumbnails.Mode;

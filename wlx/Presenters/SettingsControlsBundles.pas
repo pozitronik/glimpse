@@ -125,6 +125,7 @@ type
     ChkQVDisableNavigation: TCheckBox;
     ChkQVHideToolbar: TCheckBox;
     ChkQVHideStatusBar: TCheckBox;
+    ChkQVEscClearsSelection: TCheckBox;
   end;
 
   TThumbnailsControls = record
@@ -423,6 +424,7 @@ begin
   AControls.ChkQVDisableNavigation.Checked := ASettings.QVDisableNavigation;
   AControls.ChkQVHideToolbar.Checked := ASettings.QVHideToolbar;
   AControls.ChkQVHideStatusBar.Checked := ASettings.QVHideStatusBar;
+  AControls.ChkQVEscClearsSelection.Checked := ASettings.QVEscClearsSelection;
 end;
 
 procedure BindQuickViewFromControls(ASettings: TPluginSettings; const AControls: TQuickViewControls);
@@ -430,6 +432,7 @@ begin
   ASettings.QVDisableNavigation := AControls.ChkQVDisableNavigation.Checked;
   ASettings.QVHideToolbar := AControls.ChkQVHideToolbar.Checked;
   ASettings.QVHideStatusBar := AControls.ChkQVHideStatusBar.Checked;
+  ASettings.QVEscClearsSelection := AControls.ChkQVEscClearsSelection.Checked;
 end;
 
 {Thumbnails}

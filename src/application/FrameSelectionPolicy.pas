@@ -28,6 +28,12 @@ type
      is loaded; callers must skip the action.}
     class function PickActionCell(const AView: IFrameViewQuery;
       AContextCellIndex: Integer): Integer; static;
+
+    {Quick View only: the first Esc clears a non-empty selection instead of
+     closing. Pure so the gate is testable without a window; the caller does
+     the actual DeselectAll and consumes the key when this returns True.}
+    class function ShouldEscClearSelection(AIsQuickView, AEnabled: Boolean;
+      ASelectedCount: Integer): Boolean; static;
   end;
 
 implementation
@@ -68,6 +74,12 @@ begin
     Exit(0);
 
   Result := -1;
+end;
+
+class function TFrameSelectionPolicy.ShouldEscClearSelection(AIsQuickView,
+  AEnabled: Boolean; ASelectedCount: Integer): Boolean;
+begin
+  Result := AIsQuickView and AEnabled and (ASelectedCount > 0);
 end;
 
 end.

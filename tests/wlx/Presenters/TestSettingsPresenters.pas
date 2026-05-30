@@ -136,6 +136,7 @@ begin
   AControls.ChkQVDisableNavigation := MakeCheckBox(AParent);
   AControls.ChkQVHideToolbar := MakeCheckBox(AParent);
   AControls.ChkQVHideStatusBar := MakeCheckBox(AParent);
+  AControls.ChkQVEscClearsSelection := MakeCheckBox(AParent);
 end;
 
 procedure BuildViewControls(AParent: TWinControl; out AControls: TViewControls);

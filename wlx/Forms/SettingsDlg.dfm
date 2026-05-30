@@ -1765,12 +1765,25 @@ object SettingsForm: TSettingsForm
         Top = 82
         Width = 427
         Height = 17
-        Hint = 
+        Hint =
           'Hide the status bar when the plugin runs in Quick View, regardle' +
           'ss of the General-tab Show status bar setting.'
         Anchors = [akLeft, akTop, akRight]
         Caption = 'Hide status bar'
         TabOrder = 2
+      end
+      object ChkQVEscClearsSelection: TCheckBox
+        Left = 12
+        Top = 111
+        Width = 427
+        Height = 17
+        Hint =
+          'In Quick View, the first Esc clears the frame selection; a secon' +
+          'd Esc closes Quick View. Esc still closes immediately when nothi' +
+          'ng is selected. Lister mode is unaffected.'
+        Anchors = [akLeft, akTop, akRight]
+        Caption = 'Esc clears frame selection'
+        TabOrder = 3
       end
     end
     object TshHotkeys: TTabSheet

@@ -251,6 +251,10 @@ type
     DisableNavigation: Boolean;
     HideToolbar: Boolean;
     HideStatusBar: Boolean;
+    {Quick View only: Esc clears the frame selection first, falling through to
+     the normal close once nothing is selected. Off by default so upgrades
+     keep Esc closing immediately.}
+    EscClearsSelection: Boolean;
 
     class function Defaults: TQuickViewSettingsGroup; static;
     procedure LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -731,6 +735,7 @@ begin
   Result.DisableNavigation := True;
   Result.HideToolbar := True;
   Result.HideStatusBar := True;
+  Result.EscClearsSelection := False;
 end;
 
 procedure TQuickViewSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -738,6 +743,7 @@ begin
   DisableNavigation := AIni.ReadBool(ASection, 'DisableNavigation', DisableNavigation);
   HideToolbar := AIni.ReadBool(ASection, 'HideToolbar', HideToolbar);
   HideStatusBar := AIni.ReadBool(ASection, 'HideStatusBar', HideStatusBar);
+  EscClearsSelection := AIni.ReadBool(ASection, 'EscClearsSelection', EscClearsSelection);
 end;
 
 procedure TQuickViewSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
@@ -745,6 +751,7 @@ begin
   AIni.WriteBool(ASection, 'DisableNavigation', DisableNavigation);
   AIni.WriteBool(ASection, 'HideToolbar', HideToolbar);
   AIni.WriteBool(ASection, 'HideStatusBar', HideStatusBar);
+  AIni.WriteBool(ASection, 'EscClearsSelection', EscClearsSelection);
 end;
 
 {TThumbnailsSettingsGroup}
