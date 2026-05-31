@@ -627,6 +627,12 @@ begin
   LoadFile(AFileName);
 
   FInitialized := True;
+
+  {Run one toolbar layout pass now that the form is sized. Resize is the only
+   other caller and it is guarded by FInitialized, so a lister that opens
+   narrower than the toolbar would otherwise show no overflow menu until the
+   first user-initiated resize.}
+  LayoutToolbar;
 end;
 
 procedure TPluginForm.InitializeWindowing(AParentWin: HWND);
