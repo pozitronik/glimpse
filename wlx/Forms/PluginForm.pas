@@ -2219,6 +2219,15 @@ begin
     WM_DEFERRED_INIT:
       begin
         SetWindowSubclass(Handle, @FormSubclassProc, FORM_SUBCLASS_ID, DWORD_PTR(Self));
+        {Re-assert focus on the form HWND after TC's post-ListLoad focus
+         handling. InitializeWindowing's SetFocus runs too early (before TC
+         parks focus on its own window), so on XP the form HWND never held
+         Win32 focus and FormSubclassProc never saw WM_KEYDOWN — configurable
+         hotkeys (Ctrl+A etc.) stayed dead until an Alt+Tab round-trip
+         re-focused the form. Excluded in Quick View so the plugin does not
+         steal focus from TC's file panel during file-list navigation.}
+        if not FQuickViewMode then
+          Winapi.Windows.SetFocus(Handle);
         Exit;
       end;
     WM_PLUGIN_FKEY:
