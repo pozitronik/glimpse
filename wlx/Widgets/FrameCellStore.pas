@@ -52,6 +52,7 @@ type
     procedure ToggleSelection(AIndex: Integer);
     procedure SelectAll;
     procedure DeselectAll;
+    procedure InvertSelection;
     function SelectedCount: Integer;
   end;
 
@@ -229,6 +230,14 @@ var
 begin
   for I := 0 to High(FCells) do
     FCells[I].Selected := False;
+end;
+
+procedure TFrameCellStore.InvertSelection;
+var
+  I: Integer;
+begin
+  for I := 0 to High(FCells) do
+    FCells[I].Selected := not FCells[I].Selected;
 end;
 
 function TFrameCellStore.SelectedCount: Integer;

@@ -27,6 +27,8 @@ type
     paSaveViewLive, paSaveViewNative,
     paSelectAllFrames, paCopyFrame, paCopyView,
     paCopyViewLive, paCopyViewNative,
+    {Selection}
+    paClearSelection, paInvertSelection,
     {Zoom}
     paZoomIn, paZoomOut, paZoomReset,
     {View mode}
@@ -365,6 +367,8 @@ const
     (IniKey: 'CopyView';          Caption: 'Copy view to clipboard (honour persisted resolution toggle)'), {paCopyView}
     (IniKey: 'CopyViewLive';      Caption: 'Copy view at view resolution (one-shot)'),                   {paCopyViewLive}
     (IniKey: 'CopyViewNative';    Caption: 'Copy view at native size (one-shot)'),                       {paCopyViewNative}
+    (IniKey: 'ClearSelection';    Caption: 'Clear frame selection'),                                     {paClearSelection}
+    (IniKey: 'InvertSelection';   Caption: 'Invert frame selection'),                                    {paInvertSelection}
     (IniKey: 'ZoomIn';            Caption: 'Zoom in'),                                                   {paZoomIn}
     (IniKey: 'ZoomOut';           Caption: 'Zoom out'),                                                  {paZoomOut}
     (IniKey: 'ZoomReset';         Caption: 'Reset zoom'),                                                {paZoomReset}
@@ -425,6 +429,8 @@ begin
     {Copy: Alt modifier (Shift is taken by Save).}
     paCopyViewLive:       Result := [THotkeyChord.Make(Ord('L'), [ssCtrl, ssAlt])];
     paCopyViewNative:     Result := [THotkeyChord.Make(Ord('N'), [ssCtrl, ssAlt])];
+    paClearSelection:     Result := [THotkeyChord.Make(Ord('D'), [ssCtrl])];
+    paInvertSelection:    Result := [THotkeyChord.Make(Ord('A'), [ssCtrl, ssShift])];
     paZoomIn:             Result := [THotkeyChord.Make(VK_OEM_PLUS, [])];
     paZoomOut:            Result := [THotkeyChord.Make(VK_OEM_MINUS, [])];
     paZoomReset:          Result := [THotkeyChord.Make(Ord('0'), [])];

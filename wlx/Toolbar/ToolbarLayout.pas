@@ -53,6 +53,9 @@ const
   {Copy view variants are the final resolution (no dialog).}
   CM_COPY_VIEW_LIVE = 15;
   CM_COPY_VIEW_NATIVE = 16;
+  {Selection commands: configurable hotkeys, also on the context menu.}
+  CM_CLEAR_SELECTION = 17;
+  CM_INVERT_SELECTION = 18;
 
   CAPTION_SAVE_VIEW_LIVE = 'Save view at view resolution...';
   CAPTION_SAVE_VIEW_NATIVE = 'Save view at native size...';

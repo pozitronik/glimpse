@@ -67,6 +67,7 @@ type
     procedure ToggleSelection(AIndex: Integer);
     procedure SelectAll;
     procedure DeselectAll;
+    procedure InvertSelection;
     function SelectedCount: Integer;
     procedure SetCellCount(ACount: Integer; const AOffsets: TFrameOffsetArray);
     procedure SetFrame(AIndex: Integer; ABitmap: TBitmap);
@@ -491,6 +492,12 @@ end;
 procedure TFrameView.DeselectAll;
 begin
   FCellStore.DeselectAll;
+  Invalidate;
+end;
+
+procedure TFrameView.InvertSelection;
+begin
+  FCellStore.InvertSelection;
   Invalidate;
 end;
 

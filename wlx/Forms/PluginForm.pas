@@ -45,6 +45,8 @@ type
     procedure CopyViewNative;
     procedure SelectAll;
     procedure DeselectAll;
+    procedure ClearSelection;
+    procedure InvertSelection;
     procedure Refresh;
     procedure Shuffle;
     procedure Settings;
@@ -490,6 +492,19 @@ begin
   FForm.FFrameView.DeselectAll;
 end;
 
+procedure TPluginCommandHandlers.ClearSelection;
+begin
+  {Functionally identical to Deselect all; kept as a separately bindable
+   command so the user can assign a hotkey without repurposing the
+   menu-only Deselect all entry.}
+  FForm.FFrameView.DeselectAll;
+end;
+
+procedure TPluginCommandHandlers.InvertSelection;
+begin
+  FForm.FFrameView.InvertSelection;
+end;
+
 procedure TPluginCommandHandlers.Refresh;
 begin
   FForm.RefreshExtraction;
@@ -513,7 +528,7 @@ begin
    reference) rather than via Self (which would round-trip through
    the captured closure environment on every invocation).}
   H := Self;
-  SetLength(Result, 14);
+  SetLength(Result, 16);
   Result[0].Tag := CM_SAVE_FRAME;
   Result[0].ActionEnum := paSaveFrame;
   Result[0].EnabledPolicy := epRequiresExtract;
@@ -573,6 +588,14 @@ begin
   Result[13].ActionEnum := paSettings;
   Result[13].EnabledPolicy := epAlways;
   Result[13].Executor := procedure begin H.Settings end;
+  Result[14].Tag := CM_CLEAR_SELECTION;
+  Result[14].ActionEnum := paClearSelection;
+  Result[14].EnabledPolicy := epRequiresSelection;
+  Result[14].Executor := procedure begin H.ClearSelection end;
+  Result[15].Tag := CM_INVERT_SELECTION;
+  Result[15].ActionEnum := paInvertSelection;
+  Result[15].EnabledPolicy := epRequiresLoadedCell;
+  Result[15].Executor := procedure begin H.InvertSelection end;
 end;
 
 { TPluginForm }
@@ -1074,6 +1097,8 @@ begin
   AddSeparator;
   AddItem('Select all'#9'Ctrl+A', CM_SELECT_ALL);
   AddItem('Deselect all', CM_DESELECT_ALL);
+  AddItem('Clear selection'#9'Ctrl+D', CM_CLEAR_SELECTION);
+  AddItem('Invert selection'#9'Ctrl+Shift+A', CM_INVERT_SELECTION);
   AddSeparator;
   AddItem('Refresh'#9'R', CM_REFRESH);
   AddItem('Shuffle'#9'Ctrl+R', CM_SHUFFLE);
