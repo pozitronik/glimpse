@@ -136,11 +136,22 @@ begin
     S.PublishAlphaAwareBitmap := True;
     S.PublishCompressedPng := False;
     S.PngCompression := 7;
+    S.JpegQuality := 55;
+    S.ClipboardFileReferenceFormat := sfJPEG;
+    S.ClipboardFileReferenceJpegQuality := 42;
+    S.ClipboardFileReferencePngCompression := 4;
     P := S;
     Assert.IsTrue(P.GetClipboardFormats.PublishAlphaAwareBitmap,
       'GetClipboardFormats reflects the underlying group');
     Assert.IsFalse(P.GetClipboardFormats.PublishCompressedPng);
     Assert.AreEqual(7, P.GetPngCompression);
+    Assert.AreEqual(55, P.GetJpegQuality);
+    Assert.AreEqual(Ord(sfJPEG), Ord(P.GetClipboardFileReferenceFormat),
+      'GetClipboardFileReferenceFormat reflects the underlying field');
+    Assert.AreEqual(42, P.GetClipboardFileReferenceJpegQuality,
+      'GetClipboardFileReferenceJpegQuality reflects the underlying field');
+    Assert.AreEqual(4, P.GetClipboardFileReferencePngCompression,
+      'GetClipboardFileReferencePngCompression reflects the underlying field');
   finally
     S.Free;
   end;
@@ -177,10 +188,13 @@ begin
     S.ClipboardAsFileReference := True;
     S.Background := clNavy;
     S.CopyAtLiveResolution := True;
+    S.ClipboardFileReferenceBackgroundAlpha := 64;
     P := S;
     Assert.IsTrue(P.GetClipboardAsFileReference);
     Assert.IsTrue(P.GetBackground = clNavy);
     Assert.IsTrue(P.GetCopyAtLiveResolution);
+    Assert.AreEqual(64, P.GetClipboardFileReferenceBackgroundAlpha,
+      'GetClipboardFileReferenceBackgroundAlpha reflects the underlying field');
   finally
     S.Free;
   end;

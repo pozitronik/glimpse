@@ -144,6 +144,14 @@ type
       read FClipboardTemp.CleanupStrategy write FClipboardTemp.CleanupStrategy;
     property ClipboardCleanupAgeSeconds: Integer
       read FClipboardTemp.CleanupAgeSeconds write FClipboardTemp.CleanupAgeSeconds;
+    property ClipboardFileReferenceFormat: TSaveFormat
+      read FClipboardTemp.FileReferenceFormat write FClipboardTemp.FileReferenceFormat;
+    property ClipboardFileReferenceJpegQuality: Integer
+      read FClipboardTemp.FileReferenceJpegQuality write FClipboardTemp.FileReferenceJpegQuality;
+    property ClipboardFileReferencePngCompression: Integer
+      read FClipboardTemp.FileReferencePngCompression write FClipboardTemp.FileReferencePngCompression;
+    property ClipboardFileReferenceBackgroundAlpha: Byte
+      read FClipboardTemp.FileReferenceBackgroundAlpha write FClipboardTemp.FileReferenceBackgroundAlpha;
     property CombinedMaxSide: Integer read FSave.CombinedMaxSide write FSave.CombinedMaxSide;
     property ShowBanner: Boolean read FBanner.Show write FBanner.Show;
     property BannerBackground: TColor read FBanner.Background write FBanner.Background;
@@ -212,6 +220,10 @@ type
     function GetClipboardFormats: TClipboardFormatsGroup;
     function GetClipboardAsFileReference: Boolean;
     function GetClipboardTempFolder: string;
+    function GetClipboardFileReferenceFormat: TSaveFormat;
+    function GetClipboardFileReferenceJpegQuality: Integer;
+    function GetClipboardFileReferencePngCompression: Integer;
+    function GetClipboardFileReferenceBackgroundAlpha: Integer;
     function GetPngCompression: Integer;
     function GetJpegQuality: Integer;
   end;
@@ -531,6 +543,26 @@ end;
 function TPluginSettings.GetClipboardTempFolder: string;
 begin
   Result := FClipboardTemp.TempFolder;
+end;
+
+function TPluginSettings.GetClipboardFileReferenceFormat: TSaveFormat;
+begin
+  Result := FClipboardTemp.FileReferenceFormat;
+end;
+
+function TPluginSettings.GetClipboardFileReferenceJpegQuality: Integer;
+begin
+  Result := FClipboardTemp.FileReferenceJpegQuality;
+end;
+
+function TPluginSettings.GetClipboardFileReferencePngCompression: Integer;
+begin
+  Result := FClipboardTemp.FileReferencePngCompression;
+end;
+
+function TPluginSettings.GetClipboardFileReferenceBackgroundAlpha: Integer;
+begin
+  Result := FClipboardTemp.FileReferenceBackgroundAlpha;
 end;
 
 function TPluginSettings.GetPngCompression: Integer;

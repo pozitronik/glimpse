@@ -715,6 +715,10 @@ begin
   Reloaded := TPluginSettings.Create('');
   try
     Bundle.EdtClipboardTempFolder := MakeEdit(Owner);
+    Bundle.CbxClipboardFileReferenceFormat := MakeComboBox(Owner, 2);
+    Bundle.UdClipboardFileReferenceJpegQuality := MakeUpDown(Owner, 1, 100);
+    Bundle.UdClipboardFileReferencePngCompression := MakeUpDown(Owner, 0, 9);
+    Bundle.UdClipboardFileReferenceBackgroundAlpha := MakeUpDown(Owner, 0, 255);
     Bundle.CbxClipboardCleanup := MakeComboBox(Owner, 3);
     Bundle.UdCleanupDays := MakeUpDown(Owner, 0, 365);
     Bundle.UdCleanupHours := MakeUpDown(Owner, 0, 23);
@@ -754,6 +758,10 @@ begin
   Settings := TPluginSettings.Create('');
   try
     Bundle.EdtClipboardTempFolder := MakeEdit(Owner);
+    Bundle.CbxClipboardFileReferenceFormat := MakeComboBox(Owner, 2);
+    Bundle.UdClipboardFileReferenceJpegQuality := MakeUpDown(Owner, 1, 100);
+    Bundle.UdClipboardFileReferencePngCompression := MakeUpDown(Owner, 0, 9);
+    Bundle.UdClipboardFileReferenceBackgroundAlpha := MakeUpDown(Owner, 0, 255);
     Bundle.CbxClipboardCleanup := MakeComboBox(Owner, 3);
     Bundle.UdCleanupDays := MakeUpDown(Owner, 0, 365);
     Bundle.UdCleanupHours := MakeUpDown(Owner, 0, 23);
@@ -783,6 +791,10 @@ begin
   Reloaded := TPluginSettings.Create('');
   try
     Bundle.EdtClipboardTempFolder := MakeEdit(Owner);
+    Bundle.CbxClipboardFileReferenceFormat := MakeComboBox(Owner, 2);
+    Bundle.UdClipboardFileReferenceJpegQuality := MakeUpDown(Owner, 1, 100);
+    Bundle.UdClipboardFileReferencePngCompression := MakeUpDown(Owner, 0, 9);
+    Bundle.UdClipboardFileReferenceBackgroundAlpha := MakeUpDown(Owner, 0, 255);
     Bundle.CbxClipboardCleanup := MakeComboBox(Owner, 3);
     Bundle.UdCleanupDays := MakeUpDown(Owner, 0, 365);
     Bundle.UdCleanupHours := MakeUpDown(Owner, 0, 23);

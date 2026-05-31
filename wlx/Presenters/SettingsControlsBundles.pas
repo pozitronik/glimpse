@@ -105,6 +105,10 @@ type
    seconds helpers.}
   TClipboardTempControls = record
     EdtClipboardTempFolder: TEdit;
+    CbxClipboardFileReferenceFormat: TComboBox;
+    UdClipboardFileReferenceJpegQuality: TUpDown;
+    UdClipboardFileReferencePngCompression: TUpDown;
+    UdClipboardFileReferenceBackgroundAlpha: TUpDown;
     CbxClipboardCleanup: TComboBox;
     UdCleanupDays: TUpDown;
     UdCleanupHours: TUpDown;
@@ -372,6 +376,10 @@ var
   Days, Hours, Minutes: Integer;
 begin
   AControls.EdtClipboardTempFolder.Text := ASettings.ClipboardTempFolder;
+  AControls.CbxClipboardFileReferenceFormat.ItemIndex := Ord(ASettings.ClipboardFileReferenceFormat);
+  AControls.UdClipboardFileReferenceJpegQuality.Position := ASettings.ClipboardFileReferenceJpegQuality;
+  AControls.UdClipboardFileReferencePngCompression.Position := ASettings.ClipboardFileReferencePngCompression;
+  AControls.UdClipboardFileReferenceBackgroundAlpha.Position := ASettings.ClipboardFileReferenceBackgroundAlpha;
   AControls.CbxClipboardCleanup.ItemIndex := Ord(ASettings.ClipboardCleanupStrategy);
   SplitSecondsToDHM(ASettings.ClipboardCleanupAgeSeconds, Days, Hours, Minutes);
   AControls.UdCleanupDays.Position := Days;
@@ -385,6 +393,13 @@ begin
    them and they would defeat the empty-means-system-temp check. Free-function
    Trim (not the string helper) so helper scope in this unit is irrelevant.}
   ASettings.ClipboardTempFolder := Trim(AControls.EdtClipboardTempFolder.Text);
+  ASettings.ClipboardFileReferenceFormat :=
+    TSaveFormat(AControls.CbxClipboardFileReferenceFormat.ItemIndex);
+  {UpDowns are range-clamped by their DFM Min/Max, so the positions are
+   already in range.}
+  ASettings.ClipboardFileReferenceJpegQuality := AControls.UdClipboardFileReferenceJpegQuality.Position;
+  ASettings.ClipboardFileReferencePngCompression := AControls.UdClipboardFileReferencePngCompression.Position;
+  ASettings.ClipboardFileReferenceBackgroundAlpha := AControls.UdClipboardFileReferenceBackgroundAlpha.Position;
   ASettings.ClipboardCleanupStrategy :=
     TClipboardCleanupStrategy(AControls.CbxClipboardCleanup.ItemIndex);
   {Spin fields are range-clamped by the UpDowns; EnsureRange guards the

@@ -330,6 +330,10 @@ begin
   Assert.AreEqual(DEF_CLIPBOARD_TEMP_FOLDER, G.TempFolder);
   Assert.AreEqual(Ord(DEF_CLIPBOARD_CLEANUP_STRATEGY), Ord(G.CleanupStrategy));
   Assert.AreEqual(DEF_CLIPBOARD_CLEANUP_AGE_SECONDS, G.CleanupAgeSeconds);
+  Assert.AreEqual(Ord(DEF_CLIPBOARD_FILE_REFERENCE_FORMAT), Ord(G.FileReferenceFormat));
+  Assert.AreEqual(DEF_CLIPBOARD_FILE_REFERENCE_JPEG_QUALITY, G.FileReferenceJpegQuality);
+  Assert.AreEqual(DEF_CLIPBOARD_FILE_REFERENCE_PNG_COMPRESSION, G.FileReferencePngCompression);
+  Assert.AreEqual(Integer(DEF_CLIPBOARD_FILE_REFERENCE_BACKGROUND_ALPHA), Integer(G.FileReferenceBackgroundAlpha));
 end;
 
 procedure TTestClipboardTempSettingsGroup.SaveThenLoad_RoundTripsAllFields;
@@ -343,6 +347,10 @@ begin
   G1.TempFolder := '%COMMANDER_PATH%\temp';
   G1.CleanupStrategy := ccsAll;
   G1.CleanupAgeSeconds := 2 * SECONDS_PER_DAY + 3 * SECONDS_PER_HOUR;
+  G1.FileReferenceFormat := sfJPEG;
+  G1.FileReferenceJpegQuality := 55;
+  G1.FileReferencePngCompression := 3;
+  G1.FileReferenceBackgroundAlpha := 128;
 
   Ini := TUnicodeIniFile.Create(IniPath);
   try
@@ -363,6 +371,10 @@ begin
   Assert.AreEqual(G1.TempFolder, G2.TempFolder);
   Assert.AreEqual(Ord(G1.CleanupStrategy), Ord(G2.CleanupStrategy));
   Assert.AreEqual(G1.CleanupAgeSeconds, G2.CleanupAgeSeconds);
+  Assert.AreEqual(Ord(G1.FileReferenceFormat), Ord(G2.FileReferenceFormat));
+  Assert.AreEqual(G1.FileReferenceJpegQuality, G2.FileReferenceJpegQuality);
+  Assert.AreEqual(G1.FileReferencePngCompression, G2.FileReferencePngCompression);
+  Assert.AreEqual(Integer(G1.FileReferenceBackgroundAlpha), Integer(G2.FileReferenceBackgroundAlpha));
 end;
 
 procedure TTestClipboardTempSettingsGroup.Load_MissingKeys_PreservesCurrentValues;

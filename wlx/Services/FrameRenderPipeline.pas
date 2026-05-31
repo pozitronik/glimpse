@@ -35,6 +35,11 @@ type
     FLayout: TFrameRenderLayout;
     FScaler: TCellBitmapScaler;
     FOverrideSource: TOverrideFramesSource;
+    {Per-render background-alpha override; -1 = use the color policy's value.
+     Set/cleared by the copier around the file-reference combined render so a
+     PNG file reference can carry a different gap/border opacity than the
+     Save tab without disturbing the persisted setting.}
+    FBackgroundAlphaOverride: Integer;
     function CollectFramesAndOffsets(out AFrames: TArray<TBitmap>; out AOffsets: TFrameOffsetArray;
       ALiveResolutionIntent: Boolean): Integer;
     procedure BuildGridStyle(out AGrid: TCombinedGridStyle);
@@ -50,6 +55,10 @@ type
     function PickSaveBitmap(AIndex: Integer; ALiveResolutionIntent: Boolean): TBitmap;
     procedure SetOverrideFrames(const AFrames: TArray<TBitmap>);
     procedure ClearOverrideFrames;
+    {Override the combined background alpha for the next render(s). AAlpha is
+     0..255. Cleared via ClearBackgroundAlphaOverride.}
+    procedure SetBackgroundAlphaOverride(AAlpha: Integer);
+    procedure ClearBackgroundAlphaOverride;
     {Delegating wrappers — see TFrameRenderLayout for the contract.}
     function CountLiveGridColumns: Integer;
     procedure GetSmartGridParameters(out APanelInnerW, APanelInnerH: Integer; out AAspectRatio: Double);
@@ -94,6 +103,7 @@ begin
   FLayout := TFrameRenderLayout.Create(AFrameView, ARenderColorPolicy);
   FScaler := TCellBitmapScaler.Create(ARenderColorPolicy);
   FOverrideSource := TOverrideFramesSource.Create(AFrameView);
+  FBackgroundAlphaOverride := -1;
 end;
 
 destructor TFrameRenderPipeline.Destroy;
@@ -117,6 +127,16 @@ end;
 procedure TFrameRenderPipeline.ClearOverrideFrames;
 begin
   FOverrideSource.ClearOverrideFrames;
+end;
+
+procedure TFrameRenderPipeline.SetBackgroundAlphaOverride(AAlpha: Integer);
+begin
+  FBackgroundAlphaOverride := AAlpha;
+end;
+
+procedure TFrameRenderPipeline.ClearBackgroundAlphaOverride;
+begin
+  FBackgroundAlphaOverride := -1;
 end;
 
 function TFrameRenderPipeline.CountLiveGridColumns: Integer;
@@ -165,11 +185,17 @@ begin
 end;
 
 procedure TFrameRenderPipeline.BuildGridStyle(out AGrid: TCombinedGridStyle);
+var
+  Alpha: Integer;
 begin
   {Columns=0 means auto (ceil(sqrt(N))); callers override when needed.}
+  if FBackgroundAlphaOverride >= 0 then
+    Alpha := FBackgroundAlphaOverride
+  else
+    Alpha := FRenderColorPolicy.GetBackgroundAlpha;
   AGrid := TCombinedGridStyle.FromFields(0,
     FRenderColorPolicy.GetCellGap, FRenderColorPolicy.GetCombinedBorder,
-    FRenderColorPolicy.GetBackground, FRenderColorPolicy.GetBackgroundAlpha);
+    FRenderColorPolicy.GetBackground, Byte(Alpha));
 end;
 
 procedure TFrameRenderPipeline.BuildTimestampStyle(out ATs: TTimestampStyle);

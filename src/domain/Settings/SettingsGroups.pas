@@ -105,6 +105,14 @@ type
     TempFolder: string;
     CleanupStrategy: TClipboardCleanupStrategy;
     CleanupAgeSeconds: Integer;
+    {Encoder used for the file-reference temp file (PNG or JPG), plus its own
+     quality / compression / background-opacity knobs (independent of the
+     Save tab). JpegQuality applies to JPG; PngCompression and
+     BackgroundAlpha apply to PNG (alpha only affects the combined view).}
+    FileReferenceFormat: TSaveFormat;
+    FileReferenceJpegQuality: Integer;
+    FileReferencePngCompression: Integer;
+    FileReferenceBackgroundAlpha: Byte;
 
     class function Defaults: TClipboardTempSettingsGroup; static;
     procedure LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -433,6 +441,10 @@ begin
   Result.TempFolder := DEF_CLIPBOARD_TEMP_FOLDER;
   Result.CleanupStrategy := DEF_CLIPBOARD_CLEANUP_STRATEGY;
   Result.CleanupAgeSeconds := DEF_CLIPBOARD_CLEANUP_AGE_SECONDS;
+  Result.FileReferenceFormat := DEF_CLIPBOARD_FILE_REFERENCE_FORMAT;
+  Result.FileReferenceJpegQuality := DEF_CLIPBOARD_FILE_REFERENCE_JPEG_QUALITY;
+  Result.FileReferencePngCompression := DEF_CLIPBOARD_FILE_REFERENCE_PNG_COMPRESSION;
+  Result.FileReferenceBackgroundAlpha := DEF_CLIPBOARD_FILE_REFERENCE_BACKGROUND_ALPHA;
 end;
 
 procedure TClipboardTempSettingsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -445,6 +457,17 @@ begin
   CleanupAgeSeconds := EnsureRange(
     AIni.ReadInteger(ASection, 'TempCleanupAgeSeconds', CleanupAgeSeconds),
     MIN_CLIPBOARD_CLEANUP_AGE_SECONDS, MAX_CLIPBOARD_CLEANUP_AGE_SECONDS);
+  FileReferenceFormat := StrToSaveFormat(
+    AIni.ReadString(ASection, 'TempFormat', SaveFormatToStr(FileReferenceFormat)));
+  FileReferenceJpegQuality := EnsureRange(
+    AIni.ReadInteger(ASection, 'TempJpegQuality', FileReferenceJpegQuality),
+    MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
+  FileReferencePngCompression := EnsureRange(
+    AIni.ReadInteger(ASection, 'TempPngCompression', FileReferencePngCompression),
+    MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
+  FileReferenceBackgroundAlpha := EnsureRange(
+    AIni.ReadInteger(ASection, 'TempBackgroundAlpha', FileReferenceBackgroundAlpha),
+    MIN_BACKGROUND_ALPHA, MAX_BACKGROUND_ALPHA);
 end;
 
 procedure TClipboardTempSettingsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
@@ -453,6 +476,10 @@ begin
   AIni.WriteString(ASection, 'TempCleanupStrategy',
     ClipboardCleanupStrategyToStr(CleanupStrategy));
   AIni.WriteInteger(ASection, 'TempCleanupAgeSeconds', CleanupAgeSeconds);
+  AIni.WriteString(ASection, 'TempFormat', SaveFormatToStr(FileReferenceFormat));
+  AIni.WriteInteger(ASection, 'TempJpegQuality', FileReferenceJpegQuality);
+  AIni.WriteInteger(ASection, 'TempPngCompression', FileReferencePngCompression);
+  AIni.WriteInteger(ASection, 'TempBackgroundAlpha', FileReferenceBackgroundAlpha);
 end;
 
 {TTimestampSettingsGroup}

@@ -11,7 +11,7 @@ uses
   System.SysUtils;
 
 type
-  {How the plugin-load sweep treats leftover glimpse_clip_*.png files.
+  {How the plugin-load sweep treats leftover glimpse_clip_* files.
    ccsAll == "delete older than 0"; both modes share one age-parameterised
    sweep. Order is load-bearing: serialised by token name via
    ClipboardCleanupStrategyToStr, and the settings combo's ItemIndex matches
@@ -47,10 +47,12 @@ const
   {Single source of truth for the file-reference temp name shared by the
    publisher (which writes) and the sweeper (which enumerates). The GUID
    between prefix and extension keeps concurrent lister windows from
-   colliding.}
+   colliding. The publisher derives the extension from the configured
+   file-reference format (PNG or JPG), so the sweep pattern matches on the
+   prefix alone — it must catch leftovers of either format.}
   CLIPBOARD_TEMP_PREFIX = 'glimpse_clip_';
   CLIPBOARD_TEMP_EXT = '.png';
-  CLIPBOARD_TEMP_PATTERN = 'glimpse_clip_*.png';
+  CLIPBOARD_TEMP_PATTERN = 'glimpse_clip_*';
 
   {Files younger than this are never swept, even under "clean everything",
    so a sweep can not race a sibling instance that has just written (or

@@ -78,7 +78,7 @@ begin
     if FSettings.GetClipboardAsFileReference then
     begin
       if FClipboardPublisher.PublishAsFileReference(ToPublish) = cprFailed then
-        MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
+        MessageDlg('Clipboard write failed - could not write the temp file or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
     end
     else if FClipboardPublisher.PublishAsImage(ToPublish, FSettings.GetBackground, ErrMsg) = cprFailed then
       MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, False), mtError, [mbOK], 0);
@@ -91,26 +91,38 @@ procedure TFrameCopier.WriteCombinedToClipboard(AForceLiveRes: Boolean);
 var
   Bmp: TBitmap;
   ErrMsg: string;
+  UseFileRef: Boolean;
 begin
   {CopyBitmapToClipboard fails silently when GlobalAlloc returns 0 for an
    oversized image; the try/except surfaces OOM with a domain-specific
    message instead of the generic OS one.}
+  UseFileRef := FSettings.GetClipboardAsFileReference;
   try
-    Bmp := FRenderPipeline.RenderWithBanner(FRenderPipeline.RenderCombinedFromCells(AForceLiveRes));
+    {File-reference PNG uses its own background opacity (independent of the
+     Save tab's): re-render the combined image with that alpha, then clear the
+     override so the next non-file-reference render uses the policy value.}
+    if UseFileRef then
+      FRenderPipeline.SetBackgroundAlphaOverride(FSettings.GetClipboardFileReferenceBackgroundAlpha);
     try
-      FRenderPipeline.ApplyCombinedSizeCap(Bmp);
-      {Strategy array from ClipboardFormats: legacy targets see opaque
-       pixels flattened against FSettings.GetBackground; alpha-aware targets
-       see transparent cell gaps via CF_DIBV5.}
-      if FSettings.GetClipboardAsFileReference then
-      begin
-        if FClipboardPublisher.PublishAsFileReference(Bmp) = cprFailed then
-          MessageDlg('Clipboard write failed - could not write the temp PNG or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
-      end
-      else if FClipboardPublisher.PublishAsImage(Bmp, FSettings.GetBackground, ErrMsg) = cprFailed then
-        MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, True), mtError, [mbOK], 0);
+      Bmp := FRenderPipeline.RenderWithBanner(FRenderPipeline.RenderCombinedFromCells(AForceLiveRes));
+      try
+        FRenderPipeline.ApplyCombinedSizeCap(Bmp);
+        {Strategy array from ClipboardFormats: legacy targets see opaque
+         pixels flattened against FSettings.GetBackground; alpha-aware targets
+         see transparent cell gaps via CF_DIBV5.}
+        if UseFileRef then
+        begin
+          if FClipboardPublisher.PublishAsFileReference(Bmp) = cprFailed then
+            MessageDlg('Clipboard write failed - could not write the temp file or publish CF_HDROP. Check %TEMP% has free space and is writable.', mtError, [mbOK], 0);
+        end
+        else if FClipboardPublisher.PublishAsImage(Bmp, FSettings.GetBackground, ErrMsg) = cprFailed then
+          MessageDlg(BuildClipboardCopyFailureMessage(ErrMsg, True), mtError, [mbOK], 0);
+      finally
+        Bmp.Free;
+      end;
     finally
-      Bmp.Free;
+      if UseFileRef then
+        FRenderPipeline.ClearBackgroundAlphaOverride;
     end;
   except
     on E: EOutOfMemory do

@@ -66,7 +66,7 @@ uses
   System.SysUtils, System.IOUtils, System.UITypes,
   ClipboardImage, VclClipboard, ClipboardFileDrop, ClipboardFormatStrategies,
   ClipboardTemp, ClipboardTempResolver,
-  SettingsGroups, Defaults, BitmapSaver, Logging;
+  SettingsGroups, BitmapSaver, Logging;
 
 function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
   AIsCombinedView: Boolean): string;
@@ -120,18 +120,28 @@ var
   NewPath, OldPath: string;
   Outcome: TBitmapWorkOutcome;
   WorkResult: TClipboardPublishResult;
+  Fmt: TSaveFormat;
+  JpegQuality, PngCompression: Integer;
 begin
+  {Snapshot the format + quality knobs before crossing into the worker.
+   Format selects the encoder (PNG lossless / JPG lossy); quality is the
+   shared Save-tab JpegQuality / PngCompression.}
+  Fmt := FClipboardPolicy.GetClipboardFileReferenceFormat;
+  JpegQuality := FClipboardPolicy.GetClipboardFileReferenceJpegQuality;
+  PngCompression := FClipboardPolicy.GetClipboardFileReferencePngCompression;
+
   {GUID-based name so concurrent TC lister windows do not collide.
    Previous file is deleted on success — at most one Glimpse temp lives at a
    time. The folder is the user-configured temp (env vars expanded, system
-   %TEMP% fallback); the prefix/extension are shared with the sweeper.}
+   %TEMP% fallback); the prefix is shared with the sweeper and the extension
+   follows the chosen format.}
   NewPath := ResolveClipboardTempFolder(FClipboardPolicy.GetClipboardTempFolder) +
-    CLIPBOARD_TEMP_PREFIX + TGuid.NewGuid.ToString + CLIPBOARD_TEMP_EXT;
+    CLIPBOARD_TEMP_PREFIX + TGuid.NewGuid.ToString + SaveFormatExtension(Fmt);
 
   WorkResult := RunBitmapWorkInModal(ABitmap, 'Writing clipboard image...',
     procedure(ABmp: TBitmap; var AOut: TBitmapWorkOutcome)
     begin
-      SaveBitmapToFile(ABmp, NewPath, sfPNG, DEF_JPEG_QUALITY, DEF_PNG_COMPRESSION);
+      SaveBitmapToFile(ABmp, NewPath, Fmt, JpegQuality, PngCompression);
       AOut.Success := True;
     end,
     procedure(const AOut: TBitmapWorkOutcome; ACancelled: Boolean)

@@ -57,7 +57,14 @@ type
      two consumer concerns (file-save + in-memory CF_PNG) is not
      duplication; each interface exposes what its consumer needs.}
     function GetPngCompression: Integer;
-    {Raw configured folder for file-reference temp PNGs; empty = system
+    function GetJpegQuality: Integer;
+    {Encoder for the file-reference temp file (PNG or JPG) plus its own
+     quality knobs, independent of the Save tab. JPEG quality applies to JPG;
+     PNG compression to PNG.}
+    function GetClipboardFileReferenceFormat: TSaveFormat;
+    function GetClipboardFileReferenceJpegQuality: Integer;
+    function GetClipboardFileReferencePngCompression: Integer;
+    {Raw configured folder for file-reference temp files; empty = system
      %TEMP%. The publisher expands env vars and falls back via
      ClipboardTempResolver, so consumers get the unresolved value here.}
     function GetClipboardTempFolder: string;
@@ -80,6 +87,10 @@ type
     function GetClipboardAsFileReference: Boolean;
     function GetBackground: TColor;
     function GetCopyAtLiveResolution: Boolean;
+    {Combined-view background opacity for the file-reference PNG path; the
+     copier re-renders with this alpha (independent of the Save tab's
+     GetBackgroundAlpha) before writing the temp file.}
+    function GetClipboardFileReferenceBackgroundAlpha: Integer;
   end;
 
 implementation

@@ -133,6 +133,17 @@ type
     ChkPublishBitmapHandle: TCheckBox;
     ChkClipboardAsFileReference: TCheckBox;
     LblClipboardTempHeader: TLabel;
+    LblClipboardFileReferenceFormat: TLabel;
+    CbxClipboardFileReferenceFormat: TComboBox;
+    LblClipboardFileReferenceJpegQuality: TLabel;
+    EdtClipboardFileReferenceJpegQuality: TEdit;
+    UdClipboardFileReferenceJpegQuality: TUpDown;
+    LblClipboardFileReferencePngCompression: TLabel;
+    EdtClipboardFileReferencePngCompression: TEdit;
+    UdClipboardFileReferencePngCompression: TUpDown;
+    LblClipboardFileReferenceBackgroundAlpha: TLabel;
+    EdtClipboardFileReferenceBackgroundAlpha: TEdit;
+    UdClipboardFileReferenceBackgroundAlpha: TUpDown;
     LblClipboardTempFolder: TLabel;
     EdtClipboardTempFolder: TEdit;
     BtnClipboardTempFolder: TButton;
@@ -207,6 +218,7 @@ type
      Wired to ten DFM entries (5 panels + 5 buttons).}
     procedure OnColorSwatchClick(Sender: TObject);
     procedure ChkClipboardAsFileReferenceClick(Sender: TObject);
+    procedure CbxClipboardFileReferenceFormatChange(Sender: TObject);
     procedure BtnClipboardTempFolderClick(Sender: TObject);
     procedure CbxClipboardCleanupChange(Sender: TObject);
     procedure EdtClipboardTempFolderChange(Sender: TObject);
@@ -416,6 +428,10 @@ begin
   FClipboardFormatsControls.ChkPublishBitmapHandle := ChkPublishBitmapHandle;
 
   FClipboardTempControls.EdtClipboardTempFolder := EdtClipboardTempFolder;
+  FClipboardTempControls.CbxClipboardFileReferenceFormat := CbxClipboardFileReferenceFormat;
+  FClipboardTempControls.UdClipboardFileReferenceJpegQuality := UdClipboardFileReferenceJpegQuality;
+  FClipboardTempControls.UdClipboardFileReferencePngCompression := UdClipboardFileReferencePngCompression;
+  FClipboardTempControls.UdClipboardFileReferenceBackgroundAlpha := UdClipboardFileReferenceBackgroundAlpha;
   FClipboardTempControls.CbxClipboardCleanup := CbxClipboardCleanup;
   FClipboardTempControls.UdCleanupDays := UdCleanupDays;
   FClipboardTempControls.UdCleanupHours := UdCleanupHours;
@@ -572,6 +588,12 @@ end;
 
 procedure TSettingsForm.ChkClipboardAsFileReferenceClick(Sender: TObject);
 begin
+  RecomputeEnables;
+end;
+
+procedure TSettingsForm.CbxClipboardFileReferenceFormatChange(Sender: TObject);
+begin
+  {PNG vs JPG toggles which quality knobs apply (mirrors the Save tab).}
   RecomputeEnables;
 end;
 
@@ -779,7 +801,7 @@ end;
 
 procedure TSettingsForm.BuildEnableRules;
 begin
-  SetLength(FEnableRules, 12);
+  SetLength(FEnableRules, 15);
 
   {Max workers / max threads — auto mode swaps which of the two
    workers/threads pairs is editable. Limit workers count is only
@@ -851,15 +873,53 @@ begin
   FEnableRules[10].Controls := [LblThumbnailGridFrames, EdtThumbnailGridFrames, UdThumbnailGridFrames];
 
   {The day/hour/minute age spins only apply to the "Delete older than"
-   cleanup strategy; the other two ignore the threshold.}
+   cleanup strategy; the other two ignore the threshold. They also live in
+   the file-reference block, so they need the override on as well.}
   FEnableRules[11].Predicate := function: Boolean
     begin
-      Result := CbxClipboardCleanup.ItemIndex = Ord(ccsOlderThan);
+      Result := ChkClipboardAsFileReference.Checked
+                and (CbxClipboardCleanup.ItemIndex = Ord(ccsOlderThan));
     end;
   FEnableRules[11].Controls := [EdtCleanupDays, UdCleanupDays, LblCleanupSep1,
                                 EdtCleanupHours, UdCleanupHours, LblCleanupSep2,
                                 EdtCleanupMinutes, UdCleanupMinutes,
                                 LblClipboardCleanupAgeUnit];
+
+  {The whole file-reference configuration block is dead until the override
+   is enabled. Format-specific knobs (rules 13/14) and the age spins (rule
+   11) carry their own extra condition on top of this; the controls that
+   only need the master toggle live here.}
+  FEnableRules[12].Predicate := function: Boolean begin Result := ChkClipboardAsFileReference.Checked end;
+  FEnableRules[12].Controls := [LblClipboardTempHeader,
+                                LblClipboardFileReferenceFormat, CbxClipboardFileReferenceFormat,
+                                LblClipboardTempFolder, EdtClipboardTempFolder, BtnClipboardTempFolder,
+                                EdtClipboardTempFolderInfo,
+                                LblClipboardCleanup, CbxClipboardCleanup];
+
+  {JPEG quality applies to the JPG file-reference format only (and only when
+   the override is on); mirrors the Save tab's format gate.}
+  FEnableRules[13].Predicate := function: Boolean
+    begin
+      Result := ChkClipboardAsFileReference.Checked
+                and (CbxClipboardFileReferenceFormat.ItemIndex <> Ord(sfPNG));
+    end;
+  FEnableRules[13].Controls := [LblClipboardFileReferenceJpegQuality,
+                                EdtClipboardFileReferenceJpegQuality,
+                                UdClipboardFileReferenceJpegQuality];
+
+  {PNG compression + background opacity apply to the PNG file-reference
+   format only (background opacity affects the combined view's gaps/border).}
+  FEnableRules[14].Predicate := function: Boolean
+    begin
+      Result := ChkClipboardAsFileReference.Checked
+                and (CbxClipboardFileReferenceFormat.ItemIndex = Ord(sfPNG));
+    end;
+  FEnableRules[14].Controls := [LblClipboardFileReferencePngCompression,
+                                EdtClipboardFileReferencePngCompression,
+                                UdClipboardFileReferencePngCompression,
+                                LblClipboardFileReferenceBackgroundAlpha,
+                                EdtClipboardFileReferenceBackgroundAlpha,
+                                UdClipboardFileReferenceBackgroundAlpha];
 end;
 
 procedure TSettingsForm.RecomputeEnables;
