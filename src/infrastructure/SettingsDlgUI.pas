@@ -67,7 +67,8 @@ procedure BrowseFolderInto(AEdit: TEdit; AOwner: TComponent);
 implementation
 
 uses
-  PathExpand;
+  Vcl.FileCtrl,
+  PathExpand, PlatformDetect;
 
 procedure PickColorForPanel(APanel: TPanel; AColorDialog: TColorDialog);
 begin
@@ -135,7 +136,10 @@ begin
   end;
 end;
 
-procedure BrowseFolderInto(AEdit: TEdit; AOwner: TComponent);
+{Vista+ path: the modern IFileDialog-based folder picker. TFileOpenDialog
+ raises "requires Windows Vista or later" on XP / 2003, hence the version
+ gate in BrowseFolderInto below.}
+procedure BrowseFolderModern(AEdit: TEdit; AOwner: TComponent);
 var
   Dlg: TFileOpenDialog;
 begin
@@ -149,6 +153,28 @@ begin
   finally
     Dlg.Free;
   end;
+end;
+
+{XP / 2003 fallback: the legacy SHBrowseForFolder-based tree picker, which
+ those versions support. sdValidateDir mirrors fdoPathMustExist above.}
+procedure BrowseFolderLegacy(AEdit: TEdit);
+var
+  Dir: string;
+begin
+  if AEdit.Text <> '' then
+    Dir := ExpandEnvVars(AEdit.Text)
+  else
+    Dir := '';
+  if SelectDirectory('', '', Dir, [sdShowEdit, sdNewFolder, sdValidateDir]) then
+    AEdit.Text := Dir;
+end;
+
+procedure BrowseFolderInto(AEdit: TEdit; AOwner: TComponent);
+begin
+  if IsLegacyWindows then
+    BrowseFolderLegacy(AEdit)
+  else
+    BrowseFolderModern(AEdit, AOwner);
 end;
 
 end.
