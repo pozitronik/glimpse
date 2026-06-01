@@ -17,7 +17,15 @@ type
     [Test] procedure CopyBitmap_Pf32Bit_CfDibCompositesAlphaOntoBackground;
     [Test] procedure CopyBitmap_Pf32Bit_CfDibIsBottomUp;
     [Test] procedure CopyBitmap_Pf32Bit_PublishesCfBitmapSibling;
-    [Test] procedure CopyBitmap_Pf24Bit_RoutesToAssignBitmap;
+    [Test] procedure CopyBitmap_Pf24Bit_NoStrategies_RoutesToAssignBitmap;
+    {pf24bit + at least one strategy must promote to pf32bit and run the
+     orchestrator (NOT AssignBitmap). Without this the user's per-format
+     toggles silently miss the pf24bit combined-grid case — the original
+     "Compressed JPEG only" bug.}
+    [Test] procedure CopyBitmap_Pf24Bit_WithStrategies_RunsOrchestrator;
+    {The promoted pf32bit copy must be opaque (alpha=255 everywhere) so
+     CF_DIBV5 published from a pf24bit source is not silently transparent.}
+    [Test] procedure CopyBitmap_Pf24Bit_PromotedAlphaIs255;
     [Test] procedure CopyBitmap_OpenFails_DiscardsStrategiesAndReturnsFalse;
     {Total publish failure leaves the emptied clipboard with nothing on
      it; the copy must report False, not a false success.}
@@ -506,15 +514,16 @@ begin
   Assert.AreEqual(3, Calls);
 end;
 
-procedure TTestClipboardImage.CopyBitmap_Pf24Bit_RoutesToAssignBitmap;
+procedure TTestClipboardImage.CopyBitmap_Pf24Bit_NoStrategies_RoutesToAssignBitmap;
 var
   Bmp: Vcl.Graphics.TBitmap;
   Fake: TFakeImageClipboard;
   Clip: IImageClipboard;
   Err: string;
 begin
-  {pf24bit must take the one-shot AssignBitmap path and never enter the
-   open/empty/close session.}
+  {pf24bit + empty strategies preserves the legacy "just put a bitmap on
+   the clipboard" path so users who disabled every format toggle still
+   get something pasteable.}
   Fake := TFakeImageClipboard.Create;
   Clip := Fake;
   Bmp := Vcl.Graphics.TBitmap.Create;
@@ -522,10 +531,104 @@ begin
     Bmp.PixelFormat := pf24bit;
     Bmp.SetSize(8, 4);
     Assert.IsTrue(CopyBitmapToClipboard(Bmp, TColor($000000), nil, Clip, Err));
-    Assert.AreEqual(1, Fake.AssignCount, 'pf24bit must call AssignBitmap once');
-    Assert.AreEqual(0, Fake.OpenCount, 'pf24bit must not open a clipboard session');
+    Assert.AreEqual(1, Fake.AssignCount, 'pf24bit + empty strategies must call AssignBitmap once');
+    Assert.AreEqual(0, Fake.OpenCount, 'pf24bit + empty strategies must not open a clipboard session');
   finally
     Bmp.Free;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf24Bit_WithStrategies_RunsOrchestrator;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Fake: TFakeImageClipboard;
+  Clip: IImageClipboard;
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  Err: string;
+begin
+  {The fake clipboard does not actually own the system clipboard, so the
+   downstream SetClipboardData calls inside Publish fail and the overall
+   copy returns False. That is fine for this test — we only care that the
+   pf24bit path no longer short-circuits to AssignBitmap and instead
+   walks the open/empty/close session. The JpegStrategy_AllocatedBytes...
+   test in TestClipboardFormatStrategies covers the real publish.}
+  Fake := TFakeImageClipboard.Create;
+  Clip := Fake;
+  Settings.PublishAlphaAwareBitmap := False;
+  Settings.PublishFlattenedBitmap := False;
+  Settings.PublishBitmapHandle := False;
+  Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := True;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(8, 4);
+    CopyBitmapToClipboard(Bmp, TColor($000000), Strategies, Clip, Err);
+    Assert.AreEqual(0, Fake.AssignCount,
+      'pf24bit + at least one strategy must NOT call AssignBitmap');
+    Assert.AreEqual(1, Fake.OpenCount,
+      'pf24bit + strategies must open a clipboard session for publish');
+    Assert.AreEqual(1, Fake.EmptyCount);
+    Assert.AreEqual(1, Fake.CloseCount);
+  finally
+    Bmp.Free;
+  end;
+end;
+
+procedure TTestClipboardImage.CopyBitmap_Pf24Bit_PromotedAlphaIs255;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  Err: string;
+  DibFormatId: UINT;
+  Mem: HGLOBAL;
+  HeaderPtr: PByte;
+  Header: PBitmapV5Header;
+  Pixel: PByte;
+begin
+  {pf24bit promotion must set alpha=255 on every pixel. We verify via the
+   DIBV5 strategy because it writes raw BGRA — if the promoted alpha were
+   0 the published image would be fully transparent.}
+  Settings.PublishAlphaAwareBitmap := True;
+  Settings.PublishFlattenedBitmap := False;
+  Settings.PublishBitmapHandle := False;
+  Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+
+  Bmp := Vcl.Graphics.TBitmap.Create;
+  try
+    Bmp.PixelFormat := pf24bit;
+    Bmp.SetSize(4, 4);
+    Bmp.Canvas.Brush.Color := clRed;
+    Bmp.Canvas.FillRect(Rect(0, 0, 4, 4));
+    Assert.IsTrue(CopyBitmapToClipboard(Bmp, TColor($000000), Strategies, CreateImageClipboard, Err));
+  finally
+    Bmp.Free;
+  end;
+
+  DibFormatId := CF_DIBV5;
+  ClipboardOpenWithRetry;
+  try
+    Mem := GetClipboardData(DibFormatId);
+    Assert.IsTrue(Mem <> 0, 'CF_DIBV5 must be present after pf24bit publish via the alpha-aware strategy');
+    HeaderPtr := PByte(GlobalLock(Mem));
+    try
+      Assert.IsNotNull(HeaderPtr);
+      Header := PBitmapV5Header(HeaderPtr);
+      Pixel := HeaderPtr;
+      Inc(Pixel, Header^.bV5Size);
+      {First pixel BGRA: B=0, G=0, R=255 (red), A must be 255.}
+      Assert.AreEqual<Integer>(255, Integer(PByte(NativeUInt(Pixel) + 3)^),
+        'Promoted pf24bit must yield alpha=255 in the DIBV5 payload');
+    finally
+      GlobalUnlock(Mem);
+    end;
+  finally
+    Clipboard.Close;
   end;
 end;
 

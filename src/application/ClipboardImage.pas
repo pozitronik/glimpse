@@ -46,6 +46,41 @@ begin
   DebugLog('Clipboard', AMsg);
 end;
 
+{Returns a fresh pf32bit copy of a pf24bit source with alpha=255 on every
+ pixel. Needed because the DIBV5 / DIB / BITMAP strategies walk BGRA
+ scanlines and would read garbage from a 3-bytes-per-pixel layout; the
+ PNG / JPEG strategies are layout-agnostic but go through the same
+ promoted bitmap so the orchestrator can stay uniform.}
+function PromoteToPf32(ASource: Vcl.Graphics.TBitmap): Vcl.Graphics.TBitmap;
+var
+  Y, X, W, H: Integer;
+  SrcRow, DstRow: PByte;
+begin
+  Result := Vcl.Graphics.TBitmap.Create;
+  try
+    Result.PixelFormat := pf32bit;
+    Result.AlphaFormat := afDefined;
+    W := ASource.Width;
+    H := ASource.Height;
+    Result.SetSize(W, H);
+    for Y := 0 to H - 1 do
+    begin
+      SrcRow := PByte(ASource.ScanLine[Y]);
+      DstRow := PByte(Result.ScanLine[Y]);
+      for X := 0 to W - 1 do
+      begin
+        DstRow^ := SrcRow^; Inc(SrcRow); Inc(DstRow); {B}
+        DstRow^ := SrcRow^; Inc(SrcRow); Inc(DstRow); {G}
+        DstRow^ := SrcRow^; Inc(SrcRow); Inc(DstRow); {R}
+        DstRow^ := 255; Inc(DstRow); {A}
+      end;
+    end;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
 function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap;
   ABackground: TColor;
   const AStrategies: TArray<IClipboardFormatStrategy>;
@@ -54,13 +89,18 @@ function CopyBitmapToClipboard(ABitmap: Vcl.Graphics.TBitmap;
 var
   I, J: Integer;
   AnyPublished: Boolean;
+  Working: Vcl.Graphics.TBitmap;
 begin
   Result := False;
   AFailedFormatName := '';
   if ABitmap = nil then
     Exit;
 
-  if ABitmap.PixelFormat <> pf32bit then
+  {pf24bit + no strategies enabled — keep the legacy "just put a bitmap
+   on the clipboard" behaviour so users who disabled every format toggle
+   still get something pasteable. With any strategy enabled we route
+   through the orchestrator instead so the toggles actually take effect.}
+  if (ABitmap.PixelFormat <> pf32bit) and (Length(AStrategies) = 0) then
   begin
     AClipboard.AssignBitmap(ABitmap);
     Result := True;
@@ -74,42 +114,51 @@ begin
     Exit;
   end;
 
-  Log(Format('CopyBitmapToClipboard: %dx%d pf32bit, %d strategies',
-    [ABitmap.Width, ABitmap.Height, Length(AStrategies)]));
+  if ABitmap.PixelFormat <> pf32bit then
+    Working := PromoteToPf32(ABitmap)
+  else
+    Working := ABitmap;
+  try
+    Log(Format('CopyBitmapToClipboard: %dx%d (source pf=%d, working pf32bit), %d strategies',
+      [Working.Width, Working.Height, Ord(ABitmap.PixelFormat), Length(AStrategies)]));
 
-  {Allocate phase: every enabled format must succeed or we abort the
-   whole copy. Reverse-order Discard frees the most-recent first.}
-  for I := 0 to High(AStrategies) do
-    if not AStrategies[I].Allocate(ABitmap, ABackground) then
+    {Allocate phase: every enabled format must succeed or we abort the
+     whole copy. Reverse-order Discard frees the most-recent first.}
+    for I := 0 to High(AStrategies) do
+      if not AStrategies[I].Allocate(Working, ABackground) then
+      begin
+        AFailedFormatName := AStrategies[I].Name;
+        Log(Format('CopyBitmapToClipboard: aborting publish - %s allocation failed',
+          [AFailedFormatName]));
+        for J := I - 1 downto 0 do
+          AStrategies[J].Discard;
+        Exit;
+      end;
+
+    {Publish phase: per-format failures are logged inside the strategy
+     and do not abort the cycle.}
+    if not AClipboard.TryOpen then
     begin
-      AFailedFormatName := AStrategies[I].Name;
-      Log(Format('CopyBitmapToClipboard: aborting publish - %s allocation failed',
-        [AFailedFormatName]));
-      for J := I - 1 downto 0 do
+      Log('CopyBitmapToClipboard: clipboard open exhausted retries');
+      for J := High(AStrategies) downto 0 do
         AStrategies[J].Discard;
       Exit;
     end;
-
-  {Publish phase: per-format failures are logged inside the strategy
-   and do not abort the cycle.}
-  if not AClipboard.TryOpen then
-  begin
-    Log('CopyBitmapToClipboard: clipboard open exhausted retries');
-    for J := High(AStrategies) downto 0 do
-      AStrategies[J].Discard;
-    Exit;
-  end;
-  try
-    AClipboard.Empty;
-    {Per-format failures are non-fatal, but if every format fails the
-     clipboard was emptied with nothing put back — report failure.}
-    AnyPublished := False;
-    for I := 0 to High(AStrategies) do
-      if AStrategies[I].Publish then
-        AnyPublished := True;
-    Result := AnyPublished;
+    try
+      AClipboard.Empty;
+      {Per-format failures are non-fatal, but if every format fails the
+       clipboard was emptied with nothing put back — report failure.}
+      AnyPublished := False;
+      for I := 0 to High(AStrategies) do
+        if AStrategies[I].Publish then
+          AnyPublished := True;
+      Result := AnyPublished;
+    finally
+      AClipboard.Close;
+    end;
   finally
-    AClipboard.Close;
+    if Working <> ABitmap then
+      Working.Free;
   end;
 end;
 
