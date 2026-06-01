@@ -181,7 +181,7 @@ const
 
   {Clipboard file-reference temp-file management. Empty folder = the system
    %TEMP%; any other value (env vars expanded) overrides it, e.g. TC's own
-   temp tree. Cleanup sweeps leftover glimpse_clip_*.png on plugin load:
+   temp tree. Cleanup sweeps leftover glimpse_clip_* files on plugin load:
    default is "delete older than 24h", a grace window that still allows the
    intended paste-after-close while not hoarding files forever.}
   DEF_CLIPBOARD_TEMP_FOLDER = '';
