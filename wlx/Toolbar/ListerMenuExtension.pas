@@ -36,6 +36,13 @@ const
 
   GLIMPSE_MENU_CAPTION = '&Glimpse';
 
+  {One-shot deferred-install message. Posted from the constructor so
+   the retry dispatches AFTER TC's ListLoad returns and any subsequent
+   SetMenu the host runs during its post-load setup. Picked from the
+   WM_APP range to stay out of the system-message space; the constant
+   is module-private since nobody else posts it.}
+  WM_GLIMPSE_LISTER_MENU_DEFERRED_INSTALL = WM_APP + 1;
+
 type
   {Each menu item dispatches to one of four host operations.}
   TListerMenuEntryKind = (lmekMode, lmekZoom, lmekTimecode, lmekFrameCount, lmekAction);
@@ -219,6 +226,16 @@ begin
         if Ext <> nil then
           Ext.ForceRebuild;
       end;
+    WM_GLIMPSE_LISTER_MENU_DEFERRED_INSTALL:
+      begin
+        {Deferred retry posted from the constructor — runs after TC's
+         ListLoad has returned, when any host-side SetMenu has settled.
+         On Win11 the items are already installed and EnsureItemsInstalled
+         early-exits; on XP this is where they finally land.}
+        if Ext <> nil then
+          Ext.EnsureItemsInstalled;
+        Result := 0;
+      end;
   else
     Result := DefSubclassProc(AWnd, AMsg, AWParam, ALParam);
   end;
@@ -242,6 +259,15 @@ begin
    EnsureItemsInstalled try again. Subclass also forwards WM_COMMAND
    no matter what.}
   InstallSubclass;
+  {Deferred retry: when the host's lister-menu construction races our
+   constructor (observed on XP — TC sometimes calls SetMenu only after
+   ListLoad has returned), the synchronous Install above silently bails
+   on GetMenu = 0. Post a one-shot message that fires after the current
+   ListLoad call unwinds; by then the menu is set and EnsureItemsInstalled
+   can take. No-op on hosts where the synchronous Install already
+   succeeded.}
+  if FParentWnd <> 0 then
+    PostMessage(FParentWnd, WM_GLIMPSE_LISTER_MENU_DEFERRED_INSTALL, 0, 0);
 end;
 
 destructor TListerMenuExtension.Destroy;
