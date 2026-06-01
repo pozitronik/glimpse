@@ -124,11 +124,12 @@ var
   JpegQuality, PngCompression: Integer;
 begin
   {Snapshot the format + quality knobs before crossing into the worker.
-   Format selects the encoder (PNG lossless / JPG lossy); quality is the
-   shared Save-tab JpegQuality / PngCompression.}
+   Format selects the encoder (PNG lossless / JPG lossy); quality comes
+   from the shared Clipboard-tab JpegQuality / PngCompression — the same
+   pair that drives the direct-publish clipboard strategies.}
   Fmt := FClipboardPolicy.GetClipboardFileReferenceFormat;
-  JpegQuality := FClipboardPolicy.GetClipboardFileReferenceJpegQuality;
-  PngCompression := FClipboardPolicy.GetClipboardFileReferencePngCompression;
+  JpegQuality := FClipboardPolicy.GetJpegQuality;
+  PngCompression := FClipboardPolicy.GetPngCompression;
 
   {GUID-based name so concurrent TC lister windows do not collide.
    Previous file is deleted on success — at most one Glimpse temp lives at a

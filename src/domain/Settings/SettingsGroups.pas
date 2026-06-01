@@ -105,13 +105,15 @@ type
     TempFolder: string;
     CleanupStrategy: TClipboardCleanupStrategy;
     CleanupAgeSeconds: Integer;
-    {Encoder used for the file-reference temp file (PNG or JPG), plus its own
-     quality / compression / background-opacity knobs (independent of the
-     Save tab). JpegQuality applies to JPG; PngCompression and
-     BackgroundAlpha apply to PNG (alpha only affects the combined view).}
+    {JpegQuality and PngCompression drive both the direct-publish clipboard
+     strategies (registered PNG / JFIF formats) and the file-reference temp
+     encoder; they live on the Clipboard tab and are independent of the
+     Save tab's same-named knobs. FileReferenceFormat (PNG vs JPG) and
+     FileReferenceBackgroundAlpha apply only to the file-reference temp
+     file (alpha matters there because PNG preserves it).}
     FileReferenceFormat: TSaveFormat;
-    FileReferenceJpegQuality: Integer;
-    FileReferencePngCompression: Integer;
+    JpegQuality: Integer;
+    PngCompression: Integer;
     FileReferenceBackgroundAlpha: Byte;
 
     class function Defaults: TClipboardTempSettingsGroup; static;
@@ -442,8 +444,8 @@ begin
   Result.CleanupStrategy := DEF_CLIPBOARD_CLEANUP_STRATEGY;
   Result.CleanupAgeSeconds := DEF_CLIPBOARD_CLEANUP_AGE_SECONDS;
   Result.FileReferenceFormat := DEF_CLIPBOARD_FILE_REFERENCE_FORMAT;
-  Result.FileReferenceJpegQuality := DEF_CLIPBOARD_FILE_REFERENCE_JPEG_QUALITY;
-  Result.FileReferencePngCompression := DEF_CLIPBOARD_FILE_REFERENCE_PNG_COMPRESSION;
+  Result.JpegQuality := DEF_CLIPBOARD_JPEG_QUALITY;
+  Result.PngCompression := DEF_CLIPBOARD_PNG_COMPRESSION;
   Result.FileReferenceBackgroundAlpha := DEF_CLIPBOARD_FILE_REFERENCE_BACKGROUND_ALPHA;
 end;
 
@@ -459,11 +461,11 @@ begin
     MIN_CLIPBOARD_CLEANUP_AGE_SECONDS, MAX_CLIPBOARD_CLEANUP_AGE_SECONDS);
   FileReferenceFormat := StrToSaveFormat(
     AIni.ReadString(ASection, 'TempFormat', SaveFormatToStr(FileReferenceFormat)));
-  FileReferenceJpegQuality := EnsureRange(
-    AIni.ReadInteger(ASection, 'TempJpegQuality', FileReferenceJpegQuality),
+  JpegQuality := EnsureRange(
+    AIni.ReadInteger(ASection, 'JpegQuality', JpegQuality),
     MIN_JPEG_QUALITY, MAX_JPEG_QUALITY);
-  FileReferencePngCompression := EnsureRange(
-    AIni.ReadInteger(ASection, 'TempPngCompression', FileReferencePngCompression),
+  PngCompression := EnsureRange(
+    AIni.ReadInteger(ASection, 'PngCompression', PngCompression),
     MIN_PNG_COMPRESSION, MAX_PNG_COMPRESSION);
   FileReferenceBackgroundAlpha := EnsureRange(
     AIni.ReadInteger(ASection, 'TempBackgroundAlpha', FileReferenceBackgroundAlpha),
@@ -477,8 +479,8 @@ begin
     ClipboardCleanupStrategyToStr(CleanupStrategy));
   AIni.WriteInteger(ASection, 'TempCleanupAgeSeconds', CleanupAgeSeconds);
   AIni.WriteString(ASection, 'TempFormat', SaveFormatToStr(FileReferenceFormat));
-  AIni.WriteInteger(ASection, 'TempJpegQuality', FileReferenceJpegQuality);
-  AIni.WriteInteger(ASection, 'TempPngCompression', FileReferencePngCompression);
+  AIni.WriteInteger(ASection, 'JpegQuality', JpegQuality);
+  AIni.WriteInteger(ASection, 'PngCompression', PngCompression);
   AIni.WriteInteger(ASection, 'TempBackgroundAlpha', FileReferenceBackgroundAlpha);
 end;
 

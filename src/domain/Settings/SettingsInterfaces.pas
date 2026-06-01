@@ -53,17 +53,17 @@ type
   IClipboardPolicy = interface
     ['{E5F6A7B8-8CAF-4ECE-D508-6CBF9EDABE56}']
     function GetClipboardFormats: TClipboardFormatsGroup;
-    {Also exposed via IFrameSaveSettings. One underlying field driving
-     two consumer concerns (file-save + in-memory CF_PNG) is not
-     duplication; each interface exposes what its consumer needs.}
+    {Clipboard tab knobs — drive the direct-publish strategies (registered
+     PNG / JFIF formats) AND the file-reference temp encoder. Distinct from
+     IFrameSaveSettings.GetJpegQuality / GetPngCompression which read the
+     Save tab. TPluginSettings uses a method-resolution clause to satisfy
+     both interfaces from the appropriate field.}
     function GetPngCompression: Integer;
     function GetJpegQuality: Integer;
-    {Encoder for the file-reference temp file (PNG or JPG) plus its own
-     quality knobs, independent of the Save tab. JPEG quality applies to JPG;
-     PNG compression to PNG.}
+    {File-reference temp-file format only; the JPEG quality / PNG
+     compression it uses come from the Get*Quality / Get*Compression
+     methods above.}
     function GetClipboardFileReferenceFormat: TSaveFormat;
-    function GetClipboardFileReferenceJpegQuality: Integer;
-    function GetClipboardFileReferencePngCompression: Integer;
     {Raw configured folder for file-reference temp files; empty = system
      %TEMP%. The publisher expands env vars and falls back via
      ClipboardTempResolver, so consumers get the unresolved value here.}

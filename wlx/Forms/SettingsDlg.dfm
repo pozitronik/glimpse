@@ -1362,58 +1362,58 @@ object SettingsForm: TSettingsForm
           'PNG'
           'JPG')
       end
-      object LblClipboardFileReferenceJpegQuality: TLabel
+      object LblClipboardJpegQuality: TLabel
         Left = 12
         Top = 252
         Width = 100
         Height = 15
         Caption = 'JPEG quality:'
       end
-      object EdtClipboardFileReferenceJpegQuality: TEdit
+      object EdtClipboardJpegQuality: TEdit
         Left = 130
         Top = 248
         Width = 45
         Height = 23
-        Hint = 'JPEG quality 1..100. Applies when the file format is JPG.'
+        Hint = 'JPEG quality 1..100. Applies to clipboard JPEG publishing and to the JPG file reference.'
         NumbersOnly = True
         TabOrder = 6
         Text = '90'
       end
-      object UdClipboardFileReferenceJpegQuality: TUpDown
+      object UdClipboardJpegQuality: TUpDown
         Left = 175
         Top = 248
         Width = 17
         Height = 23
-        Associate = EdtClipboardFileReferenceJpegQuality
+        Associate = EdtClipboardJpegQuality
         Min = 1
         Max = 100
         Position = 90
         TabOrder = 7
         Thousands = False
       end
-      object LblClipboardFileReferencePngCompression: TLabel
+      object LblClipboardPngCompression: TLabel
         Left = 12
         Top = 282
         Width = 100
         Height = 15
         Caption = 'PNG compression:'
       end
-      object EdtClipboardFileReferencePngCompression: TEdit
+      object EdtClipboardPngCompression: TEdit
         Left = 130
         Top = 278
         Width = 45
         Height = 23
-        Hint = 'PNG compression 0..9. Applies when the file format is PNG.'
+        Hint = 'PNG compression 0..9. Applies to clipboard PNG publishing and to the PNG file reference.'
         NumbersOnly = True
         TabOrder = 8
         Text = '6'
       end
-      object UdClipboardFileReferencePngCompression: TUpDown
+      object UdClipboardPngCompression: TUpDown
         Left = 175
         Top = 278
         Width = 17
         Height = 23
-        Associate = EdtClipboardFileReferencePngCompression
+        Associate = EdtClipboardPngCompression
         Max = 9
         Position = 6
         TabOrder = 9

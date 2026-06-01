@@ -106,8 +106,8 @@ type
   TClipboardTempControls = record
     EdtClipboardTempFolder: TEdit;
     CbxClipboardFileReferenceFormat: TComboBox;
-    UdClipboardFileReferenceJpegQuality: TUpDown;
-    UdClipboardFileReferencePngCompression: TUpDown;
+    UdClipboardJpegQuality: TUpDown;
+    UdClipboardPngCompression: TUpDown;
     UdClipboardFileReferenceBackgroundAlpha: TUpDown;
     CbxClipboardCleanup: TComboBox;
     UdCleanupDays: TUpDown;
@@ -377,8 +377,8 @@ var
 begin
   AControls.EdtClipboardTempFolder.Text := ASettings.ClipboardTempFolder;
   AControls.CbxClipboardFileReferenceFormat.ItemIndex := Ord(ASettings.ClipboardFileReferenceFormat);
-  AControls.UdClipboardFileReferenceJpegQuality.Position := ASettings.ClipboardFileReferenceJpegQuality;
-  AControls.UdClipboardFileReferencePngCompression.Position := ASettings.ClipboardFileReferencePngCompression;
+  AControls.UdClipboardJpegQuality.Position := ASettings.ClipboardJpegQuality;
+  AControls.UdClipboardPngCompression.Position := ASettings.ClipboardPngCompression;
   AControls.UdClipboardFileReferenceBackgroundAlpha.Position := ASettings.ClipboardFileReferenceBackgroundAlpha;
   AControls.CbxClipboardCleanup.ItemIndex := Ord(ASettings.ClipboardCleanupStrategy);
   SplitSecondsToDHM(ASettings.ClipboardCleanupAgeSeconds, Days, Hours, Minutes);
@@ -397,8 +397,8 @@ begin
     TSaveFormat(AControls.CbxClipboardFileReferenceFormat.ItemIndex);
   {UpDowns are range-clamped by their DFM Min/Max, so the positions are
    already in range.}
-  ASettings.ClipboardFileReferenceJpegQuality := AControls.UdClipboardFileReferenceJpegQuality.Position;
-  ASettings.ClipboardFileReferencePngCompression := AControls.UdClipboardFileReferencePngCompression.Position;
+  ASettings.ClipboardJpegQuality := AControls.UdClipboardJpegQuality.Position;
+  ASettings.ClipboardPngCompression := AControls.UdClipboardPngCompression.Position;
   ASettings.ClipboardFileReferenceBackgroundAlpha := AControls.UdClipboardFileReferenceBackgroundAlpha.Position;
   ASettings.ClipboardCleanupStrategy :=
     TClipboardCleanupStrategy(AControls.CbxClipboardCleanup.ItemIndex);

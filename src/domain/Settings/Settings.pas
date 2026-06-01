@@ -146,10 +146,10 @@ type
       read FClipboardTemp.CleanupAgeSeconds write FClipboardTemp.CleanupAgeSeconds;
     property ClipboardFileReferenceFormat: TSaveFormat
       read FClipboardTemp.FileReferenceFormat write FClipboardTemp.FileReferenceFormat;
-    property ClipboardFileReferenceJpegQuality: Integer
-      read FClipboardTemp.FileReferenceJpegQuality write FClipboardTemp.FileReferenceJpegQuality;
-    property ClipboardFileReferencePngCompression: Integer
-      read FClipboardTemp.FileReferencePngCompression write FClipboardTemp.FileReferencePngCompression;
+    property ClipboardJpegQuality: Integer
+      read FClipboardTemp.JpegQuality write FClipboardTemp.JpegQuality;
+    property ClipboardPngCompression: Integer
+      read FClipboardTemp.PngCompression write FClipboardTemp.PngCompression;
     property ClipboardFileReferenceBackgroundAlpha: Byte
       read FClipboardTemp.FileReferenceBackgroundAlpha write FClipboardTemp.FileReferenceBackgroundAlpha;
     property CombinedMaxSide: Integer read FSave.CombinedMaxSide write FSave.CombinedMaxSide;
@@ -221,9 +221,15 @@ type
     function GetClipboardAsFileReference: Boolean;
     function GetClipboardTempFolder: string;
     function GetClipboardFileReferenceFormat: TSaveFormat;
-    function GetClipboardFileReferenceJpegQuality: Integer;
-    function GetClipboardFileReferencePngCompression: Integer;
     function GetClipboardFileReferenceBackgroundAlpha: Integer;
+    {Method-resolution: IClipboardPolicy reads the Clipboard tab knobs,
+     IFrameSaveSettings reads the Save tab knobs. GetJpegQuality /
+     GetPngCompression below satisfy IFrameSaveSettings; the helpers below
+     satisfy IClipboardPolicy via the clauses above.}
+    function IClipboardPolicy.GetJpegQuality = GetClipboardJpegQuality;
+    function IClipboardPolicy.GetPngCompression = GetClipboardPngCompression;
+    function GetClipboardJpegQuality: Integer;
+    function GetClipboardPngCompression: Integer;
     function GetPngCompression: Integer;
     function GetJpegQuality: Integer;
   end;
@@ -550,19 +556,19 @@ begin
   Result := FClipboardTemp.FileReferenceFormat;
 end;
 
-function TPluginSettings.GetClipboardFileReferenceJpegQuality: Integer;
-begin
-  Result := FClipboardTemp.FileReferenceJpegQuality;
-end;
-
-function TPluginSettings.GetClipboardFileReferencePngCompression: Integer;
-begin
-  Result := FClipboardTemp.FileReferencePngCompression;
-end;
-
 function TPluginSettings.GetClipboardFileReferenceBackgroundAlpha: Integer;
 begin
   Result := FClipboardTemp.FileReferenceBackgroundAlpha;
+end;
+
+function TPluginSettings.GetClipboardJpegQuality: Integer;
+begin
+  Result := FClipboardTemp.JpegQuality;
+end;
+
+function TPluginSettings.GetClipboardPngCompression: Integer;
+begin
+  Result := FClipboardTemp.PngCompression;
 end;
 
 function TPluginSettings.GetPngCompression: Integer;

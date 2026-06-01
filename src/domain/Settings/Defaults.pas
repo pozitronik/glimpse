@@ -39,14 +39,15 @@ const
   DEF_JPEG_QUALITY = 90;
   DEF_PNG_COMPRESSION = 6;
 
-  {File-reference temp encoding. PNG keeps the original lossless,
-   alpha-preserving behaviour; JPG trades transparency and fidelity for a
-   smaller file. The file reference carries its own quality / compression /
-   background-opacity knobs (independent of the Save tab), defaulting to the
-   same values so behaviour is unchanged until the user tunes them.}
+  {Clipboard publishing knobs. JpegQuality and PngCompression apply to both
+   the direct-publish clipboard strategies (registered PNG / JFIF formats)
+   and the file-reference temp encoder. FileReferenceFormat and
+   FileReferenceBackgroundAlpha govern only the file-reference temp file —
+   the direct-publish strategies pick format by per-format toggle and use
+   the global render background for compositing where needed.}
   DEF_CLIPBOARD_FILE_REFERENCE_FORMAT = sfPNG;
-  DEF_CLIPBOARD_FILE_REFERENCE_JPEG_QUALITY = DEF_JPEG_QUALITY;
-  DEF_CLIPBOARD_FILE_REFERENCE_PNG_COMPRESSION = DEF_PNG_COMPRESSION;
+  DEF_CLIPBOARD_JPEG_QUALITY = DEF_JPEG_QUALITY;
+  DEF_CLIPBOARD_PNG_COMPRESSION = DEF_PNG_COMPRESSION;
   DEF_CLIPBOARD_FILE_REFERENCE_BACKGROUND_ALPHA = DEF_BACKGROUND_ALPHA;
 
   DEF_SAVE_AT_LIVE_RESOLUTION = False;

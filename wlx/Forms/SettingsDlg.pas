@@ -135,12 +135,12 @@ type
     LblClipboardTempHeader: TLabel;
     LblClipboardFileReferenceFormat: TLabel;
     CbxClipboardFileReferenceFormat: TComboBox;
-    LblClipboardFileReferenceJpegQuality: TLabel;
-    EdtClipboardFileReferenceJpegQuality: TEdit;
-    UdClipboardFileReferenceJpegQuality: TUpDown;
-    LblClipboardFileReferencePngCompression: TLabel;
-    EdtClipboardFileReferencePngCompression: TEdit;
-    UdClipboardFileReferencePngCompression: TUpDown;
+    LblClipboardJpegQuality: TLabel;
+    EdtClipboardJpegQuality: TEdit;
+    UdClipboardJpegQuality: TUpDown;
+    LblClipboardPngCompression: TLabel;
+    EdtClipboardPngCompression: TEdit;
+    UdClipboardPngCompression: TUpDown;
     LblClipboardFileReferenceBackgroundAlpha: TLabel;
     EdtClipboardFileReferenceBackgroundAlpha: TEdit;
     UdClipboardFileReferenceBackgroundAlpha: TUpDown;
@@ -429,8 +429,8 @@ begin
 
   FClipboardTempControls.EdtClipboardTempFolder := EdtClipboardTempFolder;
   FClipboardTempControls.CbxClipboardFileReferenceFormat := CbxClipboardFileReferenceFormat;
-  FClipboardTempControls.UdClipboardFileReferenceJpegQuality := UdClipboardFileReferenceJpegQuality;
-  FClipboardTempControls.UdClipboardFileReferencePngCompression := UdClipboardFileReferencePngCompression;
+  FClipboardTempControls.UdClipboardJpegQuality := UdClipboardJpegQuality;
+  FClipboardTempControls.UdClipboardPngCompression := UdClipboardPngCompression;
   FClipboardTempControls.UdClipboardFileReferenceBackgroundAlpha := UdClipboardFileReferenceBackgroundAlpha;
   FClipboardTempControls.CbxClipboardCleanup := CbxClipboardCleanup;
   FClipboardTempControls.UdCleanupDays := UdCleanupDays;
@@ -801,7 +801,7 @@ end;
 
 procedure TSettingsForm.BuildEnableRules;
 begin
-  SetLength(FEnableRules, 15);
+  SetLength(FEnableRules, 14);
 
   {Max workers / max threads — auto mode swaps which of the two
    workers/threads pairs is editable. Limit workers count is only
@@ -896,28 +896,17 @@ begin
                                 EdtClipboardTempFolderInfo,
                                 LblClipboardCleanup, CbxClipboardCleanup];
 
-  {JPEG quality applies to the JPG file-reference format only (and only when
-   the override is on); mirrors the Save tab's format gate.}
+  {JPEG quality and PNG compression apply to both clipboard publishing
+   strategies and the file-reference temp encoder, so they stay enabled
+   regardless of the file-reference toggle / format. Background opacity is
+   the one knob still tied to the PNG file-reference path — that's where
+   alpha actually survives the encode.}
   FEnableRules[13].Predicate := function: Boolean
-    begin
-      Result := ChkClipboardAsFileReference.Checked
-                and (CbxClipboardFileReferenceFormat.ItemIndex <> Ord(sfPNG));
-    end;
-  FEnableRules[13].Controls := [LblClipboardFileReferenceJpegQuality,
-                                EdtClipboardFileReferenceJpegQuality,
-                                UdClipboardFileReferenceJpegQuality];
-
-  {PNG compression + background opacity apply to the PNG file-reference
-   format only (background opacity affects the combined view's gaps/border).}
-  FEnableRules[14].Predicate := function: Boolean
     begin
       Result := ChkClipboardAsFileReference.Checked
                 and (CbxClipboardFileReferenceFormat.ItemIndex = Ord(sfPNG));
     end;
-  FEnableRules[14].Controls := [LblClipboardFileReferencePngCompression,
-                                EdtClipboardFileReferencePngCompression,
-                                UdClipboardFileReferencePngCompression,
-                                LblClipboardFileReferenceBackgroundAlpha,
+  FEnableRules[13].Controls := [LblClipboardFileReferenceBackgroundAlpha,
                                 EdtClipboardFileReferenceBackgroundAlpha,
                                 UdClipboardFileReferenceBackgroundAlpha];
 end;
