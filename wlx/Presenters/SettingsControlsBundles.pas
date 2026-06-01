@@ -95,6 +95,7 @@ type
   TClipboardFormatsControls = record
     ChkPublishAlphaAwareBitmap: TCheckBox;
     ChkPublishCompressedPng: TCheckBox;
+    ChkPublishCompressedJpeg: TCheckBox;
     ChkPublishFlattenedBitmap: TCheckBox;
     ChkPublishBitmapHandle: TCheckBox;
   end;
@@ -357,6 +358,7 @@ procedure BindClipboardFormatsToControls(ASettings: TPluginSettings; const ACont
 begin
   AControls.ChkPublishAlphaAwareBitmap.Checked := ASettings.PublishAlphaAwareBitmap;
   AControls.ChkPublishCompressedPng.Checked := ASettings.PublishCompressedPng;
+  AControls.ChkPublishCompressedJpeg.Checked := ASettings.PublishCompressedJpeg;
   AControls.ChkPublishFlattenedBitmap.Checked := ASettings.PublishFlattenedBitmap;
   AControls.ChkPublishBitmapHandle.Checked := ASettings.PublishBitmapHandle;
 end;
@@ -365,6 +367,7 @@ procedure BindClipboardFormatsFromControls(ASettings: TPluginSettings; const ACo
 begin
   ASettings.PublishAlphaAwareBitmap := AControls.ChkPublishAlphaAwareBitmap.Checked;
   ASettings.PublishCompressedPng := AControls.ChkPublishCompressedPng.Checked;
+  ASettings.PublishCompressedJpeg := AControls.ChkPublishCompressedJpeg.Checked;
   ASettings.PublishFlattenedBitmap := AControls.ChkPublishFlattenedBitmap.Checked;
   ASettings.PublishBitmapHandle := AControls.ChkPublishBitmapHandle.Checked;
 end;

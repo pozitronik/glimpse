@@ -133,6 +133,7 @@ type
     property PublishFlattenedBitmap: Boolean read FClipboardFormats.PublishFlattenedBitmap write FClipboardFormats.PublishFlattenedBitmap;
     property PublishBitmapHandle: Boolean read FClipboardFormats.PublishBitmapHandle write FClipboardFormats.PublishBitmapHandle;
     property PublishCompressedPng: Boolean read FClipboardFormats.PublishCompressedPng write FClipboardFormats.PublishCompressedPng;
+    property PublishCompressedJpeg: Boolean read FClipboardFormats.PublishCompressedJpeg write FClipboardFormats.PublishCompressedJpeg;
     {Whole-group access so the worker thread captures a value-typed
      snapshot of the four publish toggles in one read rather than racing
      against per-field writes.}

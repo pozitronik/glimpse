@@ -55,6 +55,10 @@ function SaveFormatExtension(AFormat: TSaveFormat): string;
 {APngCompression: 0..9. Routes pf32bit through the alpha-aware encoder.}
 procedure EncodeBitmapAsPng(ABitmap: TBitmap; AStream: TStream; APngCompression: Integer);
 
+{AQuality: 1..100. TJPEGImage.Assign flattens pf32bit per VCL semantics —
+ callers that need explicit background compositing must do it themselves.}
+procedure EncodeBitmapAsJpeg(ABitmap: TBitmap; AStream: TStream; AQuality: Integer);
+
 {AJpegQuality: 1..100, APngCompression: 0..9.}
 procedure SaveBitmapToFile(ABitmap: TBitmap; const APath: string; AFormat: TSaveFormat; AJpegQuality, APngCompression: Integer); overload;
 
@@ -127,6 +131,20 @@ begin
   end;
 end;
 
+procedure EncodeBitmapAsJpeg(ABitmap: TBitmap; AStream: TStream; AQuality: Integer);
+var
+  Jpg: TJPEGImage;
+begin
+  Jpg := TJPEGImage.Create;
+  try
+    Jpg.CompressionQuality := AQuality;
+    Jpg.Assign(ABitmap);
+    Jpg.SaveToStream(AStream);
+  finally
+    Jpg.Free;
+  end;
+end;
+
 {TPngBitmapSaver}
 
 constructor TPngBitmapSaver.Create(ACompression: Integer);
@@ -162,15 +180,13 @@ end;
 
 procedure TJpegBitmapSaver.Save(ABitmap: TBitmap; const APath: string);
 var
-  Jpg: TJPEGImage;
+  Stream: TFileStream;
 begin
-  Jpg := TJPEGImage.Create;
+  Stream := TFileStream.Create(APath, fmCreate);
   try
-    Jpg.CompressionQuality := FQuality;
-    Jpg.Assign(ABitmap);
-    Jpg.SaveToFile(APath);
+    EncodeBitmapAsJpeg(ABitmap, Stream, FQuality);
   finally
-    Jpg.Free;
+    Stream.Free;
   end;
 end;
 

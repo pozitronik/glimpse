@@ -184,19 +184,20 @@ function TClipboardPublisher.PublishAsImage(var ABitmap: TBitmap;
 var
   Outcome: TBitmapWorkOutcome;
   FormatSettings: TClipboardFormatsGroup;
-  PngCompression: Integer;
+  PngCompression, JpegQuality: Integer;
 begin
   AErrorMsg := '';
   {Snapshot settings before crossing into the worker — keeps the lifetime contract explicit.}
   FormatSettings := FClipboardPolicy.GetClipboardFormats;
   PngCompression := FClipboardPolicy.GetPngCompression;
+  JpegQuality := FClipboardPolicy.GetJpegQuality;
   Result := RunBitmapWorkInModal(ABitmap, 'Copying image to clipboard...',
     procedure(ABmp: TBitmap; var AOut: TBitmapWorkOutcome)
     var
       Strategies: TArray<IClipboardFormatStrategy>;
       FailedFormat: string;
     begin
-      Strategies := BuildClipboardFormatStrategies(FormatSettings, PngCompression);
+      Strategies := BuildClipboardFormatStrategies(FormatSettings, PngCompression, JpegQuality);
       AOut.Success := ClipboardImage.CopyBitmapToClipboard(ABmp, ABackground,
         Strategies, CreateImageClipboard, FailedFormat);
       {Carry failing-strategy name back to the main thread via ErrorMsg.}

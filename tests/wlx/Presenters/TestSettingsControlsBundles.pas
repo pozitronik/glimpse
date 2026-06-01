@@ -678,23 +678,27 @@ begin
   try
     Bundle.ChkPublishAlphaAwareBitmap := MakeCheckBox(Owner);
     Bundle.ChkPublishCompressedPng := MakeCheckBox(Owner);
+    Bundle.ChkPublishCompressedJpeg := MakeCheckBox(Owner);
     Bundle.ChkPublishFlattenedBitmap := MakeCheckBox(Owner);
     Bundle.ChkPublishBitmapHandle := MakeCheckBox(Owner);
 
     Settings.PublishAlphaAwareBitmap := True;
     Settings.PublishCompressedPng := False;
+    Settings.PublishCompressedJpeg := True;
     Settings.PublishFlattenedBitmap := True;
     Settings.PublishBitmapHandle := False;
 
     BindClipboardFormatsToControls(Settings, Bundle);
     Assert.IsTrue(Bundle.ChkPublishAlphaAwareBitmap.Checked);
     Assert.IsFalse(Bundle.ChkPublishCompressedPng.Checked);
+    Assert.IsTrue(Bundle.ChkPublishCompressedJpeg.Checked);
     Assert.IsTrue(Bundle.ChkPublishFlattenedBitmap.Checked);
     Assert.IsFalse(Bundle.ChkPublishBitmapHandle.Checked);
 
     BindClipboardFormatsFromControls(Reloaded, Bundle);
     Assert.IsTrue(Reloaded.PublishAlphaAwareBitmap);
     Assert.IsFalse(Reloaded.PublishCompressedPng);
+    Assert.IsTrue(Reloaded.PublishCompressedJpeg);
     Assert.IsTrue(Reloaded.PublishFlattenedBitmap);
     Assert.IsFalse(Reloaded.PublishBitmapHandle);
   finally

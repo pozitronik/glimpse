@@ -35,11 +35,13 @@ type
   end;
 
 {Publish order: DIBV5 (alpha-aware editors prefer raw pixels), PNG
- (web/chat apps), DIB, BITMAP (legacy last). Empty array means every
- toggle is off; orchestrator silently succeeds.}
+ (web/chat apps, lossless), JPEG (web/chat apps, lossy fallback), DIB,
+ BITMAP (legacy last). Compressed formats grouped between alpha-aware
+ and legacy; lossless before lossy. Empty array means every toggle is
+ off; orchestrator silently succeeds.}
 function BuildClipboardFormatStrategies(
   const ASettings: TClipboardFormatsGroup;
-  APngCompression: Integer): TArray<IClipboardFormatStrategy>;
+  APngCompression, AJpegQuality: Integer): TArray<IClipboardFormatStrategy>;
 
 implementation
 
@@ -107,15 +109,38 @@ type
     procedure Discard;
   end;
 
+  TCompressedJpegStrategy = class(TInterfacedObject, IClipboardFormatStrategy)
+  private
+    FHandle: HGLOBAL;
+    FJpegQuality: Integer;
+  public
+    constructor Create(AJpegQuality: Integer);
+    destructor Destroy; override;
+    function Name: string;
+    function Allocate(ASrc: Vcl.Graphics.TBitmap; ABackground: TColor): Boolean;
+    function Publish: Boolean;
+    procedure Discard;
+  end;
+
 var
   {RegisterClipboardFormat is idempotent; caching saves a syscall.}
   GPngClipboardFormatId: UINT = 0;
+  GJpegClipboardFormatId: UINT = 0;
 
 function GetPngClipboardFormatId: UINT;
 begin
   if GPngClipboardFormatId = 0 then
     GPngClipboardFormatId := RegisterClipboardFormat('PNG');
   Result := GPngClipboardFormatId;
+end;
+
+function GetJpegClipboardFormatId: UINT;
+begin
+  {"JFIF" is what Chromium / Firefox / Discord publish and read; "image/jpeg"
+   is more modern but adoption is lower.}
+  if GJpegClipboardFormatId = 0 then
+    GJpegClipboardFormatId := RegisterClipboardFormat('JFIF');
+  Result := GJpegClipboardFormatId;
 end;
 
 {TAlphaAwareBitmapStrategy — CF_DIBV5}
@@ -598,9 +623,123 @@ begin
   end;
 end;
 
+constructor TCompressedJpegStrategy.Create(AJpegQuality: Integer);
+begin
+  inherited Create;
+  FJpegQuality := AJpegQuality;
+end;
+
+destructor TCompressedJpegStrategy.Destroy;
+begin
+  Discard;
+  inherited;
+end;
+
+function TCompressedJpegStrategy.Name: string;
+begin
+  Result := 'Compressed JPEG';
+end;
+
+function TCompressedJpegStrategy.Allocate(ASrc: Vcl.Graphics.TBitmap;
+  ABackground: TColor): Boolean;
+var
+  Stream: TMemoryStream;
+  TotalBytes: NativeUInt;
+  Dest: Pointer;
+begin
+  {ABackground intentionally unused — TJPEGImage.Assign handles pf32bit
+   the same way the file-save JPEG path does (no explicit composite). The
+   "same strategy as for jpeg save" contract the user requested.}
+  Result := False;
+  Stream := TMemoryStream.Create;
+  try
+    try
+      EncodeBitmapAsJpeg(ASrc, Stream, FJpegQuality);
+    except
+      on E: Exception do
+      begin
+        Log(Format('%s.Allocate: EncodeBitmapAsJpeg raised %s: %s',
+          [Name, E.ClassName, E.Message]));
+        Exit;
+      end;
+    end;
+    TotalBytes := Stream.Size;
+    if TotalBytes = 0 then
+    begin
+      Log(Format('%s.Allocate: encoder produced zero bytes', [Name]));
+      Exit;
+    end;
+
+    FHandle := GlobalAlloc(GMEM_MOVEABLE, TotalBytes);
+    if FHandle = 0 then
+    begin
+      Log(Format('%s.Allocate: GlobalAlloc(%d bytes) failed (lastError=%d)',
+        [Name, TotalBytes, GetLastError]));
+      Exit;
+    end;
+
+    Dest := GlobalLock(FHandle);
+    if Dest = nil then
+    begin
+      Log(Format('%s.Allocate: GlobalLock failed (lastError=%d)',
+        [Name, GetLastError]));
+      GlobalFree(FHandle);
+      FHandle := 0;
+      Exit;
+    end;
+    try
+      Move(Stream.Memory^, Dest^, TotalBytes);
+    finally
+      GlobalUnlock(FHandle);
+    end;
+  finally
+    Stream.Free;
+  end;
+  Result := True;
+end;
+
+function TCompressedJpegStrategy.Publish: Boolean;
+var
+  FormatId: UINT;
+begin
+  Result := False;
+  if FHandle = 0 then
+    Exit;
+  FormatId := GetJpegClipboardFormatId;
+  if FormatId = 0 then
+  begin
+    Log(Format('%s.Publish: RegisterClipboardFormat returned 0 (lastError=%d)',
+      [Name, GetLastError]));
+    GlobalFree(FHandle);
+    FHandle := 0;
+    Exit;
+  end;
+  if SetClipboardData(FormatId, FHandle) <> 0 then
+  begin
+    FHandle := 0;
+    Result := True;
+  end
+  else
+  begin
+    Log(Format('%s.Publish: SetClipboardData(JFIF=%d) failed (lastError=%d)',
+      [Name, FormatId, GetLastError]));
+    GlobalFree(FHandle);
+    FHandle := 0;
+  end;
+end;
+
+procedure TCompressedJpegStrategy.Discard;
+begin
+  if FHandle <> 0 then
+  begin
+    GlobalFree(FHandle);
+    FHandle := 0;
+  end;
+end;
+
 function BuildClipboardFormatStrategies(
   const ASettings: TClipboardFormatsGroup;
-  APngCompression: Integer): TArray<IClipboardFormatStrategy>;
+  APngCompression, AJpegQuality: Integer): TArray<IClipboardFormatStrategy>;
 
   procedure Add(const AStrategy: IClipboardFormatStrategy);
   begin
@@ -614,6 +753,8 @@ begin
     Add(TAlphaAwareBitmapStrategy.Create);
   if ASettings.PublishCompressedPng then
     Add(TCompressedPngStrategy.Create(APngCompression));
+  if ASettings.PublishCompressedJpeg then
+    Add(TCompressedJpegStrategy.Create(AJpegQuality));
   if ASettings.PublishFlattenedBitmap then
     Add(TFlattenedBitmapStrategy.Create);
   if ASettings.PublishBitmapHandle then

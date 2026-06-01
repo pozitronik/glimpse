@@ -9,14 +9,15 @@ type
   [TestFixture]
   TTestClipboardFormatStrategies = class
   public
-    {Factory: BuildClipboardFormatStrategies(ASettings, APngCompression)
+    {Factory: BuildClipboardFormatStrategies(ASettings, APngCompression, AJpegQuality)
      translates the user's per-format toggle record into an ordered array
      of IClipboardFormatStrategy. Order is documented as
-     DIBV5 -> PNG -> DIB -> BITMAP and is publicly observable through the
-     Name property of each strategy.}
-    [Test] procedure Factory_AllTogglesOn_ReturnsFourStrategiesInDocumentedOrder;
+     DIBV5 -> PNG -> JPEG -> DIB -> BITMAP and is publicly observable
+     through the Name property of each strategy.}
+    [Test] procedure Factory_AllTogglesOn_ReturnsFiveStrategiesInDocumentedOrder;
     [Test] procedure Factory_AllTogglesOff_ReturnsEmptyArray;
     [Test] procedure Factory_OnlyPngOn_ReturnsSingleCompressedPngStrategy;
+    [Test] procedure Factory_OnlyJpegOn_ReturnsSingleCompressedJpegStrategy;
     [Test] procedure Factory_MixedToggles_PreservesPublishOrder;
 
     {PNG strategy specifics. The other three strategies are exercised
@@ -28,6 +29,14 @@ type
     [Test] procedure PngStrategy_AllocatedBytesStartWithPngSignature;
     [Test] procedure PngStrategy_DiscardOnEmpty_IsNoOp;
     [Test] procedure PngStrategy_UnpublishedDestructor_DoesNotLeak;
+
+    {JPEG strategy specifics. Mirrors the PNG suite at a thinner level —
+     allocate / publish-and-verify-signature / no-leak — to guard against
+     the encoder silently producing non-JPEG bytes or the JFIF format ID
+     not being registered.}
+    [Test] procedure JpegStrategy_AllocateForPf32Bit_Succeeds;
+    [Test] procedure JpegStrategy_AllocatedBytesStartWithJpegSignature;
+    [Test] procedure JpegStrategy_UnpublishedDestructor_DoesNotLeak;
 
     {Orchestrator behaviour pinned via inline IClipboardFormatStrategy
      mocks. Exercises the contracts the production strategies must obey
@@ -173,18 +182,20 @@ end;
 
 { Factory tests }
 
-procedure TTestClipboardFormatStrategies.Factory_AllTogglesOn_ReturnsFourStrategiesInDocumentedOrder;
+procedure TTestClipboardFormatStrategies.Factory_AllTogglesOn_ReturnsFiveStrategiesInDocumentedOrder;
 var
   Settings: TClipboardFormatsGroup;
   Strategies: TArray<IClipboardFormatStrategy>;
 begin
-  Settings := TClipboardFormatsGroup.Defaults; {all True}
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
-  Assert.AreEqual(4, Integer(Length(Strategies)), 'All-on must produce four strategies');
+  Settings := TClipboardFormatsGroup.Defaults;
+  Settings.PublishCompressedJpeg := True; {Defaults has it off; flip on for full-coverage test}
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+  Assert.AreEqual(5, Integer(Length(Strategies)), 'All-on must produce five strategies');
   Assert.AreEqual('Alpha-aware bitmap', Strategies[0].Name, 'Slot 0 = CF_DIBV5');
-  Assert.AreEqual('Compressed PNG', Strategies[1].Name, 'Slot 1 = PNG');
-  Assert.AreEqual('Flattened bitmap for legacy apps', Strategies[2].Name, 'Slot 2 = CF_DIB');
-  Assert.AreEqual('GDI bitmap handle', Strategies[3].Name, 'Slot 3 = CF_BITMAP');
+  Assert.AreEqual('Compressed PNG', Strategies[1].Name, 'Slot 1 = PNG (lossless compressed)');
+  Assert.AreEqual('Compressed JPEG', Strategies[2].Name, 'Slot 2 = JFIF (lossy compressed)');
+  Assert.AreEqual('Flattened bitmap for legacy apps', Strategies[3].Name, 'Slot 3 = CF_DIB');
+  Assert.AreEqual('GDI bitmap handle', Strategies[4].Name, 'Slot 4 = CF_BITMAP');
 end;
 
 procedure TTestClipboardFormatStrategies.Factory_AllTogglesOff_ReturnsEmptyArray;
@@ -196,7 +207,8 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := False;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
   Assert.AreEqual(0, Integer(Length(Strategies)),
     'All-off must produce an empty array so the orchestrator silently skips publishing');
 end;
@@ -210,9 +222,25 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := True;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
   Assert.AreEqual(1, Integer(Length(Strategies)));
   Assert.AreEqual('Compressed PNG', Strategies[0].Name);
+end;
+
+procedure TTestClipboardFormatStrategies.Factory_OnlyJpegOn_ReturnsSingleCompressedJpegStrategy;
+var
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+begin
+  Settings.PublishAlphaAwareBitmap := False;
+  Settings.PublishFlattenedBitmap := False;
+  Settings.PublishBitmapHandle := False;
+  Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := True;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+  Assert.AreEqual(1, Integer(Length(Strategies)));
+  Assert.AreEqual('Compressed JPEG', Strategies[0].Name);
 end;
 
 procedure TTestClipboardFormatStrategies.Factory_MixedToggles_PreservesPublishOrder;
@@ -225,9 +253,10 @@ begin
    array-position contiguity.}
   Settings.PublishAlphaAwareBitmap := True;
   Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := False;
   Settings.PublishFlattenedBitmap := True;
   Settings.PublishBitmapHandle := False;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
   Assert.AreEqual(2, Integer(Length(Strategies)));
   Assert.AreEqual('Alpha-aware bitmap', Strategies[0].Name);
   Assert.AreEqual('Flattened bitmap for legacy apps', Strategies[1].Name);
@@ -248,7 +277,8 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := True;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
 
   Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 128);
   try
@@ -270,7 +300,8 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := True;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
 
   Bmp := Vcl.Graphics.TBitmap.Create;
   try
@@ -304,7 +335,8 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := True;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
 
   Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
   try
@@ -354,7 +386,8 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := True;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
   Strategies[0].Discard;
   Strategies[0].Discard; {Idempotent}
   Assert.Pass('Repeated Discard on an empty strategy did not raise');
@@ -374,12 +407,117 @@ begin
   Settings.PublishFlattenedBitmap := False;
   Settings.PublishBitmapHandle := False;
   Settings.PublishCompressedPng := True;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Settings.PublishCompressedJpeg := False;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
 
   Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 128);
   try
     Assert.IsTrue(Strategies[0].Allocate(Bmp, clBlack));
     {Intentionally NOT calling Publish or Discard — destructor must clean up.}
+  finally
+    Bmp.Free;
+  end;
+end;
+
+{ JPEG strategy specifics }
+
+procedure TTestClipboardFormatStrategies.JpegStrategy_AllocateForPf32Bit_Succeeds;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+begin
+  Settings.PublishAlphaAwareBitmap := False;
+  Settings.PublishFlattenedBitmap := False;
+  Settings.PublishBitmapHandle := False;
+  Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := True;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+
+  Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 128);
+  try
+    Assert.IsTrue(Strategies[0].Allocate(Bmp, clBlack),
+      'JPEG strategy must allocate successfully for a small pf32bit source');
+  finally
+    Bmp.Free;
+    Strategies[0].Discard;
+  end;
+end;
+
+procedure TTestClipboardFormatStrategies.JpegStrategy_AllocatedBytesStartWithJpegSignature;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+  JpegFormatId: UINT;
+  Mem: HGLOBAL;
+  Ptr: PByte;
+begin
+  {End-to-end: allocate, publish, read back the registered "JFIF" payload
+   and assert the first two bytes are the JPEG SOI marker $FF $D8. Catches
+   a regression where EncodeBitmapAsJpeg silently emits a different
+   container.}
+  Settings.PublishAlphaAwareBitmap := False;
+  Settings.PublishFlattenedBitmap := False;
+  Settings.PublishBitmapHandle := False;
+  Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := True;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+
+  Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 255);
+  try
+    ClipboardOpenWithRetry;
+    try
+      EmptyClipboard;
+      Assert.IsTrue(Strategies[0].Allocate(Bmp, clBlack));
+      Assert.IsTrue(Strategies[0].Publish,
+        'JPEG strategy must publish under the registered JFIF format');
+    finally
+      Clipboard.Close;
+    end;
+  finally
+    Bmp.Free;
+  end;
+
+  JpegFormatId := RegisterClipboardFormat('JFIF');
+  Assert.IsTrue(JpegFormatId <> 0, 'RegisterClipboardFormat("JFIF") must succeed');
+  ClipboardOpenWithRetry;
+  try
+    Mem := GetClipboardData(JpegFormatId);
+    Assert.IsTrue(Mem <> 0, 'Registered "JFIF" format must be present after publish');
+    Ptr := PByte(GlobalLock(Mem));
+    try
+      Assert.IsNotNull(Ptr);
+      Assert.AreEqual<Integer>($FF, Integer(Ptr^),
+        'First byte of the published JPEG must be the SOI marker high byte ($FF)');
+      Inc(Ptr);
+      Assert.AreEqual<Integer>($D8, Integer(Ptr^),
+        'Second byte of the published JPEG must be the SOI marker low byte ($D8)');
+    finally
+      GlobalUnlock(Mem);
+    end;
+  finally
+    Clipboard.Close;
+  end;
+end;
+
+procedure TTestClipboardFormatStrategies.JpegStrategy_UnpublishedDestructor_DoesNotLeak;
+var
+  Bmp: Vcl.Graphics.TBitmap;
+  Settings: TClipboardFormatsGroup;
+  Strategies: TArray<IClipboardFormatStrategy>;
+begin
+  Settings.PublishAlphaAwareBitmap := False;
+  Settings.PublishFlattenedBitmap := False;
+  Settings.PublishBitmapHandle := False;
+  Settings.PublishCompressedPng := False;
+  Settings.PublishCompressedJpeg := True;
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
+
+  Bmp := MakePf32Bitmap(4, 4, 0, 200, 0, 128);
+  try
+    Assert.IsTrue(Strategies[0].Allocate(Bmp, clBlack));
+    {Intentionally not Publish/Discard — destructor must clean up.}
   finally
     Bmp.Free;
   end;
@@ -538,7 +676,7 @@ begin
    Pin them so a rename triggers a coordinated update across all three
    surfaces rather than a silent dialog/checkbox divergence.}
   Settings := TClipboardFormatsGroup.Defaults;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
   Assert.AreEqual('Alpha-aware bitmap', Strategies[0].Name);
   Assert.AreEqual('Compressed PNG', Strategies[1].Name);
   Assert.AreEqual('Flattened bitmap for legacy apps', Strategies[2].Name);

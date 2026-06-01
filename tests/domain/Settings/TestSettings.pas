@@ -1976,6 +1976,7 @@ begin
     Assert.IsTrue(S.PublishFlattenedBitmap, 'PublishFlattenedBitmap default');
     Assert.IsTrue(S.PublishBitmapHandle, 'PublishBitmapHandle default');
     Assert.IsTrue(S.PublishCompressedPng, 'PublishCompressedPng default');
+    Assert.IsFalse(S.PublishCompressedJpeg, 'PublishCompressedJpeg default opt-in');
   finally
     S.Free;
   end;
@@ -1996,6 +1997,7 @@ begin
     S1.PublishFlattenedBitmap := not DEF_PUBLISH_FLATTENED_BITMAP;
     S1.PublishBitmapHandle := not DEF_PUBLISH_BITMAP_HANDLE;
     S1.PublishCompressedPng := not DEF_PUBLISH_COMPRESSED_PNG;
+    S1.PublishCompressedJpeg := not DEF_PUBLISH_COMPRESSED_JPEG;
     S1.Save;
   finally
     S1.Free;
@@ -2007,6 +2009,7 @@ begin
     Assert.AreEqual(not DEF_PUBLISH_FLATTENED_BITMAP, S2.PublishFlattenedBitmap);
     Assert.AreEqual(not DEF_PUBLISH_BITMAP_HANDLE, S2.PublishBitmapHandle);
     Assert.AreEqual(not DEF_PUBLISH_COMPRESSED_PNG, S2.PublishCompressedPng);
+    Assert.AreEqual(not DEF_PUBLISH_COMPRESSED_JPEG, S2.PublishCompressedJpeg);
   finally
     S2.Free;
   end;

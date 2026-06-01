@@ -62,6 +62,10 @@ const
   DEF_PUBLISH_FLATTENED_BITMAP = True; {CF_DIB}
   DEF_PUBLISH_BITMAP_HANDLE = True; {CF_BITMAP}
   DEF_PUBLISH_COMPRESSED_PNG = True; {registered "PNG" format}
+  {Registered "JFIF" format. Default off: PNG already covers the
+   compressed-publish slot, and JFIF readers are a minority. Users who want
+   it opt in explicitly.}
+  DEF_PUBLISH_COMPRESSED_JPEG = False;
 
   {Save/Copy view longer-side cap (0 = unlimited). 8192 is a good starting
    point for 32-bit clipboard OOM. Mirrors WCX_DEF_COMBINED_MAX_SIDE.}

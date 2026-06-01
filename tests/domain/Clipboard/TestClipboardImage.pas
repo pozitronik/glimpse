@@ -91,7 +91,7 @@ var
   Err: string;
 begin
   Settings := TClipboardFormatsGroup.Defaults;
-  Strategies := BuildClipboardFormatStrategies(Settings, 6);
+  Strategies := BuildClipboardFormatStrategies(Settings, 6, 90);
   Result := CopyBitmapToClipboard(ABmp, ABackground, Strategies, CreateImageClipboard, Err);
 end;
 
@@ -543,7 +543,7 @@ begin
   Fake := TFakeImageClipboard.Create;
   Fake.OpenSucceeds := False;
   Clip := Fake;
-  Strategies := BuildClipboardFormatStrategies(TClipboardFormatsGroup.Defaults, 6);
+  Strategies := BuildClipboardFormatStrategies(TClipboardFormatsGroup.Defaults, 6, 90);
   Bmp := Vcl.Graphics.TBitmap.Create;
   try
     Bmp.SetSize(4, 4);

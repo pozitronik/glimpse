@@ -88,6 +88,7 @@ type
     PublishFlattenedBitmap: Boolean;  {CF_DIB}
     PublishBitmapHandle: Boolean;     {CF_BITMAP}
     PublishCompressedPng: Boolean;    {registered "PNG" format}
+    PublishCompressedJpeg: Boolean;   {registered "JFIF" format — opt-in: reader adoption is patchy}
 
     class function Defaults: TClipboardFormatsGroup; static;
     procedure LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -418,6 +419,7 @@ begin
   Result.PublishFlattenedBitmap := DEF_PUBLISH_FLATTENED_BITMAP;
   Result.PublishBitmapHandle := DEF_PUBLISH_BITMAP_HANDLE;
   Result.PublishCompressedPng := DEF_PUBLISH_COMPRESSED_PNG;
+  Result.PublishCompressedJpeg := DEF_PUBLISH_COMPRESSED_JPEG;
 end;
 
 procedure TClipboardFormatsGroup.LoadFrom(const AIni: IIniFile; const ASection: string);
@@ -426,6 +428,7 @@ begin
   PublishFlattenedBitmap := AIni.ReadBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
   PublishBitmapHandle := AIni.ReadBool(ASection, 'PublishBitmapHandle', PublishBitmapHandle);
   PublishCompressedPng := AIni.ReadBool(ASection, 'PublishCompressedPng', PublishCompressedPng);
+  PublishCompressedJpeg := AIni.ReadBool(ASection, 'PublishCompressedJpeg', PublishCompressedJpeg);
 end;
 
 procedure TClipboardFormatsGroup.SaveTo(const AIni: IIniFile; const ASection: string);
@@ -434,6 +437,7 @@ begin
   AIni.WriteBool(ASection, 'PublishFlattenedBitmap', PublishFlattenedBitmap);
   AIni.WriteBool(ASection, 'PublishBitmapHandle', PublishBitmapHandle);
   AIni.WriteBool(ASection, 'PublishCompressedPng', PublishCompressedPng);
+  AIni.WriteBool(ASection, 'PublishCompressedJpeg', PublishCompressedJpeg);
 end;
 
 {TClipboardTempSettingsGroup}

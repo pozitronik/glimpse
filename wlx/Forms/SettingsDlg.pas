@@ -129,6 +129,7 @@ type
     LblClipboardFormatsHeader: TLabel;
     ChkPublishAlphaAwareBitmap: TCheckBox;
     ChkPublishCompressedPng: TCheckBox;
+    ChkPublishCompressedJpeg: TCheckBox;
     ChkPublishFlattenedBitmap: TCheckBox;
     ChkPublishBitmapHandle: TCheckBox;
     ChkClipboardAsFileReference: TCheckBox;
@@ -424,6 +425,7 @@ begin
 
   FClipboardFormatsControls.ChkPublishAlphaAwareBitmap := ChkPublishAlphaAwareBitmap;
   FClipboardFormatsControls.ChkPublishCompressedPng := ChkPublishCompressedPng;
+  FClipboardFormatsControls.ChkPublishCompressedJpeg := ChkPublishCompressedJpeg;
   FClipboardFormatsControls.ChkPublishFlattenedBitmap := ChkPublishFlattenedBitmap;
   FClipboardFormatsControls.ChkPublishBitmapHandle := ChkPublishBitmapHandle;
 
@@ -835,7 +837,8 @@ begin
    visible to the user without reading the hint text.}
   FEnableRules[5].Predicate := function: Boolean begin Result := not ChkClipboardAsFileReference.Checked end;
   FEnableRules[5].Controls := [LblClipboardFormatsHeader, ChkPublishAlphaAwareBitmap,
-                               ChkPublishCompressedPng, ChkPublishFlattenedBitmap, ChkPublishBitmapHandle];
+                               ChkPublishCompressedPng, ChkPublishCompressedJpeg,
+                               ChkPublishFlattenedBitmap, ChkPublishBitmapHandle];
 
   {Cache folder + size cap are dead controls while the cache is off.}
   FEnableRules[6].Predicate := function: Boolean begin Result := ChkCacheEnabled.Checked end;
