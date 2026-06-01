@@ -10,7 +10,7 @@ unit StatusBarRenderer;
 interface
 
 uses
-  System.Classes, Vcl.ComCtrls,
+  System.Classes, System.Types, Vcl.ComCtrls,
   StatusBarTokens, StatusBarTemplate, TextMeasurement;
 
 type
@@ -46,6 +46,12 @@ type
     function MeasureText(const AText: string): Integer;
     function ScaledExplicitWidth(ALogicalWidth: Integer): Integer;
     function MapAlignment(A: TStatusBarTokenAlign): TAlignment;
+    {Owner-draw handler: clip-to-panel + DT_END_ELLIPSIS so overflowing
+     text gets a trailing "..." instead of bleeding past the panel
+     border. Bound on FStatusBar.OnDrawPanel in the constructor; each
+     panel opts in via Style := psOwnerDraw in Refresh.}
+    procedure HandleDrawPanel(AStatusBar: TStatusBar; APanel: TStatusPanel;
+      const ARect: TRect);
   public
     {AOwner nil = caller-owned (tests). 3-arg overload wires
      TBitmapTextMeasurer; tests use the 4-arg overload to inject a stub.}
@@ -103,6 +109,7 @@ begin
   FAutoWidthLive := False;
   FFontName := AStatusBar.Font.Name;
   FFontSize := AStatusBar.Font.Size;
+  FStatusBar.OnDrawPanel := HandleDrawPanel;
 end;
 
 procedure TStatusBarRenderer.SetFont(const AFontName: string; AFontSize: Integer);
@@ -234,6 +241,10 @@ begin
       Panel.Text := Text;
       Panel.Width := EffectiveWidth;
       Panel.Alignment := MapAlignment(Tok.GetAlignment);
+      {Owner-draw across the board — HandleDrawPanel implements the
+       DT_END_ELLIPSIS truncation that the default Win32 status bar text
+       drawing lacks.}
+      Panel.Style := psOwnerDraw;
 
       SetLength(FPanelHints, Length(FPanelHints) + 1);
       FPanelHints[High(FPanelHints)] := StatusBarTokenHint(Tok.Kind);
@@ -307,6 +318,49 @@ begin
       NewWidth := 0;
     FStatusBar.Panels[LastAuto].Width := NewWidth;
   end;
+end;
+
+procedure TStatusBarRenderer.HandleDrawPanel(AStatusBar: TStatusBar;
+  APanel: TStatusPanel; const ARect: TRect);
+const
+  {Empirical horizontal inset matching the default Win32 status bar
+   panel-text indent. Logical pixels at 96 DPI; scaled per-PPI below.}
+  PANEL_TEXT_INSET_96 = 4;
+var
+  Canvas: Vcl.Graphics.TCanvas;
+  TextRect: TRect;
+  Flags: Cardinal;
+  Inset, Ppi: Integer;
+begin
+  Canvas := AStatusBar.Canvas;
+  Canvas.Brush.Color := AStatusBar.Color;
+  Canvas.FillRect(ARect);
+  if APanel.Text = '' then
+    Exit;
+
+  Canvas.Font := AStatusBar.Font;
+  Canvas.Brush.Style := bsClear;
+
+  Ppi := AStatusBar.CurrentPPI;
+  if Ppi <= 0 then
+    Ppi := 96;
+  Inset := MulDiv(PANEL_TEXT_INSET_96, Ppi, 96);
+
+  TextRect := ARect;
+  Inc(TextRect.Left, Inset);
+  Dec(TextRect.Right, Inset);
+  if TextRect.Right <= TextRect.Left then
+    Exit;
+
+  Flags := DT_SINGLELINE or DT_VCENTER or DT_END_ELLIPSIS or DT_NOPREFIX;
+  case APanel.Alignment of
+    taRightJustify: Flags := Flags or DT_RIGHT;
+    taCenter:       Flags := Flags or DT_CENTER;
+  else
+    Flags := Flags or DT_LEFT;
+  end;
+
+  DrawTextW(Canvas.Handle, PWideChar(APanel.Text), -1, TextRect, Flags);
 end;
 
 function TStatusBarRenderer.HintForPanel(AIndex: Integer): string;

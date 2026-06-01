@@ -132,6 +132,15 @@ type
     procedure TestStretchExtremeShrinkClampsAutoPanelsToZero;
     [Test]
     procedure TestStretchShrinkLeavesFixedWidthPanelsAlone;
+
+    {Owner-draw with DT_END_ELLIPSIS: every rendered panel must be
+     psOwnerDraw so the truncation handler runs, and the status bar must
+     have an OnDrawPanel handler wired the moment a renderer exists. Visual
+     ellipsis correctness is verified manually.}
+    [Test]
+    procedure TestRefreshSetsEveryPanelToOwnerDrawStyle;
+    [Test]
+    procedure TestConstructorWiresOnDrawPanelHandler;
   end;
 
 implementation
@@ -854,6 +863,38 @@ begin
     R.Refresh;
     Assert.AreEqual<Integer>(FixedWidth, FStatusBar.Panels[0].Width,
       'Fixed-width panel must not be touched by negative-slack shrinkage');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestRefreshSetsEveryPanelToOwnerDrawStyle;
+var
+  R: TStatusBarRenderer;
+  I: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    R.ApplyTemplate('%resolution%%fps%%duration%');
+    Assert.IsTrue(FStatusBar.Panels.Count >= 2,
+      'Sanity: template must produce at least two panels');
+    for I := 0 to FStatusBar.Panels.Count - 1 do
+      Assert.AreEqual(Ord(psOwnerDraw), Ord(FStatusBar.Panels[I].Style),
+        Format('Panel %d must be owner-draw so DT_END_ELLIPSIS truncation runs', [I]));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestConstructorWiresOnDrawPanelHandler;
+var
+  R: TStatusBarRenderer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    Assert.IsTrue(Assigned(FStatusBar.OnDrawPanel),
+      'Renderer constructor must bind FStatusBar.OnDrawPanel so the ellipsis '
+      + 'handler fires for every owner-draw panel');
   finally
     R.Free;
   end;
