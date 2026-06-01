@@ -122,6 +122,16 @@ type
     procedure TestStretchNoOpWhenNoSlack;
     [Test]
     procedure TestStretchSingleAutoPanelTakesAllSlack;
+    {Negative-slack contract: when the window shrinks past the natural total
+     width of the panels, the auto panels must keep shrinking proportionally
+     rather than letting the underlying control eat the rightmost panel one
+     at a time. Symmetric counterpart to the positive-slack stretch.}
+    [Test]
+    procedure TestStretchNegativeSlackShrinksAutoPanelsProportionally;
+    [Test]
+    procedure TestStretchExtremeShrinkClampsAutoPanelsToZero;
+    [Test]
+    procedure TestStretchShrinkLeavesFixedWidthPanelsAlone;
   end;
 
 implementation
@@ -746,6 +756,104 @@ begin
     Assert.AreEqual<Integer>(FStatusBar.ClientWidth - FixedWidth,
       FStatusBar.Panels[1].Width,
       'The lone auto panel must absorb all the remaining slack');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchNegativeSlackShrinksAutoPanelsProportionally;
+var
+  R: TStatusBarRenderer;
+  WideW0, WideW1: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    {Detach the bar from alBottom auto-sizing so we can pick its width
+     independently of the parent form.}
+    FStatusBar.Align := alNone;
+    FStatusBar.Width := 800;
+    R.SetStretchPanels(True);
+    R.ApplyTemplate('%resolution%%fps%');
+    WideW0 := FStatusBar.Panels[0].Width;
+    WideW1 := FStatusBar.Panels[1].Width;
+    Assert.AreEqual<Integer>(FStatusBar.ClientWidth, SumPanelWidths(FStatusBar),
+      'Wide bar baseline: stretched panels cover ClientWidth');
+
+    {Now shrink the bar past the natural total width. The previous
+     implementation early-exited on negative slack and let the OS control
+     shrink only the rightmost panel; the fix must scale both auto panels
+     proportionally so the sum still equals ClientWidth (modulo the small
+     remainder absorbed by the last panel).}
+    FStatusBar.Width := 200;
+    R.Refresh;
+    Assert.AreEqual<Integer>(FStatusBar.ClientWidth, SumPanelWidths(FStatusBar),
+      'After shrink, auto panels together still cover ClientWidth');
+    Assert.IsTrue(FStatusBar.Panels[0].Width < WideW0,
+      'Panel 0 must have shrunk, not stayed at its wide-bar width');
+    Assert.IsTrue(FStatusBar.Panels[1].Width < WideW1,
+      'Panel 1 must have shrunk, not been hit alone by the OS control');
+    Assert.IsTrue(FStatusBar.Panels[0].Width > 0);
+    Assert.IsTrue(FStatusBar.Panels[1].Width > 0);
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchExtremeShrinkClampsAutoPanelsToZero;
+var
+  R: TStatusBarRenderer;
+  I, ZeroPanels: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Align := alNone;
+    FStatusBar.Width := 800;
+    R.SetStretchPanels(True);
+    R.ApplyTemplate('%resolution%%fps%');
+
+    {Tiny ClientWidth — proportional shrinkage forces at least one panel
+     to clamp at zero (panels can disappear per the user spec). Width=1
+     is well below any plausible auto-panel natural width so the floor
+     definitely engages.}
+    FStatusBar.Width := 1;
+    R.Refresh;
+    ZeroPanels := 0;
+    for I := 0 to FStatusBar.Panels.Count - 1 do
+    begin
+      Assert.IsTrue(FStatusBar.Panels[I].Width >= 0,
+        'Panel widths must never go negative even at extreme shrink');
+      if FStatusBar.Panels[I].Width = 0 then
+        Inc(ZeroPanels);
+    end;
+    Assert.IsTrue(ZeroPanels >= 1,
+      'At least one auto panel must clamp to zero when ClientWidth is far below sum of bases');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestStatusBarRenderer.TestStretchShrinkLeavesFixedWidthPanelsAlone;
+var
+  R: TStatusBarRenderer;
+  FixedWidth: Integer;
+begin
+  R := MakeRenderer(ResolverEcho());
+  try
+    FStatusBar.Align := alNone;
+    FStatusBar.Width := 800;
+    R.SetStretchPanels(True);
+    R.ApplyTemplate('%resolution width=150%%fps%');
+    FixedWidth := FStatusBar.Panels[0].Width;
+    Assert.IsTrue(FixedWidth > 0);
+
+    {Shrink past the fixed panel's width. The fixed panel must keep its
+     150 (logical) px; only the auto panel shrinks. When that auto panel
+     hits 0 the fixed panel overflows the bar via the OS control's clip,
+     but its Width property still reads the user-typed value.}
+    FStatusBar.Width := 80;
+    R.Refresh;
+    Assert.AreEqual<Integer>(FixedWidth, FStatusBar.Panels[0].Width,
+      'Fixed-width panel must not be touched by negative-slack shrinkage');
   finally
     R.Free;
   end;

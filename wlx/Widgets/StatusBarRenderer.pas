@@ -253,7 +253,7 @@ end;
 
 procedure TStatusBarRenderer.RedistributeSlack;
 var
-  I, TotalCur, AutoBaseSum, Slack, Bonus, Distributed, LastAuto: Integer;
+  I, TotalCur, AutoBaseSum, Slack, Bonus, NewWidth, Distributed, LastAuto: Integer;
 begin
   if FStatusBar.Panels.Count = 0 then
     Exit;
@@ -268,9 +268,20 @@ begin
   end;
 
   Slack := FStatusBar.ClientWidth - TotalCur;
-  if (Slack <= 0) or (AutoBaseSum <= 0) then
+  {No auto panels — nothing to scale; fixed panels handle their own
+   overflow via the underlying common control.}
+  if AutoBaseSum <= 0 then
+    Exit;
+  {Already exactly fits — skip the rewrite to avoid redundant repaints.}
+  if Slack = 0 then
     Exit;
 
+  {Bonus is positive when Slack > 0 (panels stretch) and negative when
+   Slack < 0 (panels shrink). Each auto panel scales in proportion to
+   its base width so the visual ratio stays stable across the whole
+   resize range. Floor at 0 because TStatusPanel.Width is unsigned —
+   when -Bonus exceeds the base, the panel disappears (per user spec:
+   "panels can disappear").}
   Distributed := 0;
   LastAuto := -1;
   for I := 0 to FStatusBar.Panels.Count - 1 do
@@ -278,15 +289,24 @@ begin
     if not FPanelIsAuto[I] then
       Continue;
     Bonus := MulDiv(Slack, FPanelBaseWidth[I], AutoBaseSum);
-    FStatusBar.Panels[I].Width := FStatusBar.Panels[I].Width + Bonus;
-    Inc(Distributed, Bonus);
+    NewWidth := FPanelBaseWidth[I] + Bonus;
+    if NewWidth < 0 then
+      NewWidth := 0;
+    Inc(Distributed, NewWidth - FPanelBaseWidth[I]);
+    FStatusBar.Panels[I].Width := NewWidth;
     LastAuto := I;
   end;
 
-  {Dump MulDiv truncation remainder into the last auto panel.}
-  if (LastAuto >= 0) and (Distributed < Slack) then
-    FStatusBar.Panels[LastAuto].Width :=
-      FStatusBar.Panels[LastAuto].Width + (Slack - Distributed);
+  {MulDiv truncation remainder dumps into the last auto panel. On the
+   shrink side, if that would push it below zero we clamp again — the
+   leftover overflow then surfaces via the common control's clip.}
+  if (LastAuto >= 0) and (Distributed <> Slack) then
+  begin
+    NewWidth := FStatusBar.Panels[LastAuto].Width + (Slack - Distributed);
+    if NewWidth < 0 then
+      NewWidth := 0;
+    FStatusBar.Panels[LastAuto].Width := NewWidth;
+  end;
 end;
 
 function TStatusBarRenderer.HintForPanel(AIndex: Integer): string;
