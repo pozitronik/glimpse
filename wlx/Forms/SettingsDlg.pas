@@ -133,6 +133,7 @@ type
     ChkPublishFlattenedBitmap: TCheckBox;
     ChkPublishBitmapHandle: TCheckBox;
     ChkClipboardAsFileReference: TCheckBox;
+    LblClipboardEncodingHeader: TLabel;
     LblClipboardTempHeader: TLabel;
     LblClipboardFileReferenceFormat: TLabel;
     CbxClipboardFileReferenceFormat: TComboBox;

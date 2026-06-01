@@ -1345,23 +1345,30 @@ object SettingsForm: TSettingsForm
         TabOrder = 5
         OnClick = ChkClipboardAsFileReferenceClick
       end
-      object LblClipboardTempHeader: TLabel
+      object LblClipboardEncodingHeader: TLabel
         Left = 12
         Top = 218
+        Width = 380
+        Height = 15
+        Caption = 'Encoding (applies to clipboard publishing and file reference):'
+      end
+      object LblClipboardTempHeader: TLabel
+        Left = 12
+        Top = 308
         Width = 300
         Height = 15
         Caption = 'Clipboard file-reference files:'
       end
       object LblClipboardFileReferenceFormat: TLabel
         Left = 12
-        Top = 248
+        Top = 338
         Width = 100
         Height = 15
         Caption = 'File format:'
       end
       object CbxClipboardFileReferenceFormat: TComboBox
         Left = 130
-        Top = 244
+        Top = 334
         Width = 130
         Height = 23
         Style = csDropDownList
@@ -1369,7 +1376,7 @@ object SettingsForm: TSettingsForm
           'Encoder for the file-reference temp file. PNG is lossless and ' +
           'keeps transparency; JPG is smaller but lossy and drops alpha. ' +
           'Quality follows the Save tab.'
-        TabOrder = 6
+        TabOrder = 10
         OnChange = CbxClipboardFileReferenceFormatChange
         Items.Strings = (
           'PNG'
@@ -1377,71 +1384,71 @@ object SettingsForm: TSettingsForm
       end
       object LblClipboardJpegQuality: TLabel
         Left = 12
-        Top = 278
+        Top = 248
         Width = 100
         Height = 15
         Caption = 'JPEG quality:'
       end
       object EdtClipboardJpegQuality: TEdit
         Left = 130
-        Top = 274
+        Top = 244
         Width = 45
         Height = 23
         Hint = 'JPEG quality 1..100. Applies to clipboard JPEG publishing and to the JPG file reference.'
         NumbersOnly = True
-        TabOrder = 7
+        TabOrder = 6
         Text = '90'
       end
       object UdClipboardJpegQuality: TUpDown
         Left = 175
-        Top = 274
+        Top = 244
         Width = 17
         Height = 23
         Associate = EdtClipboardJpegQuality
         Min = 1
         Max = 100
         Position = 90
-        TabOrder = 8
+        TabOrder = 7
         Thousands = False
       end
       object LblClipboardPngCompression: TLabel
         Left = 12
-        Top = 308
+        Top = 278
         Width = 100
         Height = 15
         Caption = 'PNG compression:'
       end
       object EdtClipboardPngCompression: TEdit
         Left = 130
-        Top = 304
+        Top = 274
         Width = 45
         Height = 23
         Hint = 'PNG compression 0..9. Applies to clipboard PNG publishing and to the PNG file reference.'
         NumbersOnly = True
-        TabOrder = 9
+        TabOrder = 8
         Text = '6'
       end
       object UdClipboardPngCompression: TUpDown
         Left = 175
-        Top = 304
+        Top = 274
         Width = 17
         Height = 23
         Associate = EdtClipboardPngCompression
         Max = 9
         Position = 6
-        TabOrder = 10
+        TabOrder = 9
         Thousands = False
       end
       object LblClipboardFileReferenceBackgroundAlpha: TLabel
         Left = 12
-        Top = 338
+        Top = 368
         Width = 100
         Height = 15
         Caption = 'Background opacity:'
       end
       object EdtClipboardFileReferenceBackgroundAlpha: TEdit
         Left = 130
-        Top = 334
+        Top = 364
         Width = 45
         Height = 23
         Hint =
@@ -1454,7 +1461,7 @@ object SettingsForm: TSettingsForm
       end
       object UdClipboardFileReferenceBackgroundAlpha: TUpDown
         Left = 175
-        Top = 334
+        Top = 364
         Width = 17
         Height = 23
         Associate = EdtClipboardFileReferenceBackgroundAlpha
@@ -1465,14 +1472,14 @@ object SettingsForm: TSettingsForm
       end
       object LblClipboardTempFolder: TLabel
         Left = 12
-        Top = 368
+        Top = 398
         Width = 100
         Height = 15
         Caption = 'Files location:'
       end
       object EdtClipboardTempFolder: TEdit
         Left = 130
-        Top = 364
+        Top = 394
         Width = 278
         Height = 23
         Hint =
@@ -1485,7 +1492,7 @@ object SettingsForm: TSettingsForm
       end
       object BtnClipboardTempFolder: TButton
         Left = 414
-        Top = 364
+        Top = 394
         Width = 25
         Height = 23
         Hint = 'Browse for the file-reference folder.'
@@ -1496,7 +1503,7 @@ object SettingsForm: TSettingsForm
       end
       object EdtClipboardTempFolderInfo: TEdit
         Left = 130
-        Top = 392
+        Top = 422
         Width = 309
         Height = 23
         TabStop = False
@@ -1514,14 +1521,14 @@ object SettingsForm: TSettingsForm
       end
       object LblClipboardCleanup: TLabel
         Left = 12
-        Top = 422
+        Top = 452
         Width = 100
         Height = 15
         Caption = 'Clean up on start:'
       end
       object CbxClipboardCleanup: TComboBox
         Left = 130
-        Top = 418
+        Top = 448
         Width = 116
         Height = 23
         Style = csDropDownList
@@ -1538,7 +1545,7 @@ object SettingsForm: TSettingsForm
       end
       object EdtCleanupDays: TEdit
         Left = 252
-        Top = 418
+        Top = 448
         Width = 30
         Height = 23
         Hint = 'Days'
@@ -1548,7 +1555,7 @@ object SettingsForm: TSettingsForm
       end
       object UdCleanupDays: TUpDown
         Left = 282
-        Top = 418
+        Top = 448
         Width = 16
         Height = 23
         Associate = EdtCleanupDays
@@ -1558,14 +1565,14 @@ object SettingsForm: TSettingsForm
       end
       object LblCleanupSep1: TLabel
         Left = 302
-        Top = 422
+        Top = 452
         Width = 4
         Height = 15
         Caption = ':'
       end
       object EdtCleanupHours: TEdit
         Left = 310
-        Top = 418
+        Top = 448
         Width = 26
         Height = 23
         Hint = 'Hours'
@@ -1575,7 +1582,7 @@ object SettingsForm: TSettingsForm
       end
       object UdCleanupHours: TUpDown
         Left = 336
-        Top = 418
+        Top = 448
         Width = 16
         Height = 23
         Associate = EdtCleanupHours
@@ -1584,14 +1591,14 @@ object SettingsForm: TSettingsForm
       end
       object LblCleanupSep2: TLabel
         Left = 356
-        Top = 422
+        Top = 452
         Width = 4
         Height = 15
         Caption = ':'
       end
       object EdtCleanupMinutes: TEdit
         Left = 364
-        Top = 418
+        Top = 448
         Width = 26
         Height = 23
         Hint = 'Minutes'
@@ -1601,7 +1608,7 @@ object SettingsForm: TSettingsForm
       end
       object UdCleanupMinutes: TUpDown
         Left = 390
-        Top = 418
+        Top = 448
         Width = 16
         Height = 23
         Associate = EdtCleanupMinutes
@@ -1610,7 +1617,7 @@ object SettingsForm: TSettingsForm
       end
       object LblClipboardCleanupAgeUnit: TLabel
         Left = 410
-        Top = 422
+        Top = 452
         Width = 40
         Height = 15
         Caption = '(d:h:m)'
