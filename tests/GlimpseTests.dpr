@@ -1,4 +1,4 @@
-program GlimpseTests;
+﻿program GlimpseTests;
 
 {$STRONGLINKTYPES ON}
 {$APPTYPE CONSOLE}
@@ -92,6 +92,7 @@ uses
   TestToolbarGlyphLibrary in 'TestToolbarGlyphLibrary.pas',
   ToolbarBuilder in '..\wlx\Toolbar\ToolbarBuilder.pas',
   ListerMenuExtension in '..\wlx\Toolbar\ListerMenuExtension.pas',
+  TestListerMenuExtension in 'TestListerMenuExtension.pas',
   ViewportRefreshDebouncer in '..\wlx\Services\ViewportRefreshDebouncer.pas',
   TestViewportRefreshDebouncer in 'TestViewportRefreshDebouncer.pas',
   LoadTimeRecorder in '..\wlx\Services\LoadTimeRecorder.pas',

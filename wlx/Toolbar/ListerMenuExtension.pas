@@ -307,15 +307,25 @@ end;
 procedure TListerMenuExtension.Teardown;
 var
   I: Integer;
+  Sub: HMENU;
 begin
   {Only remove if the cached parent menu is still the host's current
    menu. If GetMenu has changed underneath us, the old HMENU was
-   destroyed by the host (taking our items with it) and a removal call
-   would target the wrong menu.}
+   destroyed by the host (taking our items with it; DestroyMenu recurses
+   into attached popups) and a removal call would target the wrong menu.}
   if (FParentMenu <> 0) and (FParentMenu = GetMenu(FParentWnd)) then
   begin
     for I := FItemCount - 1 downto 0 do
+    begin
+      {RemoveMenu only detaches a popup item — the submenu tree built by
+       CreatePopupMenu stays alive in the host process and must be freed
+       explicitly, or every teardown leaks its USER handles. DestroyMenu
+       on the detached top-level handle releases the nested popups too.}
+      Sub := GetSubMenu(FParentMenu, FFirstPos + I);
       RemoveMenu(FParentMenu, FFirstPos + I, MF_BYPOSITION);
+      if Sub <> 0 then
+        DestroyMenu(Sub);
+    end;
     DrawMenuBar(FParentWnd);
   end;
   FParentMenu := 0;

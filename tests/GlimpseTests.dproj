@@ -143,6 +143,7 @@
         <DCCReference Include="..\wlx\Toolbar\ToolbarGlyphLibrary.pas"/>
         <DCCReference Include="wlx\Toolbar\TestToolbarGlyphLibrary.pas"/>
         <DCCReference Include="..\wlx\Toolbar\ToolbarBuilder.pas"/>
+        <DCCReference Include="wlx\Toolbar\TestListerMenuExtension.pas"/>
         <DCCReference Include="..\src\infrastructure\FileNavigator.pas"/>
         <DCCReference Include="infrastructure\TestFileNavigator.pas"/>
         <DCCReference Include="shared\TestLogging.pas"/>
