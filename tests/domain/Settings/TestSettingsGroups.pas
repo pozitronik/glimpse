@@ -1,4 +1,4 @@
-unit TestSettingsGroups;
+﻿unit TestSettingsGroups;
 
 {Direct tests for the three shared settings groups (TExtractionSettingsGroup,
  TBannerSettingsGroup, TTimestampSettingsGroup). The groups are exercised
@@ -39,7 +39,7 @@ type
     [Test] procedure Load_SkipEdgesClamped;
     {ToExtractionOptions copies the four boolean fields and stamps the
      caller-supplied MaxSide. The owning export-boundary callers
-     (WCX BuildExtractionOptions, WLX TPluginForm extraction kickoff)
+     (WCX entry extractors / extraction controller, WLX TPluginForm)
      collapsed to one-line delegations; this fixture pins the contract.}
     [Test] procedure ToExtractionOptions_CopiesAllBooleanFields;
     [Test] procedure ToExtractionOptions_StampsCallerSuppliedMaxSide;

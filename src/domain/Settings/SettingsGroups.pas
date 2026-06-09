@@ -51,8 +51,8 @@ type
      The four boolean fields travel together through the extraction
      pipeline as TExtractionOptions; owning the conversion here keeps
      the field-by-field copy from leaking into every export-boundary
-     caller (WcxExports.BuildExtractionOptions, WLX TPluginForm's
-     extraction kickoff, etc.).
+     caller (the WCX entry extractors and extraction controller, WLX
+     TPluginForm's extraction kickoff, etc.).
      AMaxSide=0 means "no scale limit" — combined-mode callers rely on
      this because the assembled grid is shrunk separately after rendering.}
     function ToExtractionOptions(AMaxSide: Integer = 0): TExtractionOptions;

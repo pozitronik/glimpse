@@ -146,13 +146,6 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
-{AMaxSide = 0 means no scale limit; combined-mode relies on this since
- the assembled grid is shrunk separately after rendering.}
-function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
-begin
-  Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
-end;
-
 {Returns True when a cached source existed and a copy was attempted
  (AResult holds E_SUCCESS or the mapped error). Returns False to let
  the caller fall through to the ffmpeg path.}
@@ -189,7 +182,8 @@ begin
   SetLength(Frames, Length(Offsets));
   try
     for I := 0 to Length(Offsets) - 1 do
-      Frames[I] := AExtractor.ExtractFrame(AContext.FileName, Offsets[I].TimeOffset, BuildExtractionOptions(Settings));
+      Frames[I] := AExtractor.ExtractFrame(AContext.FileName, Offsets[I].TimeOffset,
+        Settings.Extraction.ToExtractionOptions);
 
     GridStyle := TCombinedGridStyle.FromFields(
       Settings.CombinedColumns, Settings.CellGap, Settings.CombinedBorder,
@@ -293,7 +287,8 @@ begin
     Exit;
 
   try
-    Bmp := AContext.FrameExtractor.ExtractFrame(AContext.FileName, AContext.Offsets[FFrameIndex].TimeOffset, BuildExtractionOptions(Settings, Settings.FrameMaxSide));
+    Bmp := AContext.FrameExtractor.ExtractFrame(AContext.FileName, AContext.Offsets[FFrameIndex].TimeOffset,
+      Settings.Extraction.ToExtractionOptions(Settings.FrameMaxSide));
     if Bmp = nil then
       Exit(E_BAD_DATA);
     try

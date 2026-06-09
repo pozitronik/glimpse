@@ -38,13 +38,6 @@ begin
   DebugLog('WCX', AMsg);
 end;
 
-{AMaxSide = 0 disables ffmpeg's scale filter; combined-mode relies on
- this since the assembled grid is shrunk separately.}
-function BuildExtractionOptions(ASettings: TWcxSettings; AMaxSide: Integer = 0): TExtractionOptions;
-begin
-  Result := ASettings.Extraction.ToExtractionOptions(AMaxSide);
-end;
-
 procedure ExtractCombinedToCache(H: TArchiveHandle; const AExtractor: IFrameExtractor;
   const ASession: TWcxCacheExtractionSession);
 var
@@ -76,7 +69,7 @@ var
   I: Integer;
   Options: TExtractionOptions;
 begin
-  Options := BuildExtractionOptions(H.Settings, H.Settings.FrameMaxSide);
+  Options := H.Settings.Extraction.ToExtractionOptions(H.Settings.FrameMaxSide);
   for I := 0 to Length(H.Offsets) - 1 do
   begin
     Bmp := AExtractor.ExtractFrame(H.FileName, H.Offsets[I].TimeOffset, Options);
