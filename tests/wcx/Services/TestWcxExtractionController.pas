@@ -1,8 +1,9 @@
-{Tests for ExtractSeparateToCache and ExtractCombinedToCache. Both
- procedures write real files into a TWcxCacheExtractionSession-owned
- temp dir and record slot metadata back to the session. The full
- PreExtractFrames orchestration (which couples to the TWcxFrameCache
- singleton) is exercised indirectly via TestWcxArchiveCoordinator.}
+{Tests for the WCX pre-extraction controller. ExtractSeparateToCache /
+ ExtractCombinedToCache write real files into a session-owned temp dir
+ and record slot metadata back to the session. The PreExtract* tests
+ drive the full PreExtractFrames orchestration against the real
+ TWcxFrameCache singleton (reset per test): cache-miss publish, cache-hit
+ short-circuit, and the slot layout per ShowFrames/ShowCombined.}
 unit TestWcxExtractionController;
 
 interface
@@ -24,6 +25,11 @@ type
     [Test] procedure TestExtractSeparateToCacheHappyPathWritesEachFrame;
     [Test] procedure TestExtractSeparateToCacheSkipsNilFrames;
     [Test] procedure TestExtractSeparateToCacheRoutesThroughInjectedRouter;
+
+    [Test] procedure PreExtract_CacheMiss_PublishesAllSlotsToHandle;
+    [Test] procedure PreExtract_CacheHit_ServesCachedPathsWithoutExtraction;
+    [Test] procedure PreExtract_FramesOnly_PublishesFrameSlots;
+    [Test] procedure PreExtract_CombinedOnly_PublishesSingleSlot;
   end;
 
 implementation
@@ -332,6 +338,96 @@ begin
     finally
       Session.Free;
     end;
+  finally
+    FreeHandleAndSettings(H);
+  end;
+end;
+
+procedure TTestWcxExtractionController.PreExtract_CacheMiss_PublishesAllSlotsToHandle;
+var
+  H: TArchiveHandle;
+  I: Integer;
+begin
+  {Frames + combined: LegacyEntryCount = 2 frame slots + 1 combined slot.
+   A miss must extract everything and publish paths + sizes back onto
+   the handle for ReadHeaderExW / ProcessFile to consume.}
+  H := MakeHandle(2, True, True);
+  try
+    H.FrameExtractor := TFakeExtractor.Create;
+    PreExtractFrames(H, TWcxFrameCache.Instance);
+    Assert.AreEqual(3, Integer(Length(H.TempPaths)));
+    Assert.AreEqual(3, Integer(Length(H.EntrySizes)));
+    for I := 0 to 2 do
+    begin
+      Assert.IsTrue(H.TempPaths[I] <> '', Format('slot %d must be populated', [I]));
+      Assert.IsTrue(H.EntrySizes[I] > 0, Format('slot %d must record size > 0', [I]));
+      Assert.IsTrue(TFile.Exists(H.TempPaths[I]), Format('file for slot %d must exist', [I]));
+    end;
+  finally
+    FreeHandleAndSettings(H);
+  end;
+end;
+
+procedure TTestWcxExtractionController.PreExtract_CacheHit_ServesCachedPathsWithoutExtraction;
+var
+  H1, H2: TArchiveHandle;
+  Extractor2: TFakeExtractor;
+begin
+  {Second open of the same video must take the cache-hit branch: the
+   cached paths land on the new handle and the extractor is never asked
+   for a single frame.}
+  H1 := MakeHandle(2, True, True);
+  try
+    H1.FrameExtractor := TFakeExtractor.Create;
+    PreExtractFrames(H1, TWcxFrameCache.Instance);
+    Assert.IsTrue(H1.TempPaths[0] <> '', 'sanity: first open populated the cache');
+
+    H2 := MakeHandle(2, True, True);
+    try
+      Extractor2 := TFakeExtractor.Create;
+      H2.FrameExtractor := Extractor2;
+      PreExtractFrames(H2, TWcxFrameCache.Instance);
+      Assert.AreEqual(0, Extractor2.CallCount, 'cache hit must not re-extract');
+      Assert.AreEqual(3, Integer(Length(H2.TempPaths)));
+      Assert.AreEqual(H1.TempPaths[0], H2.TempPaths[0], 'hit must serve the cached paths');
+      Assert.AreEqual(H1.TempPaths[2], H2.TempPaths[2]);
+    finally
+      FreeHandleAndSettings(H2);
+    end;
+  finally
+    FreeHandleAndSettings(H1);
+  end;
+end;
+
+procedure TTestWcxExtractionController.PreExtract_FramesOnly_PublishesFrameSlots;
+var
+  H: TArchiveHandle;
+begin
+  H := MakeHandle(2, True, False);
+  try
+    H.FrameExtractor := TFakeExtractor.Create;
+    PreExtractFrames(H, TWcxFrameCache.Instance);
+    Assert.AreEqual(2, Integer(Length(H.TempPaths)), 'no combined slot when ShowCombined=False');
+    Assert.IsTrue(TFile.Exists(H.TempPaths[0]));
+    Assert.IsTrue(TFile.Exists(H.TempPaths[1]));
+  finally
+    FreeHandleAndSettings(H);
+  end;
+end;
+
+procedure TTestWcxExtractionController.PreExtract_CombinedOnly_PublishesSingleSlot;
+var
+  H: TArchiveHandle;
+begin
+  {ShowFrames=False: the combined image is the only entry, at slot 0.}
+  H := MakeHandle(2, False, True);
+  try
+    H.FrameExtractor := TFakeExtractor.Create;
+    PreExtractFrames(H, TWcxFrameCache.Instance);
+    Assert.AreEqual(1, Integer(Length(H.TempPaths)));
+    Assert.IsTrue(H.TempPaths[0] <> '', 'combined-only entry must land at slot 0');
+    Assert.IsTrue(H.EntrySizes[0] > 0);
+    Assert.IsTrue(TFile.Exists(H.TempPaths[0]));
   finally
     FreeHandleAndSettings(H);
   end;
