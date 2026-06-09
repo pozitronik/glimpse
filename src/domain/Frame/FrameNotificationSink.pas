@@ -67,7 +67,8 @@ begin
     Exit;
   while PeekMessage(Msg, FHwnd, WM_FRAME_READY, WM_FRAME_READY, PM_REMOVE) do
     ;
-  PeekMessage(Msg, FHwnd, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE);
+  while PeekMessage(Msg, FHwnd, WM_EXTRACTION_DONE, WM_EXTRACTION_DONE, PM_REMOVE) do
+    ;
 end;
 
 end.

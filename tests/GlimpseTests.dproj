@@ -102,6 +102,7 @@
         <DCCReference Include="..\wlx\Services\FrameSaver.pas"/>
         <DCCReference Include="..\wlx\Services\FrameCopier.pas"/>
         <DCCReference Include="..\src\domain\Frame\ExtractionWorker.pas"/>
+        <DCCReference Include="domain\Frame\TestFrameNotificationSink.pas"/>
         <DCCReference Include="..\wlx\Widgets\StatusBarHostBar.pas"/>
         <DCCReference Include="..\wlx\Hotkeys\KeyInterceptionSubclass.pas"/>
         <DCCReference Include="wlx\Hotkeys\TestKeyInterceptionSubclass.pas"/>

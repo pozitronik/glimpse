@@ -194,6 +194,7 @@ uses
   TestHotkeysVcl in 'TestHotkeysVcl.pas',
   TextMeasurement in '..\wlx\Util\TextMeasurement.pas',
   FrameNotificationSink in '..\src\domain\Frame\FrameNotificationSink.pas',
+  TestFrameNotificationSink in 'domain\Frame\TestFrameNotificationSink.pas',
   PluginContext in '..\wlx\Core\PluginContext.pas',
   TestPluginContext in 'TestPluginContext.pas',
   CommandDescriptors in '..\wlx\Commands\CommandDescriptors.pas',
