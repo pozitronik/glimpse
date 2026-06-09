@@ -1,29 +1,65 @@
-{Tests for wlx/ViewportRefreshDebouncer. The debouncer uses TTimer
- so timer firing is not covered here — only what is verifiable
- synchronously: precondition short-circuit on Schedule, max-side memo
- round-trip, and no-callback safety.}
+{Tests for wlx/ViewportRefreshDebouncer. Synchronous tests cover the
+ Schedule-path precondition short-circuit, the max-side memo round-trip
+ and nil-callback safety. The TimerFire_* tests drive the real VCL
+ TTimer with a short interval and pump the message queue until the
+ handler runs, covering the debounce-fire logic itself: precondition
+ re-check, same-size-bucket short-circuit and refresh invocation.}
 unit TestViewportRefreshDebouncer;
 
 interface
 
 uses
-  DUnitX.TestFramework;
+  DUnitX.TestFramework,
+  System.Classes,
+  ViewportRefreshDebouncer;
 
 type
   [TestFixture]
   TTestViewportRefreshDebouncer = class
+  strict private
+    FOwner: TComponent;
+    FDebouncer: TViewportRefreshDebouncer;
+    FShouldResult: Boolean;
+    FShouldCalls: Integer;
+    FComputeValue: Integer;
+    FComputeCalls: Integer;
+    FRefreshCalls: Integer;
+    {Counting debouncer with a 20 ms interval; callbacks bump the
+     fixture counters so the pump loop can observe TimerFired progress.}
+    procedure BuildCountingDebouncer;
   public
+    [Setup] procedure Setup;
+    [TearDown] procedure TearDown;
     [Test] procedure Schedule_PreconditionFalse_DoesNotEnableTimer;
     [Test] procedure RecordExtractionMaxSide_RoundTripsThroughProperty;
     [Test] procedure NilCallbacks_SafeOnTimerFire;
+    [Test] procedure TimerFire_SizeChanged_InvokesRefresh;
+    [Test] procedure TimerFire_SameSizeBucket_SkipsRefresh;
+    [Test] procedure TimerFire_PreconditionFlippedFalse_SkipsComputeAndRefresh;
   end;
 
 implementation
 
 uses
-  System.Classes,
-  Vcl.Forms,
-  ViewportRefreshDebouncer;
+  Winapi.Windows,
+  System.SysUtils,
+  Vcl.Forms;
+
+{Pumps the message queue until APredicate holds or ATimeoutMs elapses.
+ Needed because WM_TIMER only dispatches through a message loop, which
+ the console test runner does not spin on its own.}
+function PumpUntil(const APredicate: TFunc<Boolean>; ATimeoutMs: Cardinal): Boolean;
+var
+  Deadline: UInt64;
+begin
+  Deadline := GetTickCount64 + ATimeoutMs;
+  while not APredicate() and (GetTickCount64 < Deadline) do
+  begin
+    Application.ProcessMessages;
+    Sleep(5);
+  end;
+  Result := APredicate();
+end;
 
 procedure TTestViewportRefreshDebouncer.Schedule_PreconditionFalse_DoesNotEnableTimer;
 var
@@ -108,6 +144,84 @@ begin
     D.Free;
     Owner.Free;
   end;
+end;
+
+procedure TTestViewportRefreshDebouncer.Setup;
+begin
+  FOwner := TComponent.Create(nil);
+  FDebouncer := nil;
+  FShouldResult := True;
+  FShouldCalls := 0;
+  FComputeValue := 500;
+  FComputeCalls := 0;
+  FRefreshCalls := 0;
+end;
+
+procedure TTestViewportRefreshDebouncer.TearDown;
+begin
+  FreeAndNil(FDebouncer);
+  FreeAndNil(FOwner);
+end;
+
+procedure TTestViewportRefreshDebouncer.BuildCountingDebouncer;
+begin
+  FDebouncer := TViewportRefreshDebouncer.Create(FOwner, 20,
+    function: Boolean
+    begin
+      Inc(FShouldCalls);
+      Result := FShouldResult;
+    end,
+    function: Integer
+    begin
+      Inc(FComputeCalls);
+      Result := FComputeValue;
+    end,
+    procedure
+    begin
+      Inc(FRefreshCalls);
+    end);
+end;
+
+procedure TTestViewportRefreshDebouncer.TimerFire_SizeChanged_InvokesRefresh;
+begin
+  BuildCountingDebouncer;
+  FDebouncer.RecordExtractionMaxSide(100); {baseline differs from computed 500}
+  FDebouncer.Schedule;
+  Assert.IsTrue(
+    PumpUntil(function: Boolean begin Result := FRefreshCalls >= 1 end, 2000),
+    'changed size bucket must trigger the refresh callback');
+  Assert.AreEqual(1, FRefreshCalls, 'one Schedule = one debounced refresh');
+end;
+
+procedure TTestViewportRefreshDebouncer.TimerFire_SameSizeBucket_SkipsRefresh;
+begin
+  BuildCountingDebouncer;
+  FDebouncer.RecordExtractionMaxSide(500); {baseline equals computed 500}
+  FDebouncer.Schedule;
+  {ComputeCalls rising proves TimerFired ran past the precondition and
+   reached the bucket compare — only then is asserting "no refresh"
+   meaningful.}
+  Assert.IsTrue(
+    PumpUntil(function: Boolean begin Result := FComputeCalls >= 1 end, 2000),
+    'timer must have fired and computed the new size');
+  Assert.AreEqual(0, FRefreshCalls,
+    'same size bucket: cached frames already match, refresh must be skipped');
+end;
+
+procedure TTestViewportRefreshDebouncer.TimerFire_PreconditionFlippedFalse_SkipsComputeAndRefresh;
+begin
+  BuildCountingDebouncer;
+  FDebouncer.RecordExtractionMaxSide(100);
+  FDebouncer.Schedule; {gate check consumes the first precondition call}
+  FShouldResult := False;
+  {The second precondition call can only come from TimerFired's re-check.}
+  Assert.IsTrue(
+    PumpUntil(function: Boolean begin Result := FShouldCalls >= 2 end, 2000),
+    'timer must have fired and re-checked the precondition');
+  Assert.AreEqual(0, FComputeCalls,
+    'precondition flipped between trigger and fire: no compute');
+  Assert.AreEqual(0, FRefreshCalls,
+    'precondition flipped between trigger and fire: no refresh');
 end;
 
 initialization
