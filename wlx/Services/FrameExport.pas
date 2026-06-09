@@ -103,6 +103,9 @@ function CreateFrameExporter(AFrameView: TFrameView; ASettings: TPluginSettings)
 
 implementation
 
+uses
+  ClipboardFileDrop, VclClipboard;
+
 {Thin pass-throughs so existing call sites that resolved these via
  FrameExport continue to compile after the publisher extraction.}
 function RunBitmapWorkInModal(var ABitmap: Vcl.Graphics.TBitmap;
@@ -153,7 +156,7 @@ var
 begin
   Resolver := TExportTargetResolver.Create(AFrameView);
   SaveDialog := TSaveDialogPresenter.Create(ASettings);
-  Publisher := TClipboardPublisher.Create(ASettings);
+  Publisher := TClipboardPublisher.Create(ASettings, CreateFileDropClipboard, CreateImageClipboard);
   RenderPipeline := TFrameRenderPipeline.Create(AFrameView, ASettings, ASettings, ASettings, ASettings);
   DimensionPredictor := TFrameDimensionPredictor.Create(AFrameView, ASettings, ASettings, RenderPipeline);
   Saver := TFrameSaver.Create(AFrameView, ASettings, Resolver, SaveDialog, RenderPipeline);

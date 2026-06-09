@@ -8,7 +8,7 @@ interface
 uses
   System.Classes,
   Vcl.Graphics,
-  Settings, SettingsInterfaces, BitmapWorkThread;
+  Settings, SettingsInterfaces, BitmapWorkThread, ClipboardImage, ClipboardFileDrop;
 
 type
   {Re-aliased so existing imports of ClipboardPublisher resolve these names.}
@@ -39,13 +39,20 @@ type
   TClipboardPublisher = class
   strict private
     FClipboardPolicy: IClipboardPolicy;
+    FFileDropClipboard: IFileDropClipboard;
+    FImageClipboard: IImageClipboard;
     FOnAsyncTaskRun: TAsyncTaskRunner;
     {Tracked so the next CF_HDROP copy can delete the previous file.
      NOT cleared on destruction: closing the Lister must not invalidate
      a CF_HDROP entry the user has not pasted yet — %TEMP% cleanup later.}
     FLastClipboardTempFile: string;
   public
-    constructor Create(const AClipboardPolicy: IClipboardPolicy);
+    {The clipboard surfaces are injected (production: CreateFileDropClipboard
+     / CreateImageClipboard, wired by the composition root) so the temp-file
+     bookkeeping and failure routing are testable against fakes.}
+    constructor Create(const AClipboardPolicy: IClipboardPolicy;
+      const AFileDropClipboard: IFileDropClipboard;
+      const AImageClipboard: IImageClipboard);
     {OWNERSHIP: takes ABitmap unconditionally (var; set to nil on entry).
      Callers MUST NOT touch ABitmap after the call.
 
@@ -64,8 +71,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.UITypes,
-  ClipboardImage, VclClipboard, ClipboardFileDrop, ClipboardFormatStrategies,
-  ClipboardTemp, ClipboardTempResolver,
+  ClipboardFormatStrategies, ClipboardTemp, ClipboardTempResolver,
   SettingsGroups, BitmapSaver, Logging;
 
 function BuildClipboardCopyFailureMessage(const AFailedFormat: string;
@@ -109,10 +115,14 @@ end;
 
 { TClipboardPublisher }
 
-constructor TClipboardPublisher.Create(const AClipboardPolicy: IClipboardPolicy);
+constructor TClipboardPublisher.Create(const AClipboardPolicy: IClipboardPolicy;
+  const AFileDropClipboard: IFileDropClipboard;
+  const AImageClipboard: IImageClipboard);
 begin
   inherited Create;
   FClipboardPolicy := AClipboardPolicy;
+  FFileDropClipboard := AFileDropClipboard;
+  FImageClipboard := AImageClipboard;
 end;
 
 function TClipboardPublisher.PublishAsFileReference(var ABitmap: TBitmap): TClipboardPublishResult;
@@ -167,7 +177,7 @@ begin
   {Reset to cprFailed; promote to cprSuccess only after publish AND
    temp-file bookkeeping both complete.}
   Result := cprFailed;
-  if not CreateFileDropClipboard.PutFilePathOnClipboard(NewPath) then
+  if not FFileDropClipboard.PutFilePathOnClipboard(NewPath) then
   begin
     System.SysUtils.DeleteFile(NewPath);
     Exit;
@@ -185,12 +195,15 @@ var
   Outcome: TBitmapWorkOutcome;
   FormatSettings: TClipboardFormatsGroup;
   PngCompression, JpegQuality: Integer;
+  ImageClipboard: IImageClipboard;
 begin
   AErrorMsg := '';
-  {Snapshot settings before crossing into the worker — keeps the lifetime contract explicit.}
+  {Snapshot settings and the clipboard surface before crossing into the
+   worker — keeps the lifetime contract explicit.}
   FormatSettings := FClipboardPolicy.GetClipboardFormats;
   PngCompression := FClipboardPolicy.GetPngCompression;
   JpegQuality := FClipboardPolicy.GetJpegQuality;
+  ImageClipboard := FImageClipboard;
   Result := RunBitmapWorkInModal(ABitmap, 'Copying image to clipboard...',
     procedure(ABmp: TBitmap; var AOut: TBitmapWorkOutcome)
     var
@@ -199,7 +212,7 @@ begin
     begin
       Strategies := BuildClipboardFormatStrategies(FormatSettings, PngCompression, JpegQuality);
       AOut.Success := ClipboardImage.CopyBitmapToClipboard(ABmp, ABackground,
-        Strategies, CreateImageClipboard, FailedFormat);
+        Strategies, ImageClipboard, FailedFormat);
       {Carry failing-strategy name back to the main thread via ErrorMsg.}
       if not AOut.Success then
         AOut.ErrorMsg := FailedFormat;

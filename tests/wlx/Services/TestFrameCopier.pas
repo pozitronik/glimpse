@@ -43,7 +43,7 @@ implementation
 uses
   System.SysUtils,
   Vcl.Graphics,
-  FrameOffsets;
+  FrameOffsets, ClipboardFileDrop, VclClipboard;
 
 function CreateTestFrameView(AForm: TForm; ACellCount: Integer;
   const ALoadedIndices: array of Integer): TFrameView;
@@ -80,7 +80,10 @@ begin
   {Non-existent INI path: settings use defaults.}
   FSettings := TPluginSettings.Create('__nonexistent__.ini');
   FResolver := TExportTargetResolver.Create(FView);
-  FClipboardPublisher := TClipboardPublisher.Create(FSettings);
+  {Production clipboard surfaces: these no-op tests exit before any
+   clipboard call, so no fake is needed.}
+  FClipboardPublisher := TClipboardPublisher.Create(FSettings,
+    CreateFileDropClipboard, CreateImageClipboard);
   FRenderPipeline := TFrameRenderPipeline.Create(FView, FSettings, FSettings, FSettings, FSettings);
   FCopier := TFrameCopier.Create(FView, FSettings, FResolver, FClipboardPublisher, FRenderPipeline);
 end;
