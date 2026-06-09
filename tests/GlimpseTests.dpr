@@ -151,6 +151,7 @@ uses
   WcxEntryExtractors in '..\wcx\Entries\WcxEntryExtractors.pas',
   WcxArchiveHandle in '..\wcx\Core\WcxArchiveHandle.pas',
   WcxErrorMapping in '..\wcx\Util\WcxErrorMapping.pas',
+  TestWcxErrorMapping in 'wcx\Util\TestWcxErrorMapping.pas',
   WcxExtractionController in '..\wcx\Services\WcxExtractionController.pas',
   WcxArchiveCoordinator in '..\wcx\Core\WcxArchiveCoordinator.pas',
   TestWcxArchiveCoordinator in 'TestWcxArchiveCoordinator.pas',
