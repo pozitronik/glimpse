@@ -124,6 +124,7 @@ uses
   OverrideFramesSource in '..\wlx\Services\OverrideFramesSource.pas',
   FrameRenderPipeline in '..\wlx\Services\FrameRenderPipeline.pas',
   FrameDimensionPredictor in '..\wlx\Services\FrameDimensionPredictor.pas',
+  TestFrameDimensionPredictor in 'wlx\Services\TestFrameDimensionPredictor.pas',
   TestFrameExport in 'TestFrameExport.pas',
   TestFrameRenderPipeline in 'wlx\Services\TestFrameRenderPipeline.pas',
   TestExportTargetResolver in 'wlx\Services\TestExportTargetResolver.pas',
