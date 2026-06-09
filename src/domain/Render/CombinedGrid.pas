@@ -26,7 +26,8 @@ type
 function GridBackgroundQuad(const AGrid: TCombinedGridStyle): TRGBQuad;
 
 {nil entries in AFrames leave the rect at ABg (partial extraction).
- Caller owns the returned bitmap.}
+ ASource must be pf24bit — rows are read as RGB triples. Caller owns
+ the returned bitmap.}
 function LiftToAlphaAwareCore(ASource: TBitmap; const ABg: TRGBQuad; const AFrames: TArray<TBitmap>; const ACellRects: TArray<TRect>): TBitmap;
 
 {Returns 1 when AFrameCount is zero so callers can divide safely.}
@@ -65,10 +66,11 @@ type
   TTripleRow = array [0 .. 0] of TRGBTriple;
   PTripleRow = ^TTripleRow;
 var
-  X, Y, I, Px, Py: Integer;
+  X, Y, I, Px, Py, RowBytes: Integer;
   R: TRect;
   DstRow: PQuadRow;
   SrcRow: PTripleRow;
+  FirstRow: PQuadRow;
 begin
   Result := TBitmap.Create;
   try
@@ -76,11 +78,18 @@ begin
     Result.AlphaFormat := afDefined;
     Result.SetSize(ASource.Width, ASource.Height);
 
-    for Y := 0 to Result.Height - 1 do
+    {Background fill: stamp the quad pattern across row 0 once, then
+     replicate it with a per-row Move — a single memcpy per row instead
+     of a per-pixel record write over the whole (often multi-megapixel)
+     bitmap, most of which the frame-copy pass below overwrites anyway.}
+    if (Result.Width > 0) and (Result.Height > 0) then
     begin
-      DstRow := PQuadRow(Result.ScanLine[Y]);
+      FirstRow := PQuadRow(Result.ScanLine[0]);
       for X := 0 to Result.Width - 1 do
-        DstRow^[X] := ABg;
+        FirstRow^[X] := ABg;
+      RowBytes := Result.Width * SizeOf(TRGBQuad);
+      for Y := 1 to Result.Height - 1 do
+        Move(FirstRow^, Result.ScanLine[Y]^, RowBytes);
     end;
 
     for I := 0 to High(AFrames) do
