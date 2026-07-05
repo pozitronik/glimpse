@@ -134,8 +134,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 45
         Height = 23
         Hint = 
-          'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single' +
-          '-threaded.'
+          'Caps the number of simultaneous workers when One per frame is on.' +
+          ' -1 = no limit, 0 = CPU core count.'
         NumbersOnly = True
         TabOrder = 3
         Text = '0'
@@ -147,8 +147,8 @@ object WcxSettingsForm: TWcxSettingsForm
         Width = 17
         Height = 23
         Hint = 
-          'Per-worker ffmpeg thread cap. 0 = let ffmpeg decide, -1 = single' +
-          '-threaded.'
+          'Caps the number of simultaneous workers when One per frame is on.' +
+          ' -1 = no limit, 0 = CPU core count.'
         Associate = EdtMaxThreads
         Min = -1
         Max = 64
