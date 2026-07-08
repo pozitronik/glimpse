@@ -1,8 +1,14 @@
 # Glimpse
 
+**English** | [Русский](README.ru.md)
+
 ![Plugin screenshot](/img/glimpse.jpg)
 
-A pair of Total Commander plugins for working with video frames. The **WLX** (Lister) plugin displays evenly-spaced video frames when previewing a file. The **WCX** (Packer) plugin presents a video as a virtual archive of frame images, allowing batch extraction via TC's standard file operations.
+A pair of Total Commander plugins for working with video frames.
+* The **WLX** (Lister) plugin displays evenly-spaced video frames when previewing a file.
+* The **WCX** (Packer) plugin presents a video as a virtual archive of frame images, allowing batch extraction via TC's standard file operations.
+
+The plugins rely on [ffmpeg](https://www.ffmpeg.org/) and require it to be present and available.
 
 ## WLX Plugin (Lister)
 
@@ -10,7 +16,7 @@ Provides an instant visual summary of a video's content without opening a media 
 
 ### Keyboard Shortcuts
 
-All shortcuts below are defaults. Every row is user-configurable via the **Hotkeys** tab in Settings — bindings can be added, removed, or replaced, and each action can carry more than one chord at a time.
+All shortcuts below are defaults. Every row is user-configurable via the **[Hotkeys](#hotkeys)** tab in Settings — bindings can be added, removed, or replaced, and each action can carry more than one chord at a time.
 
 | Key              | Action                                                                                            |
 |------------------|---------------------------------------------------------------------------------------------------|
@@ -25,6 +31,8 @@ All shortcuts below are defaults. Every row is user-configurable via the **Hotke
 | Z                | Previous video file in directory                                                                  |
 | Ctrl+Up/Down     | Increase / decrease frame count                                                                   |
 | Ctrl+A           | Select all                                                                                        |
+| Ctrl+Shift+A     | Invert frame selection                                                                            |
+| Ctrl+D           | Clear frame selection                                                                             |
 | Ctrl+Click       | Toggle frame selection                                                                            |
 | Ctrl+S           | Save frame (the focused or right-clicked one)                                                     |
 | Ctrl+Shift+S     | Save view — honours the persisted *Save at view resolution* setting                               |
@@ -49,7 +57,7 @@ All shortcuts below are defaults. Every row is user-configurable via the **Hotke
 
 ### Configuration
 
-All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into eight tabs: **General**, **Sampling**, **Appearance**, **Save**, **Cache**, **Thumbnails**, **Quick View**, **Hotkeys**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
+All settings are stored in `Glimpse.ini` in the plugin directory. Access the settings dialog with F2 or via the right-click context menu. The dialog is organized into tabs: **General**, **Sampling**, **Appearance**, **Save**, **Clipboard**, **Cache**, **Thumbnails**, **Quick View**, **Hotkeys**. Press **Apply** to commit changes to the open viewer without closing the dialog, making the live view act as a preview. **Apply cannot be rolled back with Cancel.**
 
 #### General
 
@@ -61,7 +69,7 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 | Use BMP pipe                      | On          | Transfers frames via BMP pipe instead of temporary PNG files. Faster but uses more memory                                                                                       |
 | Use hardware-accelerated decoding | On          | Offloads video decoding to GPU when available (DXVA2, NVDEC, QuickSync). Falls back to software decoding silently                                                               |
 | Use keyframes                     | Off         | Seeks to the nearest keyframe instead of decoding to the exact timestamp. Faster but timecodes may be less precise                                                              |
-| Extract frames at display size    | Off         | Asks ffmpeg to produce frames already scaled to display size instead of full resolution. Significantly faster for 4K+                                                           |
+| Extract frames at display size    | Off         | Asks ffmpeg to produce frames already scaled to display size instead of full resolution.                                                                                        |
 | Scale target min (px)             | 120         | Lower bound on the scale target (bigger side). Prevents the viewport-derived target from collapsing too small                                                                   |
 | Scale target max (px)             | 1920        | Upper bound on the scale target (bigger side). Frames are left at native resolution when the target exceeds it                                                                  |
 | Re-extract on viewport change     | On          | Quietly re-extracts in the background when switching view modes or resizing Lister so frames stay at display resolution. No effect when *Extract frames at display size* is off |
@@ -74,13 +82,12 @@ All settings are stored in `Glimpse.ini` in the plugin directory. Access the set
 
 Controls *which* moments of the video are turned into frames — independent of the engine knobs on the General tab.
 
-| Setting                     | Default | Description                                                                                                                                                            |
-|-----------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Skip edges                  | 2%      | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                                                                            |
-| Start from random positions | Off     | When on, opening a file picks frame offsets at random within their slices instead of the deterministic midpoints.                                                      |
-| Randomness                  | 50%     | Strength of the per-slice jitter window. 1% nudges the offset slightly off-centre; 100% lets a frame be picked anywhere within its slice.                              |
-| Cache random frames         | Off     | When off, random extractions read from the cache (so a previously-cached random pick still hits) but do not write fresh picks back, keeping every Shuffle truly fresh. |
-|                             |         | When on, random picks are cached just like normal ones                                                                                                                 |
+| Setting                     | Default | Description                                                                                                                                                                                                                   |
+|-----------------------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Skip edges                  | 2%      | Percentage of video duration to skip at the beginning and end, avoiding black intros/outros                                                                                                                                   |
+| Start from random positions | Off     | When on, opening a file picks frame offsets at random within their slices instead of the deterministic midpoints.                                                                                                             |
+| Randomness                  | 50%     | Strength of the per-slice jitter window. 1% nudges the offset slightly off-centre; 100% lets a frame be picked anywhere within its slice.                                                                                     |
+| Cache random frames         | Off     | When off, random extractions read from the cache (so a previously-cached random pick still hits) but do not write fresh picks back, keeping every Shuffle truly fresh. When on, random picks are cached just like normal ones |
 
 The toolbar **Refresh** button is a split button: clicking it re-extracts the current offsets, while its dropdown arrow exposes a **Shuffle** item (Ctrl+R) that re-rolls the offsets and re-extracts. Shuffle works regardless of the *Start from random positions* checkbox — that toggle only governs the default behaviour when opening a file.
 
@@ -89,15 +96,19 @@ The toolbar **Refresh** button is a split button: clicking it re-extracts the cu
 | Setting                                       | Default       | Description                                                                                                                                                                             |
 |-----------------------------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Background                                    | Dark grey     | Background color behind the frame grid                                                                                                                                                  |
+| Show timestamp                                | On            | Draw the timecode label on each frame (toggle at runtime with T)                                                                                                                        |
 | Timecode bg                                   | Dark grey     | Background color of the timecode overlay on each frame                                                                                                                                  |
 | Timecode opacity                              | 180           | Opacity of the timecode background (0 = fully transparent, 255 = fully opaque)                                                                                                          |
+| Timecode text color                           | Light grey    | Color of the timecode label text (when Show timestamp is on)                                                                                                                            |
+| Timecode text opacity                         | 255           | Opacity of the timecode label text (0 = transparent, 255 = opaque)                                                                                                                      |
 | Timestamp font                                | Segoe UI, 8pt | Font face and size for timecode labels on frames                                                                                                                                        |
-| Cell gap (px)                                 | 0             | Spacing in pixels between frame cells in the viewer (0-20)                                                                                                                              |
+| Cell gap (px)                                 | 0             | Spacing in pixels between frame cells in the viewer (0-32767)                                                                                                                           |
 | Border (px)                                   | 0             | Outer margin around the grid, shared by the viewer and Save view exports (0-200)                                                                                                        |
 | Timestamp corner                              | Bottom left   | Corner of each cell where the timecode label is drawn                                                                                                                                   |
 | Show toolbar                                  | On            | Display the toolbar at the top of the lister window (F4 to toggle)                                                                                                                      |
 | Show status bar                               | On            | Display the status bar at the bottom of the lister window (F3 to toggle)                                                                                                                |
-| Progress bar layout                           | Auto          | Where the extraction progress bar sits in the status bar.                                                                                                                               |
+| Show menu in lister (experimental)            | Off           | Adds a native menu bar to the Lister window exposing view toggles and commands (experimental)                                                                                           |
+| Progress bar position                         | Auto          | Where the extraction progress bar sits in the status bar.                                                                                                                               |
 | Status bar template                           | (see below)   | Token string controlling which panels appear in the status bar and in what order                                                                                                        |
 | Status bar font                               | Tahoma, 9pt   | Font face and size for the status bar; the bar's height adapts to the metrics                                                                                                           |
 | Status bar height (px)                        | 0 (auto)      | Overrides the font-derived height with an explicit pixel count (logical pixels, scaled to monitor DPI). Values below the font minimum are silently bumped so text never clips. 0 = auto |
@@ -154,36 +165,42 @@ The `%save_dimension%` and `%copy_dimension%` panels are interactive: a click fl
 
 The **Stretch auto-width panels to fill the bar** setting (Appearance tab, off by default) makes the renderer distribute any remaining bar width across the auto-width panels proportionally to their natural widths — useful when you want a justified bar with no trailing gap. Fixed `width=N` panels keep their widths.
 
-The progress bar continues to live outside the template — its position relative to the panels is governed by the *Progress bar layout* setting.
+The progress bar continues to live outside the template — its position relative to the panels is governed by the *Progress bar position* setting.
 
 #### Save
 
-| Setting                               | Default | Description                                                                                                                                                                                             |
-|---------------------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Format                                | PNG     | Image format for saved frames (PNG or JPEG)                                                                                                                                                             |
-| JPEG quality                          | 90      | Compression quality for JPEG output (1-100, higher = better quality, larger file)                                                                                                                       |
-| PNG compression                       | 6       | Compression level for PNG output (0-9, higher = smaller file, slower save)                                                                                                                              |
-| Background opacity                    | 255     | Opacity of cell gaps, border, and Copy/Save view output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG.                                                             |
-| Default folder                        | (empty) | Default destination folder for saved frames. Empty = prompt every time                                                                                                                                  |
-| Include file info banner              | Off     | Adds a header with video file name, resolution, and duration to Save view exports                                                                                                                       |
-| Save at view resolution               | Off     | When on, saves match the on-screen layout at panel pixel size; when off, output uses native frame resolution. Also available as a checkbox in the file save dialog (Vista+).                            |
-| Max combined side (px)                | 0       | Cap on the longer side of the rendered Save view / Copy view image. The combined image (with optional banner) is shrunk proportionally if its longer side exceeds this many pixels. 0 disables the cap. |
+| Setting                               | Default        | Description                                                                                                                                                                                             |
+|---------------------------------------|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Format                                | PNG            | Image format for saved frames (PNG or JPEG)                                                                                                                                                             |
+| JPEG quality                          | 90             | Compression quality for JPEG output (1-100, higher = better quality, larger file)                                                                                                                       |
+| PNG compression                       | 6              | Compression level for PNG output (0-9, higher = smaller file, slower save)                                                                                                                              |
+| Background opacity                    | 255            | Opacity of cell gaps, border, and Copy/Save view output background (0 = fully transparent, 255 = fully opaque). PNG only; ignored for JPEG.                                                             |
+| Default folder                        | (empty)        | Default destination folder for saved frames. Empty = prompt every time                                                                                                                                  |
+| Include file info banner              | Off            | Adds a header with video file name, resolution, and duration to Save view exports                                                                                                                       |
+| Banner background                     | Dark grey      | Background color of the file-info banner (when the banner is enabled)                                                                                                                                   |
+| Banner text color                     | Light grey     | Text color of the file-info banner                                                                                                                                                                      |
+| Banner font                           | Segoe UI, 10pt | Font face and size for the banner text                                                                                                                                                                  |
+| Banner position                       | Top            | Where the banner sits relative to the grid (Top or Bottom)                                                                                                                                              |
+| Auto-size banner font to image width  | On             | Scales the banner font so its text spans the image width                                                                                                                                                |
+| Save at view resolution               | Off            | When on, saves match the on-screen layout at panel pixel size; when off, output uses native frame resolution. Also available as a checkbox in the file save dialog (Vista+).                            |
+| Copy at view resolution               | Off            | When on, Copy view matches the on-screen layout at panel pixel size; when off it uses native frame resolution. Separate toggle from Save at view resolution.                                            |
+| Max combined side (px)                | 0              | Cap on the longer side of the rendered Save view / Copy view image. The combined image (with optional banner) is shrunk proportionally if its longer side exceeds this many pixels. 0 disables the cap. |
 
 The toolbar **Save view** button is a split button: clicking it honors the *Save at view resolution* setting, while its dropdown arrow exposes one-shot **Save view at view resolution...** and **Save view at native size...** items that override the setting for that single action without persisting. On legacy Windows (XP / Server 2003) the dropdown is reached via right-click on the same button (the system dropdown arrow is unavailable there); right-click also works on Vista+ as an alternate access path.
 
-The toolbar **Copy view** button works the same way: a split button whose dropdown exposes one-shot **Copy view at view resolution** and **Copy view at native size** items. The native-size variant re-extracts at native resolution before publishing to the clipboard, so the clipboard receives true native-resolution pixels rather than the viewport-scaled live cells. The default Copy view click honors the same persisted *Save at view resolution* setting that Save view uses (the setting governs both surfaces).
+The toolbar **Copy view** button works the same way: a split button whose dropdown exposes one-shot **Copy view at view resolution** and **Copy view at native size** items. The native-size variant re-extracts at native resolution before publishing to the clipboard, so the clipboard receives true native-resolution pixels rather than the viewport-scaled live cells. The default Copy view click honors its own persisted *Copy at view resolution* setting (a separate toggle from Save view's).
 
 #### Clipboard
 
-Controls which Win32 clipboard formats *Copy frame* / *Copy view* publish, and the encoding knobs that apply to both clipboard publishing and the file-reference temp file. The orchestrator runs whenever any format toggle is enabled; `pf24bit` sources (single frames without alpha) are promoted to `pf32bit` internally so every strategy sees a uniform BGRA layout. With every toggle off, the `pf24bit` path falls back to VCL's `Clipboard.Assign` so something still lands on the clipboard. Each enabled format is allocated before any clipboard operation begins; if any one of them runs out of contiguous memory the whole copy aborts and the error dialog names the failing format.
+Controls which Win32 clipboard formats *Copy frame* / *Copy view* publish, and the encoding knobs that apply to both clipboard publishing and the file-reference temp file.
 
 | Setting                               | Default               | Description                                                                                                                                                                                                              |
 |---------------------------------------|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Alpha-aware bitmap                    | On                    | Preserves transparency. Costs roughly width*height*4 bytes per copy. Published as `CF_DIBV5`.                                                                                                                            |
+| Alpha-aware bitmap                    | On                    | Preserves transparency. Published as `CF_DIBV5`.                                                                                                                                                                         |
 | Compressed PNG                        | On                    | Carries true alpha at a fraction of the raw-pixel memory cost. Published under the system-registered `"PNG"` clipboard format. Compression level follows the *PNG compression* knob below — independent of the Save tab. |
 | Compressed JPEG                       | Off                   | Lossy compressed copy. Published under the system-registered `"JFIF"` clipboard format. Quality follows the *JPEG quality* knob below.                                                                                   |
-| Flattened bitmap for legacy apps      | On                    | Opaque copy with transparency composited onto the background colour. Used as a fallback by paste targets that do not understand alpha. Costs roughly width*height*3 bytes per copy. Published as `CF_DIB`.               |
-| GDI bitmap handle                     | On                    | Direct bitmap handle for paste targets that distrust DIB synthesis. Costs roughly width*height*4 bytes per copy. Published as `CF_BITMAP`.                                                                               |
+| Flattened bitmap for legacy apps      | On                    | Opaque copy with transparency composited onto the background colour. Used as a fallback by paste targets that do not understand alpha. Published as `CF_DIB`.                                                            |
+| GDI bitmap handle                     | On                    | Direct bitmap handle for paste targets that distrust DIB synthesis. Published as `CF_BITMAP`.                                                                                                                            |
 | JPEG quality                          | 90                    | Compression quality 1-100 for both the Compressed JPEG clipboard strategy and the JPG file-reference temp file. Independent of the Save tab's JPEG quality.                                                              |
 | PNG compression                       | 6                     | Compression level 0-9 for both the Compressed PNG clipboard strategy and the PNG file-reference temp file. Independent of the Save tab's PNG compression.                                                                |
 | Copy to clipboard as a file reference | Off                   | Writes the image to a temp file (PNG or JPG per *File format* below) and publishes its path as `CF_HDROP` instead of a bitmap. When on, the five format toggles above are ignored.                                       |
@@ -232,7 +249,7 @@ Every command-style action in the plugin is configurable. Each action can carry 
 - **Clear** wipes every chord assigned to the selected action.
 - **Reset all** restores every action to its default binding.
 - Conflicts are resolved at assignment time: when you add a chord that another action already owns, the editor asks whether to reassign. Saying yes silently strips the chord from the previous owner.
-- Tab, Alt+F4, and bare modifier keys are not user-configurable — they belong to VCL focus cycling and the Windows window-management shell.
+- Tab, Alt+F4, and bare modifier keys are not user-configurable.
 
 When the plugin holds keyboard focus, all other key combinations are owned by this table, regardless of Lister's built-in defaults. An unbound action simply does nothing; Lister's original shortcuts (Escape to close, `1`..`9` to switch text/binary/hex views, etc.) are still available via Lister's menu.
 
@@ -245,7 +262,7 @@ There is no UI control for debug logging — the toggle is hand-edited in the WL
 LogEnabled=1
 ```
 
-When enabled, the plugin writes to `glimpse_debug.log` next to the WLX DLL. The file is wiped at each Total Commander startup (when logging is on), so a single repro session lives in one self-contained file. The setting takes effect on the next TC startup. Set back to `0` (or remove the line) to stop logging. Debug builds default to logging on; release builds default to off — the explicit INI value always wins.
+When enabled, the plugin writes to `glimpse_debug.log` next to the WLX DLL. The file is wiped at each Total Commander startup (when logging is on), so a single repro session lives in one self-contained file. The setting takes effect on the next TC startup. Set back to `0` (or remove the line) to stop logging.
 
 ## WCX Plugin (Packer)
 
@@ -254,13 +271,12 @@ Presents a video file as a virtual archive containing frame images. Opening a vi
 ### Use Cases
 
 - Batch-extract thumbnails from many videos at once using TC's multi-file copy
-- Preview frame filenames before extracting
 - Use TC's built-in viewer to browse individual frames
 - Run user-defined ffmpeg presets (audio rip, low-bitrate preview, custom transcodes) by extracting them from the virtual archive — see [Presets](#presets)
 
 ### Configuration
 
-Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into six tabs: **General**, **Sampling**, **Output**, **Combined**, **Presets**, **Size limit**.
+Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin uses its own `Glimpse.ini`, separate from the WLX plugin. After changing settings, re-enter the video file to see the updated listing. The dialog is organized into tabs: **General**, **Sampling**, **Output**, **Combined**, **Presets**, **Size limit**.
 
 #### General
 
@@ -279,15 +295,12 @@ Open the settings dialog via Files > Pack (Alt+F5) > Configure. The WCX plugin u
 
 Controls *which* moments of the video are extracted. Re-enter the archive to see picks change.
 
-| Setting                     | Default | Description                                                                                                                      |
-|-----------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------|
-| Frame count                 | 4       | Number of frames to extract from the video (1-99)                                                                                |
-| Skip edges                  | 2%      | Percentage of video duration to skip at the beginning and end                                                                    |
-| Start from random positions | Off     | When on, each TC entry into the archive picks frame offsets at random within their slices instead of the deterministic midpoints |
-| Randomness                  | 50%     | Strength of the per-slice jitter window. 1% = slight nudge off-centre, 100% = anywhere within the slice.                         |
-|                             |         | No effect when *Start from random positions* is off                                                                              |
-
-WCX has no "Cache random frames" toggle: the plugin runs on demand from TC and has no frame cache, so the option would be a no-op.
+| Setting                     | Default | Description                                                                                                                                                  |
+|-----------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Frame count                 | 4       | Number of frames to extract from the video (1-99)                                                                                                            |
+| Skip edges                  | 2%      | Percentage of video duration to skip at the beginning and end                                                                                                |
+| Start from random positions | Off     | When on, each TC entry into the archive picks frame offsets at random within their slices instead of the deterministic midpoints                             |
+| Randomness                  | 50%     | Strength of the per-slice jitter window. 1% = slight nudge off-centre, 100% = anywhere within the slice. No effect when *Start from random positions* is off |
 
 #### Output
 
@@ -304,22 +317,33 @@ WCX has no "Cache random frames" toggle: the plugin runs on demand from TC and h
 
 These settings only apply when output mode is set to "Combined image":
 
-| Setting                  | Default       | Description                                                              |
-|--------------------------|---------------|--------------------------------------------------------------------------|
-| Columns                  | 0 (auto)      | Number of columns in the grid. 0 = automatic layout based on frame count |
-| Cell gap (px)            | 2             | Spacing in pixels between frames in the grid                             |
-| Background               | Dark grey     | Background color visible in cell gaps and margins                        |
-| Show timestamps          | On            | Overlays timecode labels on each frame                                   |
-| Timestamp font           | Consolas, 9pt | Font face and size for timecode labels                                   |
-| Include file info banner | Off           | Adds a header with video file name, resolution, and duration             |
+| Setting                              | Default        | Description                                                              |
+|--------------------------------------|----------------|--------------------------------------------------------------------------|
+| Columns                              | 0 (auto)       | Number of columns in the grid. 0 = automatic layout by frame count       |
+| Cell gap (px)                        | 2              | Spacing in pixels between frames in the grid                             |
+| Border (px)                          | 0              | Outer margin in pixels around the grid                                   |
+| Background color                     | Dark grey      | Background color visible in cell gaps and margins                        |
+| Show timestamp                       | On             | Overlay the timecode label on each frame                                 |
+| Timestamp corner                     | Bottom left    | Frame corner where the timecode label is drawn                           |
+| Timecode background                  | Dark grey      | Background color of the timecode overlay                                 |
+| Opacity                              | 180            | Opacity of the timecode background (0-255)                               |
+| Timecode text color                  | Light grey     | Color of the timecode label text                                         |
+| Opacity                              | 255            | Opacity of the timecode text (0-255)                                     |
+| Timestamp font                       | Consolas, 9pt  | Font face and size for timecode labels                                   |
+| Include file info banner             | Off            | Adds a header with file name, resolution, and duration                   |
+| Banner background                    | Dark grey      | Background color of the info banner                                      |
+| Banner text color                    | Light grey     | Text color of the info banner                                            |
+| Banner font                          | Segoe UI, 10pt | Font face and size for the banner text                                   |
+| Auto-size banner font to image width | On             | Scale the banner font to span the image width                            |
+| Banner position                      | Top            | Where the banner sits: Top or Bottom                                     |
+
+The timecode text color/opacity rows apply only when *Show timestamp* is enabled; the banner rows apply only when *Include file info banner* is enabled.
 
 #### Presets
 
-User-defined ffmpeg recipes that appear as additional virtual files in the archive listing alongside (or instead of) the frame and combined entries. Each preset is a complete ffmpeg invocation — extract a preset entry and the plugin runs ffmpeg with your arguments and saves the result to TC's chosen destination.
+User-defined ffmpeg recipes that appear as additional virtual files in the archive listing alongside (or instead of) the frame and combined entries.
 
 Enable preset listing by ticking the **Presets** checkbox in the Output tab. Disabled presets remain visible in the editor (so you can re-enable them) but do not appear in the archive listing.
-
-The Presets tab provides a master-detail editor: the list on the left shows every preset, the panel on the right edits the currently selected one. **Add** creates a blank preset, **Del** removes the selection, **Copy** duplicates with a fresh name. Saved on Apply or OK.
 
 | Field       | Description                                                                                                                                                                                                                                                                                                                            |
 |-------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -332,7 +356,7 @@ The Presets tab provides a master-detail editor: the list on the left shows ever
 
 Presets live in `presets.ini` next to `Glimpse.ini`. The file is hand-editable — each preset is a `[name]` section with `OutputExt=`, `Args=`, etc. The editor reads and writes this file; manual edits are picked up on the next archive open. The file is UTF-8 (with or without BOM); modern editors save it correctly.
 
-When a preset extraction fails, ffmpeg's actual error appears in a dialog ("Glimpse preset extraction failed") with the relevant ffmpeg stderr line — useful for debugging your args.
+When a preset extraction fails, ffmpeg's actual error appears in a dialog ("Glimpse preset extraction failed") with the relevant ffmpeg stderr line.
 
 Naming collisions between presets get the standard `(N)` suffix in the listing; first-defined wins the bare name. Place a preset under a virtual subfolder (e.g. `OutputName=audio/%basename%`) to avoid collisions and group related presets visually.
 
@@ -354,7 +378,7 @@ There is no UI control for debug logging — the toggle is hand-edited in `Glimp
 LogEnabled=1
 ```
 
-When enabled, the plugin writes to `Glimpse.log` next to the WCX DLL. Lines are tagged `WCX:` for general operations and `WCX-Presets:` for preset loader warnings (rejected presets, malformed values). The setting takes effect on the next archive open — no TC restart required. Set back to `0` (or remove the line) and reopen any archive to stop logging. The existing log file is left in place for inspection.
+When enabled, the plugin writes to `Glimpse.log` next to the WCX DLL. Lines are tagged `[WCX]` for general operations and `[WCX-Presets]` for preset loader warnings (rejected presets, malformed values). The setting takes effect on the next archive open — no TC restart required. Set back to `0` (or remove the line) and reopen any archive to stop logging. The existing log file is left in place for inspection.
 
 ## Installation
 
